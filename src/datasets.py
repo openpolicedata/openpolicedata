@@ -109,23 +109,7 @@ class _DatasetBuilder:
         df = df.astype(self.columns)
         df.sort_values(by=keyVals, inplace=True, ignore_index=True)
 
-        if len(df)>0:
-            ids = [str(uuid.uuid4())[0:_idLength]]
-            maxNumFails = 10
-            while len(ids) < len(df):
-                newId = str(uuid.uuid4())[0:_idLength]
-                fails = 0
-                while newId in ids and fails < maxNumFails:
-                    newId = str(uuid.uuid4())[0:_idLength]
-                    fails += 1
-
-                if fails == maxNumFails:
-                    raise ValueError("Failed to generate ID")
-
-                ids.append(newId)
-
-            df["ID"] = ids 
-
+        df["ID"] = pd.util.hash_pandas_object(df[["State", "Jurisdiction", "TableType", "Year"]], index=False)
 
         return df
     
