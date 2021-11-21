@@ -133,3 +133,6 @@ Pipfile*
 
 # VS Code folder
 .vscode/
+
+# Key files
+*.key
