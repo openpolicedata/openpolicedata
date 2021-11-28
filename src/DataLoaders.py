@@ -7,9 +7,9 @@ from sodapy import Socrata
 # Requests made without an app_token will be subject to strict throttling limits
 # Get a App Token here: https://data.virginia.gov/profile/edit/developer_settings
 # Copy the App Token
-# Create a file with name below in the folder where this file is located and copy
-# the app token into it
-_sodapyKeyFilename = "sodapy_api.key"
+# Create an environment variable SODAPY_API_KEY and set it equal to the API key
+# Setting environment variable in Linux: https://phoenixnap.com/kb/linux-set-environment-variable
+defaultSodaPyKey = os.environ.get("SODAPY_API_KEY")
 
 def _getDefaultSodaPyKey():
     key = None
@@ -28,8 +28,8 @@ def loadSocrataTable(url, data_set, dateField=None, year=None, optFilter=None, k
     # in place of application token, and no username or password:
     client = Socrata(url, key)
 
-    limit = 10000
-    N = limit
+    limit = client.DEFAULT_LIMIT
+    N = 1  # Initialize to value > 0 so while loop runs
     offset = 0
 
     where = ""
@@ -78,7 +78,7 @@ def loadSocrataTable(url, data_set, dateField=None, year=None, optFilter=None, k
                 df.append(rows)
 
         N = len(results)
-        offset += limit
+        offset += N
 
     return df
 

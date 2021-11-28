@@ -1,7 +1,6 @@
 from enum import Enum
 import pandas as pd
 import numpy as np
-import uuid
 
 # SOCRATA data requires a dataset ID
 # Example: For https://data.virginia.gov/resource/segb-5y2c.json, data set ID is segb-5y2c. Include key id in the lutDict with this value
@@ -81,7 +80,7 @@ _builder = _DatasetBuilder()
 ###################### Add datasets here #########################
 _builder.addData(state="Virginia", jurisdiction=MULTI, tableType=TableTypes.STOPS, url="data.virginia.gov", dataType=DataTypes.SOCRATA, 
     description="A data collection consisting of all traffic and investigatory stops made in Virginia as aggregated by Virginia Department of State Police",
-    lutDict={id :"segb-5y2c"})
+    lutDict={"id" :"segb-5y2c","dateField" : "incident_date", "jurisdictionField" : "agency_name"})
 _builder.addData(state="Virginia", jurisdiction="Fairfax County Police Department",
     tableType=TableTypes.TRAFFIC_WARNINGS, 
     url=["https://opendata.arcgis.com/datasets/f9c4429fb0dc440ba97a0616c99c9493_0.geojson",
@@ -109,22 +108,36 @@ _builder.addData(state="Virginia", jurisdiction="Fairfax County Police Departmen
 _builder.addData("Maryland", jurisdiction="Montgomery County Police Department", 
     tableType=TableTypes.TRAFFIC, url="data.montgomerycountymd.gov", dataType=DataTypes.SOCRATA,
     description="This dataset contains traffic violation information from all electronic traffic violations issued in Montgomery County",
-    lutDict={id :"4mse-ku6q"})
+    lutDict={"id" :"4mse-ku6q","dateField" : "date_of_stop"})
 
 datasets = _builder.buildDataFrame()
 
 
-def get(state=None, id=None):
-    if state == None and id==None:
+def get(state=None, id=None, jurisdiction=None, tableType=None, year=None):
+    query = ""
+    if state != None:
+        query += "State == '" + state + "' and "
+
+    if id != None:
+        query += "ID == " + str(id) + " and "
+
+    if jurisdiction != None:
+        query += "Jurisdiction == '" + jurisdiction + "' and " 
+
+    if tableType != None:
+        if isinstance(tableType, TableTypes):
+            tableType = tableType.value
+        query += "TableType == '" + tableType + "' and "
+
+    if year != None:
+        if isinstance(year, str):
+            query += "Year == '" + year + "' and "
+        else:
+            query += "Year == " + str(year) + " and "
+
+    if len(query) == 0:
         return datasets
-    else: 
-        query = ""
-        if state != None:
-            query += "State == '" + state + "' and "
-
-        if id != None:
-            query += "ID == '" + id + "' and "
-
+    else:
         return datasets.query(query[0:-5]) 
 
 

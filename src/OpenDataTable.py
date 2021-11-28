@@ -1,3 +1,4 @@
+import numbers
 import pandas as pd
 
 import DataLoaders
@@ -26,7 +27,7 @@ class OpenDataTable:
     def __init__(self, data):
         # If data is ID find datasets row. Otherwise, it should be datasets row
         # Then populate class properties
-        if isinstance(data, str):
+        if isinstance(data, numbers.Number):
             data = datasets.get(id=data)
         elif not isinstance(data, pd.core.frame.DataFrame) and \
             not isinstance(data, pd.core.series.Serires):
@@ -72,19 +73,21 @@ class OpenDataTable:
     def load(self, year=None, jurisdiction=None):
         # Load data from URL. For year or jurisdiction equal to multi, filtering can be done
         if self._dataType == datasets.DataTypes.CSV:
+            # TODO: Paul
             pass
         elif self._dataType == datasets.DataTypes.GeoJSON:
             pass
         elif self._dataType == datasets.DataTypes.REQUESTS:
+            # TODO: Paul
             pass
         elif self._dataType == datasets.DataTypes.SOCRATA:
             optFilter = None
-            if jurisdiction != None:
+            if jurisdiction != None and self._jurisdictionField != None:
                 optFilter = self._jurisdictionField + " = '" + jurisdiction + "'"
 
             self.table = DataLoaders.loadSocrataTable(self.url, self._datasetId, dateField=self._dateField, year=year, optFilter=optFilter)
         else:
-            raise ValueError("Unknown data type")
+            raise ValueError(f"Unknown data type: {self._dataType}")
 
     def load_from_csv(self, outputDir=None, year=year, jurisdiction=jurisdiction):
         # Load from default CSV file in outputDir (default to cd)
@@ -97,4 +100,27 @@ class OpenDataTable:
         pass
 
 
-# if __name__ == '__main__':
+if __name__ == '__main__':
+    
+    table = OpenDataTable(18360770769085142775) # VCPA data
+
+    # Get name of Fairfax County PD
+
+    # Load data for 2020
+
+    # Use Montogomery County data to test big loads
+    table = OpenDataTable(datasets.get(jurisdiction="Montgomery County Police Department"))
+    # Test loading the entire data set
+    table.load()
+
+    # Test loading for single year
+    year = 2020
+    table.load(year=year)
+
+    from datetime import datetime
+    dt = datetime.strptime(table.table["date_of_stop"].min(), "%Y-%m-%dT%H:%M:%S.%f")
+    if dt.year != 2020:
+        raise ValueError(f"Min date is not in {year}")
+    dt = datetime.strptime(table.table["date_of_stop"].max(), "%Y-%m-%dT%H:%M:%S.%f")
+    if dt.year != 2020:
+        raise ValueError(f"Max date is not in {year}")
