@@ -65,10 +65,30 @@ class OpenDataTable:
         # Otherwise return self.year
         pass
 
-    def getJurisdictions(self):
+    def getJurisdictions(self, partialName=None, year=None):
         # If year is multi, need to use self._jurisdictionField to query URL
         # Otherwise return self.jurisdiction
-        pass
+        if self.year == datasets.MULTI:
+            if self._dataType == datasets.DataTypes.CSV:
+                raise ValueError(f"Unable to get jurisdictions for {self._dataType}")
+            elif self._dataType == datasets.DataTypes.GeoJSON:
+                raise ValueError(f"Unable to get jurisdictions for {self._dataType}")
+            elif self._dataType == datasets.DataTypes.REQUESTS:
+                raise ValueError(f"Unable to get jurisdictions for {self._dataType}")
+            elif self._dataType == datasets.DataTypes.SOCRATA:
+                if partialName is not None:
+                    optFilter = "agency_name LIKE '%" + partialName + "%'"
+                else:
+                    optFilter = None
+
+                jurisdictionSet = DataLoaders.loadSocrataTable(self.url, self._datasetId, dateField=self._dateField, year=year, 
+                    optFilter=optFilter, select="DISTINCT agency_name", outputType="set")
+                return list(jurisdictionSet)
+            else:
+                raise ValueError(f"Unknown data type: {self._dataType}")
+        else:
+            return [self.jurisdiction]
+
 
     def load(self, year=None, jurisdiction=None):
         # Load data from URL. For year or jurisdiction equal to multi, filtering can be done
@@ -101,13 +121,21 @@ class OpenDataTable:
 
 
 if __name__ == '__main__':
-    
-    table = OpenDataTable(18360770769085142775) # VCPA data
+    # Should verify these against CSV data...
+
+    table = OpenDataTable(18360770769085142775) # Virginia Community Policing Act data
+
+    # Get all jurisdicitions
+    agencies = table.getJurisdictions(year=2020)
+
+    # Get jurisdicitions with Fairfax in the name
+    ffxAgencies = table.getJurisdictions(partialName="Fairfax", year=2020)
 
     # Get name of Fairfax County PD
 
     # Load data for 2020
-
+    table.load(year=2020, jurisdiction="Fairfax County Police Department")
+    
     # Use Montogomery County data to test big loads
     table = OpenDataTable(datasets.get(jurisdiction="Montgomery County Police Department"))
     # Test loading the entire data set

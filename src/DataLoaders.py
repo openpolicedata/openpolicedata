@@ -11,17 +11,7 @@ from sodapy import Socrata
 # Setting environment variable in Linux: https://phoenixnap.com/kb/linux-set-environment-variable
 defaultSodaPyKey = os.environ.get("SODAPY_API_KEY")
 
-def _getDefaultSodaPyKey():
-    key = None
-    if os.path.isfile(_sodapyKeyFilename):
-        with open(_sodapyKeyFilename, "rt") as f:
-            key = f.readline().strip()
-
-    return key
-
-defaultSodaPyKey = _getDefaultSodaPyKey()
-
-def loadSocrataTable(url, data_set, dateField=None, year=None, optFilter=None, key=defaultSodaPyKey):
+def loadSocrataTable(url, data_set, dateField=None, year=None, optFilter=None, select=None, outputType=None, key=defaultSodaPyKey):
     # Load tables that use Socrata
 
     # Unauthenticated client only works with public data sets. Note 'None'
@@ -49,13 +39,28 @@ def loadSocrataTable(url, data_set, dateField=None, year=None, optFilter=None, k
         if where[0:len(andStr)] == andStr:
             where = where[len(andStr):]
 
-    hasGeom = False
     while N > 0:
         results = client.get(data_set, where=where,
-            limit=limit,offset=offset)
+            limit=limit,offset=offset, select=select)
 
-        if hasGeom or (len(results)>0 and "geolocation" in results[0]):
-            hasGeom = True
+        if outputType == "set":
+            if offset==0:
+                df = set()
+
+            if len(results)>0:
+                results = [row[select.replace("DISTINCT ", "")] for row in results]
+                results = set(results)
+                df.update(results)
+
+        elif outputType == "list":
+            if offset==0:
+                df = list()
+
+            if len(results)>0:
+                [df.append(row[select]) for row in results]
+
+        elif outputType=="GeoDataFrame" or (outputType==None and len(results)>0 and "geolocation" in results[0]):
+            outputType = "GeoDataFrame"
             # Presumed to be a list of properties that possibly include coordinates
             geojson = {"type" : "FeatureCollection", "features" : []}
             for p in results:
