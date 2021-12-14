@@ -121,8 +121,6 @@ class OpenDataTable:
 
 
 if __name__ == '__main__':
-    # Should verify these against CSV data...
-
     table = OpenDataTable(18360770769085142775) # Virginia Community Policing Act data
 
     # Get all jurisdicitions
@@ -131,24 +129,33 @@ if __name__ == '__main__':
     # Get jurisdicitions with Fairfax in the name
     ffxAgencies = table.getJurisdictions(partialName="Fairfax", year=2020)
 
-    # Get name of Fairfax County PD
-
     # Load data for 2020
-    table.load(year=2020, jurisdiction="Fairfax County Police Department")
+    dpmt = "Fairfax County Police Department"
+    year = 2020
+    table.load(year=2020, jurisdiction=dpmt)
+    # table.table = table.table.astype({'incident_date': 'datetime64[ns]'})
+
+    # Verify that data is correct
+    csvTable = pd.read_csv("https://data.virginia.gov/api/views/segb-5y2c/rows.csv?accessType=DOWNLOAD",parse_dates=['INCIDENT DATE'])
+    csvTable = csvTable[csvTable["AGENCY NAME"]==dpmt]
+    csvTable = csvTable[csvTable['INCIDENT DATE'].dt.year == year]
+
+    # Assuming that if lengths are the same, then data has been imported properly
+    if len(table.table) != len(csvTable):
+        raise ValueError("VCPA data was not read in improperly")
     
     # Use Montogomery County data to test big loads
     table = OpenDataTable(datasets.get(jurisdiction="Montgomery County Police Department"))
-    # Test loading the entire data set
-    table.load()
+
+    csvTable = pd.read_csv("https://data.montgomerycountymd.gov/api/views/4mse-ku6q/rows.csv?accessType=DOWNLOAD",parse_dates=['Date Of Stop'])
 
     # Test loading for single year
     year = 2020
     table.load(year=year)
 
-    from datetime import datetime
-    dt = datetime.strptime(table.table["date_of_stop"].min(), "%Y-%m-%dT%H:%M:%S.%f")
-    if dt.year != 2020:
-        raise ValueError(f"Min date is not in {year}")
-    dt = datetime.strptime(table.table["date_of_stop"].max(), "%Y-%m-%dT%H:%M:%S.%f")
-    if dt.year != 2020:
-        raise ValueError(f"Max date is not in {year}")
+    csvTable = csvTable[csvTable['Date Of Stop'].dt.year == year]
+
+    if len(table.table) != len(csvTable):
+        raise ValueError("MCPD data was not read in improperly")
+
+    print("OpenDataTable main function complete")

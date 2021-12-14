@@ -76,11 +76,12 @@ def loadSocrataTable(url, data_set, dateField=None, year=None, optFilter=None, s
             else:
                 df = df.append(new_gdf)
         else:
+            outputType = "DataFrame"
             rows = pd.DataFrame.from_records(results)
             if offset==0:
                 df = pd.DataFrame(rows)
             else:
-                df.append(rows)
+                df = df.append(rows)
 
         N = len(results)
         offset += N
