@@ -97,7 +97,7 @@ class OpenDataTable:
             pass
         elif self._dataType == datasets.DataTypes.GeoJSON:
             pass
-        elif self._dataType == datasets.DataTypes.REQUESTS:
+        elif self._dataType == datasets.DataTypes.ArcGIS:
             # TODO: Paul
             pass
         elif self._dataType == datasets.DataTypes.SOCRATA:
