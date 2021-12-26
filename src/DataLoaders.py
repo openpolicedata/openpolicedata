@@ -2,6 +2,7 @@ import os
 import geopandas as gpd
 import pandas as pd
 from sodapy import Socrata
+import requests
 
 # This is for use if import data sets using Socrata. It is not required.
 # Requests made without an app_token will be subject to strict throttling limits
@@ -10,6 +11,26 @@ from sodapy import Socrata
 # Create an environment variable SODAPY_API_KEY and set it equal to the API key
 # Setting environment variable in Linux: https://phoenixnap.com/kb/linux-set-environment-variable
 defaultSodaPyKey = os.environ.get("SODAPY_API_KEY")
+
+def loadGeoJSON(url):
+    try:
+        response = requests.get(url)
+
+        # If the response was successful, no Exception will be raised
+        response.raise_for_status()
+    # pylint: disable=undefined-variable. 
+    except HTTPError as http_err:
+        print(f'HTTP error occurred: {http_err}')  # Python 3.6
+        Exception()
+    except Exception as err:
+        print(f'Other error occurred: {err}')  # Python 3.6
+        Exception()
+
+    jsonData = response.json()
+
+    df = gpd.GeoDataFrame.from_features(jsonData, crs=jsonData["crs"]["properties"]["name"])
+    return df
+
 
 def loadSocrataTable(url, data_set, dateField=None, year=None, optFilter=None, select=None, outputType=None, key=defaultSodaPyKey):
     # Load tables that use Socrata

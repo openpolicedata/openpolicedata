@@ -30,7 +30,7 @@ class OpenDataTable:
         if isinstance(data, numbers.Number):
             data = datasets.get(id=data)
         elif not isinstance(data, pd.core.frame.DataFrame) and \
-            not isinstance(data, pd.core.series.Serires):
+            not isinstance(data, pd.core.series.Series):
             raise TypeError("data must be an ID, DataFrame or Series")
 
         if isinstance(data, pd.core.frame.DataFrame):
@@ -96,8 +96,8 @@ class OpenDataTable:
             # TODO: Paul
             pass
         elif self._dataType == datasets.DataTypes.GeoJSON:
-            pass
-        elif self._dataType == datasets.DataTypes.ArcGIS:
+            self.table = DataLoaders.loadGeoJSON(self.url)
+        elif self._dataType == datasets.DataTypes.REQUESTS:
             # TODO: Paul
             pass
         elif self._dataType == datasets.DataTypes.SOCRATA:
@@ -121,41 +121,44 @@ class OpenDataTable:
 
 
 if __name__ == '__main__':
-    table = OpenDataTable(18360770769085142775) # Virginia Community Policing Act data
+    table = OpenDataTable(datasets.get(jurisdiction="Fairfax County Police Department", tableType=datasets.TableTypes.TRAFFIC_CITATIONS, year=2020))
+    table.load()
 
-    # Get all jurisdicitions
-    agencies = table.getJurisdictions(year=2020)
+    # table = OpenDataTable(18360770769085142775) # Virginia Community Policing Act data
 
-    # Get jurisdicitions with Fairfax in the name
-    ffxAgencies = table.getJurisdictions(partialName="Fairfax", year=2020)
+    # # Get all jurisdicitions
+    # agencies = table.getJurisdictions(year=2020)
 
-    # Load data for 2020
-    dpmt = "Fairfax County Police Department"
-    year = 2020
-    table.load(year=2020, jurisdiction=dpmt)
-    # table.table = table.table.astype({'incident_date': 'datetime64[ns]'})
+    # # Get jurisdicitions with Fairfax in the name
+    # ffxAgencies = table.getJurisdictions(partialName="Fairfax", year=2020)
 
-    # Verify that data is correct
-    csvTable = pd.read_csv("https://data.virginia.gov/api/views/segb-5y2c/rows.csv?accessType=DOWNLOAD",parse_dates=['INCIDENT DATE'])
-    csvTable = csvTable[csvTable["AGENCY NAME"]==dpmt]
-    csvTable = csvTable[csvTable['INCIDENT DATE'].dt.year == year]
+    # # Load data for 2020
+    # dpmt = "Fairfax County Police Department"
+    # year = 2020
+    # table.load(year=2020, jurisdiction=dpmt)
+    # # table.table = table.table.astype({'incident_date': 'datetime64[ns]'})
 
-    # Assuming that if lengths are the same, then data has been imported properly
-    if len(table.table) != len(csvTable):
-        raise ValueError("VCPA data was not read in improperly")
+    # # Verify that data is correct
+    # csvTable = pd.read_csv("https://data.virginia.gov/api/views/segb-5y2c/rows.csv?accessType=DOWNLOAD",parse_dates=['INCIDENT DATE'])
+    # csvTable = csvTable[csvTable["AGENCY NAME"]==dpmt]
+    # csvTable = csvTable[csvTable['INCIDENT DATE'].dt.year == year]
+
+    # # Assuming that if lengths are the same, then data has been imported properly
+    # if len(table.table) != len(csvTable):
+    #     raise ValueError("VCPA data was not read in improperly")
     
-    # Use Montogomery County data to test big loads
-    table = OpenDataTable(datasets.get(jurisdiction="Montgomery County Police Department"))
+    # # Use Montogomery County data to test big loads
+    # table = OpenDataTable(datasets.get(jurisdiction="Montgomery County Police Department"))
 
-    csvTable = pd.read_csv("https://data.montgomerycountymd.gov/api/views/4mse-ku6q/rows.csv?accessType=DOWNLOAD",parse_dates=['Date Of Stop'])
+    # csvTable = pd.read_csv("https://data.montgomerycountymd.gov/api/views/4mse-ku6q/rows.csv?accessType=DOWNLOAD",parse_dates=['Date Of Stop'])
 
-    # Test loading for single year
-    year = 2020
-    table.load(year=year)
+    # # Test loading for single year
+    # year = 2020
+    # table.load(year=year)
 
-    csvTable = csvTable[csvTable['Date Of Stop'].dt.year == year]
+    # csvTable = csvTable[csvTable['Date Of Stop'].dt.year == year]
 
-    if len(table.table) != len(csvTable):
-        raise ValueError("MCPD data was not read in improperly")
+    # if len(table.table) != len(csvTable):
+    #     raise ValueError("MCPD data was not read in improperly")
 
     print("OpenDataTable main function complete")
