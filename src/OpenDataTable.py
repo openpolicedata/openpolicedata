@@ -73,7 +73,7 @@ class OpenDataTable:
                 raise ValueError(f"Unable to get jurisdictions for {self._dataType}")
             elif self._dataType == datasets.DataTypes.GeoJSON:
                 raise ValueError(f"Unable to get jurisdictions for {self._dataType}")
-            elif self._dataType == datasets.DataTypes.REQUESTS:
+            elif self._dataType == datasets.DataTypes.ArcGIS:
                 raise ValueError(f"Unable to get jurisdictions for {self._dataType}")
             elif self._dataType == datasets.DataTypes.SOCRATA:
                 if partialName is not None:
@@ -121,8 +121,8 @@ class OpenDataTable:
 
 
 if __name__ == '__main__':
-    table = OpenDataTable(datasets.get(jurisdiction="Fairfax County Police Department", tableType=datasets.TableTypes.TRAFFIC_CITATIONS, year=2020))
-    table.load()
+    # table = OpenDataTable(datasets.get(jurisdiction="Fairfax County Police Department", tableType=datasets.TableTypes.TRAFFIC_CITATIONS, year=2020))
+    # table.load()
 
     # table = OpenDataTable(18360770769085142775) # Virginia Community Policing Act data
 

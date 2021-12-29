@@ -4,6 +4,11 @@ import pandas as pd
 from sodapy import Socrata
 import requests
 
+from arcgis.gis import GIS
+from arcgis.features import FeatureLayer
+from arcgis.features import FeatureLayerCollection
+from arcgis.features.manage_data import extract_data
+
 # This is for use if import data sets using Socrata. It is not required.
 # Requests made without an app_token will be subject to strict throttling limits
 # Get a App Token here: https://data.virginia.gov/profile/edit/developer_settings
@@ -30,6 +35,28 @@ def loadGeoJSON(url):
 
     df = gpd.GeoDataFrame.from_features(jsonData, crs=jsonData["crs"]["properties"]["name"])
     return df
+
+
+def arcGIS(url, dateField=None, year=None):
+    #TODO: Error checking for layer type
+    layerCollection = FeatureLayerCollection(url)
+
+    active_layer = layerCollection.layers[0]
+
+    if dateField!=None and year!=None:
+        startDate = str(year) + "-01-01"
+        stopDate = str(year) + "-12-31"
+        where_query = f"{dateField} >= '{startDate}' AND  {dateField} < '{stopDate}'"
+        print(f'where_query = {where_query}')
+        layer_query_result = active_layer.query(where=where_query)
+        print(f'len(layer_query_result) = {len(layer_query_result)}, layer_query_result.spatial_reference = {layer_query_result.spatial_reference}')
+        if len(layer_query_result) > 0:
+            layer_query_result.spatial_reference
+            df = gpd.GeoDataFrame(layer_query_result.sdf,crs=layer_query_result.spatial_reference['wkid'])
+            return df
+        else:
+            return None
+    
 
 
 def loadSocrataTable(url, data_set, dateField=None, year=None, optFilter=None, select=None, outputType=None, key=defaultSodaPyKey):
