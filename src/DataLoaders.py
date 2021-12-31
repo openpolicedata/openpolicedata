@@ -37,15 +37,24 @@ def loadGeoJSON(url):
     return df
 
 
-def arcGIS(url, dateField=None, year=None):
+def loadArcGIS(url, dateField=None, year=None):
     #TODO: Error checking for layer type
     layerCollection = FeatureLayerCollection(url)
 
     active_layer = layerCollection.layers[0]
-
+    
     if dateField!=None and year!=None:
-        startDate = str(year) + "-01-01"
-        stopDate = str(year) + "-12-31"
+        if len(year)==1:
+            startDate = str(year) + "-01-01"
+            stopDate = str(year) + "-12-31"
+        elif len(year)==2:
+            if year[0] > year[1]:
+                raise ValueError('year[0] needs to be smaller than or equal to year[1]')
+            startDate = str(year[0]) + "-01-01"
+            stopDate = str(year[1]) + "-12-31"
+        else:
+            raise ValueError('year needs to be a 1 or 2 argument value')
+        
         where_query = f"{dateField} >= '{startDate}' AND  {dateField} < '{stopDate}'"
         print(f'where_query = {where_query}')
         layer_query_result = active_layer.query(where=where_query)

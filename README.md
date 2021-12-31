@@ -23,6 +23,6 @@ A Python package for accessing police traffic stop, arrests, use of force, etc. 
 
 The Python path needs to include the src directory to run pytest and if using the included notebooks.
 ### Using VSCode
-If using VSCode the path to the src diretcory can be added to the Python path by creating a file called `.env` in the root directory. This file should include the line: `PYTHONPATH=./src`
-### PyTest
- 
+If using VSCode the path to the src directory can be added to the Python path by creating a file called `.env` in the root directory. This file should include the line: `PYTHONPATH=./src`
+### Using PyTest
+When running pytest from the terminal the `.env` file settings will not be used. Therefore first run ` export PYTHONPATH=./src:${PYTHONPATH}` at the command line.
