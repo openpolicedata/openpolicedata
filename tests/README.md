@@ -3,6 +3,7 @@ When running pytest from the terminal from VSCode the `.env` file settings will 
 
 If using Linux first activate the virtual environment described in the main README
 > `source .venv/bin/activate`
+
 Next add the src directory to the Python path with
 > `export PYTHONPATH=./src:${PYTHONPATH}` 
 
