@@ -1,0 +1,5 @@
+###### These can be the latest version ######
+wheel
+geopandas
+pandas
+sodapy

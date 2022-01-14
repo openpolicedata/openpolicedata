@@ -7,7 +7,7 @@ import numpy as np
 class DataTypes(Enum):
     CSV = "CSV"
     GeoJSON = "GeoJSON"
-    REQUESTS = "Requests"
+    ArcGIS = "ArcGIS"
     SOCRATA = "Socrata"
 
 class TableTypes(Enum):
@@ -113,7 +113,12 @@ _builder.addData("Maryland", jurisdiction="Montgomery County Police Department",
     tableType=TableTypes.TRAFFIC, url="data.montgomerycountymd.gov", dataType=DataTypes.SOCRATA,
     description="This dataset contains traffic violation information from all electronic traffic violations issued in Montgomery County",
     lutDict={"id" :"4mse-ku6q","dateField" : "date_of_stop"})
-
+_builder.addData(state="Colorado", jurisdiction="Denver  ... check name Colorado.... Police Department",
+    tableType=TableTypes.STOPS, 
+    url=["https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_CRIME_STOPS_P/FeatureServer"], 
+    dataType=DataTypes.ArcGIS,
+    description="Police Pedestrian Stops and Vehicle Stops",
+    lutDict={"dateField" : "TIME_PHONEPICKUP"})
 datasets = _builder.buildDataFrame()
 
 
