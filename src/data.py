@@ -77,7 +77,7 @@ class Table:
     #             raise ValueError(f"Unable to get jurisdictions for {self._dataType}")
     #         elif self._dataType == datasets.DataTypes.GeoJSON:
     #             raise ValueError(f"Unable to get jurisdictions for {self._dataType}")
-    #         elif self._dataType == datasets.DataTypes.REQUESTS:
+    #         elif self._dataType == datasets.DataTypes.ArcGIS:
     #             raise ValueError(f"Unable to get jurisdictions for {self._dataType}")
     #         elif self._dataType == datasets.DataTypes.SOCRATA:
     #             if partialName is not None:
@@ -249,9 +249,8 @@ class Source:
         elif dataType == datasets.DataTypes.GeoJSON:
             table = DataLoaders.loadGeoJSON(url, dateField=dateField, yearFilter=yearFilter, 
                 jurisdictionField=jurisdictionField, jurisdictionFilter=jurisdictionFilter)
-        elif dataType == datasets.DataTypes.REQUESTS:
-            # TODO: Paul
-            pass
+        elif dataType == datasets.DataTypes.ArcGIS:
+            table = DataLoaders.loadArcGIS(url, dateField, yearFilter)
         elif dataType == datasets.DataTypes.SOCRATA:
             optFilter = None
             if jurisdictionFilter != None and jurisdictionField != None:
@@ -268,9 +267,13 @@ class Source:
 
 
 if __name__ == '__main__':
-    src = Source("Fairfax County Police Department")
-    print(f"Tables for FCPD are {src.getTablesList()}")
-    print(f"Years for FCPD Arrests Table are {src.getYears(datasets.TableTypes.ARRESTS)}")
+    src = Source("Denver Police Department")
+    # print(f"Years for DPD Table are {src.getYears()}")
+    table = src.getTable(year = 2020)
+
+    # src = Source("Fairfax County Police Department")
+    # print(f"Tables for FCPD are {src.getTablesList()}")
+    # print(f"Years for FCPD Arrests Table are {src.getYears(datasets.TableTypes.ARRESTS)}")
 
     # table = src.getTable(datasets.TableTypes.TRAFFIC_CITATIONS, year=2020)
     # ffxCit2020 = "https://opendata.arcgis.com/api/v3/datasets/1a262db8328e42d79feac20ec8424b38_0/downloads/data?format=csv&spatialRefId=4326"

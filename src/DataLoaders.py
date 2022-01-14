@@ -4,10 +4,7 @@ import pandas as pd
 from sodapy import Socrata
 import requests
 
-from arcgis.gis import GIS
-from arcgis.features import FeatureLayer
 from arcgis.features import FeatureLayerCollection
-from arcgis.features.manage_data import extract_data
 
 # This is for use if import data sets using Socrata. It is not required.
 # Requests made without an app_token will be subject to strict throttling limits
@@ -44,34 +41,30 @@ def loadGeoJSON(url, dateField=None, yearFilter=None, jurisdictionField=None, ju
     return df
 
 
-def loadArcGIS(url, dateField=None, year=None):
+def loadArcGIS(url, dateField=None, year=None, select=None, outputType=None):
     #TODO: Error checking for layer type
     layerCollection = FeatureLayerCollection(url)
 
     active_layer = layerCollection.layers[0]
     
+    where_query = ""
     if dateField!=None and year!=None:
-        if len(year)==1:
-            startDate = str(year) + "-01-01"
-            stopDate = str(year) + "-12-31"
-        elif len(year)==2:
+        if not isinstance(year, list):
+            year = [year, year]
+
+        if len(year)==2:
             if year[0] > year[1]:
                 raise ValueError('year[0] needs to be smaller than or equal to year[1]')
             startDate = str(year[0]) + "-01-01"
-            stopDate = str(year[1]) + "-12-31"
+            stopDate = str(year[1]+1) + "-01-01"
         else:
             raise ValueError('year needs to be a 1 or 2 argument value')
         
         where_query = f"{dateField} >= '{startDate}' AND  {dateField} < '{stopDate}'"
-        print(f'where_query = {where_query}')
-        layer_query_result = active_layer.query(where=where_query)
-        print(f'len(layer_query_result) = {len(layer_query_result)}, layer_query_result.spatial_reference = {layer_query_result.spatial_reference}')
-        if len(layer_query_result) > 0:
-            layer_query_result.spatial_reference
-            df = gpd.GeoDataFrame(layer_query_result.sdf,crs=layer_query_result.spatial_reference['wkid'])
-            return df
-        else:
-            return None
+
+    layer_query_result = active_layer.query(where=where_query)
+
+    return gpd.GeoDataFrame(layer_query_result.sdf,crs=layer_query_result.spatial_reference['wkid'])
     
 
 
