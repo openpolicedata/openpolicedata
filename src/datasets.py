@@ -38,6 +38,7 @@ class _DatasetBuilder:
     columns = {
         'ID' : pd.StringDtype(),
         'State' : pd.StringDtype(),
+        'SourceName' : pd.StringDtype(),
         'Jurisdiction': pd.StringDtype(),
         'TableType': pd.StringDtype(),
         'Year': np.dtype("O"),
@@ -50,7 +51,7 @@ class _DatasetBuilder:
     rowData = []
 
 
-    def addData(self, state, jurisdiction, tableType, url, dataType, years=MULTI, description="", lutDict={}):
+    def addData(self, state, jurisdiction, tableType, url, dataType, sourceName=None, years=MULTI, description="", lutDict={}):
         if state not in _allStates:
             raise ValueError(f"Unknown state: {state}")
         
@@ -60,17 +61,20 @@ class _DatasetBuilder:
         if not isinstance(url, list):
             url = [url]
 
+        if sourceName==None:
+            sourceName = jurisdiction
+
         for k, year in enumerate(years):
-            self.rowData.append([0, state, jurisdiction, tableType.value, year, description, dataType.value, url[k], lutDict])
+            self.rowData.append([0, state, sourceName, jurisdiction, tableType.value, year, description, dataType.value, url[k], lutDict])
 
     def buildDataFrame(self):
         df = pd.DataFrame(self.rowData, columns=self.columns.keys())
-        keyVals = ['State', 'Jurisdiction', 'TableType','Year']
+        keyVals = ['State', 'SourceName', 'Jurisdiction', 'TableType','Year']
         df.drop_duplicates(subset=keyVals, inplace=True)
         df = df.astype(self.columns)
         df.sort_values(by=keyVals, inplace=True, ignore_index=True)
 
-        df["ID"] = pd.util.hash_pandas_object(df[["State", "Jurisdiction", "TableType", "Year"]], index=False)
+        df["ID"] = pd.util.hash_pandas_object(df[keyVals], index=False)
 
         return df
     
@@ -78,9 +82,9 @@ class _DatasetBuilder:
 _builder = _DatasetBuilder()
 
 ###################### Add datasets here #########################
-_builder.addData(state="Virginia", jurisdiction=MULTI, tableType=TableTypes.STOPS, url="data.virginia.gov", dataType=DataTypes.SOCRATA, 
+_builder.addData(state="Virginia", sourceName="Virginia Community Policing Act", jurisdiction=MULTI, tableType=TableTypes.STOPS, url="data.virginia.gov", dataType=DataTypes.SOCRATA, 
     description="A data collection consisting of all traffic and investigatory stops made in Virginia as aggregated by Virginia Department of State Police",
-    lutDict={"id" :"segb-5y2c","dateField" : "incident_date", "jurisdictionField" : "agency_name"})
+    lutDict={"id" :"2c96-texw","dateField" : "incident_date", "jurisdictionField" : "agency_name"})
 _builder.addData(state="Virginia", jurisdiction="Fairfax County Police Department",
     tableType=TableTypes.TRAFFIC_WARNINGS, 
     url=["https://opendata.arcgis.com/datasets/f9c4429fb0dc440ba97a0616c99c9493_0.geojson",
@@ -113,10 +117,13 @@ _builder.addData("Maryland", jurisdiction="Montgomery County Police Department",
 datasets = _builder.buildDataFrame()
 
 
-def get(state=None, id=None, jurisdiction=None, tableType=None, year=None):
+def get(sourceName=None, state=None, id=None, jurisdiction=None, tableType=None, year=None):
     query = ""
     if state != None:
         query += "State == '" + state + "' and "
+
+    if sourceName != None:
+        query += "SourceName == '" + sourceName + "' and "
 
     if id != None:
         query += "ID == " + str(id) + " and "

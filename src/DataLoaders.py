@@ -12,7 +12,7 @@ import requests
 # Setting environment variable in Linux: https://phoenixnap.com/kb/linux-set-environment-variable
 defaultSodaPyKey = os.environ.get("SODAPY_API_KEY")
 
-def loadGeoJSON(url):
+def loadGeoJSON(url, dateField=None, yearFilter=None, jurisdictionField=None, jurisdictionFilter=None):
     try:
         response = requests.get(url)
 
@@ -28,7 +28,14 @@ def loadGeoJSON(url):
 
     jsonData = response.json()
 
-    df = gpd.GeoDataFrame.from_features(jsonData, crs=jsonData["crs"]["properties"]["name"])
+    df = gpd.GeoDataFrame.from_features(jsonData, crs=jsonData["crs"]["properties"]["name"], )
+
+    if dateField != None:
+        df = df.astype({dateField: 'datetime64[ns]'})
+
+    df = filterDataFrame(df, dateField=dateField, yearFilter=yearFilter, 
+        jurisdictionField=jurisdictionField, jurisdictionFilter=jurisdictionFilter)
+
     return df
 
 
@@ -45,8 +52,14 @@ def loadSocrataTable(url, data_set, dateField=None, year=None, optFilter=None, s
 
     where = ""
     if dateField!=None and year!=None:
-        startDate = str(year) + "-01-01"
-        stopDate = str(year) + "-12-31"
+        if not isinstance(year, list):
+            year = [year, year]
+
+        if len(year) > 2:
+            raise ValueError("year should be a list of length 2: [startYear, stopYear]")
+
+        startDate = str(year[0]) + "-01-01"
+        stopDate  = str(year[1]) + "-12-31"
         where = dateField + " between '" + startDate + "' and '" + stopDate +"'"
 
     if optFilter is not None:
@@ -69,7 +82,8 @@ def loadSocrataTable(url, data_set, dateField=None, year=None, optFilter=None, s
                 df = set()
 
             if len(results)>0:
-                results = [row[select.replace("DISTINCT ", "")] for row in results]
+                filtKey = select.replace("DISTINCT ", "")
+                results = [row[filtKey] for row in results if len(row)>0]
                 results = set(results)
                 df.update(results)
 
@@ -109,3 +123,12 @@ def loadSocrataTable(url, data_set, dateField=None, year=None, optFilter=None, s
 
     return df
 
+
+def filterDataFrame(df, dateField=None, yearFilter=None, jurisdictionField=None, jurisdictionFilter=None):
+    if yearFilter != None and dateField != None:
+        df = df[df[dateField].dt.year == yearFilter]
+
+    if jurisdictionFilter != None and jurisdictionField != None:
+        df = df.query(jurisdictionField + " = '" + jurisdictionFilter + "'")
+
+    return df
