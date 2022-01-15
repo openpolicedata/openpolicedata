@@ -12,9 +12,9 @@ from arcgis.features import FeatureLayerCollection
 # Copy the App Token
 # Create an environment variable SODAPY_API_KEY and set it equal to the API key
 # Setting environment variable in Linux: https://phoenixnap.com/kb/linux-set-environment-variable
-defaultSodaPyKey = os.environ.get("SODAPY_API_KEY")
+default_sodapy_key = os.environ.get("SODAPY_API_KEY")
 
-def loadGeoJSON(url, dateField=None, yearFilter=None, jurisdictionField=None, jurisdictionFilter=None):
+def load_geojson(url, date_field=None, year_filter=None, jurisdiction_field=None, jurisdiction_filter=None):
     try:
         response = requests.get(url)
 
@@ -28,39 +28,39 @@ def loadGeoJSON(url, dateField=None, yearFilter=None, jurisdictionField=None, ju
         print(f'Other error occurred: {err}')  # Python 3.6
         Exception()
 
-    jsonData = response.json()
+    json_data = response.json()
 
-    df = gpd.GeoDataFrame.from_features(jsonData, crs=jsonData["crs"]["properties"]["name"], )
+    df = gpd.GeoDataFrame.from_features(json_data, crs=json_data["crs"]["properties"]["name"], )
 
-    if dateField != None:
-        df = df.astype({dateField: 'datetime64[ns]'})
+    if date_field != None:
+        df = df.astype({date_field: 'datetime64[ns]'})
 
-    df = filterDataFrame(df, dateField=dateField, yearFilter=yearFilter, 
-        jurisdictionField=jurisdictionField, jurisdictionFilter=jurisdictionFilter)
+    df = filter_dataframe(df, date_field=date_field, year_filter=year_filter, 
+        jurisdiction_field=jurisdiction_field, jurisdiction_filter=jurisdiction_filter)
 
     return df
 
 
-def loadArcGIS(url, dateField=None, year=None, select=None, outputType=None):
+def load_arcgis(url, date_field=None, year=None, select=None, output_type=None):
     #TODO: Error checking for layer type
-    layerCollection = FeatureLayerCollection(url)
+    layer_collection = FeatureLayerCollection(url)
 
-    active_layer = layerCollection.layers[0]
+    active_layer = layer_collection.layers[0]
     
     where_query = ""
-    if dateField!=None and year!=None:
+    if date_field!=None and year!=None:
         if not isinstance(year, list):
             year = [year, year]
 
         if len(year)==2:
             if year[0] > year[1]:
                 raise ValueError('year[0] needs to be smaller than or equal to year[1]')
-            startDate = str(year[0]) + "-01-01"
-            stopDate = str(year[1]+1) + "-01-01"
+            start_date = str(year[0]) + "-01-01"
+            stop_date = str(year[1]+1) + "-01-01"
         else:
             raise ValueError('year needs to be a 1 or 2 argument value')
         
-        where_query = f"{dateField} >= '{startDate}' AND  {dateField} < '{stopDate}'"
+        where_query = f"{date_field} >= '{start_date}' AND  {date_field} < '{stop_date}'"
 
     layer_query_result = active_layer.query(where=where_query)
 
@@ -68,7 +68,7 @@ def loadArcGIS(url, dateField=None, year=None, select=None, outputType=None):
     
 
 
-def loadSocrataTable(url, data_set, dateField=None, year=None, optFilter=None, select=None, outputType=None, key=defaultSodaPyKey):
+def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, select=None, output_type=None, key=default_sodapy_key):
     # Load tables that use Socrata
 
     # Unauthenticated client only works with public data sets. Note 'None'
@@ -80,23 +80,23 @@ def loadSocrataTable(url, data_set, dateField=None, year=None, optFilter=None, s
     offset = 0
 
     where = ""
-    if dateField!=None and year!=None:
+    if date_field!=None and year!=None:
         if not isinstance(year, list):
             year = [year, year]
 
         if len(year) > 2:
             raise ValueError("year should be a list of length 2: [startYear, stopYear]")
 
-        startDate = str(year[0]) + "-01-01"
-        stopDate  = str(year[1]) + "-12-31"
-        where = dateField + " between '" + startDate + "' and '" + stopDate +"'"
+        start_date = str(year[0]) + "-01-01"
+        stop_date  = str(year[1]) + "-12-31"
+        where = date_field + " between '" + start_date + "' and '" + stop_date +"'"
 
-    if optFilter is not None:
-        if not isinstance(optFilter, list):
-            optFilter = [optFilter]
+    if opt_filter is not None:
+        if not isinstance(opt_filter, list):
+            opt_filter = [opt_filter]
 
         andStr = " AND "
-        for filt in optFilter:
+        for filt in opt_filter:
             where += andStr + filt
 
         if where[0:len(andStr)] == andStr:
@@ -106,25 +106,25 @@ def loadSocrataTable(url, data_set, dateField=None, year=None, optFilter=None, s
         results = client.get(data_set, where=where,
             limit=limit,offset=offset, select=select)
 
-        if outputType == "set":
+        if output_type == "set":
             if offset==0:
                 df = set()
 
             if len(results)>0:
-                filtKey = select.replace("DISTINCT ", "")
-                results = [row[filtKey] for row in results if len(row)>0]
+                filt_key = select.replace("DISTINCT ", "")
+                results = [row[filt_key] for row in results if len(row)>0]
                 results = set(results)
                 df.update(results)
 
-        elif outputType == "list":
+        elif output_type == "list":
             if offset==0:
                 df = list()
 
             if len(results)>0:
                 [df.append(row[select]) for row in results]
 
-        elif outputType=="GeoDataFrame" or (outputType==None and len(results)>0 and "geolocation" in results[0]):
-            outputType = "GeoDataFrame"
+        elif output_type=="GeoDataFrame" or (output_type==None and len(results)>0 and "geolocation" in results[0]):
+            output_type = "GeoDataFrame"
             # Presumed to be a list of properties that possibly include coordinates
             geojson = {"type" : "FeatureCollection", "features" : []}
             for p in results:
@@ -140,7 +140,7 @@ def loadSocrataTable(url, data_set, dateField=None, year=None, optFilter=None, s
             else:
                 df = df.append(new_gdf)
         else:
-            outputType = "DataFrame"
+            output_type = "DataFrame"
             rows = pd.DataFrame.from_records(results)
             if offset==0:
                 df = pd.DataFrame(rows)
@@ -153,11 +153,11 @@ def loadSocrataTable(url, data_set, dateField=None, year=None, optFilter=None, s
     return df
 
 
-def filterDataFrame(df, dateField=None, yearFilter=None, jurisdictionField=None, jurisdictionFilter=None):
-    if yearFilter != None and dateField != None:
-        df = df[df[dateField].dt.year == yearFilter]
+def filter_dataframe(df, date_field=None, year_filter=None, jurisdiction_field=None, jurisdiction_filter=None):
+    if year_filter != None and date_field != None:
+        df = df[df[date_field].dt.year == year_filter]
 
-    if jurisdictionFilter != None and jurisdictionField != None:
-        df = df.query(jurisdictionField + " = '" + jurisdictionFilter + "'")
+    if jurisdiction_filter != None and jurisdiction_field != None:
+        df = df.query(jurisdiction_field + " = '" + jurisdiction_filter + "'")
 
     return df

@@ -21,7 +21,7 @@ class TableTypes(Enum):
 # df = datasets.get()  # Return a dataframe containing all datasets
 # df = datasets.get(state="Virginia")  # Return a dataframe containing only datasets for Virginia
 
-_allStates = [
+_all_states = [
     'Alabama', 'Alaska', 'American Samoa', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware', 'District Of Columbia',
     'Florida', 'Georgia', 'Guam', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky', 'Louisiana', 'Maine',
     'Maryland', 'Massachusetts', 'Michigan', 'Minnesota', 'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire',
@@ -32,7 +32,6 @@ _allStates = [
 
 # For data sets that put multiple years or jurisdictions in 1 dataset
 MULTI = "MULTI"
-_idLength = 8
 
 class _DatasetBuilder:
     columns = {
@@ -48,11 +47,11 @@ class _DatasetBuilder:
         'LUT': np.dtype("O"),
     }
 
-    rowData = []
+    row_data = []
 
 
-    def addData(self, state, jurisdiction, tableType, url, dataType, sourceName=None, years=MULTI, description="", lutDict={}):
-        if state not in _allStates:
+    def add_data(self, state, jurisdiction, tableType, url, data_type, source_name=None, years=MULTI, description="", lut_dict={}):
+        if state not in _all_states:
             raise ValueError(f"Unknown state: {state}")
         
         if not isinstance(years, list):
@@ -61,14 +60,14 @@ class _DatasetBuilder:
         if not isinstance(url, list):
             url = [url]
 
-        if sourceName==None:
-            sourceName = jurisdiction
+        if source_name==None:
+            source_name = jurisdiction
 
         for k, year in enumerate(years):
-            self.rowData.append([0, state, sourceName, jurisdiction, tableType.value, year, description, dataType.value, url[k], lutDict])
+            self.row_data.append([0, state, source_name, jurisdiction, tableType.value, year, description, data_type.value, url[k], lut_dict])
 
-    def buildDataFrame(self):
-        df = pd.DataFrame(self.rowData, columns=self.columns.keys())
+    def build_data_frame(self):
+        df = pd.DataFrame(self.row_data, columns=self.columns.keys())
         keyVals = ['State', 'SourceName', 'Jurisdiction', 'TableType','Year']
         df.drop_duplicates(subset=keyVals, inplace=True)
         df = df.astype(self.columns)
@@ -82,47 +81,47 @@ class _DatasetBuilder:
 _builder = _DatasetBuilder()
 
 ###################### Add datasets here #########################
-_builder.addData(state="Virginia", sourceName="Virginia Community Policing Act", jurisdiction=MULTI, tableType=TableTypes.STOPS, url="data.virginia.gov", dataType=DataTypes.SOCRATA, 
+_builder.add_data(state="Virginia", source_name="Virginia Community Policing Act", jurisdiction=MULTI, tableType=TableTypes.STOPS, url="data.virginia.gov", data_type=DataTypes.SOCRATA, 
     description="A data collection consisting of all traffic and investigatory stops made in Virginia as aggregated by Virginia Department of State Police",
-    lutDict={"id" :"2c96-texw","dateField" : "incident_date", "jurisdictionField" : "agency_name"})
-_builder.addData(state="Virginia", jurisdiction="Fairfax County Police Department",
+    lut_dict={"id" :"2c96-texw","date_field" : "incident_date", "jurisdiction_field" : "agency_name"})
+_builder.add_data(state="Virginia", jurisdiction="Fairfax County Police Department",
     tableType=TableTypes.TRAFFIC_WARNINGS, 
     url=["https://opendata.arcgis.com/datasets/f9c4429fb0dc440ba97a0616c99c9493_0.geojson",
         "https://opendata.arcgis.com/datasets/19307e74fb5948c1a9d0270b44ebb638_0.geojson"], 
-    dataType=DataTypes.GeoJSON,
+    data_type=DataTypes.GeoJSON,
     years=[2019,2020],
     description="Traffic Warnings issued by Fairfax County Police")
-_builder.addData(state="Virginia", jurisdiction="Fairfax County Police Department",
+_builder.add_data(state="Virginia", jurisdiction="Fairfax County Police Department",
     tableType=TableTypes.TRAFFIC_CITATIONS, 
     url=["https://opendata.arcgis.com/datasets/67a02d6ebbdf41f089b9afda47292697_0.geojson",
         "https://opendata.arcgis.com/datasets/1a262db8328e42d79feac20ec8424b38_0.geojson"], 
-    dataType=DataTypes.GeoJSON,
+    data_type=DataTypes.GeoJSON,
     years=[2019,2020],
     description="Traffic Citations issued by Fairfax County Police")
-_builder.addData(state="Virginia", jurisdiction="Fairfax County Police Department",
+_builder.add_data(state="Virginia", jurisdiction="Fairfax County Police Department",
     tableType=TableTypes.ARRESTS, 
     url=["https://opendata.arcgis.com/datasets/946c2420324f4151b3526698d14021cd_0.geojson",
         "https://opendata.arcgis.com/datasets/0245b41f40a9439e928f17366dfa0b62_0.geojson",
         "https://opendata.arcgis.com/datasets/26ecb857abeb45bdbb89658b1d2b6eb1_0.geojson",
         "https://opendata.arcgis.com/datasets/71900edc43ed4be79270cdf505b06209_0.geojson",
         "https://opendata.arcgis.com/datasets/c722428522bb4666a609dd282463e11e_0.geojson"], 
-    dataType=DataTypes.GeoJSON,
+    data_type=DataTypes.GeoJSON,
     years=[2016,2017,2018,2019,2020],
     description="Traffic Citations issued by Fairfax County Police")
-_builder.addData("Maryland", jurisdiction="Montgomery County Police Department", 
-    tableType=TableTypes.TRAFFIC, url="data.montgomerycountymd.gov", dataType=DataTypes.SOCRATA,
+_builder.add_data("Maryland", jurisdiction="Montgomery County Police Department", 
+    tableType=TableTypes.TRAFFIC, url="data.montgomerycountymd.gov", data_type=DataTypes.SOCRATA,
     description="This dataset contains traffic violation information from all electronic traffic violations issued in Montgomery County",
-    lutDict={"id" :"4mse-ku6q","dateField" : "date_of_stop"})
-_builder.addData(state="Colorado", jurisdiction="Denver Police Department",
+    lut_dict={"id" :"4mse-ku6q","date_field" : "date_of_stop"})
+_builder.add_data(state="Colorado", jurisdiction="Denver Police Department",
     tableType=TableTypes.STOPS, 
     url=["https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_CRIME_STOPS_P/FeatureServer"], 
-    dataType=DataTypes.ArcGIS,
+    data_type=DataTypes.ArcGIS,
     description="Police Pedestrian Stops and Vehicle Stops",
-    lutDict={"dateField" : "TIME_PHONEPICKUP"})
-datasets = _builder.buildDataFrame()
+    lut_dict={"date_field" : "TIME_PHONEPICKUP"})
+datasets = _builder.build_data_frame()
 
 
-def get(sourceName=None, state=None, id=None, jurisdiction=None, tableType=None, year=None):
+def get(sourceName=None, state=None, id=None, jurisdiction=None, table_type=None, year=None):
     query = ""
     if state != None:
         query += "State == '" + state + "' and "
@@ -136,10 +135,10 @@ def get(sourceName=None, state=None, id=None, jurisdiction=None, tableType=None,
     if jurisdiction != None:
         query += "Jurisdiction == '" + jurisdiction + "' and " 
 
-    if tableType != None:
-        if isinstance(tableType, TableTypes):
-            tableType = tableType.value
-        query += "TableType == '" + tableType + "' and "
+    if table_type != None:
+        if isinstance(table_type, TableTypes):
+            table_type = table_type.value
+        query += "TableType == '" + table_type + "' and "
 
     if year != None:
         if isinstance(year, str):
