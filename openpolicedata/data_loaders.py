@@ -1,4 +1,5 @@
 import os
+from datetime import date
 import geopandas as gpd
 import pandas as pd
 from sodapy import Socrata
@@ -41,7 +42,7 @@ def load_geojson(url, date_field=None, year_filter=None, jurisdiction_field=None
     return df
 
 
-def load_arcgis(url, date_field=None, year=None, select=None, output_type=None):
+def load_arcgis(url, date_field=None, year=None, limit=None):
     #TODO: Error checking for layer type
     layer_collection = FeatureLayerCollection(url)
 
@@ -62,20 +63,26 @@ def load_arcgis(url, date_field=None, year=None, select=None, output_type=None):
         
         where_query = f"{date_field} >= '{start_date}' AND  {date_field} < '{stop_date}'"
 
-    layer_query_result = active_layer.query(where=where_query)
+    layer_query_result = active_layer.query(where=where_query, return_all_records=(limit == None), result_record_count=limit)
 
-    return gpd.GeoDataFrame(layer_query_result.sdf,crs=layer_query_result.spatial_reference['wkid'])
-    
+    if len(layer_query_result) > 0:
+        return gpd.GeoDataFrame(layer_query_result.sdf,crs=layer_query_result.spatial_reference['wkid'])
+    else:
+        return []
 
 
-def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, select=None, output_type=None, key=default_sodapy_key):
+def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, select=None, output_type=None, 
+                 limit=None, key=default_sodapy_key):
     # Load tables that use Socrata
 
     # Unauthenticated client only works with public data sets. Note 'None'
     # in place of application token, and no username or password:
     client = Socrata(url, key)
 
-    limit = client.DEFAULT_LIMIT
+    userLimit = limit != None
+    if not userLimit:
+        limit = client.DEFAULT_LIMIT
+
     N = 1  # Initialize to value > 0 so while loop runs
     offset = 0
 
@@ -150,6 +157,9 @@ def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, sel
         N = len(results)
         offset += N
 
+        if userLimit:
+            break
+
     return df
 
 
@@ -161,3 +171,40 @@ def filter_dataframe(df, date_field=None, year_filter=None, jurisdiction_field=N
         df = df.query(jurisdiction_field + " = '" + jurisdiction_filter + "'")
 
     return df
+
+
+def get_years_argis(url, date_field):
+    return _get_years("arcgis", url, date_field=date_field)
+
+
+def get_years_socrata(url, data_set, date_field):
+    return _get_years("socrata", url, date_field=date_field, data_set=data_set)
+
+
+def _get_years(data_type, url, date_field, data_set=None):
+    year = date.today().year
+    data_type = data_type.lower()
+
+    oldest_recent = 20
+    max_misses_gap = 10
+    max_misses = oldest_recent
+    misses = 0
+    years = []
+    while misses < max_misses:
+        if data_type == "arcgis":
+            df = load_arcgis(url, date_field=date_field, year=year, limit=1)
+        elif data_type == "socrata":
+            df = load_socrata(url, data_set, date_field=date_field, year=year, limit=1)
+        else:
+            raise ValueError("Unknown data type")
+
+        if len(df)==0:
+            misses+=1
+        else:
+            misses = 0
+            max_misses = max_misses_gap
+            years.append(year)
+
+        year-=1
+
+    return years

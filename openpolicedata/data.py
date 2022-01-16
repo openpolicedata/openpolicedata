@@ -68,30 +68,6 @@ class Table:
         if "jurisdiction_field" in source["LUT"]:
             self._jurisdiction_field = source["LUT"]["jurisdiction_field"]
 
-    # def getJurisdictions(self, partialName=None, year=None):
-    #     # If year is multi, need to use self._jurisdictionField to query URL
-    #     # Otherwise return self.jurisdiction
-    #     if self.year == datasets.MULTI:
-    #         if self._dataType == datasets.DataTypes.CSV:
-    #             raise ValueError(f"Unable to get jurisdictions for {self._dataType}")
-    #         elif self._dataType == datasets.DataTypes.GeoJSON:
-    #             raise ValueError(f"Unable to get jurisdictions for {self._dataType}")
-    #         elif self._dataType == datasets.DataTypes.ArcGIS:
-    #             raise ValueError(f"Unable to get jurisdictions for {self._dataType}")
-    #         elif self._dataType == datasets.DataTypes.SOCRATA:
-    #             if partialName is not None:
-    #                 optFilter = "agency_name LIKE '%" + partialName + "%'"
-    #             else:
-    #                 optFilter = None
-
-    #             jurisdictionSet = DataLoaders.loadSocrataTable(self.url, self._datasetId, date_field=self._dateField, year=year, 
-    #                 optFilter=optFilter, select="DISTINCT agency_name", outputType="set")
-    #             return list(jurisdictionSet)
-    #         else:
-    #             raise ValueError(f"Unknown data type: {self._dataType}")
-    #     else:
-    #         return [self.jurisdiction]
-
 
     def to_csv(self, outputDir=None, filename=None):
         # Default outputDir is cd
@@ -157,14 +133,9 @@ class Source:
                                     " for this case, use forceRead=True")
                     
             elif data_type == datasets.DataTypes.ArcGIS:
-                # TODO: Paul
-                raise NotImplementedError("This needs implemented")
+                years = data_loaders.get_years_argis(url, date_field)
             elif data_type == datasets.DataTypes.SOCRATA:
-                dates = data_loaders.load_socrata(url, df["LUT"]["id"], 
-                    select="DISTINCT " + date_field, output_type="set")
-                dates = list(dates)
-                dates = pd.to_datetime(dates)
-                years = list(dates.year.unique())
+                years = data_loaders.get_years_socrata(url, df["LUT"]["id"], date_field)
             else:
                 raise ValueError(f"Unknown data type: {data_type}")
         else:
@@ -174,9 +145,47 @@ class Source:
         return years
 
 
-    def get_jurisdictions(self, partialName=None, year=None):
-        pass
+    def get_jurisdictions(self, table_type=None, year=None, partial_name=None):
+        if isinstance(table_type, datasets.TableTypes):
+            table = table_type.value
 
+        src = self.sources
+        if table_type != None:
+            src = self.sources[self.sources["TableType"]==table]
+
+        if year != None:
+            src = src[src["Year"] == year]
+
+        if len(src) == 1:
+            src = src.iloc[0]
+        else:
+            raise ValueError("table_type and year inputs must filter for a single source")            
+
+        # If year is multi, need to use self._jurisdictionField to query URL
+        # Otherwise return self.jurisdiction
+        if src["Year"] == datasets.MULTI:
+            data_type = datasets.DataTypes(src["DataType"])
+            if data_type == datasets.DataTypes.CSV:
+                raise NotImplementedError(f"Unable to get jurisdictions for {data_type}")
+            elif data_type == datasets.DataTypes.GeoJSON:
+                raise NotImplementedError(f"Unable to get jurisdictions for {data_type}")
+            elif data_type == datasets.DataTypes.ArcGIS:
+                raise NotImplementedError(f"Unable to get jurisdictions for {data_type}")
+            elif data_type == datasets.DataTypes.SOCRATA:
+                if partial_name is not None:
+                    opt_filter = "agency_name LIKE '%" + partial_name + "%'"
+                else:
+                    opt_filter = None
+
+                select = "DISTINCT " + src["LUT"]["jurisdiction_field"]
+                jurisdictionSet = data_loaders.load_socrata(src["URL"], src["LUT"]["id"], 
+                    date_field=src["LUT"]["date_field"], year=year, opt_filter=opt_filter, select=select, output_type="set")
+                return list(jurisdictionSet)
+            else:
+                raise ValueError(f"Unknown data type: {data_type}")
+        else:
+            return [src["Jurisdiction"]]
+        
 
     def load_from_url(self, year, table_type=None, jurisdiction_filter=None):
         # year is either for selecting the correct table to load (if the year is a specific year)
@@ -271,15 +280,16 @@ class Source:
 
 if __name__ == '__main__':
     src = Source("Denver Police Department")
-    # print(f"Years for DPD Table are {src.getYears()}")
+    # print(f"Years for DPD Table are {src.get_years()}")
     # table = src.load_from_url(year = 2020)
 
     src = Source("Fairfax County Police Department")
     print(f"Tables for FCPD are {src.get_tables_types()}")
     print(f"Years for FCPD Arrests Table are {src.get_years(datasets.TableTypes.ARRESTS)}")
+    print(f"Jurisdictions for FCPD Arrests Table are {src.get_jurisdictions(table_type=datasets.TableTypes.ARRESTS, year=2019)}")
 
     # table = src.load_from_url(year=2020, table_type=datasets.TableTypes.TRAFFIC_CITATIONS)
-    table = src.load_from_url(year=[2019,2020], table_type=datasets.TableTypes.TRAFFIC_CITATIONS)  # This should cause an error
+    # table = src.load_from_url(year=[2019,2020], table_type=datasets.TableTypes.TRAFFIC_CITATIONS)  # This should cause an error
     # ffxCit2020 = "https://opendata.arcgis.com/api/v3/datasets/1a262db8328e42d79feac20ec8424b38_0/downloads/data?format=csv&spatialRefId=4326"
     # csvTable = pd.read_csv(ffxCit2020, parse_dates=True)
 
@@ -290,8 +300,11 @@ if __name__ == '__main__':
     #     raise ValueError("Example GeoJSON data was not read in improperly: Test column differs")
 
     src = Source("Virginia Community Policing Act")
-    print(f"Years for VCPA data are {src.get_years()}")
-    table = src.load_from_url(year=[2020,2020], jurisdiction_filter="Fairfax County Police Department")
+    # print(f"Years for VCPA data are {src.get_years()}")
+    jurisdictionsAll = src.get_jurisdictions()
+    jurisdictions_ffx =src.get_jurisdictions(partial_name="Fairfax")
+    print(f"Jurisdictions for VCPA matching Fairfax are {jurisdictions_ffx}")
+    # table = src.load_from_url(year=[2020,2020], jurisdiction_filter="Fairfax County Police Department")
 
     # year = 2020
     # src = Source("Montgomery County Police Department")
