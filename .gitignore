@@ -1,5 +1,8 @@
 # Local development directories
-sandbox
+sandbox/
+
+#data directory in root
+/data/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
