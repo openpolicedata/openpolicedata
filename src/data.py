@@ -1,3 +1,4 @@
+import os.path as path
 import pandas as pd
 
 import data_loaders
@@ -23,7 +24,7 @@ class Table:
     _date_field = None
     _jurisdiction_field = None
 
-    def __init__(self, source, table, date_field=None, jurisdiction_field=None):
+    def __init__(self, source, table=None, year_filter=None, jurisdiction_filter=None):
         if not isinstance(source, pd.core.frame.DataFrame) and \
             not isinstance(source, pd.core.series.Series):
             raise TypeError("data must be an ID, DataFrame or Series")
@@ -41,17 +42,15 @@ class Table:
         self.state = source["State"]
         self.source_name = source["SourceName"]
 
-        if jurisdiction_field != None and self.table[jurisdiction_field].nunique() == 1:
-            # Jurisdiction field only contains 1 value. Use that instead of source value
-            self.jurisdiction = self.table.iloc[0][jurisdiction_field]
+        if jurisdiction_filter != None:
+            self.jurisdiction = jurisdiction_filter
         else:
             self.jurisdiction = source["Jurisdiction"]
 
         self.table_type = datasets.TableTypes(source["TableType"])  # Convert to Enum
 
-        if date_field != None and self.table[date_field].dt.year.nunique() == 1:
-            # Date field only contains dates from 1 year. Use that instead of source value
-            self.year = self.table.iloc[0][date_field]
+        if year_filter != None:
+            self.year = year_filter
         else:
             self.year = source["Year"]
 
@@ -70,10 +69,18 @@ class Table:
 
 
     def to_csv(self, outputDir=None, filename=None):
-        # Default outputDir is cd
-        # If filename is none, there should be a default one
-        # Save to CSV
-        pass
+        if filename == None:
+            filename = self.get_csv_filename()
+        if outputDir != None:
+            filename = path.join(outputDir, filename)
+        if not isinstance(self.table, pd.core.frame.DataFrame):
+            raise ValueError("There is no table to save to CSV")
+
+        self.table.to_csv(filename)
+
+
+    def get_csv_filename(self):
+        return get_csv_filename(self.state, self.source_name, self.jurisdiction, self.table_type, self.year)
 
 
 class Source:
@@ -95,11 +102,11 @@ class Source:
 
     def get_years(self, table_type=None, force_read=False):
         if isinstance(table_type, datasets.TableTypes):
-            table = table_type.value
+            table_type = table_type.value
 
         df = self.sources
         if table_type != None:
-            df = self.sources[self.sources["TableType"]==table]
+            df = self.sources[self.sources["TableType"]==table_type]
 
         if len(df) == 1 and df.iloc[0]["Year"] == datasets.MULTI:
             df = df.iloc[0]
@@ -147,11 +154,11 @@ class Source:
 
     def get_jurisdictions(self, table_type=None, year=None, partial_name=None):
         if isinstance(table_type, datasets.TableTypes):
-            table = table_type.value
+            table_type = table_type.value
 
         src = self.sources
         if table_type != None:
-            src = self.sources[self.sources["TableType"]==table]
+            src = self.sources[self.sources["TableType"]==table_type]
 
         if year != None:
             src = src[src["Year"] == year]
@@ -194,10 +201,11 @@ class Source:
         #   retrieve data from startYear to stopYear
         # jurisdictionFilter filters the table for a given jurisdiction for tables that contain 
         #   multiple jurisdictions
+        return self.__load(year, table_type, jurisdiction_filter, True)
 
+    def __load(self, year, table_type, jurisdiction_filter, load_table):
         if isinstance(table_type, datasets.TableTypes):
             table_type = table_type.value
-
 
         src = self.sources
         if table_type != None:
@@ -239,43 +247,81 @@ class Source:
         if "id" in src["LUT"]:
             dataset_id = src["LUT"]["id"]
 
+        table_year = None
         if "date_field" in src["LUT"]:
             date_field = src["LUT"]["date_field"]
+            if year_filter != None:
+                table_year = year_filter
         else:
             date_field = None
         
+        table_jurisdiction = None
         if "jurisdiction_field" in src["LUT"]:
             jurisdiction_field = src["LUT"]["jurisdiction_field"]
+            if jurisdiction_filter != None and data_type != datasets.DataTypes.ArcGIS:
+                table_jurisdiction = jurisdiction_filter
         else:
             jurisdiction_field = None
         
-        if data_type == datasets.DataTypes.CSV:
-            table = pd.read_csv(url, parse_dates=True)
-            table = data_loaders.filter_dataframe(table, date_field=date_field, year_filter=year_filter, 
-                jurisdiction_field=jurisdiction_field, jurisdiction_filter=jurisdiction_filter)
-        elif data_type == datasets.DataTypes.GeoJSON:
-            table = data_loaders.load_geojson(url, date_field=date_field, year_filter=year_filter, 
-                jurisdiction_field=jurisdiction_field, jurisdiction_filter=jurisdiction_filter)
-        elif data_type == datasets.DataTypes.ArcGIS:
-            table = data_loaders.load_arcgis(url, date_field, year_filter)
-        elif data_type == datasets.DataTypes.SOCRATA:
-            opt_filter = None
-            if jurisdiction_filter != None and jurisdiction_field != None:
-                opt_filter = jurisdiction_field + " = '" + jurisdiction_filter + "'"
+        if load_table:
+            if data_type == datasets.DataTypes.CSV:
+                table = data_loaders.load_csv(url, date_field=date_field, year_filter=year_filter, 
+                    jurisdiction_field=jurisdiction_field, jurisdiction_filter=jurisdiction_filter)
+            elif data_type == datasets.DataTypes.GeoJSON:
+                table = data_loaders.load_geojson(url, date_field=date_field, year_filter=year_filter, 
+                    jurisdiction_field=jurisdiction_field, jurisdiction_filter=jurisdiction_filter)
+            elif data_type == datasets.DataTypes.ArcGIS:
+                table = data_loaders.load_arcgis(url, date_field, year_filter)
+            elif data_type == datasets.DataTypes.SOCRATA:
+                opt_filter = None
+                if jurisdiction_filter != None and jurisdiction_field != None:
+                    opt_filter = jurisdiction_field + " = '" + jurisdiction_filter + "'"
 
-            table = data_loaders.load_socrata(url, dataset_id, date_field=date_field, year=year_filter, opt_filter=opt_filter)
+                table = data_loaders.load_socrata(url, dataset_id, date_field=date_field, year=year_filter, opt_filter=opt_filter)
+            else:
+                raise ValueError(f"Unknown data type: {data_type}")
+
+            if date_field != None:
+                table = table.astype({date_field: 'datetime64[ns]'})
         else:
-            raise ValueError(f"Unknown data type: {data_type}")
+            table = None
 
-        if date_field != None:
-            table = table.astype({date_field: 'datetime64[ns]'})
-
-        return Table(src, table, date_field, jurisdiction_field)
+        return Table(src, table, year_filter=table_year, jurisdiction_filter=table_jurisdiction)
 
 
-    def load_from_csv(self, outputDir=None, year=None, jurisdiction=None):
+    def load_from_csv(self, year, outputDir=None, table_type=None, jurisdiction_filter=None):
         # Load from default CSV file in outputDir (default to cd)
-        pass
+
+        table = self.__load(year, table_type, jurisdiction_filter, False)
+
+        filename = table.get_csv_filename()
+        if outputDir != None:
+            filename = path.join(outputDir, filename)            
+
+        table.table = pd.read_csv(filename, parse_dates=True)
+
+        return table
+
+
+def get_csv_filename(state, source_name, jurisdiction, table_type, year):
+    if isinstance(table_type, datasets.TableTypes):
+        table_type = table_type.value
+        
+    filename = f"{state}_{source_name}"
+    if source_name != jurisdiction:
+        filename += f"_{jurisdiction}"
+    filename += f"_{table_type}"
+    if isinstance(year, list):
+        filename += f"_{year[0]}_{year[-1]}"
+    else:
+        filename += f"_{year}"
+
+    # Clean up filename
+    filename = filename.replace(",", "_").replace(" ", "_").replace("__", "_")
+
+    filename += ".csv"
+
+    return filename
 
 
 if __name__ == '__main__':
@@ -288,7 +334,14 @@ if __name__ == '__main__':
     print(f"Years for FCPD Arrests Table are {src.get_years(datasets.TableTypes.ARRESTS)}")
     print(f"Jurisdictions for FCPD Arrests Table are {src.get_jurisdictions(table_type=datasets.TableTypes.ARRESTS, year=2019)}")
 
-    # table = src.load_from_url(year=2020, table_type=datasets.TableTypes.TRAFFIC_CITATIONS)
+    table = src.load_from_url(year=2020, table_type=datasets.TableTypes.TRAFFIC_CITATIONS)
+    table.to_csv(outputDir="./doc")
+    table.to_csv(filename="test.csv")
+    table_load_csv = src.load_from_csv(year=2020, table_type=datasets.TableTypes.TRAFFIC_CITATIONS, outputDir="./doc")
+
+    if len(table.table) != len(table_load_csv.table):
+        raise ValueError("CSV table not loaded properly")
+
     # table = src.load_from_url(year=[2019,2020], table_type=datasets.TableTypes.TRAFFIC_CITATIONS)  # This should cause an error
     # ffxCit2020 = "https://opendata.arcgis.com/api/v3/datasets/1a262db8328e42d79feac20ec8424b38_0/downloads/data?format=csv&spatialRefId=4326"
     # csvTable = pd.read_csv(ffxCit2020, parse_dates=True)
@@ -304,7 +357,7 @@ if __name__ == '__main__':
     jurisdictionsAll = src.get_jurisdictions()
     jurisdictions_ffx =src.get_jurisdictions(partial_name="Fairfax")
     print(f"Jurisdictions for VCPA matching Fairfax are {jurisdictions_ffx}")
-    # table = src.load_from_url(year=[2020,2020], jurisdiction_filter="Fairfax County Police Department")
+    table = src.load_from_url(year=[2020,2020], jurisdiction_filter="Fairfax County Police Department")
 
     # year = 2020
     # src = Source("Montgomery County Police Department")
