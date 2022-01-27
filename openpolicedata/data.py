@@ -87,7 +87,7 @@ class Source:
     sources = None
 
     def __init__(self, source_name, state=None):
-        self.sources = datasets.get(sourceName=source_name, state=state)
+        self.sources = datasets.get(source_name=source_name, state=state)
 
         # Ensure that all sources are from the same state
         if len(self.sources) == 0:
