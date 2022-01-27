@@ -2,15 +2,7 @@ import pytest
 import pandas as pd
 import os
 import sys
-
-try:
-    import data_loaders
-except ModuleNotFoundError as error:
-    sys.exit(str(error) + ". Possible issue: The src directory is not on your path. If running Linux did you first run export PYTHONPATH=./src:${PYTHONPATH} ?")
-except Exception as exception:
-    # Output unexpected Exceptions.
-    sys.exit(str(exception))
-
+from openpolicedata import data_loaders
 
 
 class TestProduct:
