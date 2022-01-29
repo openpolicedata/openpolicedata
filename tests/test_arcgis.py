@@ -47,6 +47,6 @@ class TestProduct:
             df_gold.to_csv(gold_filename)
             
         src = data.Source("Denver Police Department")
-        table = src.load_from_url([gold_start_year, gold_end_year], table_type=datasets.TableTypes.ST
+        table = src.load_from_url([gold_start_year, gold_end_year], table_type=datasets.TableTypes.STOPS)
         assert len(table.table) == len(df_gold)
         
