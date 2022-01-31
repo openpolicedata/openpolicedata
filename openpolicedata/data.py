@@ -1,7 +1,11 @@
+import sys
+import os
+print(f"The data.py system path is {sys.path} and current directory is {os.getcwd()}")
+
 import pandas as pd
 
-import data_loaders
-import datasets
+from . import data_loaders
+from . import datasets
 
 class Table:
     source = None
