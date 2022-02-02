@@ -85,6 +85,7 @@ class Table:
 
 class Source:
     sources = None
+    __limit = None
 
     def __init__(self, source_name, state=None):
         self.sources = datasets.get(source_name=source_name, state=state)
@@ -271,13 +272,14 @@ class Source:
                 table = data_loaders.load_geojson(url, date_field=date_field, year_filter=year_filter, 
                     jurisdiction_field=jurisdiction_field, jurisdiction_filter=jurisdiction_filter)
             elif data_type == datasets.DataTypes.ArcGIS:
-                table = data_loaders.load_arcgis(url, date_field, year_filter)
+                table = data_loaders.load_arcgis(url, date_field, year_filter, limit=self.__limit)
             elif data_type == datasets.DataTypes.SOCRATA:
                 opt_filter = None
                 if jurisdiction_filter != None and jurisdiction_field != None:
                     opt_filter = jurisdiction_field + " = '" + jurisdiction_filter + "'"
 
-                table = data_loaders.load_socrata(url, dataset_id, date_field=date_field, year=year_filter, opt_filter=opt_filter)
+                table = data_loaders.load_socrata(url, dataset_id, date_field=date_field, year=year_filter, opt_filter=opt_filter, 
+                    limit=self.__limit)
             else:
                 raise ValueError(f"Unknown data type: {data_type}")
 
@@ -323,8 +325,26 @@ def get_csv_filename(state, source_name, jurisdiction, table_type, year):
 
     return filename
 
+def can_be_limited(table_type):
+    if (table_type == "CSV" or table_type == "GeoJSON"):
+        return False
+    elif (table_type == "ArcGIS" or table_type == "Socrata"):
+        return True
+    else:
+        raise ValueError("Unknown table type")
 
 if __name__ == '__main__':
+    for i in range(len(datasets.datasets)):
+        if can_be_limited(datasets.datasets.iloc[i]["DataType"]):
+            srcName = datasets.datasets.iloc[i]["SourceName"]
+            state = datasets.datasets.iloc[i]["State"]
+            src = Source(srcName, state=state)
+            # For speed, set private limit parameter so that only a single entry is requested
+            src._Source__limit = 1
+
+            table = src.load_from_url(datasets.datasets.iloc[i]["Year"], datasets.datasets.iloc[i]["TableType"])
+            assert len(table.table)==1
+
     src = Source("Denver Police Department")
     # print(f"Years for DPD Table are {src.get_years()}")
     # table = src.load_from_url(year = 2020)

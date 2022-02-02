@@ -39,7 +39,7 @@ class TestProduct:
             print(f'Comparing {url} with {gold_filename}')
             print(f'Current directory is {os.getcwd()}')
             df_gold = pd.read_csv(gold_filename)
-        else;
+        else:
             csv_url = "https://www.denvergov.org/media/gis/DataCatalog/police_pedestrian_stops_and_vehicle_stops/csv/police_pedestrian_stops_and_vehicle_stops.csv"
             df_gold = pd.read_csv(csv_url)
             if not os.path.isdir(os.path.dirname(gold_filename)):
