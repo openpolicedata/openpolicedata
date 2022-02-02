@@ -1,8 +1,12 @@
 import os.path as path
 import pandas as pd
 
-import data_loaders
-import datasets
+if __name__ == '__main__':
+    import data_loaders
+    import datasets
+else:
+    from . import data_loaders
+    from . import datasets
 
 class Table:
     source = None
@@ -325,26 +329,7 @@ def get_csv_filename(state, source_name, jurisdiction, table_type, year):
 
     return filename
 
-def can_be_limited(table_type):
-    if (table_type == "CSV" or table_type == "GeoJSON"):
-        return False
-    elif (table_type == "ArcGIS" or table_type == "Socrata"):
-        return True
-    else:
-        raise ValueError("Unknown table type")
-
 if __name__ == '__main__':
-    for i in range(len(datasets.datasets)):
-        if can_be_limited(datasets.datasets.iloc[i]["DataType"]):
-            srcName = datasets.datasets.iloc[i]["SourceName"]
-            state = datasets.datasets.iloc[i]["State"]
-            src = Source(srcName, state=state)
-            # For speed, set private limit parameter so that only a single entry is requested
-            src._Source__limit = 1
-
-            table = src.load_from_url(datasets.datasets.iloc[i]["Year"], datasets.datasets.iloc[i]["TableType"])
-            assert len(table.table)==1
-
     src = Source("Denver Police Department")
     # print(f"Years for DPD Table are {src.get_years()}")
     # table = src.load_from_url(year = 2020)
