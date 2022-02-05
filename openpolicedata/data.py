@@ -1,8 +1,12 @@
 import os.path as path
 import pandas as pd
 
-from . import data_loaders
-from . import datasets
+if __name__ == '__main__':
+    import data_loaders
+    import datasets
+else:
+    from . import data_loaders
+    from . import datasets
 
 class Table:
     source = None
@@ -85,6 +89,7 @@ class Table:
 
 class Source:
     sources = None
+    __limit = None
 
     def __init__(self, source_name, state=None):
         self.sources = datasets.get(source_name=source_name, state=state)
@@ -271,13 +276,14 @@ class Source:
                 table = data_loaders.load_geojson(url, date_field=date_field, year_filter=year_filter, 
                     jurisdiction_field=jurisdiction_field, jurisdiction_filter=jurisdiction_filter)
             elif data_type == datasets.DataTypes.ArcGIS:
-                table = data_loaders.load_arcgis(url, date_field, year_filter)
+                table = data_loaders.load_arcgis(url, date_field, year_filter, limit=self.__limit)
             elif data_type == datasets.DataTypes.SOCRATA:
                 opt_filter = None
                 if jurisdiction_filter != None and jurisdiction_field != None:
                     opt_filter = jurisdiction_field + " = '" + jurisdiction_filter + "'"
 
-                table = data_loaders.load_socrata(url, dataset_id, date_field=date_field, year=year_filter, opt_filter=opt_filter)
+                table = data_loaders.load_socrata(url, dataset_id, date_field=date_field, year=year_filter, opt_filter=opt_filter, 
+                    limit=self.__limit)
             else:
                 raise ValueError(f"Unknown data type: {data_type}")
 
@@ -322,7 +328,6 @@ def get_csv_filename(state, source_name, jurisdiction, table_type, year):
     filename += ".csv"
 
     return filename
-
 
 if __name__ == '__main__':
     src = Source("Denver Police Department")
