@@ -253,16 +253,13 @@ _builder.add_data(state="Kansas", jurisdiction="Wichita Police Department",
 datasets = _builder.build_data_frame()
 
 
-def get(sourceName=None, state=None, id=None, jurisdiction=None, table_type=None, year=None):
+def get(source_name=None, state=None, jurisdiction=None, table_type=None):
     query = ""
     if state != None:
         query += "State == '" + state + "' and "
 
-    if sourceName != None:
-        query += "SourceName == '" + sourceName + "' and "
-
-    if id != None:
-        query += "ID == " + str(id) + " and "
+    if source_name != None:
+        query += "SourceName == '" + source_name + "' and "
 
     if jurisdiction != None:
         query += "Jurisdiction == '" + jurisdiction + "' and " 
@@ -271,12 +268,6 @@ def get(sourceName=None, state=None, id=None, jurisdiction=None, table_type=None
         if isinstance(table_type, TableTypes):
             table_type = table_type.value
         query += "TableType == '" + table_type + "' and "
-
-    if year != None:
-        if isinstance(year, str):
-            query += "Year == '" + year + "' and "
-        else:
-            query += "Year == " + str(year) + " and "
 
     if len(query) == 0:
         return datasets
