@@ -15,6 +15,14 @@ from arcgis.features import FeatureLayerCollection
 # Setting environment variable in Linux: https://phoenixnap.com/kb/linux-set-environment-variable
 default_sodapy_key = os.environ.get("SODAPY_API_KEY")
 
+def load_csv(url, date_field=None, year_filter=None, jurisdiction_field=None, jurisdiction_filter=None):
+    table = pd.read_csv(url, parse_dates=True)
+    table = filter_dataframe(table, date_field=date_field, year_filter=year_filter, 
+        jurisdiction_field=jurisdiction_field, jurisdiction_filter=jurisdiction_filter)
+
+    return table
+
+
 def load_geojson(url, date_field=None, year_filter=None, jurisdiction_field=None, jurisdiction_filter=None):
     try:
         response = requests.get(url)
@@ -62,8 +70,9 @@ def load_arcgis(url, date_field=None, year=None, limit=None):
             raise ValueError('year needs to be a 1 or 2 argument value')
         
         where_query = f"{date_field} >= '{start_date}' AND  {date_field} < '{stop_date}'"
-
-    layer_query_result = active_layer.query(where=where_query, return_all_records=(limit == None), result_record_count=limit)
+        layer_query_result = active_layer.query(where=where_query, return_all_records=(limit == None), result_record_count=limit)
+    else:
+        layer_query_result = active_layer.query(return_all_records=(limit == None), result_record_count=limit)
 
     if len(layer_query_result) > 0:
         return gpd.GeoDataFrame(layer_query_result.sdf,crs=layer_query_result.spatial_reference['wkid'])
