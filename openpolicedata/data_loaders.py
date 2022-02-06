@@ -4,6 +4,9 @@ import geopandas as gpd
 import pandas as pd
 from sodapy import Socrata
 import requests
+import json
+from pyproj.exceptions import CRSError
+from pyproj import CRS
 
 from arcgis.features import FeatureLayerCollection
 
@@ -49,12 +52,46 @@ def load_geojson(url, date_field=None, year_filter=None, jurisdiction_field=None
 
     return df
 
-
 def load_arcgis(url, date_field=None, year=None, limit=None):
+    # Table vs. Layer: https://developers.arcgis.com/rest/services-reference/enterprise/layer-feature-service-.htm
+    # The layer resource represents a single feature layer or a nonspatial table in a feature service. 
+    # A feature layer is a table or view with at least one spatial column.
+    # For tables, it provides basic information about the table such as its ID, name, fields, types, and templates. 
+    # For feature layers, in addition to the table information, it provides information such as its geometry type, min and max scales, and spatial reference.
     #TODO: Error checking for layer type
+    # TODO: Check layers for all arc GIS URLs
+    if url[-1] == "/":
+        url = url[0:-1]
+    last_slash = url.rindex("/")
+    layer_num = url[last_slash+1:]
+    url = url[:last_slash]
+    # Get layer/table #
+    # Shorten URL
+    
     layer_collection = FeatureLayerCollection(url)
 
-    active_layer = layer_collection.layers[0]
+    is_table = True
+    active_layer = None
+    for layer in layer_collection.layers:
+        layer_url = layer.url
+        if layer_url[-1] == "/":
+            layer_url = layer_url[:-1]
+        if layer_num == layer_url[last_slash+1:]:
+            active_layer = layer
+            is_table = False
+            break
+
+    if is_table:
+        for layer in layer_collection.tables:
+            layer_url = layer.url
+            if layer_url[-1] == "/":
+                layer_url = layer_url[:-1]
+            if layer_num == layer_url[last_slash+1:]:
+                active_layer = layer
+                break
+
+    if active_layer == None:
+        raise ValueError("Unable to find layer")
     
     where_query = ""
     if date_field!=None and year!=None:
@@ -75,9 +112,21 @@ def load_arcgis(url, date_field=None, year=None, limit=None):
         layer_query_result = active_layer.query(return_all_records=(limit == None), result_record_count=limit)
 
     if len(layer_query_result) > 0:
-        return gpd.GeoDataFrame(layer_query_result.sdf,crs=layer_query_result.spatial_reference['wkid'])
+        if is_table:
+            if "SHAPE" in layer_query_result.sdf:
+                raise ValueError("Tables are not expected to include geographic data")
+            return layer_query_result.sdf
+        else:
+            json_data = layer_query_result.to_geojson
+            json_data = json.loads(json_data)
+            try:
+                return gpd.GeoDataFrame.from_features(json_data, crs=layer_query_result.spatial_reference['wkid'])
+            except CRSError:
+                # Method recommended by pyproj to deal with CRSError for wkid = 102685
+                crs = CRS.from_authority("ESRI", layer_query_result.spatial_reference['wkid'])
+                return gpd.GeoDataFrame.from_features(json_data, crs=crs)
     else:
-        return []
+        return None
 
 
 def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, select=None, output_type=None, 
@@ -217,3 +266,7 @@ def _get_years(data_type, url, date_field, data_set=None):
         year-=1
 
     return years
+
+if __name__ == "__main__":
+    url = "https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPD/MapServer/14/"
+    table = load_arcgis(url, date_field="Month_of_Stop", year=2020, limit=1)
