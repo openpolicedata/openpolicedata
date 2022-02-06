@@ -124,7 +124,7 @@ _builder.add_data("Maryland", jurisdiction="Montgomery County Police Department"
 _builder.add_data("Maryland", jurisdiction="Montgomery County Police Department", 
     tableType=TableTypes.COMPLAINTS, url="data.montgomerycountymd.gov", data_type=DataTypes.SOCRATA,
     description="This dataset contains allegations brought to the attention of the Internal Affairs Division either through external complaints or internal complaint or recognition",
-    lut_dict={"id" :"usip-62e2","date_field" : "Date"})
+    lut_dict={"id" :"usip-62e2","date_field" : "created_dt"})
 _builder.add_data(state="Colorado", jurisdiction="Denver Police Department",
     tableType=TableTypes.STOPS, 
     url=["https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_CRIME_STOPS_P/FeatureServer/32/"], 
@@ -142,6 +142,7 @@ _builder.add_data(state="North Carolina", jurisdiction="Charlotte-Mecklenburg Po
     url=["https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPD/MapServer/16/"], 
     data_type=DataTypes.ArcGIS,
     description="CMPD Employee Demographics")
+# TODO: Combine officer-involved shootings data for Charlotte: https://data.charlottenc.gov/search?groupIds=82e7ad57f9bd4443af251fe88442dd17
 # TODO: Create data loader for Burlington
 # _builder.add_data(state="Vermont", jurisdiction="Burlington Police Department",
 #     tableType=TableTypes.USE_OF_FORCE, 
@@ -210,54 +211,54 @@ _builder.add_data(state="Maryland", jurisdiction="Baltimore Police Department",
     description=" Police Emergency and Non-Emergency calls to 911",
     years=2021,
     lut_dict={"date_field" : "callDateTime"})
-_builder.add_data(state="Maryland", jurisdiction="Baltimore Police Department",
-    tableType=TableTypes.COMPLAINTS, 
-    url=["https://www.projectcomport.org/department/4/complaints.csv"], 
-    data_type=DataTypes.CSV,
-    description="The Baltimore Police Department’s Office of Professional Responsibility tracks and investigates both internal complaints and citizen complaints regarding officer interactions in order to better serve the people of Baltimore.",
-    lut_dict={"date_field" : "occurredDate"})
-_builder.add_data(state="Maryland", jurisdiction="Baltimore Police Department",
-    tableType=TableTypes.USE_OF_FORCE, 
-    url=["https://www.projectcomport.org/department/4/uof.csv"], 
-    data_type=DataTypes.CSV,
-    description="Officers must immediately report any use of force incident, and all incidents undergo a thorough review process to ensure that the force used was reasonable, necessary, and proportional.",
-    lut_dict={"date_field" : "occurredDate"})
-_builder.add_data(state="Maryland", jurisdiction="Baltimore Police Department",
-    tableType=TableTypes.SHOOTINGS, 
-    url=["https://www.projectcomport.org/department/4/ois.csv"], 
-    data_type=DataTypes.CSV,
-    description="",
-    lut_dict={"date_field" : "occurredDate"})
-_builder.add_data(state="Indiana", jurisdiction="Indianapolis Police Department",
-    tableType=TableTypes.COMPLAINTS, 
-    url=["https://www.projectcomport.org/department/1/complaints.csv"], 
-    data_type=DataTypes.CSV,
-    description="The Citizens' Police Complaint Office (CPCO) gathers this data as part of accepting and investigating resident complaints about interactions with IMPD officers. More information is available in the CPCO FAQ (http://www.indy.gov/eGov/City/DPS/CPCO/Pages/faq.aspx).",
-    lut_dict={"date_field" : "occurredDate"})
-_builder.add_data(state="Indiana", jurisdiction="Indianapolis Police Department",
-    tableType=TableTypes.USE_OF_FORCE, 
-    url=["https://www.projectcomport.org/department/1/uof.csv"], 
-    data_type=DataTypes.CSV,
-    description="The Indianapolis Metropolitan Police Department (IMPD) gathers this data as part of its professional standards practices.",
-    lut_dict={"date_field" : "occurredDate"})
-_builder.add_data(state="Indiana", jurisdiction="Indianapolis Police Department",
-    tableType=TableTypes.SHOOTINGS, 
-    url=["https://www.projectcomport.org/department/1/ois.csv"], 
-    data_type=DataTypes.CSV,
-    description="The Indianapolis Metropolitan Police Department (IMPD) gathers this data as part of its professional standards practices.",
-    lut_dict={"date_field" : "occurredDate"})
-_builder.add_data(state="Kansas", jurisdiction="Wichita Police Department",
-    tableType=TableTypes.COMPLAINTS, 
-    url=["https://www.projectcomport.org/department/7/complaints.csv"], 
-    data_type=DataTypes.CSV,
-    description="",
-    lut_dict={"date_field" : "occurredDate"})
-_builder.add_data(state="Kansas", jurisdiction="Wichita Police Department",
-    tableType=TableTypes.USE_OF_FORCE, 
-    url=["https://www.projectcomport.org/department/7/uof.csv"], 
-    data_type=DataTypes.CSV,
-    description="The Wichita Police Department tracks all incidents of force used in a situation during the line of duty as part of its office of Professional Standards. ",
-    lut_dict={"date_field" : "occurredDate"})
+# _builder.add_data(state="Maryland", jurisdiction="Baltimore Police Department",
+#     tableType=TableTypes.COMPLAINTS, 
+#     url=["https://www.projectcomport.org/department/4/complaints.csv"], 
+#     data_type=DataTypes.CSV,
+#     description="The Baltimore Police Department’s Office of Professional Responsibility tracks and investigates both internal complaints and citizen complaints regarding officer interactions in order to better serve the people of Baltimore.",
+#     lut_dict={"date_field" : "occurredDate"})
+# _builder.add_data(state="Maryland", jurisdiction="Baltimore Police Department",
+#     tableType=TableTypes.USE_OF_FORCE, 
+#     url=["https://www.projectcomport.org/department/4/uof.csv"], 
+#     data_type=DataTypes.CSV,
+#     description="Officers must immediately report any use of force incident, and all incidents undergo a thorough review process to ensure that the force used was reasonable, necessary, and proportional.",
+#     lut_dict={"date_field" : "occurredDate"})
+# _builder.add_data(state="Maryland", jurisdiction="Baltimore Police Department",
+#     tableType=TableTypes.SHOOTINGS, 
+#     url=["https://www.projectcomport.org/department/4/ois.csv"], 
+#     data_type=DataTypes.CSV,
+#     description="",
+#     lut_dict={"date_field" : "occurredDate"})
+# _builder.add_data(state="Indiana", jurisdiction="Indianapolis Police Department",
+#     tableType=TableTypes.COMPLAINTS, 
+#     url=["https://www.projectcomport.org/department/1/complaints.csv"], 
+#     data_type=DataTypes.CSV,
+#     description="The Citizens' Police Complaint Office (CPCO) gathers this data as part of accepting and investigating resident complaints about interactions with IMPD officers. More information is available in the CPCO FAQ (http://www.indy.gov/eGov/City/DPS/CPCO/Pages/faq.aspx).",
+#     lut_dict={"date_field" : "occurredDate"})
+# _builder.add_data(state="Indiana", jurisdiction="Indianapolis Police Department",
+#     tableType=TableTypes.USE_OF_FORCE, 
+#     url=["https://www.projectcomport.org/department/1/uof.csv"], 
+#     data_type=DataTypes.CSV,
+#     description="The Indianapolis Metropolitan Police Department (IMPD) gathers this data as part of its professional standards practices.",
+#     lut_dict={"date_field" : "occurredDate"})
+# _builder.add_data(state="Indiana", jurisdiction="Indianapolis Police Department",
+#     tableType=TableTypes.SHOOTINGS, 
+#     url=["https://www.projectcomport.org/department/1/ois.csv"], 
+#     data_type=DataTypes.CSV,
+#     description="The Indianapolis Metropolitan Police Department (IMPD) gathers this data as part of its professional standards practices.",
+#     lut_dict={"date_field" : "occurredDate"})
+# _builder.add_data(state="Kansas", jurisdiction="Wichita Police Department",
+#     tableType=TableTypes.COMPLAINTS, 
+#     url=["https://www.projectcomport.org/department/7/complaints.csv"], 
+#     data_type=DataTypes.CSV,
+#     description="",
+#     lut_dict={"date_field" : "occurredDate"})
+# _builder.add_data(state="Kansas", jurisdiction="Wichita Police Department",
+#     tableType=TableTypes.USE_OF_FORCE, 
+#     url=["https://www.projectcomport.org/department/7/uof.csv"], 
+#     data_type=DataTypes.CSV,
+#     description="The Wichita Police Department tracks all incidents of force used in a situation during the line of duty as part of its office of Professional Standards. ",
+#     lut_dict={"date_field" : "occurredDate"})
 
         
 datasets = _builder.build_data_frame()
