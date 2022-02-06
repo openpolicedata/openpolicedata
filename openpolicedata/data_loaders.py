@@ -4,6 +4,7 @@ import geopandas as gpd
 import pandas as pd
 from sodapy import Socrata
 import requests
+import json
 
 from arcgis.features import FeatureLayerCollection
 
@@ -51,10 +52,31 @@ def load_geojson(url, date_field=None, year_filter=None, jurisdiction_field=None
 
 
 def load_arcgis(url, date_field=None, year=None, limit=None):
+    # Table vs. Layer: https://developers.arcgis.com/rest/services-reference/enterprise/layer-feature-service-.htm
+    # The layer resource represents a single feature layer or a nonspatial table in a feature service. 
+    # A feature layer is a table or view with at least one spatial column.
+    # For tables, it provides basic information about the table such as its ID, name, fields, types, and templates. 
+    # For feature layers, in addition to the table information, it provides information such as its geometry type, min and max scales, and spatial reference.
     #TODO: Error checking for layer type
+    # TODO: Check layers for all arc GIS URLs
+    if url[-1] == "/":
+        url = url[0:-1]
+    last_slash = url.rindex("/")
+    # Get layer/table #
+    # Shorten URL
+    
     layer_collection = FeatureLayerCollection(url)
 
-    active_layer = layer_collection.layers[0]
+    if len(layer_collection.layers)==1:
+        active_layer = layer_collection.layers[0]
+    elif len(layer_collection.layers)>1:
+        raise ValueError("How to handle more than 1 layer?")
+    elif len(layer_collection.tables)==1:
+        active_layer = layer_collection.tables[0]
+    elif len(layer_collection.tables)>1:
+        raise ValueError("How to handle more than 1 table?")
+    else:
+        raise ValueError("No layers or tables")
     
     where_query = ""
     if date_field!=None and year!=None:
@@ -75,7 +97,25 @@ def load_arcgis(url, date_field=None, year=None, limit=None):
         layer_query_result = active_layer.query(return_all_records=(limit == None), result_record_count=limit)
 
     if len(layer_query_result) > 0:
-        return gpd.GeoDataFrame(layer_query_result.sdf,crs=layer_query_result.spatial_reference['wkid'])
+        if "SHAPE" in layer_query_result.sdf:
+            json_data = layer_query_result.to_geojson
+            json_data = json.loads(json_data)
+            if layer_query_result.spatial_reference != None and layer_query_result.spatial_reference['wkid'] == 102685:
+                # This EPSG (https://epsg.io/102685) is causing an error. Presumably source is in pyproj
+                # Issue submitted: https://github.com/pyproj4/pyproj/issues/1021
+                gdf = gpd.GeoDataFrame.from_features(json_data)
+                if "Latitude" in gdf and "Longitude" in gdf:
+                    print("Updating geometry due to error with EPSG:102685")
+                    from shapely.geometry import Point
+                    lat = gdf["Latitude"].to_list()
+                    lon = gdf["Longitude"].to_list()
+                    lat_lon = [Point(x,y) for (x,y) in zip(lat, lon)]
+                    gdf.set_geometry(lat_lon,crs="EPSG:4326",inplace=True)
+                    return gdf
+            else:
+                return gpd.GeoDataFrame.from_features(json_data, crs=layer_query_result.spatial_reference['wkid'])
+        else:
+            return layer_query_result.sdf
     else:
         return []
 
@@ -217,3 +257,7 @@ def _get_years(data_type, url, date_field, data_set=None):
         year-=1
 
     return years
+
+if __name__ == "__main__":
+    url = "https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPD/MapServer/14/"
+    table = load_arcgis(url, date_field="Month_of_Stop", year=2020, limit=1)

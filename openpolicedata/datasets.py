@@ -6,8 +6,9 @@ import numpy as np
 # Example: For https://data.virginia.gov/resource/segb-5y2c.json, data set ID is segb-5y2c. Include key id in the lutDict with this value
 class DataTypes(Enum):
     CSV = "CSV"
-    EXCEL = "Excel"
+    # EXCEL = "Excel"
     GeoJSON = "GeoJSON"
+    # ArcGIS URL should end with {Feature|Map}Server/{#} with # indicating the table/layer number
     ArcGIS = "ArcGIS"
     SOCRATA = "Socrata"
 
@@ -126,79 +127,88 @@ _builder.add_data("Maryland", jurisdiction="Montgomery County Police Department"
     lut_dict={"id" :"usip-62e2","date_field" : "Date"})
 _builder.add_data(state="Colorado", jurisdiction="Denver Police Department",
     tableType=TableTypes.STOPS, 
-    url=["https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_CRIME_STOPS_P/FeatureServer"], 
+    url=["https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_CRIME_STOPS_P/FeatureServer/32/"], 
     data_type=DataTypes.ArcGIS,
     description="Police Pedestrian Stops and Vehicle Stops",
     lut_dict={"date_field" : "TIME_PHONEPICKUP"})
 _builder.add_data(state="North Carolina", jurisdiction="Charlotte-Mecklenburg Police Department",
     tableType=TableTypes.TRAFFIC, 
-    url=["https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPD/MapServer/14/query?outFields=*&where=1%3D1"], 
+    url=["https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPD/MapServer/14/"], 
     data_type=DataTypes.ArcGIS,
     description="Traffic Stops",
     lut_dict={"date_field" : "Month_of_Stop"})
 _builder.add_data(state="North Carolina", jurisdiction="Charlotte-Mecklenburg Police Department",
     tableType=TableTypes.EMPLOYEE, 
-    url=["https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPD/MapServer/16/query?outFields=*&where=1%3D1"], 
+    url=["https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPD/MapServer/16/"], 
     data_type=DataTypes.ArcGIS,
     description="CMPD Employee Demographics")
-_builder.add_data(state="Vermont", jurisdiction="Burlington Police Department",
-    tableType=TableTypes.USE_OF_FORCE, 
-    url=["https://data.burlingtonvt.gov/explore/dataset/bpd-use-of-force/"], 
-    data_type=DataTypes.UNKNOWN,
-    description="Use-of-Force incidents",
-    lut_dict={"date_field" : "call_time"})
-_builder.add_data(state="Vermont", jurisdiction="Burlington Police Department",
-    tableType=TableTypes.TRAFFIC, 
-    url=["https://data.burlingtonvt.gov/explore/dataset/bpd-traffic-stops/"], 
-    data_type=DataTypes.UNKNOWN,
-    description="Traffic Stops",
-    lut_dict={"date_field" : "call_time"})
-_builder.add_data(state="Vermont", jurisdiction="Burlington Police Department",
-    tableType=TableTypes.ARRESTS, 
-    url=["https://data.burlingtonvt.gov/explore/dataset/arrests/"], 
-    data_type=DataTypes.UNKNOWN,
-    description="Arrests",
-    lut_dict={"date_field" : "arrest_date"})
-_builder.add_data(state="Vermont", jurisdiction="Burlington Police Department",
-    tableType=TableTypes.ARRAIGNMENT, 
-    url=["https://data.burlingtonvt.gov/explore/dataset/arraignment-and-bail-data/"], 
-    data_type=DataTypes.UNKNOWN,
-    description="Case level data set on arraignment and bail",
-    lut_dict={"date_field" : "arraignment_date"})
+# TODO: Create data loader for Burlington
+# _builder.add_data(state="Vermont", jurisdiction="Burlington Police Department",
+#     tableType=TableTypes.USE_OF_FORCE, 
+#     url=["https://data.burlingtonvt.gov/explore/dataset/bpd-use-of-force/"], 
+#     data_type=DataTypes.UNKNOWN,
+#     description="Use-of-Force incidents",
+#     lut_dict={"date_field" : "call_time"})
+# _builder.add_data(state="Vermont", jurisdiction="Burlington Police Department",
+#     tableType=TableTypes.TRAFFIC, 
+#     url=["https://data.burlingtonvt.gov/explore/dataset/bpd-traffic-stops/"], 
+#     data_type=DataTypes.UNKNOWN,
+#     description="Traffic Stops",
+#     lut_dict={"date_field" : "call_time"})
+# _builder.add_data(state="Vermont", jurisdiction="Burlington Police Department",
+#     tableType=TableTypes.ARRESTS, 
+#     url=["https://data.burlingtonvt.gov/explore/dataset/arrests/"], 
+#     data_type=DataTypes.UNKNOWN,
+#     description="Arrests",
+#     lut_dict={"date_field" : "arrest_date"})
+# _builder.add_data(state="Vermont", jurisdiction="Burlington Police Department",
+#     tableType=TableTypes.ARRAIGNMENT, 
+#     url=["https://data.burlingtonvt.gov/explore/dataset/arraignment-and-bail-data/"], 
+#     data_type=DataTypes.UNKNOWN,
+#     description="Case level data set on arraignment and bail",
+#     lut_dict={"date_field" : "arraignment_date"})
 # TODO: Add in police incidents data using function as url: https://data.burlingtonvt.gov/explore/?refine.theme=Public+Safety&disjunctive.theme&disjunctive.publisher&disjunctive.keyword&sort=modified
-# TODO: Also https://data-openjustice.doj.ca.gov/sites/default/files/dataset/2021-12/RIPA%20Stop%20Data%202020.csv
 _builder.add_data(state="California", jurisdiction="California Department of Justice",
-    tableType=TableTypes.DEATHES_IN_CUSTODY, 
+    tableType=TableTypes.STOPS, 
     url=["https://data-openjustice.doj.ca.gov/sites/default/files/dataset/2020-01/RIPA%20Stop%20Data%202018.csv", 
         "https://data-openjustice.doj.ca.gov/sites/default/files/dataset/2021-01/RIPA%20Stop%20Data%202019.csv",
         "https://data-openjustice.doj.ca.gov/sites/default/files/dataset/2021-12/RIPA%20Stop%20Data%202020.csv"], 
-    data_type=DataTypes.EXCEL,
-    years=[2018,2019,2020],
-    description="State and local law enforcement agencies and correctional facilities report information on deaths that occur in custody or during the process of arrest in compliance with Section 12525 of the California Government Code",
-    lut_dict={"date_field" : "date_of_death_yyyy"})
-# TODO: Add in link for data description
-_builder.add_data(state="California", jurisdiction="California Department of Justice",
-    tableType=TableTypes.DEATHES_IN_CUSTODY, 
-    url=["https://data-openjustice.doj.ca.gov/sites/default/files/dataset/2021-07/DeathInCustody_2005-2020_20210603.xlsx"], 
     data_type=DataTypes.CSV,
-    description="RIPA Stop Data: Assembly Bill 953 (AB 953) requires each state and local agency in California that employs peace officers to annually report to the Attorney General data on all stops, as defined in Government Code section 12525.5(g)(2), conducted by the agency's peace officers. T",
-    lut_dict={"date_field" : "date_of_death_yyyy"})
+    years=[2018,2019,2020],
+    description="RIPA Stop Data: Assembly Bill 953 (AB 953) requires each state and local agency in California that employs peace officers to annually report to the Attorney General data on all stops, as defined in Government Code section 12525.5(g)(2), conducted by the agency's peace officers.",
+    lut_dict={"date_field" : "TIME_PHONEPICKUP"})
+# TODO: Add in link for description of data fields. CA data has a file online containing this info
+# TODO: Add data loader for Excel
+# _builder.add_data(state="California", jurisdiction="California Department of Justice",
+#     tableType=TableTypes.DEATHES_IN_CUSTODY, 
+#     url=["https://data-openjustice.doj.ca.gov/sites/default/files/dataset/2021-07/DeathInCustody_2005-2020_20210603.xlsx"], 
+#     data_type=DataTypes.EXCEL,
+#     escription="State and local law enforcement agencies and correctional facilities report information on deaths that occur in custody or during the process of arrest in compliance with Section 12525 of the California Government Code",
+#     lut_dict={"date_field" : "date_of_death_yyyy"})
 # TODO: Add CA UoF: https://openjustice.doj.ca.gov/data
 _builder.add_data(state="Maryland", jurisdiction="Baltimore Police Department",
     tableType=TableTypes.ARRESTS, 
-    url=["https://egis.baltimorecity.gov/egis/rest/services/GeoSpatialized_Tables/Arrest/FeatureServer/0/query?outFields=*&where=1%3D1"], 
+    url=["https://egis.baltimorecity.gov/egis/rest/services/GeoSpatialized_Tables/Arrest/FeatureServer/0"], 
     data_type=DataTypes.ArcGIS,
     description="Arrest in the City of Baltimore",
     lut_dict={"date_field" : "ArrestDateTime"})
-# TODO: Functionalize...
+# TODO: Functionalize URLs that have a pattern?
 _builder.add_data(state="Maryland", jurisdiction="Baltimore Police Department",
     tableType=TableTypes.CALLS_FOR_SERVICE, 
-    url=["https://opendata.baltimorecity.gov/egis/rest/services/Hosted/911_Calls_For_Service_2017_csv/FeatureServer/0/query?outFields=*&where=1%3D1",
-         "https://opendata.baltimorecity.gov/egis/rest/services/Hosted/911_Calls_For_Service_2018_csv/FeatureServer/0/query?outFields=*&where=1%3D1"
-        "https://opendata.baltimorecity.gov/egis/rest/services/Hosted/911_Calls_For_Service_2020_csv/FeatureServer/0/query?outFields=*&where=1%3D1"], 
+    url=["https://opendata.baltimorecity.gov/egis/rest/services/Hosted/911_Calls_For_Service_2017_csv/FeatureServer/0",
+         "https://opendata.baltimorecity.gov/egis/rest/services/Hosted/911_Calls_For_Service_2018_csv/FeatureServer/0",
+         "https://opendata.baltimorecity.gov/egis/rest/services/Hosted/911_Calls_For_Service_2019_csv/FeatureServer/0",
+         "https://opendata.baltimorecity.gov/egis/rest/services/Hosted/911_Calls_For_Service_2020_csv/FeatureServer/0"], 
     data_type=DataTypes.ArcGIS,
     description=" Police Emergency and Non-Emergency calls to 911",
-    years=[2017,2018,2019,2020,2021],
+    years=[2017,2018,2019,2020],
+    lut_dict={"date_field" : "calldatetime"})
+_builder.add_data(state="Maryland", jurisdiction="Baltimore Police Department",
+    tableType=TableTypes.CALLS_FOR_SERVICE, 
+    url="https://services1.arcgis.com/UWYHeuuJISiGmgXx/arcgis/rest/services/911_Calls_for_Service_2021_Historic/FeatureServer/0", 
+    data_type=DataTypes.ArcGIS,
+    description=" Police Emergency and Non-Emergency calls to 911",
+    years=2021,
     lut_dict={"date_field" : "callDateTime"})
 _builder.add_data(state="Maryland", jurisdiction="Baltimore Police Department",
     tableType=TableTypes.COMPLAINTS, 

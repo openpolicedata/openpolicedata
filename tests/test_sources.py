@@ -14,6 +14,8 @@ class TestProduct:
 
 				table = src.load_from_url(datasets.iloc[i]["Year"], datasets.iloc[i]["TableType"])
 				assert len(table.table)==1
+
+				# TODO: test date fields
 				
 				
 	def test_jurisdiction_filter(self):
@@ -39,9 +41,8 @@ class TestProduct:
 				table = src.load_from_url(datasets.iloc[i]["Year"], datasets.iloc[i]["TableType"])
 				assert len(table.table)>0
 
-	# Future tests on date filtering, get year and jurisdictions functions, and a couple of testings that read in the whole table...
-        
-      
+	# TODO: Future tests on date filtering, get year and jurisdictions functions, and a couple of testings that read in the whole table...
+	# TODO: test to ensure that loaded data is geopandas and has geometry where appropriate
 	def can_be_limited(self, table_type):
 		if (table_type == "CSV" or table_type == "GeoJSON"):
 			return False
