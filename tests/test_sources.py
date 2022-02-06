@@ -42,6 +42,12 @@ class TestProduct:
 				if "jurisdiction_field" in datasets.iloc[i]["LUT"]:
 					assert datasets.iloc[i]["LUT"]["jurisdiction_field"] in table.table
 				
+	def test_source_url_name_unlimitable(self):
+		for i in range(len(datasets)):
+			if not self.can_be_limited(datasets.iloc[i]["DataType"]):
+				ext = "." + datasets.iloc[i]["DataType"].lower()
+				assert ext in datasets.iloc[i]["URL"]
+				
 				
 	def test_jurisdiction_filter(self):
 		src = data.Source("Virginia Community Policing Act")
