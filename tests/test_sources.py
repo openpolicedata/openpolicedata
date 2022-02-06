@@ -4,7 +4,7 @@ if __name__ == "__main__":
 	import sys
 	sys.path.append('../openpolicedata')
 from openpolicedata import data
-from openpolicedata.datasets import datasets
+from openpolicedata import datasets
 
 class TestProduct:
 	def test_source_urls(self):
