@@ -8,9 +8,9 @@ Charlotte-Mecklenburg Police Department,North Carolina,,https://charlottenc.gov/
 Charlottesville Police Department,Virginia,,https://www.charlottesville.gov/155/Police-Department,,,,,,,,,,,,,,,,,,,12/29/2021,sowdm,No data
 Burlington Police Department,Vermont,,https://www.burlingtonvt.gov/Police,data.burlingtonvt.gov,X,X,X,,,,,,,,,X,,,X,,,12/29/2021,sowdm,Need loader for format
 California Department of Justice,California,,https://openjustice.doj.ca.gov/,https://openjustice.doj.ca.gov/data,,,,,X,,,,,,,X,,,X,,,12/29/2021,sowdm,
-Baltimore Police Department,Maryland,,https://www.baltimorepolice.org/,data.baltimorecity.gov / https://www.projectcomport.org/,X,,X,X,,,,,X,,,,,,X,,Partially,12/29/2021,sowdm,Project Comport was down when checking
-Indianapolis Metropolitan Police Department,Indiana,,https://www.indy.gov/agency/indianapolis-metropolitan-police-department,https://www.projectcomport.org/,,,,X,,,,,X,,,,,,X,,,12/29/2021,sowdm,Project Comport was down when checking
-Witchita Police Department,Kansas,,https://www.wichita.gov/WPD/Pages/default.aspx,https://ict-opendata-cityofwichita.hub.arcgis.com/search?tags=safety / https://www.projectcomport.org/,,,,X,,,,,,,X,,,,X,,,12/29/2021,sowdm,Project Comport was down when checking
+Baltimore Police Department,Maryland,,https://www.baltimorepolice.org/,data.baltimorecity.gov / https://www.projectcomport.org/,X,,X,X,,,,,X,,,,,,X,,X,12/29/2021,sowdm,
+Indianapolis Metropolitan Police Department,Indiana,,https://www.indy.gov/agency/indianapolis-metropolitan-police-department,https://www.projectcomport.org/,,,,X,,,,,X,,,,,,X,,X,12/29/2021,sowdm,
+Witchita Police Department,Kansas,,https://www.wichita.gov/WPD/Pages/default.aspx,https://ict-opendata-cityofwichita.hub.arcgis.com/search?tags=safety / https://www.projectcomport.org/,,,,X,,,,,,,X,,,,X,,X,12/29/2021,sowdm,
 New York Police Department,New York,,https://www1.nyc.gov/site/nypd/index.page,https://data.cityofnewyork.us/browse?Dataset-Information_Agency=Police+Department+%28NYPD%29,X,,,,,,X,,,X,,,,,X,,,12/29/2021,sowdm,
 Stanford Open Policing Project,Various,,https://openpolicing.stanford.edu/,https://openpolicing.stanford.edu/data/,,,,,,,,,,,,X,,,,,,12/29/2021,sowdm,
 New Jersey Office of the Attorney General,New Jersey,,https://www.njoag.gov/,https://www.njoag.gov/force/#policy,,,,,,,,,,,,,,,X,,,12/29/2021,sowdm,
