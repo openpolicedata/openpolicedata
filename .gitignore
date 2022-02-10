@@ -142,3 +142,4 @@ Pipfile*
 
 # Key files
 *.key
+notebooks/*.zip
