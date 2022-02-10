@@ -271,7 +271,7 @@ class Source:
         if load_table:
             if data_type == _datasets.DataTypes.CSV:
                 table = data_loaders.load_csv(url, date_field=date_field, year_filter=year_filter, 
-                    jurisdiction_field=jurisdiction_field, jurisdiction_filter=jurisdiction_filter)
+                    jurisdiction_field=jurisdiction_field, jurisdiction_filter=jurisdiction_filter, limit=self.__limit)
             elif data_type == _datasets.DataTypes.GeoJSON:
                 table = data_loaders.load_geojson(url, date_field=date_field, year_filter=year_filter, 
                     jurisdiction_field=jurisdiction_field, jurisdiction_filter=jurisdiction_filter)

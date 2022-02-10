@@ -1,7 +1,26 @@
 import pytest
+if __name__ == "__main__":
+	import sys
+	sys.path.append('../openpolicedata')
 import openpolicedata as opd
 
 class TestProduct:
+    def test_data_field_req(self):
+        builder = opd._datasets._DatasetBuilder()
+        with pytest.raises(ValueError) as e_info:
+            builder.add_data("New York", "", opd.TableTypes.STOPS, "", opd.DataTypes.ArcGIS,
+                            years=opd._datasets.MULTI)
+
+    def test_jurisdiction_field_req(self):
+        builder = opd._datasets._DatasetBuilder()
+        with pytest.raises(ValueError) as e_info:
+            builder.add_data("New York", opd._datasets.MULTI, opd.TableTypes.STOPS, "", opd.DataTypes.ArcGIS, years=2020)
+            
+    def test_socrata_id_field_req(self):
+        builder = opd._datasets._DatasetBuilder()
+        with pytest.raises(ValueError) as e_info:
+            builder.add_data("New York", "", opd.TableTypes.STOPS, "", opd.DataTypes.SOCRATA, years=2020)
+
     def test_source_list_get_all(self):
         df = opd.get()
         assert (df == opd.datasets).all().all()
@@ -52,3 +71,6 @@ class TestProduct:
         assert len(df)>0
         assert (df == df_truth).all().all()
         
+
+if __name__ == "__main__":
+    TestProduct().test_data_field_req()

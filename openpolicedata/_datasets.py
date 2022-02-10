@@ -73,6 +73,15 @@ class _DatasetBuilder:
             source_name = jurisdiction
 
         for k, year in enumerate(years):
+            # TODO: Make values in lut_dict into columns of data frame
+            # Socrata data must have an ID
+            # If 
+            if jurisdiction == MULTI and "jurisdiction_field" not in lut_dict:
+                raise ValueError("Multi-jurisidiction data must have a jurisdiction field")
+            if year == MULTI and "date_field" not in lut_dict and tableType != TableTypes.EMPLOYEE:
+                raise ValueError("Multi-year data must have a date field")
+            if data_type == DataTypes.SOCRATA and "id" not in lut_dict:
+                raise ValueError("Socrata data must have an ID field")
             self.row_data.append([0, state, source_name, jurisdiction, tableType.value, year, description, data_type.value, url[k], lut_dict])
 
     def build_data_frame(self):
@@ -169,7 +178,7 @@ _builder.add_data(state="North Carolina", jurisdiction="Charlotte-Mecklenburg Po
 #     description="Case level data set on arraignment and bail",
 #     lut_dict={"date_field" : "arraignment_date"})
 # TODO: Add in police incidents data using function as url: https://data.burlingtonvt.gov/explore/?refine.theme=Public+Safety&disjunctive.theme&disjunctive.publisher&disjunctive.keyword&sort=modified
-_builder.add_data(state="California", jurisdiction="California Department of Justice",
+_builder.add_data(state="California", source_name="California Department of Justice", jurisdiction=MULTI,
     tableType=TableTypes.STOPS, 
     url=["https://data-openjustice.doj.ca.gov/sites/default/files/dataset/2020-01/RIPA%20Stop%20Data%202018.csv", 
         "https://data-openjustice.doj.ca.gov/sites/default/files/dataset/2021-01/RIPA%20Stop%20Data%202019.csv",
@@ -177,10 +186,10 @@ _builder.add_data(state="California", jurisdiction="California Department of Jus
     data_type=DataTypes.CSV,
     years=[2018,2019,2020],
     description="RIPA Stop Data: Assembly Bill 953 (AB 953) requires each state and local agency in California that employs peace officers to annually report to the Attorney General data on all stops, as defined in Government Code section 12525.5(g)(2), conducted by the agency's peace officers.",
-    lut_dict={"date_field" : "TIME_PHONEPICKUP"})
+    lut_dict={"date_field" : "DATE_OF_STOP", "jurisdiction_field" : "AGENCY_NAME"})
 # TODO: Add in link for description of data fields. CA data has a file online containing this info
 # TODO: Add data loader for Excel
-# _builder.add_data(state="California", jurisdiction="California Department of Justice",
+# _builder.add_data(state="California", source_name="California Department of Justice", jurisdiction=MULTI,
 #     tableType=TableTypes.DEATHES_IN_CUSTODY, 
 #     url=["https://data-openjustice.doj.ca.gov/sites/default/files/dataset/2021-07/DeathInCustody_2005-2020_20210603.xlsx"], 
 #     data_type=DataTypes.EXCEL,
@@ -211,54 +220,56 @@ _builder.add_data(state="Maryland", jurisdiction="Baltimore Police Department",
     description=" Police Emergency and Non-Emergency calls to 911",
     years=2021,
     lut_dict={"date_field" : "callDateTime"})
-_builder.add_data(state="Maryland", jurisdiction="Baltimore Police Department",
-    tableType=TableTypes.COMPLAINTS, 
-    url=["https://www.projectcomport.org/department/4/complaints.csv"], 
-    data_type=DataTypes.CSV,
-    description="The Baltimore Police Department’s Office of Professional Responsibility tracks and investigates both internal complaints and citizen complaints regarding officer interactions in order to better serve the people of Baltimore.",
-    lut_dict={"date_field" : "occurredDate"})
-_builder.add_data(state="Maryland", jurisdiction="Baltimore Police Department",
-    tableType=TableTypes.USE_OF_FORCE, 
-    url=["https://www.projectcomport.org/department/4/uof.csv"], 
-    data_type=DataTypes.CSV,
-    description="Officers must immediately report any use of force incident, and all incidents undergo a thorough review process to ensure that the force used was reasonable, necessary, and proportional.",
-    lut_dict={"date_field" : "occurredDate"})
-_builder.add_data(state="Maryland", jurisdiction="Baltimore Police Department",
-    tableType=TableTypes.SHOOTINGS, 
-    url=["https://www.projectcomport.org/department/4/ois.csv"], 
-    data_type=DataTypes.CSV,
-    description="",
-    lut_dict={"date_field" : "occurredDate"})
-_builder.add_data(state="Indiana", jurisdiction="Indianapolis Police Department",
-    tableType=TableTypes.COMPLAINTS, 
-    url=["https://www.projectcomport.org/department/1/complaints.csv"], 
-    data_type=DataTypes.CSV,
-    description="The Citizens' Police Complaint Office (CPCO) gathers this data as part of accepting and investigating resident complaints about interactions with IMPD officers. More information is available in the CPCO FAQ (http://www.indy.gov/eGov/City/DPS/CPCO/Pages/faq.aspx).",
-    lut_dict={"date_field" : "occurredDate"})
-_builder.add_data(state="Indiana", jurisdiction="Indianapolis Police Department",
-    tableType=TableTypes.USE_OF_FORCE, 
-    url=["https://www.projectcomport.org/department/1/uof.csv"], 
-    data_type=DataTypes.CSV,
-    description="The Indianapolis Metropolitan Police Department (IMPD) gathers this data as part of its professional standards practices.",
-    lut_dict={"date_field" : "occurredDate"})
-_builder.add_data(state="Indiana", jurisdiction="Indianapolis Police Department",
-    tableType=TableTypes.SHOOTINGS, 
-    url=["https://www.projectcomport.org/department/1/ois.csv"], 
-    data_type=DataTypes.CSV,
-    description="The Indianapolis Metropolitan Police Department (IMPD) gathers this data as part of its professional standards practices.",
-    lut_dict={"date_field" : "occurredDate"})
-_builder.add_data(state="Kansas", jurisdiction="Wichita Police Department",
-    tableType=TableTypes.COMPLAINTS, 
-    url=["https://www.projectcomport.org/department/7/complaints.csv"], 
-    data_type=DataTypes.CSV,
-    description="",
-    lut_dict={"date_field" : "occurredDate"})
-_builder.add_data(state="Kansas", jurisdiction="Wichita Police Department",
-    tableType=TableTypes.USE_OF_FORCE, 
-    url=["https://www.projectcomport.org/department/7/uof.csv"], 
-    data_type=DataTypes.CSV,
-    description="The Wichita Police Department tracks all incidents of force used in a situation during the line of duty as part of its office of Professional Standards. ",
-    lut_dict={"date_field" : "occurredDate"})
+include_comport = False  # These dataset links are unreliable 2/10/2022
+if include_comport:
+    _builder.add_data(state="Maryland", jurisdiction="Baltimore Police Department",
+        tableType=TableTypes.COMPLAINTS, 
+        url=["https://www.projectcomport.org/department/4/complaints.csv"], 
+        data_type=DataTypes.CSV,
+        description="The Baltimore Police Department’s Office of Professional Responsibility tracks and investigates both internal complaints and citizen complaints regarding officer interactions in order to better serve the people of Baltimore.",
+        lut_dict={"date_field" : "occurredDate"})
+    _builder.add_data(state="Maryland", jurisdiction="Baltimore Police Department",
+        tableType=TableTypes.USE_OF_FORCE, 
+        url=["https://www.projectcomport.org/department/4/uof.csv"], 
+        data_type=DataTypes.CSV,
+        description="Officers must immediately report any use of force incident, and all incidents undergo a thorough review process to ensure that the force used was reasonable, necessary, and proportional.",
+        lut_dict={"date_field" : "occurredDate"})
+    _builder.add_data(state="Maryland", jurisdiction="Baltimore Police Department",
+        tableType=TableTypes.SHOOTINGS, 
+        url=["https://www.projectcomport.org/department/4/ois.csv"], 
+        data_type=DataTypes.CSV,
+        description="",
+        lut_dict={"date_field" : "occurredDate"})
+    _builder.add_data(state="Indiana", jurisdiction="Indianapolis Police Department",
+        tableType=TableTypes.COMPLAINTS, 
+        url=["https://www.projectcomport.org/department/1/complaints.csv"], 
+        data_type=DataTypes.CSV,
+        description="The Citizens' Police Complaint Office (CPCO) gathers this data as part of accepting and investigating resident complaints about interactions with IMPD officers. More information is available in the CPCO FAQ (http://www.indy.gov/eGov/City/DPS/CPCO/Pages/faq.aspx).",
+        lut_dict={"date_field" : "occurredDate"})
+    _builder.add_data(state="Indiana", jurisdiction="Indianapolis Police Department",
+        tableType=TableTypes.USE_OF_FORCE, 
+        url=["https://www.projectcomport.org/department/1/uof.csv"], 
+        data_type=DataTypes.CSV,
+        description="The Indianapolis Metropolitan Police Department (IMPD) gathers this data as part of its professional standards practices.",
+        lut_dict={"date_field" : "occurredDate"})
+    _builder.add_data(state="Indiana", jurisdiction="Indianapolis Police Department",
+        tableType=TableTypes.SHOOTINGS, 
+        url=["https://www.projectcomport.org/department/1/ois.csv"], 
+        data_type=DataTypes.CSV,
+        description="The Indianapolis Metropolitan Police Department (IMPD) gathers this data as part of its professional standards practices.",
+        lut_dict={"date_field" : "occurredDate"})
+    _builder.add_data(state="Kansas", jurisdiction="Wichita Police Department",
+        tableType=TableTypes.COMPLAINTS, 
+        url=["https://www.projectcomport.org/department/7/complaints.csv"], 
+        data_type=DataTypes.CSV,
+        description="",
+        lut_dict={"date_field" : "receivedDate"})
+    _builder.add_data(state="Kansas", jurisdiction="Wichita Police Department",
+        tableType=TableTypes.USE_OF_FORCE, 
+        url=["https://www.projectcomport.org/department/7/uof.csv"], 
+        data_type=DataTypes.CSV,
+        description="The Wichita Police Department tracks all incidents of force used in a situation during the line of duty as part of its office of Professional Standards. ",
+        lut_dict={"date_field" : "occurredDate"})
 
         
 datasets = _builder.build_data_frame()
