@@ -28,7 +28,7 @@ class TestProduct:
 
 	def test_source_download_limitable(self):
 		for i in range(len(datasets)):
-			if self.can_be_limited(datasets.iloc[i]["DataType"]):
+			if self.can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]):
 				srcName = datasets.iloc[i]["SourceName"]
 				state = datasets.iloc[i]["State"]
 				src = data.Source(srcName, state=state)
@@ -45,7 +45,7 @@ class TestProduct:
 				
 	def test_source_url_name_unlimitable(self):
 		for i in range(len(datasets)):
-			if not self.can_be_limited(datasets.iloc[i]["DataType"]):
+			if not self.can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]):
 				ext = "." + datasets.iloc[i]["DataType"].lower()
 				assert ext in datasets.iloc[i]["URL"]
 				
@@ -65,7 +65,7 @@ class TestProduct:
 	@pytest.mark.slow(reason="This is a slow test and should only be run before a major commit.")
 	def test_source_download_not_limitable(self):
 		for i in range(len(datasets)):
-			if not self.can_be_limited(datasets.iloc[i]["DataType"]):
+			if not self.can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]):
 				srcName = datasets.iloc[i]["SourceName"]
 				state = datasets.iloc[i]["State"]
 				src = data.Source(srcName, state=state)
@@ -86,8 +86,8 @@ class TestProduct:
 
 
 	# TODO: Future tests on date filtering, get year and jurisdictions functions, and a couple of testings that read in the whole table...
-	def can_be_limited(self, table_type):
-		if (table_type == "GeoJSON"):
+	def can_be_limited(self, table_type, url):
+		if table_type == "GeoJSON" or (table_type == "CSV" and ".zip" in url):
 			return False
 		elif (table_type == "ArcGIS" or table_type == "Socrata" or table_type == "CSV"):
 			return True

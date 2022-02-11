@@ -1,6 +1,7 @@
 from enum import Enum
 import pandas as pd
 import numpy as np
+import requests
 
 # SOCRATA data requires a dataset ID
 # Example: For https://data.virginia.gov/resource/segb-5y2c.json, data set ID is segb-5y2c. Include key id in the lutDict with this value
@@ -38,6 +39,65 @@ _all_states = [
     'Pennsylvania', 'Puerto Rico', 'Rhode Island', 'South Carolina', 'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virgin Islands',
     'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming'
 ]
+
+_us_state_abbrev = {
+    'AL' : 'Alabama', 
+    'AK' : 'Alaska',
+    'AS' : 'American Samoa',
+    'AZ' : 'Arizona',
+    'AR' : 'Arkansas',
+    'CA' : 'California',
+    'CO' : 'Colorado',
+    'CT' : 'Connecticut',
+    'DE' : 'Delaware',
+    'DC' : 'District of Columbia',
+    'FL' : 'Florida',
+    'GA' : 'Georgia',
+    'GU' : 'Guam',
+    'HI' : 'Hawaii',
+    'ID' : 'Idaho',
+    'IL' : 'Illinois',
+    'IN' : 'Indiana',
+    'IA' : 'Iowa',
+    'KS' : 'Kansas',
+    'KY' : 'Kentucky',
+    'LA' : 'Louisiana',
+    'ME' : 'Maine',
+    'MD' : 'Maryland',
+    'MA' : 'Massachusetts',
+    'MI' : 'Michigan',
+    'MN' : 'Minnesota',
+    'MS' : 'Mississippi',
+    'MO' : 'Missouri',
+    'MT' : 'Montana',
+    'NE' : 'Nebraska',
+    'NV' : 'Nevada',
+    'NH' : 'New Hampshire',
+    'NJ' : 'New Jersey',
+    'NM' : 'New Mexico',
+    'NY' : 'New York',
+    'NC' : 'North Carolina',
+    'ND' : 'North Dakota',
+    'MP' : 'Northern Mariana Islands',
+    'OH' : 'Ohio',
+    'OK' : 'Oklahoma',
+    'OR' : 'Oregon',
+    'PA' : 'Pennsylvania',
+    'PR' : 'Puerto Rico',
+    'RI' : 'Rhode Island',
+    'SC' : 'South Carolina',
+    'SD' : 'South Dakota',
+    'TN' : 'Tennessee',
+    'TX' : 'Texas',
+    'UT' : 'Utah',
+    'VT' : 'Vermont',
+    'VI' : 'Virgin Islands',
+    'VA' : 'Virginia',
+    'WA' : 'Washington',
+    'WV' : 'West Virginia',
+    'WI' : 'Wisconsin',
+    'WY' : 'Wyoming'
+}
 
 # For data sets that put multiple years or jurisdictions in 1 dataset
 MULTI = "MULTI"
@@ -101,6 +161,116 @@ class _DatasetBuilder:
             if data_type == DataTypes.SOCRATA and "id" not in lut_dict:
                 raise ValueError("Socrata data must have an ID field")
             self.row_data.append([0, state, source_name, jurisdiction, table_type.value, year, description, data_type.value, url[k], lut_dict])
+
+
+    def add_stanford_data(self):
+        url = "https://openpolicing.stanford.edu/data/"
+
+        r = requests.get(url)
+
+        def find_next(r, string, last_loc):
+            new_loc = r.text[last_loc+1:].find(string)
+            if new_loc >= 0:
+                new_loc += last_loc+1
+            return new_loc
+
+        def find_next_state(r, last_loc):
+            new_loc = find_next(r, '<tr class="state-title">', last_loc)
+            if new_loc < 0:
+                return new_loc, None
+            td_loc = find_next(r, '<td', new_loc)
+            start = find_next(r, '>', td_loc)+1
+            end = find_next(r, '<', start)
+            name = r.text[start:end].strip()
+            name = _us_state_abbrev[name]
+            return new_loc, name
+
+        def find_next_pd(r, last_loc):
+            new_loc = find_next(r, '<td class="state text-left" data-title="State">', last_loc)
+            if new_loc < 0:
+                return new_loc, None, None
+            span_loc = find_next(r, '<span', new_loc)
+            start = find_next(r, '>', span_loc)+1
+            end = find_next(r, '<', start)
+            name = r.text[start:end].strip()
+            local_str = "<sup>1</sup>"
+            is_multi = r.text[end:end+len(local_str)] == local_str
+            return new_loc, name, is_multi
+
+        def find_next_csv(r, start, end):
+            open_loc = start
+            while open_loc < end:
+                open_loc = find_next(r, '<a href', open_loc+1)
+                if open_loc >= end:
+                    raise ValueError("unable to find CSV")
+                close_loc = find_next(r, '</a>', open_loc)
+                if close_loc >= end:
+                    raise ValueError("unable to find CSV")
+
+                if "Download data as CSV" in r.text[open_loc:close_loc]:
+                    first_quote = find_next(r, '"', open_loc)
+                    last_quote = find_next(r, '"', first_quote+1)
+                    return r.text[first_quote+1:last_quote]
+
+            raise ValueError("unable to find CSV")
+
+        def includes_pedestrian_stops(r, start, end):
+            open_loc = find_next(r, '<td class="text-right" data-title="Stops">', start)
+            if open_loc >= end:
+                raise ValueError("Unable to find # of stops")
+
+            close_loc = find_next(r, '</td>', open_loc)
+            if close_loc >= end:
+                raise ValueError("Unable to find # of stops")
+
+            return '<sup>2</sup>' in r.text[open_loc:close_loc]
+            
+            
+        row_states = [x[1] for x in self.row_data]
+        row_pds = ["Charlotte" if x[3] == "Charlotte-Mecklenburg" else x[3] for x in self.row_data]
+        row_types = [x[4] for x in self.row_data]
+
+        st_loc, state = find_next_state(r, -1)
+        next_st_loc, next_state = find_next_state(r, st_loc)
+        pd_loc, pd_name, is_multi = find_next_pd(r, -1)
+        while pd_loc >= 0 and pd_loc != len(r.text):
+            next_pd_loc, next_pd_name, next_is_multi = find_next_pd(r, pd_loc+1)
+            if next_pd_loc < 0:
+                next_pd_loc = len(r.text)
+            csv_file = find_next_csv(r, pd_loc, next_pd_loc)
+
+            if includes_pedestrian_stops(r, pd_loc, next_pd_loc):
+                table_type = TableTypes.STOPS
+            else:
+                table_type = TableTypes.TRAFFIC
+
+            already_added = False
+            for k in range(len(row_states)):
+                if pd_name == row_pds[k] and state == row_states[k] and table_type.value == row_types[k]:
+                    already_added = True
+                    break
+
+            if not already_added:
+                if is_multi:
+                    jurisdiction = MULTI
+                    lut_dict={"date_field" : "date", "jurisdiction_field" : "department_name"}
+                else:
+                    jurisdiction = pd_name
+                    lut_dict={"date_field" : "date"}
+                self.add_data(state, jurisdiction=jurisdiction, table_type=table_type,
+                            url=csv_file, data_type=DataTypes.CSV, source_name=pd_name, 
+                            description="Standardized stop data from the Stanford Open Policing Project",
+                            lut_dict=lut_dict)
+
+            pd_loc = next_pd_loc
+            pd_name = next_pd_name
+            is_multi = next_is_multi
+
+            if pd_loc > next_st_loc:
+                st_loc = next_st_loc
+                state = next_state
+                next_st_loc, next_state = find_next_state(r, st_loc)
+
 
     def build_data_frame(self):
         df = pd.DataFrame(self.row_data, columns=self.columns.keys())
@@ -289,6 +459,7 @@ if include_comport:
         description="The Wichita Police Department tracks all incidents of force used in a situation during the line of duty as part of its office of Professional Standards. ",
         lut_dict={"date_field" : "occurredDate"})
 
+_builder.add_stanford_data()
         
 datasets = _builder.build_data_frame()
 

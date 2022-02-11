@@ -23,7 +23,7 @@ default_sodapy_key = os.environ.get("SODAPY_API_KEY")
 
 def load_csv(url, date_field=None, year_filter=None, jurisdiction_field=None, jurisdiction_filter=None, limit=None):
     
-    if limit==None:
+    if limit==None or ".zip" in url:
         # Perhaps use requests iter_content/iter_lines as below to read large CSVs so progress can be shown
         table = pd.read_csv(url)
     else:
@@ -34,8 +34,8 @@ def load_csv(url, date_field=None, year_filter=None, jurisdiction_field=None, ju
                 if len(table) > limit:
                     break
 
-        if len(table) > limit:
-            table = table.head(limit)
+    if limit!=None and len(table) > limit:
+        table = table.head(limit)
 
 
     table = filter_dataframe(table, date_field=date_field, year_filter=year_filter, 
