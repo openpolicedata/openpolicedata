@@ -330,11 +330,11 @@ def get_csv_filename(state, source_name, jurisdiction, table_type, year):
     return filename
 
 if __name__ == '__main__':
-    src = Source("Denver Police Department")
+    src = Source("Denver")
     # print(f"Years for DPD Table are {src.get_years()}")
     # table = src.load_from_url(year = 2020)
 
-    src = Source("Fairfax County Police Department")
+    src = Source("Fairfax County")
     print(f"Tables for FCPD are {src.get_tables_types()}")
     print(f"Years for FCPD Arrests Table are {src.get_years(_datasets.TableTypes.ARRESTS)}")
     print(f"Jurisdictions for FCPD Arrests Table are {src.get_jurisdictions(table_type=_datasets.TableTypes.ARRESTS, year=2019)}")
@@ -365,7 +365,7 @@ if __name__ == '__main__':
     table = src.load_from_url(year=[2020,2020], jurisdiction_filter="Fairfax County Police Department")
 
     # year = 2020
-    # src = Source("Montgomery County Police Department")
+    # src = Source("Montgomery County")
     # print(f"Years for MCPD data are {src.getYears()}")
     # table = src.getTable(year=year)
 
