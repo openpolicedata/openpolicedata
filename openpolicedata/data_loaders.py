@@ -4,6 +4,9 @@ import geopandas as gpd
 import pandas as pd
 from sodapy import Socrata
 import requests
+from io import StringIO 
+import contextlib
+import urllib
 import json
 from pyproj.exceptions import CRSError
 from pyproj import CRS
@@ -18,8 +21,23 @@ from arcgis.features import FeatureLayerCollection
 # Setting environment variable in Linux: https://phoenixnap.com/kb/linux-set-environment-variable
 default_sodapy_key = os.environ.get("SODAPY_API_KEY")
 
-def load_csv(url, date_field=None, year_filter=None, jurisdiction_field=None, jurisdiction_filter=None):
-    table = pd.read_csv(url, parse_dates=True)
+def load_csv(url, date_field=None, year_filter=None, jurisdiction_field=None, jurisdiction_filter=None, limit=None):
+    
+    if limit==None or ".zip" in url:
+        # Perhaps use requests iter_content/iter_lines as below to read large CSVs so progress can be shown
+        table = pd.read_csv(url)
+    else:
+        table = pd.DataFrame()
+        with contextlib.closing(urllib.request.urlopen(url=url)) as rd:
+            for df in pd.read_csv(rd, chunksize=1024):
+                table = pd.concat([table, df], ignore_index=True)
+                if len(table) > limit:
+                    break
+
+    if limit!=None and len(table) > limit:
+        table = table.head(limit)
+
+
     table = filter_dataframe(table, date_field=date_field, year_filter=year_filter, 
         jurisdiction_field=jurisdiction_field, jurisdiction_filter=jurisdiction_filter)
 
@@ -268,5 +286,9 @@ def _get_years(data_type, url, date_field, data_set=None):
     return years
 
 if __name__ == "__main__":
-    url = "https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPD/MapServer/14/"
-    table = load_arcgis(url, date_field="Month_of_Stop", year=2020, limit=1)
+    url = "https://data-openjustice.doj.ca.gov/sites/default/files/dataset/2021-12/RIPA%20Stop%20Data%202020.csv"
+    url = "https://www.projectcomport.org/department/4/complaints.csv"
+    table1 = load_csv(url, limit=1026)
+    table2 = load_csv(url)
+    table3 = table2.head(1026)
+    

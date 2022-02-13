@@ -22,12 +22,13 @@ class TestProduct:
 			except:
 				raise
 
-			assert r.status_code == 200
+			if r.status_code != 200:
+				raise ValueError(f"Status code for {url} is {r.status_code}")
 
 
 	def test_source_download_limitable(self):
 		for i in range(len(datasets)):
-			if self.can_be_limited(datasets.iloc[i]["DataType"]):
+			if self.can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]):
 				srcName = datasets.iloc[i]["SourceName"]
 				state = datasets.iloc[i]["State"]
 				src = data.Source(srcName, state=state)
@@ -44,7 +45,7 @@ class TestProduct:
 				
 	def test_source_url_name_unlimitable(self):
 		for i in range(len(datasets)):
-			if not self.can_be_limited(datasets.iloc[i]["DataType"]):
+			if not self.can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]):
 				ext = "." + datasets.iloc[i]["DataType"].lower()
 				assert ext in datasets.iloc[i]["URL"]
 				
@@ -61,15 +62,38 @@ class TestProduct:
 		assert table.table.iloc[0][table._jurisdiction_field] == jurisdiction
 
 
+	@pytest.mark.slow(reason="This is a slow test and should only be run before a major commit.")
+	def test_source_download_not_limitable(self):
+		for i in range(len(datasets)):
+			if not self.can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]):
+				srcName = datasets.iloc[i]["SourceName"]
+				state = datasets.iloc[i]["State"]
+				src = data.Source(srcName, state=state)
+
+				year = datasets.iloc[i]["Year"]
+				table_type = datasets.iloc[i]["TableType"]
+				try:
+					table = src.load_from_url(year, table_type)
+				except:
+					raise ValueError(f"Error loading CSV {srcName}, year={year}, table_type={table_type}")
+
+				assert len(table.table)>1
+				if "date_field" in datasets.iloc[i]["LUT"]:
+					assert datasets.iloc[i]["LUT"]["date_field"] in table.table
+					assert table.table[datasets.iloc[i]["LUT"]["date_field"]].dtype.name == 'datetime64[ns]'
+				if "jurisdiction_field" in datasets.iloc[i]["LUT"]:
+					assert datasets.iloc[i]["LUT"]["jurisdiction_field"] in table.table
+
+
 	# TODO: Future tests on date filtering, get year and jurisdictions functions, and a couple of testings that read in the whole table...
-	def can_be_limited(self, table_type):
-		if (table_type == "CSV" or table_type == "GeoJSON"):
+	def can_be_limited(self, table_type, url):
+		if table_type == "GeoJSON" or (table_type == "CSV" and ".zip" in url):
 			return False
-		elif (table_type == "ArcGIS" or table_type == "Socrata"):
+		elif (table_type == "ArcGIS" or table_type == "Socrata" or table_type == "CSV"):
 			return True
 		else:
-		  	raise ValueError("Unknown table type")		
+			raise ValueError("Unknown table type")
 
 if __name__ == "__main__":
 	tp = TestProduct()
-	tp.test_source_urls()
+	tp.test_source_download_limitable()
