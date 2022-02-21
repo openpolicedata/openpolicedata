@@ -4,7 +4,7 @@ Interested in helping build openpolicedata? Have code from your research that yo
 
 ## Introduction
 
-First off, thank you for considering contributing to openpolicedata. openpolicedata is community-driven project. It's people like you that make MetPy useful and successful. There are many ways to contribute including, but not limited to, writing tutorials or examples, improvements to the documentation, submitting bug reports and feature requests, writing code to fix an issue or add a feature which can be incorporated into openpolicedata for everyone to use, and simply just informing us of a data set that is not already available in openpolicedata.
+First off, thank you for considering contributing to openpolicedata. openpolicedata is community-driven project. It's people like you that make openpolicedata useful and successful. There are many ways to contribute including, but not limited to, writing tutorials or examples, improvements to the documentation, submitting bug reports and feature requests, writing code to fix an issue or add a feature which can be incorporated into openpolicedata for everyone to use, and simply just informing us of a data set that is not already available in openpolicedata.
 
 Following these guidelines helps to communicate that you respect the time of the developers managing and developing this open source project. In return, they should reciprocate that respect in addressing your issue, assessing changes, and helping you finalize your pull requests.
 
@@ -50,39 +50,37 @@ requesting something you think is missing.
 
 ## Setting up your development environment
 
-We recommend using the [conda](https://conda.io/docs/) package manager for your Python environments.
+We recommend using the [conda](https://conda.io/docs/) package manager for your Python environments. This is particularly true in Windows where [geopandas](https://geopandas.org/en/stable/getting_started/install.html) is a challenge to install without conda.
 This requires some comfort with the command line and a little ``git`` knowledge.
 Our recommended setup for contributing:
-
-Install [miniconda](https://docs.conda.io/en/latest/miniconda.html) on your system.
+* Install [miniconda](https://docs.conda.io/en/latest/miniconda.html) on your system.
 You may have to restart your prompt for the remaining steps to work.
 
-Install [git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git)
+Install [git](https://git-scm.com/downloads)
 (link with instructions) on your system if not already available
-(check with ``git --version`` at the command line.)
+(check with ``git --version`` at the command line).
 This can also be installed from a variety of package managers, including ``conda`` if needed.
 
 Login to your [GitHub](https://github.com) account and make a fork of the
-[MetPy repository](https://github.com/unidata/metpy/) by clicking the "Fork" button.
-Clone your fork of the MetPy repository (in terminal on Mac/Linux or git shell/GUI on Windows)
-to the location you'd like to keep it.
+[openpolicedata repository](https://github.com/sowdm/openpolicedata/) by clicking the "Fork" button.
+Clone your fork of the openpolicedata repository (in terminal on Mac/Linux or git shell/GUI on Windows) to the location you'd like to keep it.
 We are partial to creating a ``git_repos`` or ``projects`` directory in our home folder.
 
 ```sh
-git clone https://github.com/<your-user-name>/metpy.git
+git clone https://github.com/<your-user-name>/openpolicedata.git
 ```
 
 Navigate to that folder in the terminal or in Anaconda Prompt if you're on Windows.
 The remainder of the instructions will take place within this directory.
 
 ```sh
-cd metpy
+cd openpolicedata
 ```
 
 Connect your repository to the upstream (main project).
 
 ```sh
-git remote add unidata https://github.com/unidata/metpy.git
+git remote add sowdm https://github.com/sowdm/openpolicedata.git
 ```
 
 Create a new conda environment for us to configure, and give it a name.
@@ -100,21 +98,22 @@ conda activate devel
 
 You will have to do this any time you re-open your prompt.
 Currently there are no packages in this environment, let's change that.
-Configure this environment so that we can reach
-[conda-forge](https://conda-forge.org/feedstock-outputs/) for the specific packages we depend on.
+
+Install the necessary dependency packages that are available on conda.
+Remember that these must be executed within the ``openpolicedata`` directory.
 
 ```sh
-conda config --env --add channels conda-forge --add channels conda-forge/label/testing
+conda install --file dev/requirements-conda.txt --file dev/requirements-test.txt
 ```
 
-Install the necessary dependency packages from conda-forge.
-Remember that these must be executed within the ``metpy`` directory.
+Install the necessary dependency packages that are NOT available on conda.
+Remember that these must be executed within the ``openpolicedata`` directory.
 
 ```sh
-conda install --file ci/requirements.txt --file ci/extra_requirements.txt --file ci/test_requirements.txt
+pip install -r dev/requirements-pip.txt
 ```
 
-Finally, create an editable install of MetPy that will update with your development!
+Finally, create an editable install of MetPy that will update with your development! (TODO: Setup so that pip install of openpolicedata is possible)
 
 ```sh
 pip install -e .
