@@ -268,6 +268,7 @@ class Source:
         else:
             jurisdiction_field = None
         
+        #It is assumed that each data loader method will return data with the proper data type so date type etc...
         if load_table:
             if data_type == _datasets.DataTypes.CSV:
                 table = data_loaders.load_csv(url, date_field=date_field, year_filter=year_filter, 
@@ -286,9 +287,6 @@ class Source:
                     limit=self.__limit)
             else:
                 raise ValueError(f"Unknown data type: {data_type}")
-
-            if date_field != None:
-                table = table.astype({date_field: 'datetime64[ns]'})
         else:
             table = None
 
