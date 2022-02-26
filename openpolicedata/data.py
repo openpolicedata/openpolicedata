@@ -287,8 +287,19 @@ class Source:
             else:
                 raise ValueError(f"Unknown data type: {data_type}")
 
-            if date_field != None:
+            if date_field != None and len(table)>0:
+                dts = table[date_field]
+                dts = dts[dts.notnull()]
+                if len(dts) > 0:
+                    one_date = dts.iloc[0]
+                    # Try ns units
+                    if type(one_date) == str:
                 table = table.astype({date_field: 'datetime64[ns]'})
+                    else:
+                        if pd.to_datetime(one_date, unit="ns").year > 1980:
+                            table = table.astype({date_field: 'datetime64[ns]'})
+                        else:
+                            table = table.astype({date_field: 'datetime64[ms]'})
         else:
             table = None
 
