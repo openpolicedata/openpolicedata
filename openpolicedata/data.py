@@ -175,7 +175,7 @@ class Source:
 
         # If year is multi, need to use self._jurisdictionField to query URL
         # Otherwise return self.jurisdiction
-        if src["Year"] == _datasets.MULTI:
+        if src["Jurisdiction"] == _datasets.MULTI:
             data_type = _datasets.DataTypes(src["DataType"])
             if data_type == _datasets.DataTypes.CSV:
                 raise NotImplementedError(f"Unable to get jurisdictions for {data_type}")
@@ -190,6 +190,8 @@ class Source:
                     opt_filter = None
 
                 select = "DISTINCT " + src["LUT"]["jurisdiction_field"]
+                if year == _datasets.MULTI:
+                    year = None
                 jurisdictionSet = data_loaders.load_socrata(src["URL"], src["LUT"]["id"], 
                     date_field=src["LUT"]["date_field"], year=year, opt_filter=opt_filter, select=select, output_type="set")
                 return list(jurisdictionSet)
@@ -230,7 +232,7 @@ class Source:
         else:
             # If there are not any years corresponding to this year, check for a table
             # containing multiple years
-            src = src[self.sources["Year"] == _datasets.MULTI]
+            src = src.query("Year == '" + _datasets.MULTI + "'")
 
         if isinstance(src, pd.core.frame.DataFrame):
             if len(src) == 0:
@@ -294,7 +296,7 @@ class Source:
                     one_date = dts.iloc[0]
                     # Try ns units
                     if type(one_date) == str:
-                table = table.astype({date_field: 'datetime64[ns]'})
+                        table = table.astype({date_field: 'datetime64[ns]'})
                     else:
                         if pd.to_datetime(one_date, unit="ns").year > 1980:
                             table = table.astype({date_field: 'datetime64[ns]'})
