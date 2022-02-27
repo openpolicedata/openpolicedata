@@ -35,25 +35,7 @@ class TestProduct:
 			if r.status_code != 200:
 				raise ValueError(f"Status code for {url} is {r.status_code}")
 
-
-	def test_source_download_limitable(self):
-		for i in range(len(datasets)):
-			if self.can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]):
-				srcName = datasets.iloc[i]["SourceName"]
-				state = datasets.iloc[i]["State"]
-				src = data.Source(srcName, state=state)
-				# For speed, set private limit parameter so that only a single entry is requested
-				src._Source__limit = 1
-
-				table = src.load_from_url(datasets.iloc[i]["Year"], datasets.iloc[i]["TableType"])
-				assert len(table.table)==1
-				if "date_field" in datasets.iloc[i]["LUT"]:
-					assert datasets.iloc[i]["LUT"]["date_field"] in table.table
-					assert table.table[datasets.iloc[i]["LUT"]["date_field"]].dtype.name == 'datetime64[ns]'
-				if "jurisdiction_field" in datasets.iloc[i]["LUT"]:
-					assert datasets.iloc[i]["LUT"]["jurisdiction_field"] in table.table
-
-					
+	
 	def test_get_years(self):
 		for i in range(len(datasets)):
 			if self.is_filterable(datasets.iloc[i]["DataType"]) or datasets.iloc[i]["Year"] != _datasets.MULTI:
@@ -67,6 +49,37 @@ class TestProduct:
 					assert datasets.iloc[i]["Year"] in years
 				else:
 					assert len(years) > 0
+
+
+	def test_source_download_limitable(self):
+		num_stanford = 0
+		max_num_stanford = 1  # This data is standardized. Probably no need to test more than 1
+		for i in range(len(datasets)):
+			has_date_field = "date_field" in datasets.iloc[i]["LUT"]
+			if self.can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]) or has_date_field:
+				if self.is_stanford(datasets.iloc[i]["URL"]):
+					num_stanford += 1
+					if num_stanford > max_num_stanford:
+						continue
+				srcName = datasets.iloc[i]["SourceName"]
+				state = datasets.iloc[i]["State"]
+				src = data.Source(srcName, state=state)
+				# For speed, set private limit parameter so that only a single entry is requested
+				src._Source__limit = 20
+
+				table = src.load_from_url(datasets.iloc[i]["Year"], datasets.iloc[i]["TableType"])
+				assert len(table.table)>0
+				if "date_field" in datasets.iloc[i]["LUT"]:
+					assert datasets.iloc[i]["LUT"]["date_field"] in table.table
+					assert table.table[datasets.iloc[i]["LUT"]["date_field"]].dtype.name == 'datetime64[ns]'
+					dts = table.table[datasets.iloc[i]["LUT"]["date_field"]]
+					dts = dts[dts.notnull()]
+					assert len(dts) > 0   # If not, either all dates are bad or number of rows requested needs increased
+					# Check that year is reasonable
+					assert dts.iloc[0].year > 1999  # This is just an arbitrarily old year that is assumed to be before all available data
+					assert dts.iloc[0].year <= datetime.now().year
+				if "jurisdiction_field" in datasets.iloc[i]["LUT"]:
+					assert datasets.iloc[i]["LUT"]["jurisdiction_field"] in table.table				
 
 	
 	def test_get_jurisdictions(self):
@@ -181,7 +194,7 @@ class TestProduct:
 	def test_source_download_not_limitable(self):
 		for i in range(len(datasets)):
 			if not self.can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]):
-				if "stanford.edu" in datasets.iloc[i]["URL"]:
+				if self.is_stanford(datasets.iloc[i]["URL"]):
 					# There are a lot of data sets from Stanford, no need to run them all
 					# Just run approximately 10%
 					rnd = random.uniform(0,1)
@@ -227,7 +240,10 @@ class TestProduct:
 		else:
 			raise ValueError("Unknown table type")
 
+	def is_stanford(self, url):
+		return "stanford.edu" in url
+
 if __name__ == "__main__":
 	# For testing
 	tp = TestProduct()
-	tp.test_source_download_not_limitable()
+	tp.test_source_download_limitable()
