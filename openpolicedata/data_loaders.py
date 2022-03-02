@@ -2,6 +2,7 @@ import os
 from datetime import date
 import geopandas as gpd
 import pandas as pd
+from numpy import nan
 from sodapy import Socrata
 import requests
 from io import StringIO 
@@ -15,10 +16,11 @@ from arcgis.features import FeatureLayerCollection
 
 # This is for use if import data sets using Socrata. It is not required.
 # Requests made without an app_token will be subject to strict throttling limits
-# Get a App Token here: https://data.virginia.gov/profile/edit/developer_settings
+# Get a App Token here: http://dev.socrata.com/docs/app-tokens.html
 # Copy the App Token
 # Create an environment variable SODAPY_API_KEY and set it equal to the API key
 # Setting environment variable in Linux: https://phoenixnap.com/kb/linux-set-environment-variable
+# Windows: https://www.wikihow.com/Create-an-Environment-Variable-in-Windows-10
 default_sodapy_key = os.environ.get("SODAPY_API_KEY")
 
 def load_csv(url, date_field=None, year_filter=None, jurisdiction_field=None, jurisdiction_filter=None, limit=None):
@@ -86,6 +88,7 @@ def load_arcgis(url, date_field=None, year=None, limit=None):
     # Get layer/table #
     # Shorten URL
     
+    # https://developers.arcgis.com/python/
     layer_collection = FeatureLayerCollection(url)
 
     is_table = True
@@ -113,16 +116,7 @@ def load_arcgis(url, date_field=None, year=None, limit=None):
     
     where_query = ""
     if date_field!=None and year!=None:
-        if not isinstance(year, list):
-            year = [year, year]
-
-        if len(year)==2:
-            if year[0] > year[1]:
-                raise ValueError('year[0] needs to be smaller than or equal to year[1]')
-            start_date = str(year[0]) + "-01-01"
-            stop_date = str(year[1]+1) + "-01-01"
-        else:
-            raise ValueError('year needs to be a 1 or 2 argument value')
+        start_date, stop_date = _process_date(year, inclusive=False)
         
         where_query = f"{date_field} >= '{start_date}' AND  {date_field} < '{stop_date}'"
         layer_query_result = active_layer.query(where=where_query, return_all_records=(limit == None), result_record_count=limit)
@@ -131,11 +125,20 @@ def load_arcgis(url, date_field=None, year=None, limit=None):
 
     if len(layer_query_result) > 0:
         if is_table:
-            if "SHAPE" in layer_query_result.sdf:
+            if len(layer_query_result.features) > 0 and layer_query_result.features[0].geometry != None:
                 raise ValueError("Tables are not expected to include geographic data")
             return layer_query_result.sdf
         else:
-            json_data = layer_query_result.to_geojson
+            try:
+                json_data = layer_query_result.to_geojson
+            except:
+                for k in range(len(layer_query_result.features)):
+                    if layer_query_result.features[k].geometry == None:
+                        # Put in dummy data
+                        layer_query_result.features[k].geometry = {"x" : nan, "y" : nan}
+
+                json_data = layer_query_result.to_geojson
+
             json_data = json.loads(json_data)
             try:
                 return gpd.GeoDataFrame.from_features(json_data, crs=layer_query_result.spatial_reference['wkid'])
@@ -164,14 +167,7 @@ def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, sel
 
     where = ""
     if date_field!=None and year!=None:
-        if not isinstance(year, list):
-            year = [year, year]
-
-        if len(year) > 2:
-            raise ValueError("year should be a list of length 2: [startYear, stopYear]")
-
-        start_date = str(year[0]) + "-01-01"
-        stop_date  = str(year[1]) + "-12-31"
+        start_date, stop_date = _process_date(year,inclusive=True)
         where = date_field + " between '" + start_date + "' and '" + stop_date +"'"
 
     if opt_filter is not None:
@@ -239,6 +235,34 @@ def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, sel
     return df
 
 
+def _process_date(date, inclusive):
+    if not isinstance(date, list):
+        date = [date, date]
+
+    if len(date) !=2:
+        raise ValueError("date should be a list of length 2: [startYear, stopYear]")
+
+    if date[0] > date[1]:
+        raise ValueError('date[0] needs to be smaller than or equal to date[1]')
+
+    if type(date[0]) == str:
+        # This should already be in date format
+        start_date = date[0]
+    else:
+        start_date = str(date[0]) + "-01-01"
+
+    if type(date[1]) == str:
+        # This should already be in date format
+        stop_date = date[1]
+    else:
+        if inclusive:
+            stop_date  = str(date[1]) + "-12-31"
+        else:
+            stop_date  = str(date[1]+1) + "-01-01"
+
+    return start_date, stop_date
+
+
 def filter_dataframe(df, date_field=None, year_filter=None, jurisdiction_field=None, jurisdiction_filter=None):
     if year_filter != None and date_field != None:
         df = df[df[date_field].dt.year == year_filter]
@@ -274,7 +298,7 @@ def _get_years(data_type, url, date_field, data_set=None):
         else:
             raise ValueError("Unknown data type")
 
-        if len(df)==0:
+        if not hasattr(df, '__len__') or len(df)==0:  # If doesn't have len attribute, it is None
             misses+=1
         else:
             misses = 0
