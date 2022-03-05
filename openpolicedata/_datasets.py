@@ -101,6 +101,7 @@ _us_state_abbrev = {
 
 # For data sets that put multiple years or jurisdictions in 1 dataset
 MULTI = "MULTI"
+NA = "N/A"
 
 def _clean_source_name(name):
     str_rem = "Police Department"
@@ -156,7 +157,7 @@ class _DatasetBuilder:
             # If 
             if jurisdiction == MULTI and "jurisdiction_field" not in lut_dict:
                 raise ValueError("Multi-jurisidiction data must have a jurisdiction field")
-            if year == MULTI and "date_field" not in lut_dict and table_type != TableTypes.EMPLOYEE:
+            if year == MULTI and "date_field" not in lut_dict:
                 raise ValueError("Multi-year data must have a date field")
             if data_type == DataTypes.SOCRATA and "id" not in lut_dict:
                 raise ValueError("Socrata data must have an ID field")
@@ -328,14 +329,16 @@ _builder.add_data(state="Colorado", jurisdiction="Denver",
     data_type=DataTypes.ArcGIS,
     description="Police Pedestrian Stops and Vehicle Stops",
     lut_dict={"date_field" : "TIME_PHONEPICKUP"})
+# _builder.add_data(state="North Carolina", jurisdiction="Charlotte-Mecklenburg",
+#     table_type=TableTypes.TRAFFIC, 
+#     url=["https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPD/MapServer/14/"], 
+#     data_type=DataTypes.ArcGIS,
+#     description="Traffic Stops",
+#     lut_dict={"date_field" : "Month_of_Stop"})
+# TODO: Ensure that EMPLOYEE data is read properly since it's years value is unique (NA for not applicable)
 _builder.add_data(state="North Carolina", jurisdiction="Charlotte-Mecklenburg",
-    table_type=TableTypes.TRAFFIC, 
-    url=["https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPD/MapServer/14/"], 
-    data_type=DataTypes.ArcGIS,
-    description="Traffic Stops",
-    lut_dict={"date_field" : "Month_of_Stop"})
-_builder.add_data(state="North Carolina", jurisdiction="Charlotte-Mecklenburg",
-    table_type=TableTypes.EMPLOYEE, 
+    table_type=TableTypes.EMPLOYEE,
+    years=NA,
     url=["https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPD/MapServer/16/"], 
     data_type=DataTypes.ArcGIS,
     description="CMPD Employee Demographics")

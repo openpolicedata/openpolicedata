@@ -1,8 +1,10 @@
 ###### These can be the latest version ######
+# Availble from conda
 geopandas
 pandas
-sodapy
 numpy
 requests
 pyproj
+# Must be installed with pip
+sodapy
 arcgis
