@@ -71,7 +71,8 @@ class TestProduct:
 				assert len(table.table)>0
 				if "date_field" in datasets.iloc[i]["LUT"]:
 					assert datasets.iloc[i]["LUT"]["date_field"] in table.table
-					assert table.table[datasets.iloc[i]["LUT"]["date_field"]].dtype.name == 'datetime64[ns]'
+					#assuming a Pandas string dtype('O').name = object is okay too
+					assert (table.table[datasets.iloc[i]["LUT"]["date_field"]].dtype.name in ['datetime64[ns]', 'datetime64[ms]'])
 					dts = table.table[datasets.iloc[i]["LUT"]["date_field"]]
 					dts = dts[dts.notnull()]
 					assert len(dts) > 0   # If not, either all dates are bad or number of rows requested needs increased
@@ -218,7 +219,8 @@ class TestProduct:
 				assert len(table.table)>1
 				if "date_field" in datasets.iloc[i]["LUT"]:
 					assert datasets.iloc[i]["LUT"]["date_field"] in table.table
-					assert table.table[datasets.iloc[i]["LUT"]["date_field"]].dtype.name == 'datetime64[ns]'
+					#assuming a Pandas string dtype('O').name = object is okay too
+					assert (table.table[datasets.iloc[i]["LUT"]["date_field"]].dtype.name in ['datetime64[ns]', 'datetime64[ms]'])
 				if "jurisdiction_field" in datasets.iloc[i]["LUT"]:
 					assert datasets.iloc[i]["LUT"]["jurisdiction_field"] in table.table
 
