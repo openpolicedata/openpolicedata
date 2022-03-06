@@ -1,5 +1,6 @@
 import os.path as path
 import pandas as pd
+from datetime import datetime
 
 if __name__ == '__main__':
     import data_loaders
@@ -270,6 +271,7 @@ class Source:
         else:
             jurisdiction_field = None
         
+        #It is assumed that each data loader method will return data with the proper data type so date type etc...
         if load_table:
             if data_type == _datasets.DataTypes.CSV:
                 table = data_loaders.load_csv(url, date_field=date_field, year_filter=year_filter, 
@@ -293,15 +295,21 @@ class Source:
                 dts = table[date_field]
                 dts = dts[dts.notnull()]
                 if len(dts) > 0:
-                    one_date = dts.iloc[0]
-                    # Try ns units
+                    one_date = dts.iloc[0]            
                     if type(one_date) == str:
                         table = table.astype({date_field: 'datetime64[ns]'})
+                        dts = table[date_field]
+                        dts = dts[dts.notnull()]
+                        one_date = dts.iloc[0]
+
+                    if hasattr(one_date, "year"):
+                        if one_date.year < 1995:
+                            raise ValueError("Date is before 1995. There was likely an issue in the date conversion")
+                        elif one_date.year > datetime.now().year:
+                            raise ValueError("Date is after the current year. There was likely an issue in the date conversion")
                     else:
-                        if pd.to_datetime(one_date, unit="ns").year > 1980:
-                            table = table.astype({date_field: 'datetime64[ns]'})
-                        else:
-                            table = table.astype({date_field: 'datetime64[ms]'})
+                        raise TypeError("Unknown data type for date")
+                        
         else:
             table = None
 
@@ -352,13 +360,13 @@ if __name__ == '__main__':
     print(f"Years for FCPD Arrests Table are {src.get_years(_datasets.TableTypes.ARRESTS)}")
     print(f"Jurisdictions for FCPD Arrests Table are {src.get_jurisdictions(table_type=_datasets.TableTypes.ARRESTS, year=2019)}")
 
-    table = src.load_from_url(year=2020, table_type=_datasets.TableTypes.TRAFFIC_CITATIONS)
-    table.to_csv(outputDir="./doc")
-    table.to_csv(filename="test.csv")
-    table_load_csv = src.load_from_csv(year=2020, table_type=_datasets.TableTypes.TRAFFIC_CITATIONS, outputDir="./doc")
+    # table = src.load_from_url(year=2020, table_type=_datasets.TableTypes.TRAFFIC_CITATIONS)
+    # table.to_csv(outputDir="./doc")
+    # table.to_csv(filename="test.csv")
+    # table_load_csv = src.load_from_csv(year=2020, table_type=_datasets.TableTypes.TRAFFIC_CITATIONS, outputDir="./doc")
 
-    if len(table.table) != len(table_load_csv.table):
-        raise ValueError("CSV table not loaded properly")
+    # if len(table.table) != len(table_load_csv.table):
+    #     raise ValueError("CSV table not loaded properly")
 
     # table = src.load_from_url(year=[2019,2020], table_type=_datasets.TableTypes.TRAFFIC_CITATIONS)  # This should cause an error
     # ffxCit2020 = "https://opendata.arcgis.com/api/v3/datasets/1a262db8328e42d79feac20ec8424b38_0/downloads/data?format=csv&spatialRefId=4326"

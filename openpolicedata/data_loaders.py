@@ -140,12 +140,25 @@ def load_arcgis(url, date_field=None, year=None, limit=None):
                 json_data = layer_query_result.to_geojson
 
             json_data = json.loads(json_data)
+            
             try:
-                return gpd.GeoDataFrame.from_features(json_data, crs=layer_query_result.spatial_reference['wkid'])
+                geo_data_frame = gpd.GeoDataFrame.from_features(json_data, crs=layer_query_result.spatial_reference['wkid'])
             except CRSError:
                 # Method recommended by pyproj to deal with CRSError for wkid = 102685
                 crs = CRS.from_authority("ESRI", layer_query_result.spatial_reference['wkid'])
-                return gpd.GeoDataFrame.from_features(json_data, crs=crs)
+                geo_data_frame = gpd.GeoDataFrame.from_features(json_data, crs=crs)
+
+            if date_field is not None:
+                date_field_metadata=[x for x in layer_query_result.fields if x['name']==date_field]
+                if len(date_field_metadata) != 1:
+                    raise ValueError(f"Unable to find a single date field named {date_field}. Found {len(date_field_metadata)} instances.")
+
+                if date_field_metadata[0]['type'] == 'esriFieldTypeDate':
+                    geo_data_frame = geo_data_frame.astype({date_field: 'datetime64[ms]'})
+                else:
+                    raise ValueError(f"Unsupported data type {date_field_metadata[0]['type']} for field {date_field}.")
+
+            return geo_data_frame
     else:
         return None
 
