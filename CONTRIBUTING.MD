@@ -113,6 +113,18 @@ Remember, you will need to activate this environment the
 next time you want to use it after closing the terminal.
 If you want to get back to the root environment, run ``conda deactivate``.
 
+### API Keys and Application Tokens
+Some REST APIs used by OpenPoliceData either either require an API key / app token or have the option of throttling (slowing) your request without an API key / app token.
+
+In order for OpenPoliceData to access the API key or app token, environment variables are used.
+* Instructions for setting environment variables on [Windows](https://www.wikihow.com/Create-an-Environment-Variable-in-Windows-10)
+* Instructions for setting environment variables on [Linux](https://phoenixnap.com/kb/linux-set-environment-variable)
+
+Data accessed from [Socrata](https://dev.socrata.com/docs/app-tokens.html) may throttle your requests if you make too many. The following instructions describe how to add a Socrata app token:
+* [Generate an app token](https://support.socrata.com/hc/en-us/articles/210138558-Generating-an-App-Token)
+* Copy the App Token in the App Token column of the table at [evergreen.data.socrata.com](evergreen.data.socrata.com)
+* Add an environment variable called SODAPY_API_KEY and set the value to the Socrata App Token
+
 ## Pull Requests
 
 The changes to the OpenPoliceData source (and documentation) should be made via GitHub pull requests against ``main``, even for those with administration rights. While it's tempting to make changes directly to ``main`` and push them up, it is better to make a pull request so
