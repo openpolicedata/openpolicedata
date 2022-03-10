@@ -81,7 +81,7 @@ class Table:
         if not isinstance(self.table, pd.core.frame.DataFrame):
             raise ValueError("There is no table to save to CSV")
 
-        self.table.to_csv(filename)
+        self.table.to_csv(filename, index=False)
 
 
     def get_csv_filename(self):
@@ -291,25 +291,7 @@ class Source:
             else:
                 raise ValueError(f"Unknown data type: {data_type}")
 
-            if date_field != None and len(table)>0:
-                dts = table[date_field]
-                dts = dts[dts.notnull()]
-                if len(dts) > 0:
-                    one_date = dts.iloc[0]            
-                    if type(one_date) == str:
-                        table = table.astype({date_field: 'datetime64[ns]'})
-                        dts = table[date_field]
-                        dts = dts[dts.notnull()]
-                        one_date = dts.iloc[0]
-
-                    if hasattr(one_date, "year"):
-                        if one_date.year < 1995:
-                            raise ValueError("Date is before 1995. There was likely an issue in the date conversion")
-                        elif one_date.year > datetime.now().year:
-                            raise ValueError("Date is after the current year. There was likely an issue in the date conversion")
-                    else:
-                        raise TypeError("Unknown data type for date")
-                        
+            table = _check_date(table, date_field)                        
         else:
             table = None
 
@@ -326,8 +308,32 @@ class Source:
             filename = path.join(outputDir, filename)            
 
         table.table = pd.read_csv(filename, parse_dates=True)
+        table.table = _check_date(table.table, table._date_field)  
 
         return table
+
+
+def _check_date(table, date_field):
+    if date_field != None and len(table)>0:
+        dts = table[date_field]
+        dts = dts[dts.notnull()]
+        if len(dts) > 0:
+            one_date = dts.iloc[0]            
+            if type(one_date) == str:
+                table = table.astype({date_field: 'datetime64[ns]'})
+                dts = table[date_field]
+                dts = dts[dts.notnull()]
+                one_date = dts.iloc[0]
+
+            if hasattr(one_date, "year"):
+                if one_date.year < 1995:
+                    raise ValueError("Date is before 1995. There was likely an issue in the date conversion")
+                elif one_date.year > datetime.now().year:
+                    raise ValueError("Date is after the current year. There was likely an issue in the date conversion")
+            else:
+                raise TypeError("Unknown data type for date")
+
+    return table
 
 
 def get_csv_filename(state, source_name, jurisdiction, table_type, year):
