@@ -24,6 +24,28 @@ from arcgis.features import FeatureLayerCollection
 default_sodapy_key = os.environ.get("SODAPY_API_KEY")
 
 def load_csv(url, date_field=None, year_filter=None, jurisdiction_field=None, jurisdiction_filter=None, limit=None):
+    '''Download CSV file to pandas DataFrame
+    
+    Parameters
+    ----------
+    url : str
+        Download URL for CSV
+    date_field : str
+        (Optional) Name of the column that contains the date
+    year_filter : int, list
+        (Optional) Either the year or the year range [first_year, last_year] for the data that is being requested. None value returns data for all years.
+    jurisdiction_field : str
+        (Optional) Name of the column that contains the jurisidiction name (i.e. name of the police departments)
+    jurisdiction_filter : str
+        (Optional) Name of the jurisdiction to filter for. None value returns data for all jurisdictions.
+    limit : int
+        (Optional) Only returns the first limit rows of the CSV
+        
+    Returns
+    -------
+    pandas DataFrame
+        DataFrame containing table imported from CSV
+    '''
     
     if limit==None or ".zip" in url:
         # Perhaps use requests iter_content/iter_lines as below to read large CSVs so progress can be shown
@@ -47,6 +69,27 @@ def load_csv(url, date_field=None, year_filter=None, jurisdiction_field=None, ju
 
 
 def load_geojson(url, date_field=None, year_filter=None, jurisdiction_field=None, jurisdiction_filter=None):
+    '''Download GeoJSON file to geopandas DataFrame
+    
+    Parameters
+    ----------
+    url : str
+        Download URL for GeoJSON file
+    date_field : str
+        (Optional) Name of the column that contains the date
+    year_filter : int, list
+        (Optional) Either the year or the year range [first_year, last_year] for the data that is being requested.  None value returns data for all years.
+    jurisdiction_field : str
+        (Optional) Name of the column that contains the jurisidiction name (i.e. name of the police departments)
+    jurisdiction_filter : str
+        (Optional) Name of the jurisdiction to filter for.  None value returns data for all jurisdictions.
+        
+    Returns
+    -------
+    geopandas DataFrame
+        DataFrame containing table imported from GeoJSON file
+    '''
+    
     try:
         response = requests.get(url)
 
@@ -73,13 +116,31 @@ def load_geojson(url, date_field=None, year_filter=None, jurisdiction_field=None
     return df
 
 def load_arcgis(url, date_field=None, year=None, limit=None):
+    '''Download table from ArcGIS to pandas or geopandas DataFrame
+    
+    Parameters
+    ----------
+    url : str
+        ArcGIS GeoService URL
+    date_field : str
+        (Optional) Name of the column that contains the date
+    year : int, list
+        (Optional) Either the year or the year range [first_year, last_year] for the data that is being requested.  None value returns data for all years.
+    limit : int
+        (Optional) Only returns the first limit rows of the table
+        
+    Returns
+    -------
+    pandas or geopandas DataFrame
+        DataFrame containing table imported from ArcGIS
+    '''
+    
     # Table vs. Layer: https://developers.arcgis.com/rest/services-reference/enterprise/layer-feature-service-.htm
     # The layer resource represents a single feature layer or a nonspatial table in a feature service. 
     # A feature layer is a table or view with at least one spatial column.
     # For tables, it provides basic information about the table such as its ID, name, fields, types, and templates. 
     # For feature layers, in addition to the table information, it provides information such as its geometry type, min and max scales, and spatial reference.
-    #TODO: Error checking for layer type
-    # TODO: Check layers for all arc GIS URLs
+
     if url[-1] == "/":
         url = url[0:-1]
     last_slash = url.rindex("/")
@@ -165,7 +226,34 @@ def load_arcgis(url, date_field=None, year=None, limit=None):
 
 def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, select=None, output_type=None, 
                  limit=None, key=default_sodapy_key):
-    # Load tables that use Socrata
+    '''Download table from Socrata to pandas or geopandas DataFrame
+    
+    Parameters
+    ----------
+    url : str
+        URL for Socrata data
+    data_set : str
+        Dataset ID for Socrata data
+    date_field : str
+        (Optional) Name of the column that contains the date
+    year : int, list
+        (Optional) Either the year or the year range [first_year, last_year] for the data that is being requested.  None value returns data for all years.
+    opt_filter : str
+        (Optional) Additional filter to apply to data (beyond any date filter specified by date_field and year)
+    select : str
+        (Optional) select statement to REST API
+    output_type : str
+        (Optional) Data type for the output. Default: pandas or geopandas DataFrame
+    limit : int
+        (Optional) Only returns the first limit rows of the table
+    key : str
+        (Optional) Socrata app token to prevent throttling of the data request
+        
+    Returns
+    -------
+    pandas or geopandas DataFrame
+        DataFrame containing table
+    '''
 
     # Unauthenticated client only works with public data sets. Note 'None'
     # in place of application token, and no username or password:
@@ -277,6 +365,22 @@ def _process_date(date, inclusive):
 
 
 def filter_dataframe(df, date_field=None, year_filter=None, jurisdiction_field=None, jurisdiction_filter=None):
+    '''Load CSV file to pandas DataFrame
+    
+    Parameters
+    ----------
+    df : pandas or geopandas dataframe
+        Dataframe containing the data
+    date_field : str
+        (Optional) Name of the column that contains the date
+    year_filter : int, list
+        (Optional) Either the year or the year range [first_year, last_year] for the data that is being requested.  None value returns data for all years.
+    jurisdiction_field : str
+        (Optional) Name of the column that contains the jurisidiction name (i.e. name of the police departments)
+    jurisdiction_filter : str
+        (Optional) Name of the jurisdiction to filter for. None value returns data for all jurisdictions.
+    '''
+    
     if year_filter != None and date_field != None:
         df = df[df[date_field].dt.year == year_filter]
 
@@ -287,10 +391,40 @@ def filter_dataframe(df, date_field=None, year_filter=None, jurisdiction_field=N
 
 
 def get_years_argis(url, date_field):
+    '''Returns the years of the data contained in an ArcGIS table
+    
+    Parameters
+    ----------
+    url : str
+        ArcGIS GeoService URL
+    date_field : str
+        Name of the column that contains the date
+        
+    Returns
+    -------
+    list
+        List of years contained in the table
+    '''
+    
     return _get_years("arcgis", url, date_field=date_field)
 
 
 def get_years_socrata(url, data_set, date_field):
+    '''Returns the years of the data contained in a Socrata table
+    
+    Parameters
+    ----------
+    url : str
+        URL of Socrata table
+    date_field : str
+        Name of the column that contains the date
+        
+    Returns
+    -------
+    list
+        List of years contained in the table
+    '''
+    
     return _get_years("socrata", url, date_field=date_field, data_set=data_set)
 
 
