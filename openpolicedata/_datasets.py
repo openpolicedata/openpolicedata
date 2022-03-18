@@ -3,16 +3,18 @@ import pandas as pd
 import numpy as np
 import requests
 
-# SOCRATA data requires a dataset ID
-# Example: For https://data.virginia.gov/resource/segb-5y2c.json, data set ID is segb-5y2c. Include key id in the lutDict with this value
+# These are the types of data currently available in opd.
+# They all have corresponding data loaders in data_loaders.py
+# When new data loaders are added, this list should be updated.
 class DataTypes(Enum):
     CSV = "CSV"
     # EXCEL = "Excel"
     GeoJSON = "GeoJSON"
-    # ArcGIS URL should end with {Feature|Map}Server/{#} with # indicating the table/layer number
     ArcGIS = "ArcGIS"
     SOCRATA = "Socrata"
 
+# These are the types of tables currently available in opd.
+# Add to this list when datasets do not correspond to the below data types
 class TableTypes(Enum):
     ARRESTS = "ARRESTS"
     TRAFFIC = "TRAFFIC STOPS"
@@ -27,10 +29,7 @@ class TableTypes(Enum):
     CALLS_FOR_SERVICE = "CALLS FOR SERVICE"
     SHOOTINGS = "OFFICER-INVOLVED SHOOTINGS"
 
-# import datasets
-# df = datasets.get()  # Return a dataframe containing all datasets
-# df = datasets.get(state="Virginia")  # Return a dataframe containing only datasets for Virginia
-
+# List of states used in error checking state values
 _all_states = [
     'Alabama', 'Alaska', 'American Samoa', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware', 'District Of Columbia',
     'Florida', 'Georgia', 'Guam', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky', 'Louisiana', 'Maine',
@@ -99,11 +98,12 @@ _us_state_abbrev = {
     'WY' : 'Wyoming'
 }
 
-# For data sets that put multiple years or jurisdictions in 1 dataset
-MULTI = "MULTI"
-NA = "N/A"
+# Constants used in dataset parameters
+MULTI = "MULTI"    # For data sets that put multiple years or jurisdictions in 1 dataset
+NA = "N/A"         # N/A = not applicable
 
 def _clean_source_name(name):
+    # Source names should be the municipality name not "{municipality} Police Department"
     str_rem = "Police Department"
     if len(name) >= len(str_rem):
         name_end = name[-len(str_rem):]
@@ -118,6 +118,7 @@ def _clean_source_name(name):
 def _clean_jurisdiction_name(name):
     return _clean_source_name(name)
 
+# Class for generating the table of available datasets
 class _DatasetBuilder:
     columns = {
         'ID' : pd.StringDtype(),
@@ -136,6 +137,49 @@ class _DatasetBuilder:
 
 
     def add_data(self, state, jurisdiction, table_type, url, data_type, source_name=None, years=MULTI, description="", lut_dict={}):
+        """This method should be called when adding a dataset
+        
+        Parameters
+        ----------
+        state : str
+            State where municipality(s) is located
+        jurisidiction : str
+            Jurisdiction whose data is contained in the dataset.
+            For example, for data from the Denver Police Department, jurisdiction is Denver
+            If there are multiple jurisdictions in the dataset, set to MULTI
+        table_type : TableTypes enum value
+            The type of data contained in the dataset (TableTypes.ARRESTS, TableTypes.STOPS, etc.)
+        url : str
+            URL where data can be accessed.
+        data_type : DataTypes enum value
+            This indicates which data_loader to use when accessing the data
+        source_name : str
+            If jurisdiction=MULTI, a separate name for the source must be provided.
+            A good choice is the owner of the data such as California Department of Justice.
+            If no source_name is provided, source_name is set to the jurisdiction name.
+        years : int, list, or the value MULTI
+            This indicates what years are contained in the dataset
+            Some datasets only contain a single year in which case that year can be input (i.e. 2019)
+            Some datasets may contain a set of years from the past in case input a list (i.e. [2016,2017])
+            Many datasets are unpdated annually and data from the most recent year is added. In this case,
+            years should be MULTI
+        description : str
+            Optional description of the dataset
+        lut_dict : dict
+            Dictionary of optional parameters that may be required for some datasets. 
+            Keys currently include:
+                "id" : str
+                    Dataset ID
+                    REQUIRED for: SOCRATA data
+                    Example: For https://data.virginia.gov/resource/segb-5y2c.json, dataset ID is "segb-5y2c". 
+                "date_field" : str
+                    Indicates the field name (column header) in the table that contains dates. 
+                    REQUIRED for: datasets where years=MULTI
+                "jurisdiction_field" : str
+                    Indicates the field name (column header) in the table that contains the jurisdiction names. 
+                    REQUIRED for: datasets where jurisdictions=MULTI
+        """
+
         if state not in _all_states:
             raise ValueError(f"Unknown state: {state}")
         
@@ -145,6 +189,9 @@ class _DatasetBuilder:
         if not isinstance(url, list):
             url = [url]
 
+        if source_name==None and jurisdiction == MULTI:
+            raise ValueError("A source_name must be input for multiple jurisdiction data")
+
         if source_name==None:
             source_name = jurisdiction
 
@@ -152,9 +199,6 @@ class _DatasetBuilder:
         jurisdiction = _clean_jurisdiction_name(jurisdiction)
 
         for k, year in enumerate(years):
-            # TODO: Make values in lut_dict into columns of data frame
-            # Socrata data must have an ID
-            # If 
             if jurisdiction == MULTI and "jurisdiction_field" not in lut_dict:
                 raise ValueError("Multi-jurisidiction data must have a jurisdiction field")
             if year == MULTI and "date_field" not in lut_dict:
@@ -165,6 +209,14 @@ class _DatasetBuilder:
 
 
     def add_stanford_data(self):
+        """Adds datasets from Stanford Open Policing Project
+        The Stanford Open Policing Project contains datasets from many cities.
+        However, it appears to no longer be updated.
+        This methods adds all the datasets from Stanford that are not already added.
+        It is assumed that ones that already added are from other open data sets
+        and therefore, have more up-to-date data.
+        """
+
         url = "https://openpolicing.stanford.edu/data/"
 
         r = requests.get(url)
@@ -274,6 +326,7 @@ class _DatasetBuilder:
 
 
     def build_data_frame(self):
+        """Converts the datasets that have been added into a pandas DataFrame"""
         df = pd.DataFrame(self.row_data, columns=self.columns.keys())
         keyVals = ['State', 'SourceName', 'Jurisdiction', 'TableType','Year']
         df.drop_duplicates(subset=keyVals, inplace=True)
@@ -288,6 +341,9 @@ class _DatasetBuilder:
 _builder = _DatasetBuilder()
 
 ###################### Add datasets here #########################
+# SOCRATA data requires a dataset ID
+# Example: For https://data.virginia.gov/resource/segb-5y2c.json, data set ID is segb-5y2c. Include key id in the lutDict with this value
+# ArcGIS URL should end with {Feature|Map}Server/{#} with # indicating the table/layer number
 _builder.add_data(state="Virginia", source_name="Virginia Community Policing Act", jurisdiction=MULTI, table_type=TableTypes.STOPS, url="data.virginia.gov", data_type=DataTypes.SOCRATA, 
     description="A data collection consisting of all traffic and investigatory stops made in Virginia as aggregated by Virginia Department of State Police",
     lut_dict={"id" :"2c96-texw","date_field" : "incident_date", "jurisdiction_field" : "agency_name"})
@@ -335,15 +391,12 @@ _builder.add_data(state="Colorado", jurisdiction="Denver",
 #     data_type=DataTypes.ArcGIS,
 #     description="Traffic Stops",
 #     lut_dict={"date_field" : "Month_of_Stop"})
-# TODO: Ensure that EMPLOYEE data is read properly since it's years value is unique (NA for not applicable)
 _builder.add_data(state="North Carolina", jurisdiction="Charlotte-Mecklenburg",
     table_type=TableTypes.EMPLOYEE,
     years=NA,
     url=["https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPD/MapServer/16/"], 
     data_type=DataTypes.ArcGIS,
     description="CMPD Employee Demographics")
-# TODO: Combine officer-involved shootings data for Charlotte: https://data.charlottenc.gov/search?groupIds=82e7ad57f9bd4443af251fe88442dd17
-# TODO: Create data loader for Burlington
 # _builder.add_data(state="Vermont", jurisdiction="Burlington",
 #     tableType=TableTypes.USE_OF_FORCE, 
 #     url=["https://data.burlingtonvt.gov/explore/dataset/bpd-use-of-force/"], 
@@ -368,7 +421,6 @@ _builder.add_data(state="North Carolina", jurisdiction="Charlotte-Mecklenburg",
 #     data_type=DataTypes.UNKNOWN,
 #     description="Case level data set on arraignment and bail",
 #     lut_dict={"date_field" : "arraignment_date"})
-# TODO: Add in police incidents data using function as url: https://data.burlingtonvt.gov/explore/?refine.theme=Public+Safety&disjunctive.theme&disjunctive.publisher&disjunctive.keyword&sort=modified
 _builder.add_data(state="California", source_name="California Department of Justice", jurisdiction=MULTI,
     table_type=TableTypes.STOPS, 
     url=["https://data-openjustice.doj.ca.gov/sites/default/files/dataset/2020-01/RIPA%20Stop%20Data%202018.csv", 
@@ -378,22 +430,18 @@ _builder.add_data(state="California", source_name="California Department of Just
     years=[2018,2019,2020],
     description="RIPA Stop Data: Assembly Bill 953 (AB 953) requires each state and local agency in California that employs peace officers to annually report to the Attorney General data on all stops, as defined in Government Code section 12525.5(g)(2), conducted by the agency's peace officers.",
     lut_dict={"date_field" : "DATE_OF_STOP", "jurisdiction_field" : "AGENCY_NAME"})
-# TODO: Add in link for description of data fields. CA data has a file online containing this info
-# TODO: Add data loader for Excel
 # _builder.add_data(state="California", source_name="California Department of Justice", jurisdiction=MULTI,
 #     tableType=TableTypes.DEATHES_IN_CUSTODY, 
 #     url=["https://data-openjustice.doj.ca.gov/sites/default/files/dataset/2021-07/DeathInCustody_2005-2020_20210603.xlsx"], 
 #     data_type=DataTypes.EXCEL,
 #     escription="State and local law enforcement agencies and correctional facilities report information on deaths that occur in custody or during the process of arrest in compliance with Section 12525 of the California Government Code",
 #     lut_dict={"date_field" : "date_of_death_yyyy"})
-# TODO: Add CA UoF: https://openjustice.doj.ca.gov/data
 _builder.add_data(state="Maryland", jurisdiction="Baltimore",
     table_type=TableTypes.ARRESTS, 
     url=["https://egis.baltimorecity.gov/egis/rest/services/GeoSpatialized_Tables/Arrest/FeatureServer/0"], 
     data_type=DataTypes.ArcGIS,
     description="Arrest in the City of Baltimore",
     lut_dict={"date_field" : "ArrestDateTime"})
-# TODO: Functionalize URLs that have a pattern?
 _builder.add_data(state="Maryland", jurisdiction="Baltimore",
     table_type=TableTypes.CALLS_FOR_SERVICE, 
     url=["https://opendata.baltimorecity.gov/egis/rest/services/Hosted/911_Calls_For_Service_2017_csv/FeatureServer/0",
@@ -463,11 +511,31 @@ if include_comport:
         lut_dict={"date_field" : "occurredDate"})
 
 _builder.add_stanford_data()
-        
+
+# This generates the datasets available in opd. All datasets must be added above here.        
 datasets = _builder.build_data_frame()
 
 
-def get(source_name=None, state=None, jurisdiction=None, table_type=None):
+def datasets_query(source_name=None, state=None, jurisdiction=None, table_type=None):
+    """Query for available datasets.
+    Request a DataFrame containing available datasets based on input filters.
+    Returns all datasets if no filters applied.
+    
+    Parameters
+    ----------
+    source_name : str
+        OPTIONAL name of source to filter by source name
+    state : str
+        OPTIONAL name of state to filter by state
+    jurisdiction : str
+        OPTIONAL name of jurisdiction to filter by jurisdiction
+    table_type : str or TableTypes enum
+        OPTIONAL name of table type to filter by type of data
+
+    RETURNS
+    -------
+    Dataframe containing datasets that match any filters applied
+    """
     query = ""
     if state != None:
         query += "State == '" + state + "' and "
@@ -488,8 +556,7 @@ def get(source_name=None, state=None, jurisdiction=None, table_type=None):
     else:
         return datasets.query(query[0:-5]) 
 
-# TODO: Add function for converting "all" datasets to CSV with some filtering options
 
 if __name__=="__main__":
-    df = get()
-    df = get("Virginia")
+    df = datasets_query()
+    df = datasets_query("Virginia")

@@ -39,40 +39,40 @@ class TestProduct:
             builder.add_data("New York", "", opd.TableTypes.STOPS, "", opd.DataTypes.SOCRATA, years=2020)
 
     def test_source_list_get_all(self):
-        df = opd.get()
+        df = opd.datasets_query()
         assert (df == opd.datasets).all().all()
 
     def test_source_list_by_state(self):
         state = "Virginia"
-        df = opd.get(state=state)
+        df = opd.datasets_query(state=state)
         df_truth = opd.datasets[opd.datasets["State"]==state]
         assert len(df)>0
         assert (df == df_truth).all().all()
 
     def test_source_list_by_source_name(self):
         source_name = "Fairfax County"
-        df = opd.get(source_name=source_name)
+        df = opd.datasets_query(source_name=source_name)
         df_truth = opd.datasets[opd.datasets["SourceName"]==source_name]
         assert len(df)>0
         assert (df == df_truth).all().all()
 
     def test_source_list_by_jurisdiction(self):
         jurisdiction = "Fairfax County"
-        df = opd.get(jurisdiction=jurisdiction)
+        df = opd.datasets_query(jurisdiction=jurisdiction)
         df_truth = opd.datasets[opd.datasets["Jurisdiction"]==jurisdiction]
         assert len(df)>0
         assert (df == df_truth).all().all()
 
     def test_source_list_by_table_type(self):
         table_type = opd.TableTypes.ARRESTS
-        df = opd.get(table_type=table_type)
+        df = opd.datasets_query(table_type=table_type)
         df_truth = opd.datasets[opd.datasets["TableType"]==table_type.value]
         assert len(df)>0
         assert (df == df_truth).all().all()
 
     def test_source_list_by_table_type_value(self):
         table_type = opd.TableTypes.ARRESTS.value
-        df = opd.get(table_type=table_type)
+        df = opd.datasets_query(table_type=table_type)
         df_truth = opd.datasets[opd.datasets["TableType"]==table_type]
         assert len(df)>0
         assert (df == df_truth).all().all()
@@ -81,7 +81,7 @@ class TestProduct:
         state = "Virginia"
         source_name = "Fairfax County"
         table_type = opd.TableTypes.ARRESTS.value
-        df = opd.get(state=state, table_type=table_type, source_name=source_name)
+        df = opd.datasets_query(state=state, table_type=table_type, source_name=source_name)
         df_truth = opd.datasets[opd.datasets["TableType"]==table_type]
         df_truth = df_truth[df_truth["State"]==state]
         df_truth = df_truth[df_truth["SourceName"]==source_name]
