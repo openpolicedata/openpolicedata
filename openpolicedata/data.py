@@ -56,7 +56,6 @@ class Table:
 
     # From source
     _data_type = None
-    # From LUT in source
     _dataset_id = None
     _date_field = None
     _jurisdiction_field = None
@@ -105,14 +104,14 @@ class Table:
         self.url = source["URL"]
         self._data_type = _datasets.DataTypes(source["DataType"])  # Convert to Enum
 
-        if "id" in source["LUT"]:
-            self._dataset_id = source["LUT"]["id"]
+        if not pd.isnull(source["dataset_id"]):
+            self._dataset_id = source["dataset_id"]
 
-        if "date_field" in source["LUT"]:
-            self._date_field = source["LUT"]["date_field"]
+        if not pd.isnull(source["date_field"]):
+            self._date_field = source["date_field"]
         
-        if "jurisdiction_field" in source["LUT"]:
-            self._jurisdiction_field = source["LUT"]["jurisdiction_field"]
+        if not pd.isnull(source["jurisdiction_field"]):
+            self._jurisdiction_field = source["jurisdiction_field"]
 
 
     def to_csv(self, outputDir=None, filename=None):
@@ -234,8 +233,8 @@ class Source:
 
             data_type = _datasets.DataTypes(df["DataType"])
             url = df["URL"]
-            if "date_field" in df["LUT"]:
-                date_field = df["LUT"]["date_field"]
+            if not pd.isnull(df["date_field"]):
+                date_field = df["date_field"]
             else:
                 raise ValueError("No date_field is provided to identify the years")
             
@@ -263,7 +262,7 @@ class Source:
             elif data_type == _datasets.DataTypes.ArcGIS:
                 years = data_loaders.get_years_argis(url, date_field)
             elif data_type == _datasets.DataTypes.SOCRATA:
-                years = data_loaders.get_years_socrata(url, df["LUT"]["id"], date_field)
+                years = data_loaders.get_years_socrata(url, df["dataset_id"], date_field)
             else:
                 raise ValueError(f"Unknown data type: {data_type}")
         else:
@@ -325,11 +324,11 @@ class Source:
                 else:
                     opt_filter = None
 
-                select = "DISTINCT " + src["LUT"]["jurisdiction_field"]
+                select = "DISTINCT " + src["jurisdiction_field"]
                 if year == _datasets.MULTI:
                     year = None
-                jurisdictionSet = data_loaders.load_socrata(src["URL"], src["LUT"]["id"], 
-                    date_field=src["LUT"]["date_field"], year=year, opt_filter=opt_filter, select=select, output_type="set")
+                jurisdictionSet = data_loaders.load_socrata(src["URL"], src["dataset_id"], 
+                    date_field=src["date_field"], year=year, opt_filter=opt_filter, select=select, output_type="set")
                 return list(jurisdictionSet)
             else:
                 raise ValueError(f"Unknown data type: {data_type}")
@@ -402,20 +401,20 @@ class Source:
         else:
             year_filter = None
 
-        if "id" in src["LUT"]:
-            dataset_id = src["LUT"]["id"]
+        if not pd.isnull(src["dataset_id"]):
+            dataset_id = src["dataset_id"]
 
         table_year = None
-        if "date_field" in src["LUT"]:
-            date_field = src["LUT"]["date_field"]
+        if not pd.isnull(src["date_field"]):
+            date_field = src["date_field"]
             if year_filter != None:
                 table_year = year_filter
         else:
             date_field = None
         
         table_jurisdiction = None
-        if "jurisdiction_field" in src["LUT"]:
-            jurisdiction_field = src["LUT"]["jurisdiction_field"]
+        if not pd.isnull(src["jurisdiction_field"]):
+            jurisdiction_field = src["jurisdiction_field"]
             if jurisdiction_filter != None and data_type != _datasets.DataTypes.ArcGIS:
                 table_jurisdiction = jurisdiction_filter
         else:
@@ -550,52 +549,8 @@ def get_csv_filename(state, source_name, jurisdiction, table_type, year):
     return filename
 
 if __name__ == '__main__':
-    src = Source("Denver")
-    # print(f"Years for DPD Table are {src.get_years()}")
-    # table = src.load_from_url(year = 2020)
+    src = Source("Baltimore")
 
-    src = Source("Fairfax County")
-    print(f"Tables for FCPD are {src.get_tables_types()}")
-    print(f"Years for FCPD Arrests Table are {src.get_years(_datasets.TableTypes.ARRESTS)}")
-    print(f"Jurisdictions for FCPD Arrests Table are {src.get_jurisdictions(table_type=_datasets.TableTypes.ARRESTS, year=2019)}")
-
-    # table = src.load_from_url(year=2020, table_type=_datasets.TableTypes.TRAFFIC_CITATIONS)
-    # table.to_csv(outputDir="./doc")
-    # table.to_csv(filename="test.csv")
-    # table_load_csv = src.load_from_csv(year=2020, table_type=_datasets.TableTypes.TRAFFIC_CITATIONS, outputDir="./doc")
-
-    # if len(table.table) != len(table_load_csv.table):
-    #     raise ValueError("CSV table not loaded properly")
-
-    # table = src.load_from_url(year=[2019,2020], table_type=_datasets.TableTypes.TRAFFIC_CITATIONS)  # This should cause an error
-    # ffxCit2020 = "https://opendata.arcgis.com/api/v3/datasets/1a262db8328e42d79feac20ec8424b38_0/downloads/data?format=csv&spatialRefId=4326"
-    # csvTable = pd.read_csv(ffxCit2020, parse_dates=True)
-
-    # if len(table.table) != len(csvTable):
-    #     raise ValueError("Example GeoJSON data was not read in improperly: Lengths are not the same")
-
-    # if not (csvTable["OBJECTID"] == table.table["OBJECTID"]).all():
-    #     raise ValueError("Example GeoJSON data was not read in improperly: Test column differs")
-
-    src = Source("Virginia Community Policing Act")
-    # print(f"Years for VCPA data are {src.get_years()}")
-    jurisdictionsAll = src.get_jurisdictions()
-    jurisdictions_ffx =src.get_jurisdictions(partial_name="Fairfax")
-    print(f"Jurisdictions for VCPA matching Fairfax are {jurisdictions_ffx}")
-    table = src.load_from_url(year=[2020,2020], jurisdiction_filter="Fairfax County Police Department")
-
-    # year = 2020
-    # src = Source("Montgomery County")
-    # print(f"Years for MCPD data are {src.getYears()}")
-    # table = src.getTable(year=year)
-
-    # csvFile = "https://data.montgomerycountymd.gov/api/views/4mse-ku6q/rows.csv?accessType=DOWNLOAD"
-    # csvTable = pd.read_csv(csvFile)
-
-    # csvTable = csvTable.astype({"Date Of Stop": 'datetime64[ns]'})
-    # csvTable = csvTable[csvTable["Date Of Stop"].dt.year == year]
-
-    # if len(table.table) != len(csvTable):
-    #     raise ValueError("Example Socrata data was not read in improperly: Lengths are not the same")
+    t = src.load_from_url(year=2017, table_type=_datasets.TableTypes.CALLS_FOR_SERVICE)
 
     print("data main function complete")

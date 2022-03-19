@@ -8,6 +8,7 @@ from openpolicedata import datasets
 from openpolicedata import _datasets
 import random
 from datetime import datetime
+import pandas as pd
 
 class TestProduct:
 	def test_source_url_name_unlimitable(self):
@@ -51,11 +52,13 @@ class TestProduct:
 					assert len(years) > 0
 
 
-	def test_source_download_limitable(self):
+	def test_source_download_limitable(self, source_name=None):
 		num_stanford = 0
 		max_num_stanford = 1  # This data is standardized. Probably no need to test more than 1
 		for i in range(len(datasets)):
-			has_date_field = "date_field" in datasets.iloc[i]["LUT"]
+			if source_name != None and datasets.iloc[i]["SourceName"] != source_name:
+				continue
+			has_date_field = not pd.isnull(datasets.iloc[i]["date_field"])
 			if self.can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]) or has_date_field:
 				if self.is_stanford(datasets.iloc[i]["URL"]):
 					num_stanford += 1
@@ -69,18 +72,18 @@ class TestProduct:
 
 				table = src.load_from_url(datasets.iloc[i]["Year"], datasets.iloc[i]["TableType"])
 				assert len(table.table)>0
-				if "date_field" in datasets.iloc[i]["LUT"]:
-					assert datasets.iloc[i]["LUT"]["date_field"] in table.table
+				if not pd.isnull(datasets.iloc[i]["date_field"]):
+					assert datasets.iloc[i]["date_field"] in table.table
 					#assuming a Pandas string dtype('O').name = object is okay too
-					assert (table.table[datasets.iloc[i]["LUT"]["date_field"]].dtype.name in ['datetime64[ns]', 'datetime64[ms]'])
-					dts = table.table[datasets.iloc[i]["LUT"]["date_field"]]
+					assert (table.table[datasets.iloc[i]["date_field"]].dtype.name in ['datetime64[ns]', 'datetime64[ms]'])
+					dts = table.table[datasets.iloc[i]["date_field"]]
 					dts = dts[dts.notnull()]
 					assert len(dts) > 0   # If not, either all dates are bad or number of rows requested needs increased
 					# Check that year is reasonable
 					assert dts.iloc[0].year > 1999  # This is just an arbitrarily old year that is assumed to be before all available data
 					assert dts.iloc[0].year <= datetime.now().year
-				if "jurisdiction_field" in datasets.iloc[i]["LUT"]:
-					assert datasets.iloc[i]["LUT"]["jurisdiction_field"] in table.table				
+				if not pd.isnull(datasets.iloc[i]["jurisdiction_field"]):
+					assert datasets.iloc[i]["jurisdiction_field"] in table.table				
 
 	
 	def test_get_jurisdictions(self):
@@ -150,7 +153,7 @@ class TestProduct:
 				table = src.load_from_url(year, datasets.iloc[i]["TableType"], 
 										jurisdiction_filter=jurisdiction_filter)
 
-				dts = table.table[datasets.iloc[i]["LUT"]["date_field"]]
+				dts = table.table[datasets.iloc[i]["date_field"]]
 				dts = dts.sort_values(ignore_index=True)
 
 				all_years = dts.dt.year.unique().tolist()
@@ -163,7 +166,7 @@ class TestProduct:
 
 				table_start = src.load_from_url([start_date, stop_date], datasets.iloc[i]["TableType"], 
 												jurisdiction_filter=jurisdiction_filter)
-				dts_start = table_start.table[datasets.iloc[i]["LUT"]["date_field"]]
+				dts_start = table_start.table[datasets.iloc[i]["date_field"]]
 
 				dts_start = dts_start.sort_values(ignore_index=True)
 
@@ -179,7 +182,7 @@ class TestProduct:
 
 				table_stop = src.load_from_url([start_date, stop_date], datasets.iloc[i]["TableType"], 
 												jurisdiction_filter=jurisdiction_filter)
-				dts_stop = table_stop.table[datasets.iloc[i]["LUT"]["date_field"]]
+				dts_stop = table_stop.table[datasets.iloc[i]["date_field"]]
 
 				dts_stop = dts_stop.sort_values(ignore_index=True)
 
@@ -217,12 +220,12 @@ class TestProduct:
 					raise ValueError(f"Error loading CSV {srcName}, year={year}, table_type={table_type}")
 
 				assert len(table.table)>1
-				if "date_field" in datasets.iloc[i]["LUT"]:
-					assert datasets.iloc[i]["LUT"]["date_field"] in table.table
+				if not pd.isnull(datasets.iloc[i]["date_field"]):
+					assert datasets.iloc[i]["date_field"] in table.table
 					#assuming a Pandas string dtype('O').name = object is okay too
-					assert (table.table[datasets.iloc[i]["LUT"]["date_field"]].dtype.name in ['datetime64[ns]', 'datetime64[ms]'])
-				if "jurisdiction_field" in datasets.iloc[i]["LUT"]:
-					assert datasets.iloc[i]["LUT"]["jurisdiction_field"] in table.table
+					assert (table.table[datasets.iloc[i]["date_field"]].dtype.name in ['datetime64[ns]', 'datetime64[ms]'])
+				if not pd.isnull(datasets.iloc[i]["jurisdiction_field"]):
+					assert datasets.iloc[i]["jurisdiction_field"] in table.table
 
 
 	def can_be_limited(self, table_type, url):
