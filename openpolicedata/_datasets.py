@@ -33,9 +33,10 @@ class TableTypes(Enum):
 MULTI = "MULTI"    # For data sets that put multiple years or jurisdictions in 1 dataset
 NA = "None"         # None = not applicable (pandas converts "N/A" to NaN)
 
-def _build():
-    csv_file = "https://raw.github.com/openpolicedata/opd-data/main/opd_source_table.csv"
+# Location of table where datasets available in opd are stored
+csv_file = "https://raw.github.com/openpolicedata/opd-data/main/opd_source_table.csv"
 
+def _build(csv_file):
     # Check columns
     columns = {
         'State' : pd.StringDtype(),
@@ -78,7 +79,7 @@ def _build():
     return df
 
 
-datasets = _build()
+datasets = _build(csv_file)
 
 
 # Datasets that had issues that need readded in the future

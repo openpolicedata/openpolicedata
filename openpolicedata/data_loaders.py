@@ -5,7 +5,6 @@ import pandas as pd
 from numpy import nan
 from sodapy import Socrata
 import requests
-from io import StringIO 
 import contextlib
 import urllib
 import json

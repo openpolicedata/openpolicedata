@@ -4,21 +4,30 @@ if __name__ == "__main__":
 	import sys
 	sys.path.append('../openpolicedata')
 from openpolicedata import data
-from openpolicedata import datasets
 from openpolicedata import _datasets
+from openpolicedata import datasets_query
 import random
 from datetime import datetime
 import pandas as pd
 
+def get_datasets(csvfile):
+    if csvfile != None:
+        print(csvfile)
+        _datasets.datasets = _datasets._build(csvfile)
+
+    return datasets_query()
+
 class TestProduct:
-	def test_source_url_name_unlimitable(self):
+	def test_source_url_name_unlimitable(self, csvfile):
+		datasets = get_datasets(csvfile)
 		for i in range(len(datasets)):
 			if not self.can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]):
 				ext = "." + datasets.iloc[i]["DataType"].lower()
 				assert ext in datasets.iloc[i]["URL"]
 
 
-	def test_source_urls(self):
+	def test_source_urls(self, csvfile):
+		datasets = get_datasets(csvfile)
 		for i in range(len(datasets)):
 			url = datasets.iloc[i]["URL"]
 			try:
@@ -37,7 +46,8 @@ class TestProduct:
 				raise ValueError(f"Status code for {url} is {r.status_code}")
 
 	
-	def test_get_years(self):
+	def test_get_years(self, csvfile):
+		datasets = get_datasets(csvfile)
 		for i in range(len(datasets)):
 			if self.is_filterable(datasets.iloc[i]["DataType"]) or datasets.iloc[i]["Year"] != _datasets.MULTI:
 				srcName = datasets.iloc[i]["SourceName"]
@@ -52,7 +62,8 @@ class TestProduct:
 					assert len(years) > 0
 
 
-	def test_source_download_limitable(self, source_name=None):
+	def test_source_download_limitable(self, csvfile, source_name=None):
+		datasets = get_datasets(csvfile)
 		num_stanford = 0
 		max_num_stanford = 1  # This data is standardized. Probably no need to test more than 1
 		for i in range(len(datasets)):
@@ -86,7 +97,8 @@ class TestProduct:
 					assert datasets.iloc[i]["jurisdiction_field"] in table.table				
 
 	
-	def test_get_jurisdictions(self):
+	def test_get_jurisdictions(self, csvfile):
+		datasets = get_datasets(csvfile)
 		for i in range(len(datasets)):
 			if self.is_filterable(datasets.iloc[i]["DataType"]) or datasets.iloc[i]["Jurisdiction"] != _datasets.MULTI:
 				srcName = datasets.iloc[i]["SourceName"]
@@ -101,7 +113,9 @@ class TestProduct:
 					assert len(jurisdictions) > 0
 
 
-	def test_get_jurisdictions_name_match(self):
+	def test_get_jurisdictions_name_match(self, csvfile):
+		get_datasets(csvfile)
+
 		src = data.Source("Virginia Community Policing Act")
 
 		jurisdictions = src.get_jurisdictions(partial_name="Arlington")
@@ -109,7 +123,8 @@ class TestProduct:
 		assert len(jurisdictions) == 2
 				
 				
-	def test_jurisdiction_filter(self):
+	def test_jurisdiction_filter(self, csvfile):
+		get_datasets(csvfile)
 		src = data.Source("Virginia Community Policing Act")
 		jurisdiction="Fairfax County Police Department"
 		# For speed, set private limit parameter so that only a single entry is requested
@@ -122,7 +137,8 @@ class TestProduct:
 
 	
 	@pytest.mark.slow(reason="This is a slow test tgat should be run before a major commit.")
-	def test_load_year(self):
+	def test_load_year(self, csvfile):
+		datasets = get_datasets(csvfile)
 		# Test that filtering for a year works at the boundaries
 		for i in range(len(datasets)):
 			if self.is_filterable(datasets.iloc[i]["DataType"]) and datasets.iloc[i]["Year"] == _datasets.MULTI:
@@ -195,7 +211,8 @@ class TestProduct:
 
 
 	@pytest.mark.slow(reason="This is a slow test and should be run before a major commit.")
-	def test_source_download_not_limitable(self):
+	def test_source_download_not_limitable(self, csvfile):
+		datasets = get_datasets(csvfile)
 		for i in range(len(datasets)):
 			if not self.can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]):
 				if self.is_stanford(datasets.iloc[i]["URL"]):
@@ -251,4 +268,4 @@ class TestProduct:
 if __name__ == "__main__":
 	# For testing
 	tp = TestProduct()
-	tp.test_source_download_limitable()
+	tp.test_get_years("C:\\Users\\matth\\repos\\opd-data\\TMP.csv")
