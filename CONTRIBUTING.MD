@@ -14,7 +14,7 @@ Please take a few minutes to read through this guide and get setup for success w
 
 ## What Can I Do?
 
-* Whether you know how to code or not, you can help us find and add new data sets to OpenPoliceData. Everyone can help us find new datasets to include in OpenPoliceData. If you would like to help us with this, skip to our [Adding Datasets Guide](https://github.com/openpolicedata/opd-data/blob/main/CONTRIBUTING.md) for more details. 
+* Whether you know how to code or not, you can help us find and add new data sets to OpenPoliceData. Everyone can help us find new datasets to include in OpenPoliceData. If you would like to help us with this, skip to our [Adding Datasets Guide](https://github.com/openpolicedata/opd-data/blob/main/CONTRIBUTING.MD) for more details. 
 * Tackle any [issues](https://github.com/openpolicedata/openpolicedata/issues) you wish! We have a special label for issues that beginners might want to try. Have a look at our [current beginner issues](https://github.com/openpolicedata/openpolicedata/labels/good%20first%20issue). Also have a look at if the issue is already assigned to someone - this helps us make sure that work is not duplicated.
 * Contribute code you already have. It does not need to be perfect! We will help you clean things up, test it, etc.
 * Make a tutorial or example of how to do something.
