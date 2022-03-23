@@ -170,7 +170,7 @@ When testing in-progress code, it may be useful to run a single set of tests. To
 python -m pytest /path/to/test_name.py
 ```
 
-When adding data sources to `opd_source_table.csv` from the opd-data repository (see [Adding Datasets Guide](https://github.com/openpolicedata/opd-data/blob/main/CONTRIBUTING.md) for more details), the modifications should be tested prior to a pull request. However, OpenPoliceData defaults to reading the CSV file from the main branch in the [opd-data](https://github.com/openpolicedata/opd-data) repository. To force pytest to use your modified `opd_source_table.csv` to test OpenPoliceData, run:
+When adding data sources to `opd_source_table.csv` from the opd-data repository (see [Adding Datasets Guide](https://github.com/openpolicedata/opd-data/blob/main/CONTRIBUTING.MD) for more details), the modifications should be tested prior to a pull request. However, OpenPoliceData defaults to reading the CSV file from the main branch in the [opd-data](https://github.com/openpolicedata/opd-data) repository. To force pytest to use your modified `opd_source_table.csv` to test OpenPoliceData, run:
 ```sh
 python -m pytest --csvfile /path/to/modified_opd_source_table.csv
 ```
