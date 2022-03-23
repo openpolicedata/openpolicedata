@@ -14,7 +14,7 @@ Please take a few minutes to read through this guide and get setup for success w
 
 ## What Can I Do?
 
-* Whether you know how to code or not, you can help us find and add new data sets to OpenPoliceData. Everyone can help us find new datasets to include in OpenPoliceData. If you would like to help us with this, skip to our [Adding Datasets Guide](https://github.com/openpolicedata/opd-data/blob/main/CONTRIBUTING.md) for more details. 
+* Whether you know how to code or not, you can help us find and add new data sets to OpenPoliceData. Everyone can help us find new datasets to include in OpenPoliceData. If you would like to help us with this, skip to our [Adding Datasets Guide](https://github.com/openpolicedata/opd-data/blob/main/CONTRIBUTING.MD) for more details. 
 * Tackle any [issues](https://github.com/openpolicedata/openpolicedata/issues) you wish! We have a special label for issues that beginners might want to try. Have a look at our [current beginner issues](https://github.com/openpolicedata/openpolicedata/labels/good%20first%20issue). Also have a look at if the issue is already assigned to someone - this helps us make sure that work is not duplicated.
 * Contribute code you already have. It does not need to be perfect! We will help you clean things up, test it, etc.
 * Make a tutorial or example of how to do something.
@@ -118,7 +118,7 @@ Some REST APIs used by OpenPoliceData either require an API key / app token or h
 
 Data accessed from [Socrata](https://dev.socrata.com/docs/app-tokens.html) may throttle your requests if you make too many. The following instructions describe how to add a Socrata app token:
 * [Generate an app token](https://support.socrata.com/hc/en-us/articles/210138558-Generating-an-App-Token)
-* Copy the App Token in the App Token column of the table at [evergreen.data.socrata.com](evergreen.data.socrata.com)
+* Copy the App Token in the App Token column of the table at [evergreen.data.socrata.com](https://evergreen.data.socrata.com/)
 * Add an environment variable called SODAPY_API_KEY and set the value to the Socrata App Token
     * Instructions for setting environment variables on [Windows](https://www.wikihow.com/Create-an-Environment-Variable-in-Windows-10)
     * Instructions for setting environment variables on [Linux](https://phoenixnap.com/kb/linux-set-environment-variable)
@@ -170,7 +170,7 @@ When testing in-progress code, it may be useful to run a single set of tests. To
 python -m pytest /path/to/test_name.py
 ```
 
-When adding data sources to `opd_source_table.csv` from the opd-data repository (see [Adding Datasets Guide](https://github.com/openpolicedata/opd-data/blob/main/CONTRIBUTING.md) for more details), the modifications should be tested prior to a pull request. However, OpenPoliceData defaults to reading the CSV file from the main branch in the [opd-data](https://github.com/openpolicedata/opd-data) repository. To force pytest to use your modified `opd_source_table.csv` to test OpenPoliceData, run:
+When adding data sources to `opd_source_table.csv` from the opd-data repository (see [Adding Datasets Guide](https://github.com/openpolicedata/opd-data/blob/main/CONTRIBUTING.MD) for more details), the modifications should be tested prior to a pull request. However, OpenPoliceData defaults to reading the CSV file from the main branch in the [opd-data](https://github.com/openpolicedata/opd-data) repository. To force pytest to use your modified `opd_source_table.csv` to test OpenPoliceData, run:
 ```sh
 python -m pytest --csvfile /path/to/modified_opd_source_table.csv
 ```
