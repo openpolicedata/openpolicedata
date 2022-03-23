@@ -118,7 +118,7 @@ Some REST APIs used by OpenPoliceData either require an API key / app token or h
 
 Data accessed from [Socrata](https://dev.socrata.com/docs/app-tokens.html) may throttle your requests if you make too many. The following instructions describe how to add a Socrata app token:
 * [Generate an app token](https://support.socrata.com/hc/en-us/articles/210138558-Generating-an-App-Token)
-* Copy the App Token in the App Token column of the table at [evergreen.data.socrata.com](evergreen.data.socrata.com)
+* Copy the App Token in the App Token column of the table at [evergreen.data.socrata.com](https://evergreen.data.socrata.com/)
 * Add an environment variable called SODAPY_API_KEY and set the value to the Socrata App Token
     * Instructions for setting environment variables on [Windows](https://www.wikihow.com/Create-an-Environment-Variable-in-Windows-10)
     * Instructions for setting environment variables on [Linux](https://phoenixnap.com/kb/linux-set-environment-variable)
