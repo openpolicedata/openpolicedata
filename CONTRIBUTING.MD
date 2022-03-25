@@ -149,6 +149,8 @@ OpenPoliceData's source code is located in the `openpolicedata/` directory in th
 * `data.py`: Contains the classes for loading and saving datasets.
 * `data_loaders.py`: Contains functions for downloading data from URLs.
 
+Check out the notebooks/ directory for examples of how to use the code.
+
 ## Documentation
 
 TBD. Perhaps you can help us get our documentation site started!
