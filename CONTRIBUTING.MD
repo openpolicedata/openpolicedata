@@ -6,7 +6,7 @@ Interested in helping build OpenPoliceData? Have code from your research that yo
 
 ## Introduction
 
-First off, thank you for considering contributing to OpenPoliceData. OpenPoliceData is community-driven project. It's people like you that make OpenPoliceData useful and successful. There are many ways to contribute including, but not limited to, writing tutorials or examples, improving the documentation, submitting bug reports and feature requests, writing code to fix an issue or add a feature which can be incorporated into OpenPoliceData for everyone to use, and simply just informing us of a data set that is not already available in OpenPoliceData.
+First off, thank you for considering contributing to OpenPoliceData. OpenPoliceData is community-driven project. It's people like you that make OpenPoliceData useful and successful. There are many ways to contribute including, but not limited to, writing tutorials or examples, improving the documentation, submitting bug reports and feature requests, writing code to fix an issue or add a feature which can be incorporated into OpenPoliceData for everyone to use, and simply just informing us of a dataset that is not already available in OpenPoliceData.
 
 Following these guidelines helps to communicate that you respect the time of the developers managing and developing this open source project. In return, they should reciprocate that respect in addressing your issue, assessing changes, and helping you finalize your pull requests.
 
@@ -14,7 +14,7 @@ Please take a few minutes to read through this guide and get setup for success w
 
 ## What Can I Do?
 
-* Whether you know how to code or not, you can help us find and add new data sets to OpenPoliceData. Everyone can help us find new datasets to include in OpenPoliceData. If you would like to help us with this, skip to our [Adding Datasets Guide](https://github.com/openpolicedata/opd-data/blob/main/CONTRIBUTING.MD) for more details. 
+* Whether you know how to code or not, you can help us find and add new datasets to OpenPoliceData. Everyone can help us find new datasets to include in OpenPoliceData. If you would like to help us with this, skip to our [Adding Datasets Guide](https://github.com/openpolicedata/opd-data/blob/main/CONTRIBUTING.MD) for more details. 
 * Tackle any [issues](https://github.com/openpolicedata/openpolicedata/issues) you wish! We have a special label for issues that beginners might want to try. Have a look at our [current beginner issues](https://github.com/openpolicedata/openpolicedata/labels/good%20first%20issue). Also have a look at if the issue is already assigned to someone - this helps us make sure that work is not duplicated.
 * Contribute code you already have. It does not need to be perfect! We will help you clean things up, test it, etc.
 * Make a tutorial or example of how to do something.
@@ -33,7 +33,7 @@ Other items:
 * Be willing to accept criticism and work on improving your code; we don't want to break other users' code, so care must be taken not to introduce bugs.
 * Be aware that the pull request review process is not immediate, and is generally proportional to the size of the pull request.
 
-## Reporting a bug
+## Reporting a Bug
 
 The easiest way to get involved is to report issues you encounter when using OpenPoliceData or by requesting something you think is missing.
 
@@ -41,7 +41,7 @@ The easiest way to get involved is to report issues you encounter when using Ope
 * Search to see if your issue already exists or has even been solved previously.
 * If you indeed have a new issue or request, click the "New Issue" button and provide as much information as possible on your issue.
 
-## Setting up your development environment
+## Setting Up Your Development Environment
 
 We recommend using the [conda](https://conda.io/docs/) package manager for your Python environments. This is particularly true in Windows where the required [geopandas](https://geopandas.org/en/stable/getting_started/install.html) package is more difficult to install without conda.
 This requires some comfort with the command line and a little ``git`` knowledge.
@@ -132,7 +132,7 @@ that others can give feedback.
 During the Pull Request process, before the final merge, it's a good idea to rebase the branch and squash together smaller commits. It's not necessary to flatten the entire branch, but it can be nice to eliminate small fixes and get the merge down to logically arranged commits. This
 can also be used to hide sins from history--this is the only chance, since once it hits ``main``, it's there forever!
 
-**Working on your first Pull Request?** You can learn how from this *free* video series
+**Working on Your First Pull Request?** You can learn how from this *free* video series
 [How to Contribute to an Open Source Project on GitHub](https://egghead.io/courses/how-to-contribute-to-an-open-source-project-on-github),
 Aaron Meurer's [tutorial on the git workflow](https://www.asmeurer.com/git-workflow/), or the
 guide [“How to Contribute to Open Source"](https://opensource.guide/how-to-contribute/).
@@ -210,7 +210,7 @@ We try to conform to good Python style (i.e. [PEP8](https://pep8.org)). However,
 
 Also, if you want to make the OpenPoliceData code conform to PEP8 better, the help would be greatly appreciated!
 
-## What happens after the pull request
+## What Happens After the Pull Request
 
 You've make your changes, documented them, added some tests, and submitted a pull request. What now?
 
