@@ -2,24 +2,27 @@
 A Python package for accessing police traffic stop, arrests, use of force, etc. data
 
 ## Setup
- 
-* After cloning the repo with 
 
+* Download your version of [miniconda](https://docs.conda.io/en/latest/miniconda.html)
 > `git clone git@github.com:sowdm/openpolicedata.git`
+
+* After cloning the repo with 
+> `git clone git@github.com:sowdm/openpolicedata.git`
+
+* Change to the directory
+> `cd openpolicedata`
+
 * Setup and activate the virtual environment
+> `conda env create --name opd -f environment.yml`
 
-> `python3 -m venv .venv`
+* If the environment was not activated in the previous step run
+> `conda activate opd`
 
-> `source .venv/bin/activate`
-* Then install the dependencies
-
-> `pip install -r requirements.txt`
 * And optionally install Jupyter Notebooks
+> `conda install -c anaconda jupyter`
 
-> `pip install jupyterlab`
 * And optionally install PyTest
-
-> `pip install pytest`
+> `conda install -c conda-forge pytest`
 
 
 To run the tests see the *[readme](./tests/README.md)* in the testing directory.
