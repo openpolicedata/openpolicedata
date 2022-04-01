@@ -6,6 +6,7 @@ if __name__ == "__main__":
 from openpolicedata import data
 from openpolicedata import _datasets
 from openpolicedata import datasets_query
+from openpolicedata.exceptions import OPD_DataUnavailableError, OPD_TooManyRequestsError, OPD_MultipleErrors
 import random
 from datetime import datetime
 import pandas as pd
@@ -23,7 +24,11 @@ class TestProduct:
 		for i in range(len(datasets)):
 			if not self.can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]):
 				ext = "." + datasets.iloc[i]["DataType"].lower()
-				assert ext in datasets.iloc[i]["URL"]
+				if ext == ".csv":
+					# -csv.zip in NYC data
+					assert ext in datasets.iloc[i]["URL"] or "-csv.zip" in datasets.iloc[i]["URL"]
+				else:
+					assert ext in datasets.iloc[i]["URL"]
 
 
 	def test_source_urls(self, csvfile):
@@ -42,13 +47,17 @@ class TestProduct:
 			except:
 				raise
 
-			if r.status_code != 200:
+			# 200 is success
+			# 301 is moved permanently. This is most likely NYC. In this case, the main site has moved but the datasets have not
+			if r.status_code != 200 and r.status_code != 301:
 				raise ValueError(f"Status code for {url} is {r.status_code}")
 
 	
-	def test_get_years(self, csvfile):
+	def test_get_years(self, csvfile, source_name=None):
 		datasets = get_datasets(csvfile)
 		for i in range(len(datasets)):
+			if source_name != None and datasets.iloc[i]["SourceName"] != source_name:
+				continue
 			if self.is_filterable(datasets.iloc[i]["DataType"]) or datasets.iloc[i]["Year"] != _datasets.MULTI:
 				srcName = datasets.iloc[i]["SourceName"]
 				state = datasets.iloc[i]["State"]
@@ -66,6 +75,7 @@ class TestProduct:
 		datasets = get_datasets(csvfile)
 		num_stanford = 0
 		max_num_stanford = 1  # This data is standardized. Probably no need to test more than 1
+		caught_exceptions = []
 		for i in range(len(datasets)):
 			if source_name != None and datasets.iloc[i]["SourceName"] != source_name:
 				continue
@@ -81,7 +91,14 @@ class TestProduct:
 				# For speed, set private limit parameter so that only a single entry is requested
 				src._Source__limit = 20
 
-				table = src.load_from_url(datasets.iloc[i]["Year"], datasets.iloc[i]["TableType"])
+				try:
+					table = src.load_from_url(datasets.iloc[i]["Year"], datasets.iloc[i]["TableType"])
+				except (OPD_DataUnavailableError, OPD_TooManyRequestsError) as e:
+					# Catch exceptions related to URLs not functioning
+					caught_exceptions.append(e)
+				except:
+					raise
+
 				assert len(table.table)>0
 				if not pd.isnull(datasets.iloc[i]["date_field"]):
 					assert datasets.iloc[i]["date_field"] in table.table
@@ -94,7 +111,15 @@ class TestProduct:
 					assert dts.iloc[0].year > 1999  # This is just an arbitrarily old year that is assumed to be before all available data
 					assert dts.iloc[0].year <= datetime.now().year
 				if not pd.isnull(datasets.iloc[i]["jurisdiction_field"]):
-					assert datasets.iloc[i]["jurisdiction_field"] in table.table				
+					assert datasets.iloc[i]["jurisdiction_field"] in table.table
+
+		if len(caught_exceptions)==1:
+			raise caught_exceptions[0]
+		elif len(caught_exceptions)>0:
+			msg = f"{len(caught_exceptions)} URL errors encountered:\n"
+			for e in caught_exceptions:
+				msg += "\t" + e.args[0] + "\n"
+			raise OPD_MultipleErrors(msg)
 
 	
 	def test_get_jurisdictions(self, csvfile):
@@ -268,4 +293,4 @@ class TestProduct:
 if __name__ == "__main__":
 	# For testing
 	tp = TestProduct()
-	tp.test_get_years("C:\\Users\\matth\\repos\\opd-data\\TMP.csv")
+	tp.test_source_download_limitable("C:\\Users\\matth\\repos\\sowd-opd-data\\opd_source_table.csv")

@@ -66,14 +66,14 @@ class TestProduct:
         # Jurisdiction names should either match source name or be MULTI
         datasets = get_datasets(csvfile)
         rem = datasets["Jurisdiction"][datasets["Jurisdiction"] != datasets["SourceName"]]
-        assert (rem == opd._datasets.MULTI).all()
+        assert ((rem == opd._datasets.MULTI) | (rem == opd._datasets.NA)).all()
 
     def test_year(self, csvfile):
         # year should either be an int or MULTI or "None"
         datasets = get_datasets(csvfile)
         rem = datasets["Year"][[type(x)!=int for x in datasets["Year"]]]
         rem = rem[rem != opd._datasets.NA]
-        assert (rem == opd._datasets.MULTI).all()
+        assert ((rem == opd._datasets.MULTI) | (rem == opd._datasets.NA)).all()
 
     def test_socrata_id(self, csvfile):
         datasets = get_datasets(csvfile)
@@ -126,7 +126,7 @@ class TestProduct:
 
     def test_source_list_by_table_type(self, csvfile):
         datasets = get_datasets(csvfile)
-        table_type = opd.TableTypes.ARRESTS
+        table_type = opd.TableTypes.TRAFFIC
         df = opd.datasets_query(table_type=table_type)
         df_truth = datasets[datasets["TableType"]==table_type.value]
         assert len(df)>0
@@ -134,7 +134,7 @@ class TestProduct:
 
     def test_source_list_by_table_type_value(self, csvfile):
         datasets = get_datasets(csvfile)
-        table_type = opd.TableTypes.ARRESTS.value
+        table_type = opd.TableTypes.TRAFFIC.value
         df = opd.datasets_query(table_type=table_type)
         df_truth = datasets[datasets["TableType"]==table_type]
         assert len(df)>0
@@ -144,7 +144,7 @@ class TestProduct:
         datasets = get_datasets(csvfile)
         state = "Virginia"
         source_name = "Fairfax County"
-        table_type = opd.TableTypes.ARRESTS.value
+        table_type = opd.TableTypes.TRAFFIC_CITATIONS.value
         df = opd.datasets_query(state=state, table_type=table_type, source_name=source_name)
         df_truth = datasets[datasets["TableType"]==table_type]
         df_truth = df_truth[df_truth["State"]==state]
@@ -154,4 +154,4 @@ class TestProduct:
         
 
 if __name__ == "__main__":
-    TestProduct().test_source_list_by_state("C:\\Users\\matth\\repos\\opd-data\\TMP.csv")
+    TestProduct().test_source_list_by_table_type("C:\\Users\\matth\\repos\\sowd-opd-data\\opd_source_table.csv")

@@ -13,6 +13,11 @@ from pyproj import CRS
 
 from arcgis.features import FeatureLayerCollection
 
+if __name__ == '__main__':
+    from exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError
+else:
+    from .exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError
+
 # This is for use if import data sets using Socrata. It is not required.
 # Requests made without an app_token will be subject to strict throttling limits
 # Get a App Token here: http://dev.socrata.com/docs/app-tokens.html
@@ -149,7 +154,15 @@ def load_arcgis(url, date_field=None, year=None, limit=None):
     # Shorten URL
     
     # https://developers.arcgis.com/python/
-    layer_collection = FeatureLayerCollection(url)
+    try:
+        layer_collection = FeatureLayerCollection(url)
+    except Exception as e:
+        if len(e.args)>0 and "Error Code: 500" in e.args[0]:
+            raise OPD_DataUnavailableError(e.args[0])
+        else:
+            raise
+    except:
+        raise
 
     is_table = True
     active_layer = None
@@ -179,9 +192,25 @@ def load_arcgis(url, date_field=None, year=None, limit=None):
         start_date, stop_date = _process_date(year, inclusive=False)
         
         where_query = f"{date_field} >= '{start_date}' AND  {date_field} < '{stop_date}'"
-        layer_query_result = active_layer.query(where=where_query, return_all_records=(limit == None), result_record_count=limit)
+        try:
+            layer_query_result = active_layer.query(where=where_query, return_all_records=(limit == None), result_record_count=limit)
+        except Exception as e:
+            if len(e.args)>0 and "Error Code: 429" in e.args[0]:
+                raise OPD_TooManyRequestsError(e.args[0])
+            else:
+                raise
+        except:
+            raise
     else:
-        layer_query_result = active_layer.query(return_all_records=(limit == None), result_record_count=limit)
+        try:
+            layer_query_result = active_layer.query(return_all_records=(limit == None), result_record_count=limit)
+        except Exception as e:
+            if len(e.args)>0 and "Error Code: 429" in e.args[0]:
+                raise OPD_TooManyRequestsError(e.args[0])
+            else:
+                raise
+        except:
+            raise
 
     if len(layer_query_result) > 0:
         if is_table:
