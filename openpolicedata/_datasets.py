@@ -78,7 +78,7 @@ def _build(csv_file):
     # ArcGIS datasets should have a URL ending in either /FeatureServer/# or /MapServer/#
     # Where # is a layer #
     urls = df["URL"]
-    p = re.compile("(MapServer|FeatureServer)/\d+")
+    p = re.compile(r"(MapServer|FeatureServer)/\d+")
     for i,url in enumerate(urls):
         if df.iloc[i]["DataType"] == DataTypes.ArcGIS.value:
             result = p.search(url)

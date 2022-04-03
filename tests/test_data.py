@@ -9,6 +9,7 @@ from openpolicedata import datasets_query
 from openpolicedata.exceptions import OPD_DataUnavailableError, OPD_TooManyRequestsError, OPD_MultipleErrors
 import random
 from datetime import datetime
+from datetime import timedelta
 import pandas as pd
 
 def get_datasets(csvfile):
@@ -162,10 +163,12 @@ class TestProduct:
 
 	
 	@pytest.mark.slow(reason="This is a slow test tgat should be run before a major commit.")
-	def test_load_year(self, csvfile):
+	def test_load_year(self, csvfile, source_name=None):
 		datasets = get_datasets(csvfile)
 		# Test that filtering for a year works at the boundaries
 		for i in range(len(datasets)):
+			if source_name != None and datasets.iloc[i]["SourceName"] != source_name:
+				continue
 			if self.is_filterable(datasets.iloc[i]["DataType"]) and datasets.iloc[i]["Year"] == _datasets.MULTI:
 				srcName = datasets.iloc[i]["SourceName"]
 				state = datasets.iloc[i]["State"]
@@ -177,6 +180,10 @@ class TestProduct:
 				else:
 					jurisdiction_filter = None
 
+				table_print = datasets.iloc[i]["TableType"]
+				now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
+				print(f"{now }Testing {i} of {len(datasets)}: {srcName} {table_print} table")
+
 				src = data.Source(srcName, state=state)
 
 				years = src.get_years(datasets.iloc[i]["TableType"])
@@ -187,9 +194,7 @@ class TestProduct:
 				else:
 					year = years[0]
 
-				# table_print = datasets.iloc[i]["TableType"]
-				# now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
-				# print(f"{now }Testing {i} of {len(datasets)}: {srcName} {table_print} table for {year}")
+				print(f"Testing for year {year}")
 
 				table = src.load_from_url(year, datasets.iloc[i]["TableType"], 
 										jurisdiction_filter=jurisdiction_filter)
@@ -203,7 +208,7 @@ class TestProduct:
 				assert all_years[0] == year
 
 				start_date = str(year-1) + "-12-29"
-				stop_date  = str(year) + "-01-10"  
+				stop_date = datetime.strftime(dts.iloc[0]+timedelta(days=1), "%Y-%m-%d")
 
 				table_start = src.load_from_url([start_date, stop_date], datasets.iloc[i]["TableType"], 
 												jurisdiction_filter=jurisdiction_filter)
@@ -218,7 +223,7 @@ class TestProduct:
 				dts_start = dts_start[dts_start.dt.year == year]
 				assert dts.iloc[0] == dts_start.iloc[0]
 
-				start_date = str(year) + "-12-20"
+				start_date = datetime.strftime(dts.iloc[-1]-timedelta(days=1), "%Y-%m-%d")
 				stop_date  = str(year+1) + "-01-10"  
 
 				table_stop = src.load_from_url([start_date, stop_date], datasets.iloc[i]["TableType"], 
@@ -236,9 +241,11 @@ class TestProduct:
 
 
 	@pytest.mark.slow(reason="This is a slow test and should be run before a major commit.")
-	def test_source_download_not_limitable(self, csvfile):
+	def test_source_download_not_limitable(self, csvfile, source_name=None):
 		datasets = get_datasets(csvfile)
 		for i in range(len(datasets)):
+			if source_name != None and datasets.iloc[i]["SourceName"] != source_name:
+				continue
 			if not self.can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]):
 				if self.is_stanford(datasets.iloc[i]["URL"]):
 					# There are a lot of data sets from Stanford, no need to run them all
@@ -256,10 +263,7 @@ class TestProduct:
 
 				now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
 				print(f"{now} Testing {i} of {len(datasets)}: {srcName}, {state} {table_type} table for {year}")
-				try:
-					table = src.load_from_url(year, table_type)
-				except:
-					raise ValueError(f"Error loading CSV {srcName}, year={year}, table_type={table_type}")
+				table = src.load_from_url(year, table_type)
 
 				assert len(table.table)>1
 				if not pd.isnull(datasets.iloc[i]["date_field"]):
@@ -293,4 +297,4 @@ class TestProduct:
 if __name__ == "__main__":
 	# For testing
 	tp = TestProduct()
-	tp.test_source_download_limitable("C:\\Users\\matth\\repos\\sowd-opd-data\\opd_source_table.csv")
+	tp.test_load_year("C:\\Users\\matth\\repos\\sowd-opd-data\\opd_source_table.csv")

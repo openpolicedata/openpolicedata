@@ -10,6 +10,7 @@ import urllib
 import json
 from pyproj.exceptions import CRSError
 from pyproj import CRS
+import warnings
 
 from arcgis.features import FeatureLayerCollection
 
@@ -52,8 +53,10 @@ def load_csv(url, date_field=None, year_filter=None, jurisdiction_field=None, ju
     '''
     
     if limit==None or ".zip" in url:
-        # Perhaps use requests iter_content/iter_lines as below to read large CSVs so progress can be shown
-        table = pd.read_csv(url)
+        with warnings.catch_warnings():
+            # Perhaps use requests iter_content/iter_lines as below to read large CSVs so progress can be shown
+            warnings.simplefilter("ignore", category=pd.errors.DtypeWarning)
+            table = pd.read_csv(url)
     else:
         table = pd.DataFrame()
         with contextlib.closing(urllib.request.urlopen(url=url)) as rd:
@@ -99,8 +102,7 @@ def load_geojson(url, date_field=None, year_filter=None, jurisdiction_field=None
 
         # If the response was successful, no Exception will be raised
         response.raise_for_status()
-    # pylint: disable=undefined-variable. 
-    except HTTPError as http_err:
+    except requests.HTTPError as http_err:
         print(f'HTTP error occurred: {http_err}')  # Python 3.6
         Exception()
     except Exception as err:
@@ -109,7 +111,7 @@ def load_geojson(url, date_field=None, year_filter=None, jurisdiction_field=None
 
     json_data = response.json()
 
-    df = gpd.GeoDataFrame.from_features(json_data, crs=json_data["crs"]["properties"]["name"], )
+    df = gpd.GeoDataFrame.from_features(json_data, crs=json_data["crs"]["properties"]["name"])
 
     if date_field != None:
         df = df.astype({date_field: 'datetime64[ns]'})
@@ -341,12 +343,13 @@ def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, sel
                 feature["geometry"] = {"type" : "Point", "coordinates" : (float(geo["longitude"]), float(geo["latitude"]))}  
                 geojson["features"].append(feature)
 
-            new_gdf = gpd.GeoDataFrame.from_features(geojson, crs=4326)
-                
-            if offset==0:
-                df = new_gdf
-            else:
-                df = df.append(new_gdf)
+            if len(results)>0:
+                new_gdf = gpd.GeoDataFrame.from_features(geojson, crs=4326)
+                    
+                if offset==0:
+                    df = new_gdf
+                else:
+                    df = df.append(new_gdf)
         else:
             output_type = "DataFrame"
             rows = pd.DataFrame.from_records(results)
@@ -385,7 +388,7 @@ def _process_date(date, inclusive):
         stop_date = date[1]
     else:
         if inclusive:
-            stop_date  = str(date[1]) + "-12-31"
+            stop_date  = str(date[1]) + "-12-31T23:59:59.999"
         else:
             stop_date  = str(date[1]+1) + "-01-01"
 

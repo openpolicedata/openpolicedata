@@ -72,7 +72,6 @@ class TestProduct:
         # year should either be an int or MULTI or "None"
         datasets = get_datasets(csvfile)
         rem = datasets["Year"][[type(x)!=int for x in datasets["Year"]]]
-        rem = rem[rem != opd._datasets.NA]
         assert ((rem == opd._datasets.MULTI) | (rem == opd._datasets.NA)).all()
 
     def test_socrata_id(self, csvfile):
@@ -154,4 +153,4 @@ class TestProduct:
         
 
 if __name__ == "__main__":
-    TestProduct().test_source_list_by_table_type("C:\\Users\\matth\\repos\\sowd-opd-data\\opd_source_table.csv")
+    TestProduct().test_year("C:\\Users\\matth\\repos\\sowd-opd-data\\opd_source_table.csv")
