@@ -1,0 +1,16 @@
+# the conda channel is included by default
+channels:
+  - defaults
+  - esri
+  - pypi
+dependencies:
+  - arcgis
+  - geopandas
+  - numpy
+  - pandas
+  - pyproj
+  - requests
+  - pip
+  - pip:
+    # regular pip packages
+    -  sodapy
