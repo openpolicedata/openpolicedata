@@ -142,7 +142,7 @@ class TestProduct:
 	def test_get_jurisdictions_name_match(self, csvfile):
 		get_datasets(csvfile)
 
-		src = data.Source("Virginia Community Policing Act")
+		src = data.Source("Virginia")
 
 		jurisdictions = src.get_jurisdictions(partial_name="Arlington")
 
@@ -151,7 +151,7 @@ class TestProduct:
 				
 	def test_jurisdiction_filter(self, csvfile):
 		get_datasets(csvfile)
-		src = data.Source("Virginia Community Policing Act")
+		src = data.Source("Virginia")
 		jurisdiction="Fairfax County Police Department"
 		# For speed, set private limit parameter so that only a single entry is requested
 		src._Source__limit = 100
@@ -174,7 +174,7 @@ class TestProduct:
 				state = datasets.iloc[i]["State"]
 
 				if datasets.iloc[i]["Jurisdiction"] == _datasets.MULTI and \
-					srcName == "Virginia Community Policing Act":
+					srcName == "Virginia":
 					# Reduce size of data load by filtering by jurisdiction
 					jurisdiction_filter = "Henrico Police Department"
 				else:
