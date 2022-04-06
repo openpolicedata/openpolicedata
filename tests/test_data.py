@@ -4,20 +4,36 @@ if __name__ == "__main__":
 	import sys
 	sys.path.append('../openpolicedata')
 from openpolicedata import data
-from openpolicedata import datasets
 from openpolicedata import _datasets
+from openpolicedata import datasets_query
+from openpolicedata.exceptions import OPD_DataUnavailableError, OPD_TooManyRequestsError, OPD_MultipleErrors
 import random
 from datetime import datetime
+from datetime import timedelta
+import pandas as pd
+
+def get_datasets(csvfile):
+    if csvfile != None:
+        print(csvfile)
+        _datasets.datasets = _datasets._build(csvfile)
+
+    return datasets_query()
 
 class TestProduct:
-	def test_source_url_name_unlimitable(self):
+	def test_source_url_name_unlimitable(self, csvfile):
+		datasets = get_datasets(csvfile)
 		for i in range(len(datasets)):
 			if not self.can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]):
 				ext = "." + datasets.iloc[i]["DataType"].lower()
-				assert ext in datasets.iloc[i]["URL"]
+				if ext == ".csv":
+					# -csv.zip in NYC data
+					assert ext in datasets.iloc[i]["URL"] or "-csv.zip" in datasets.iloc[i]["URL"]
+				else:
+					assert ext in datasets.iloc[i]["URL"]
 
 
-	def test_source_urls(self):
+	def test_source_urls(self, csvfile):
+		datasets = get_datasets(csvfile)
 		for i in range(len(datasets)):
 			url = datasets.iloc[i]["URL"]
 			try:
@@ -32,12 +48,17 @@ class TestProduct:
 			except:
 				raise
 
-			if r.status_code != 200:
+			# 200 is success
+			# 301 is moved permanently. This is most likely NYC. In this case, the main site has moved but the datasets have not
+			if r.status_code != 200 and r.status_code != 301:
 				raise ValueError(f"Status code for {url} is {r.status_code}")
 
 	
-	def test_get_years(self):
+	def test_get_years(self, csvfile, source_name=None):
+		datasets = get_datasets(csvfile)
 		for i in range(len(datasets)):
+			if source_name != None and datasets.iloc[i]["SourceName"] != source_name:
+				continue
 			if self.is_filterable(datasets.iloc[i]["DataType"]) or datasets.iloc[i]["Year"] != _datasets.MULTI:
 				srcName = datasets.iloc[i]["SourceName"]
 				state = datasets.iloc[i]["State"]
@@ -51,11 +72,15 @@ class TestProduct:
 					assert len(years) > 0
 
 
-	def test_source_download_limitable(self):
+	def test_source_download_limitable(self, csvfile, source_name=None):
+		datasets = get_datasets(csvfile)
 		num_stanford = 0
 		max_num_stanford = 1  # This data is standardized. Probably no need to test more than 1
+		caught_exceptions = []
 		for i in range(len(datasets)):
-			has_date_field = "date_field" in datasets.iloc[i]["LUT"]
+			if source_name != None and datasets.iloc[i]["SourceName"] != source_name:
+				continue
+			has_date_field = not pd.isnull(datasets.iloc[i]["date_field"])
 			if self.can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]) or has_date_field:
 				if self.is_stanford(datasets.iloc[i]["URL"]):
 					num_stanford += 1
@@ -67,23 +92,39 @@ class TestProduct:
 				# For speed, set private limit parameter so that only a single entry is requested
 				src._Source__limit = 20
 
-				table = src.load_from_url(datasets.iloc[i]["Year"], datasets.iloc[i]["TableType"])
+				try:
+					table = src.load_from_url(datasets.iloc[i]["Year"], datasets.iloc[i]["TableType"])
+				except (OPD_DataUnavailableError, OPD_TooManyRequestsError) as e:
+					# Catch exceptions related to URLs not functioning
+					caught_exceptions.append(e)
+				except:
+					raise
+
 				assert len(table.table)>0
-				if "date_field" in datasets.iloc[i]["LUT"]:
-					assert datasets.iloc[i]["LUT"]["date_field"] in table.table
+				if not pd.isnull(datasets.iloc[i]["date_field"]):
+					assert datasets.iloc[i]["date_field"] in table.table
 					#assuming a Pandas string dtype('O').name = object is okay too
-					assert (table.table[datasets.iloc[i]["LUT"]["date_field"]].dtype.name in ['datetime64[ns]', 'datetime64[ms]'])
-					dts = table.table[datasets.iloc[i]["LUT"]["date_field"]]
+					assert (table.table[datasets.iloc[i]["date_field"]].dtype.name in ['datetime64[ns]', 'datetime64[ms]'])
+					dts = table.table[datasets.iloc[i]["date_field"]]
 					dts = dts[dts.notnull()]
 					assert len(dts) > 0   # If not, either all dates are bad or number of rows requested needs increased
 					# Check that year is reasonable
 					assert dts.iloc[0].year > 1999  # This is just an arbitrarily old year that is assumed to be before all available data
 					assert dts.iloc[0].year <= datetime.now().year
-				if "jurisdiction_field" in datasets.iloc[i]["LUT"]:
-					assert datasets.iloc[i]["LUT"]["jurisdiction_field"] in table.table				
+				if not pd.isnull(datasets.iloc[i]["jurisdiction_field"]):
+					assert datasets.iloc[i]["jurisdiction_field"] in table.table
+
+		if len(caught_exceptions)==1:
+			raise caught_exceptions[0]
+		elif len(caught_exceptions)>0:
+			msg = f"{len(caught_exceptions)} URL errors encountered:\n"
+			for e in caught_exceptions:
+				msg += "\t" + e.args[0] + "\n"
+			raise OPD_MultipleErrors(msg)
 
 	
-	def test_get_jurisdictions(self):
+	def test_get_jurisdictions(self, csvfile):
+		datasets = get_datasets(csvfile)
 		for i in range(len(datasets)):
 			if self.is_filterable(datasets.iloc[i]["DataType"]) or datasets.iloc[i]["Jurisdiction"] != _datasets.MULTI:
 				srcName = datasets.iloc[i]["SourceName"]
@@ -98,16 +139,19 @@ class TestProduct:
 					assert len(jurisdictions) > 0
 
 
-	def test_get_jurisdictions_name_match(self):
-		src = data.Source("Virginia Community Policing Act")
+	def test_get_jurisdictions_name_match(self, csvfile):
+		get_datasets(csvfile)
+
+		src = data.Source("Virginia")
 
 		jurisdictions = src.get_jurisdictions(partial_name="Arlington")
 
 		assert len(jurisdictions) == 2
 				
 				
-	def test_jurisdiction_filter(self):
-		src = data.Source("Virginia Community Policing Act")
+	def test_jurisdiction_filter(self, csvfile):
+		get_datasets(csvfile)
+		src = data.Source("Virginia")
 		jurisdiction="Fairfax County Police Department"
 		# For speed, set private limit parameter so that only a single entry is requested
 		src._Source__limit = 100
@@ -119,19 +163,26 @@ class TestProduct:
 
 	
 	@pytest.mark.slow(reason="This is a slow test tgat should be run before a major commit.")
-	def test_load_year(self):
+	def test_load_year(self, csvfile, source_name=None):
+		datasets = get_datasets(csvfile)
 		# Test that filtering for a year works at the boundaries
 		for i in range(len(datasets)):
+			if source_name != None and datasets.iloc[i]["SourceName"] != source_name:
+				continue
 			if self.is_filterable(datasets.iloc[i]["DataType"]) and datasets.iloc[i]["Year"] == _datasets.MULTI:
 				srcName = datasets.iloc[i]["SourceName"]
 				state = datasets.iloc[i]["State"]
 
 				if datasets.iloc[i]["Jurisdiction"] == _datasets.MULTI and \
-					srcName == "Virginia Community Policing Act":
+					srcName == "Virginia":
 					# Reduce size of data load by filtering by jurisdiction
 					jurisdiction_filter = "Henrico Police Department"
 				else:
 					jurisdiction_filter = None
+
+				table_print = datasets.iloc[i]["TableType"]
+				now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
+				print(f"{now }Testing {i} of {len(datasets)}: {srcName} {table_print} table")
 
 				src = data.Source(srcName, state=state)
 
@@ -143,14 +194,12 @@ class TestProduct:
 				else:
 					year = years[0]
 
-				# table_print = datasets.iloc[i]["TableType"]
-				# now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
-				# print(f"{now }Testing {i} of {len(datasets)}: {srcName} {table_print} table for {year}")
+				print(f"Testing for year {year}")
 
 				table = src.load_from_url(year, datasets.iloc[i]["TableType"], 
 										jurisdiction_filter=jurisdiction_filter)
 
-				dts = table.table[datasets.iloc[i]["LUT"]["date_field"]]
+				dts = table.table[datasets.iloc[i]["date_field"]]
 				dts = dts.sort_values(ignore_index=True)
 
 				all_years = dts.dt.year.unique().tolist()
@@ -159,11 +208,11 @@ class TestProduct:
 				assert all_years[0] == year
 
 				start_date = str(year-1) + "-12-29"
-				stop_date  = str(year) + "-01-10"  
+				stop_date = datetime.strftime(dts.iloc[0]+timedelta(days=1), "%Y-%m-%d")
 
 				table_start = src.load_from_url([start_date, stop_date], datasets.iloc[i]["TableType"], 
 												jurisdiction_filter=jurisdiction_filter)
-				dts_start = table_start.table[datasets.iloc[i]["LUT"]["date_field"]]
+				dts_start = table_start.table[datasets.iloc[i]["date_field"]]
 
 				dts_start = dts_start.sort_values(ignore_index=True)
 
@@ -174,12 +223,12 @@ class TestProduct:
 				dts_start = dts_start[dts_start.dt.year == year]
 				assert dts.iloc[0] == dts_start.iloc[0]
 
-				start_date = str(year) + "-12-20"
+				start_date = datetime.strftime(dts.iloc[-1]-timedelta(days=1), "%Y-%m-%d")
 				stop_date  = str(year+1) + "-01-10"  
 
 				table_stop = src.load_from_url([start_date, stop_date], datasets.iloc[i]["TableType"], 
 												jurisdiction_filter=jurisdiction_filter)
-				dts_stop = table_stop.table[datasets.iloc[i]["LUT"]["date_field"]]
+				dts_stop = table_stop.table[datasets.iloc[i]["date_field"]]
 
 				dts_stop = dts_stop.sort_values(ignore_index=True)
 
@@ -192,8 +241,11 @@ class TestProduct:
 
 
 	@pytest.mark.slow(reason="This is a slow test and should be run before a major commit.")
-	def test_source_download_not_limitable(self):
+	def test_source_download_not_limitable(self, csvfile, source_name=None):
+		datasets = get_datasets(csvfile)
 		for i in range(len(datasets)):
+			if source_name != None and datasets.iloc[i]["SourceName"] != source_name:
+				continue
 			if not self.can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]):
 				if self.is_stanford(datasets.iloc[i]["URL"]):
 					# There are a lot of data sets from Stanford, no need to run them all
@@ -211,18 +263,15 @@ class TestProduct:
 
 				now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
 				print(f"{now} Testing {i} of {len(datasets)}: {srcName}, {state} {table_type} table for {year}")
-				try:
-					table = src.load_from_url(year, table_type)
-				except:
-					raise ValueError(f"Error loading CSV {srcName}, year={year}, table_type={table_type}")
+				table = src.load_from_url(year, table_type)
 
 				assert len(table.table)>1
-				if "date_field" in datasets.iloc[i]["LUT"]:
-					assert datasets.iloc[i]["LUT"]["date_field"] in table.table
+				if not pd.isnull(datasets.iloc[i]["date_field"]):
+					assert datasets.iloc[i]["date_field"] in table.table
 					#assuming a Pandas string dtype('O').name = object is okay too
-					assert (table.table[datasets.iloc[i]["LUT"]["date_field"]].dtype.name in ['datetime64[ns]', 'datetime64[ms]'])
-				if "jurisdiction_field" in datasets.iloc[i]["LUT"]:
-					assert datasets.iloc[i]["LUT"]["jurisdiction_field"] in table.table
+					assert (table.table[datasets.iloc[i]["date_field"]].dtype.name in ['datetime64[ns]', 'datetime64[ms]'])
+				if not pd.isnull(datasets.iloc[i]["jurisdiction_field"]):
+					assert datasets.iloc[i]["jurisdiction_field"] in table.table
 
 
 	def can_be_limited(self, table_type, url):
@@ -248,4 +297,4 @@ class TestProduct:
 if __name__ == "__main__":
 	# For testing
 	tp = TestProduct()
-	tp.test_source_download_limitable()
+	tp.test_load_year("C:\\Users\\matth\\repos\\sowd-opd-data\\opd_source_table.csv")

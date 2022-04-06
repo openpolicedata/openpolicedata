@@ -6,16 +6,16 @@ Interested in helping build OpenPoliceData? Have code from your research that yo
 
 ## Introduction
 
-First off, thank you for considering contributing to OpenPoliceData. OpenPoliceData is community-driven project. It's people like you that make OpenPoliceData useful and successful. There are many ways to contribute including, but not limited to, writing tutorials or examples, improvements to the documentation, submitting bug reports and feature requests, writing code to fix an issue or add a feature which can be incorporated into OpenPoliceData for everyone to use, and simply just informing us of a data set that is not already available in OpenPoliceData.
+First off, thank you for considering contributing to OpenPoliceData. OpenPoliceData is community-driven project. It's people like you that make OpenPoliceData useful and successful. There are many ways to contribute including, but not limited to, writing tutorials or examples, improving the documentation, submitting bug reports and feature requests, writing code to fix an issue or add a feature which can be incorporated into OpenPoliceData for everyone to use, and simply just informing us of a dataset that is not already available in OpenPoliceData.
 
 Following these guidelines helps to communicate that you respect the time of the developers managing and developing this open source project. In return, they should reciprocate that respect in addressing your issue, assessing changes, and helping you finalize your pull requests.
 
-So, please take a few minutes to read through this guide and get setup for success with your OpenPoliceData contributions. We're glad you're here!
+Please take a few minutes to read through this guide and get setup for success with your OpenPoliceData contributions. We're glad you're here!
 
 ## What Can I Do?
 
-* Whether you know how to code or not, you can help us find and add new data sets to OpenPoliceData. See [Adding Datasets Guide](https://github.com/sowdm/openpolicedata/blob/sowdm-contributing-file/dev/ADDING_DATASETS.MD) for more details. (``TODO: Convert the Adding Datasets link to the main branch!!!``)
-* Tackle any [issues](https://github.com/sowdm/openpolicedata/issues) you wish! We have a special label for issues that beginners might want to try. Have a look at our [current beginner issues](https://github.com/sowdm/openpolicedata/labels/good%20first%20issue). Also have a look at if the issue is already assigned to someone - this helps us make sure that work is not duplicated.
+* Whether you know how to code or not, you can help us find and add new datasets to OpenPoliceData. Everyone can help us find new datasets to include in OpenPoliceData. If you would like to help us with this, skip to our [Adding Datasets Guide](https://github.com/openpolicedata/opd-data/blob/main/CONTRIBUTING.MD) for more details. 
+* Tackle any [issues](https://github.com/openpolicedata/openpolicedata/issues) you wish! We have a special label for issues that beginners might want to try. Have a look at our [current beginner issues](https://github.com/openpolicedata/openpolicedata/labels/good%20first%20issue). Also have a look at if the issue is already assigned to someone - this helps us make sure that work is not duplicated.
 * Contribute code you already have. It does not need to be perfect! We will help you clean things up, test it, etc.
 * Make a tutorial or example of how to do something.
 * Improve documentation of a feature you found troublesome.
@@ -24,7 +24,7 @@ So, please take a few minutes to read through this guide and get setup for succe
 ## Ground Rules
 
 The goal is to maintain a diverse community that's pleasant for everyone. Please be considerate and respectful of others by following our
-[code of conduct](https://github.com/sowdm/openpolicedata/blob/main/CODE_OF_CONDUCT.md).
+[code of conduct](https://github.com/openpolicedata/openpolicedata/blob/main/CODE_OF_CONDUCT.md).
 
 Other items:
 
@@ -33,15 +33,15 @@ Other items:
 * Be willing to accept criticism and work on improving your code; we don't want to break other users' code, so care must be taken not to introduce bugs.
 * Be aware that the pull request review process is not immediate, and is generally proportional to the size of the pull request.
 
-## Reporting a bug
+## Reporting a Bug
 
 The easiest way to get involved is to report issues you encounter when using OpenPoliceData or by requesting something you think is missing.
 
-* Head over to the [issues](https://github.com/sowdm/openpolicedata/issues) page.
+* Head over to the [issues](https://github.com/openpolicedata/openpolicedata/issues) page.
 * Search to see if your issue already exists or has even been solved previously.
-* If you indeed have a new issue or request, click the "New Issue" button and provide as much information as possible on your issue including OS and version information.
+* If you indeed have a new issue or request, click the "New Issue" button and provide as much information as possible on your issue.
 
-## Setting up your development environment
+## Setting Up Your Development Environment
 
 We recommend using the [conda](https://conda.io/docs/) package manager for your Python environments. This is particularly true in Windows where the required [geopandas](https://geopandas.org/en/stable/getting_started/install.html) package is more difficult to install without conda.
 This requires some comfort with the command line and a little ``git`` knowledge.
@@ -56,7 +56,7 @@ Install [git](https://git-scm.com/downloads)
 This can also be installed from a variety of package managers, including ``conda`` if needed.
 
 Login to your [GitHub](https://github.com) account and make a fork of the
-[OpenPoliceData repository](https://github.com/sowdm/openpolicedata/) by clicking the "Fork" button.
+[OpenPoliceData repository](https://github.com/openpolicedata/openpolicedata/) by clicking the "Fork" button.
 Clone your fork of the OpenPoliceData repository (in terminal on Mac/Linux or git shell/GUI on Windows) to the location you'd like to keep it.
 We are partial to creating a ``git_repos`` or ``projects`` directory in our home folder.
 
@@ -74,7 +74,7 @@ cd openpolicedata
 Connect your repository to the upstream (main project).
 
 ```sh
-git remote add sowdm https://github.com/sowdm/openpolicedata.git
+git remote add openpolicedata https://github.com/openpolicedata/openpolicedata.git
 ```
 
 Create a new conda environment, and give it a name.
@@ -94,14 +94,14 @@ You will have to do this any time you re-open your prompt.
 Currently there are no packages in this environment, let's change that.
 
 Install the necessary dependency packages that are available on conda.
-Remember that these must be executed within the ``openpolicedata`` directory.
+Remember that these must be executed within the base ``openpolicedata`` directory.
 
 ```sh
 conda install --file conda/requirements-conda.txt --file dev/requirements-test.txt
 ```
 
 Install the necessary dependency packages that are NOT available on conda.
-Remember that these must be executed within the ``openpolicedata`` directory.
+Remember that these must be executed within the base ``openpolicedata`` directory.
 
 ```sh
 pip install -r conda/requirements-pip.txt
@@ -113,6 +113,17 @@ Remember, you will need to activate this environment the
 next time you want to use it after closing the terminal.
 If you want to get back to the root environment, run ``conda deactivate``.
 
+### API Keys and Application Tokens
+Some REST APIs used by OpenPoliceData either require an API key / app token or have the option of throttling (slowing) your request without an API key / app token.
+
+Data accessed from [Socrata](https://dev.socrata.com/docs/app-tokens.html) may throttle your requests if you make too many. The following instructions describe how to add a Socrata app token:
+* [Generate an app token](https://support.socrata.com/hc/en-us/articles/210138558-Generating-an-App-Token)
+* Copy the App Token in the App Token column of the table at [evergreen.data.socrata.com](https://evergreen.data.socrata.com/)
+* Add an environment variable called SODAPY_API_KEY and set the value to the Socrata App Token
+    * Instructions for setting environment variables on [Windows](https://www.wikihow.com/Create-an-Environment-Variable-in-Windows-10)
+    * Instructions for setting environment variables on [Linux](https://phoenixnap.com/kb/linux-set-environment-variable)
+
+
 ## Pull Requests
 
 The changes to the OpenPoliceData source (and documentation) should be made via GitHub pull requests against ``main``, even for those with administration rights. While it's tempting to make changes directly to ``main`` and push them up, it is better to make a pull request so
@@ -121,14 +132,14 @@ that others can give feedback.
 During the Pull Request process, before the final merge, it's a good idea to rebase the branch and squash together smaller commits. It's not necessary to flatten the entire branch, but it can be nice to eliminate small fixes and get the merge down to logically arranged commits. This
 can also be used to hide sins from history--this is the only chance, since once it hits ``main``, it's there forever!
 
-**Working on your first Pull Request?** You can learn how from this *free* video series
+**Working on Your First Pull Request?** You can learn how from this *free* video series
 [How to Contribute to an Open Source Project on GitHub](https://egghead.io/courses/how-to-contribute-to-an-open-source-project-on-github),
 Aaron Meurer's [tutorial on the git workflow](https://www.asmeurer.com/git-workflow/), or the
 guide [“How to Contribute to Open Source"](https://opensource.guide/how-to-contribute/).
 
 Commit the changes you made. Chris Beams has written a [guide](https://cbea.ms/git-commit/) on how to write good commit messages.
 
-Push to your fork and [submit a pull request](https://github.com/sowdm/openpolicedata/compare).
+Push to your fork and [submit a pull request](https://github.com/openpolicedata/openpolicedata/compare).
 
 ## Source Code
 
@@ -137,6 +148,8 @@ OpenPoliceData's source code is located in the `openpolicedata/` directory in th
 * `_datasets.py`: Constructs the table of available datasets and provides query capabilities on those datasets.
 * `data.py`: Contains the classes for loading and saving datasets.
 * `data_loaders.py`: Contains functions for downloading data from URLs.
+
+Check out the notebooks/ directory for examples of how to use the code.
 
 ## Documentation
 
@@ -148,10 +161,20 @@ Unit tests are the lifeblood of the project, as it ensures that we can continue 
 
 ### Running Tests
 
-Running the tests can be done by running ``python -m pytest`` in the project root directory. This runs most of the tests except a few slow ones. Prior to a major commit, it is advised to run all the tests:
+Running the tests can be done by running ``python -m pytest`` in the project root directory. This runs most of the tests except a few very slow ones. Prior to a major commit, it is advised to run all the tests:
 
 ```sh
 python -m pytest --runslow
+```
+
+When testing in-progress code, it may be useful to run a single set of tests. To run all the tests from a single file:
+```sh
+python -m pytest /path/to/test_name.py
+```
+
+When adding data sources to `opd_source_table.csv` from the opd-data repository (see [Adding Datasets Guide](https://github.com/openpolicedata/opd-data/blob/main/CONTRIBUTING.MD) for more details), the modifications should be tested prior to a pull request. However, OpenPoliceData defaults to reading the CSV file from the main branch in the [opd-data](https://github.com/openpolicedata/opd-data) repository. To force pytest to use your modified `opd_source_table.csv` to test OpenPoliceData, run:
+```sh
+python -m pytest --csvfile=/path/to/modified_opd_source_table.csv
 ```
 
 ### Writing Tests
@@ -183,11 +206,11 @@ def test_add_as_float_or_string_string_return():
 
 ## Code Style
 
-We try to conform to good Python style (i.e. [PEP8](https://pep8.org)). However, we are not experts in it, and don't expect you to be. Try your best to conform to the general style used in the existing code.
+We try to conform to good Python style (i.e. [PEP8](https://pep8.org)). However, we are not experts in it and don't expect you to be. Try your best to conform to the general style used in the existing code.
 
 Also, if you want to make the OpenPoliceData code conform to PEP8 better, the help would be greatly appreciated!
 
-## What happens after the pull request
+## What Happens After the Pull Request
 
 You've make your changes, documented them, added some tests, and submitted a pull request. What now?
 
@@ -216,4 +239,4 @@ importance of writing tested and maintainable software.
 * [Zen of Scientific Software Maintenance](https://jrleeman.github.io/ScientificSoftwareMaintenance/)
 
 ## Still Have Questions?
-``TODO: If we turn on the Discussions board option in the GitHub settings, we could tell them to ask questions there ``
+Check out our [Discussions page](https://github.com/openpolicedata/openpolicedata/discussions)
