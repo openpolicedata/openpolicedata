@@ -221,7 +221,7 @@ def datasets_query(source_name=None, state=None, jurisdiction=None, table_type=N
         query += "TableType == '" + table_type + "' and "
 
     if len(query) == 0:
-        return datasets
+        return datasets.copy()
     else:
         return datasets.query(query[0:-5]) 
 
