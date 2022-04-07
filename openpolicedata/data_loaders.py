@@ -298,7 +298,7 @@ def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, sel
 
     where = ""
     if date_field!=None and year!=None:
-        start_date, stop_date = _process_date(year,inclusive=True)
+        start_date, stop_date = _process_date(year,inclusive=True, date_field=date_field)
         where = date_field + " between '" + start_date + "' and '" + stop_date +"'"
 
     if opt_filter is not None:
@@ -367,7 +367,7 @@ def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, sel
     return df
 
 
-def _process_date(date, inclusive):
+def _process_date(date, inclusive, date_field=None):
     if not isinstance(date, list):
         date = [date, date]
 
@@ -380,12 +380,18 @@ def _process_date(date, inclusive):
     if type(date[0]) == str:
         # This should already be in date format
         start_date = date[0]
+    elif date_field != None and date_field.lower() == "year":
+        # Assuming this as actually a string or numeric field for the year rather than a datestamp
+        start_date = str(date[0])
     else:
         start_date = str(date[0]) + "-01-01"
 
     if type(date[1]) == str:
         # This should already be in date format
         stop_date = date[1]
+    elif date_field != None and date_field.lower() == "year":
+        # Assuming this as actually a string or numeric field for the year rather than a datestamp
+        stop_date = str(date[1])
     else:
         if inclusive:
             stop_date  = str(date[1]) + "-12-31T23:59:59.999"
