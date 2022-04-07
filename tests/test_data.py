@@ -20,9 +20,11 @@ def get_datasets(csvfile):
     return datasets_query()
 
 class TestProduct:
-	def test_source_url_name_unlimitable(self, csvfile):
+	def test_source_url_name_unlimitable(self, csvfile, source):
 		datasets = get_datasets(csvfile)
 		for i in range(len(datasets)):
+			if source != None and datasets.iloc[i]["SourceName"] != source:
+				continue
 			if not self.can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]):
 				ext = "." + datasets.iloc[i]["DataType"].lower()
 				if ext == ".csv":
@@ -32,9 +34,12 @@ class TestProduct:
 					assert ext in datasets.iloc[i]["URL"]
 
 
-	def test_source_urls(self, csvfile):
+	def test_source_urls(self, csvfile, source):
 		datasets = get_datasets(csvfile)
 		for i in range(len(datasets)):
+			if source != None and datasets.iloc[i]["SourceName"] != source:
+				continue
+
 			url = datasets.iloc[i]["URL"]
 			try:
 				r = requests.head(url)
@@ -54,10 +59,10 @@ class TestProduct:
 				raise ValueError(f"Status code for {url} is {r.status_code}")
 
 	
-	def test_get_years(self, csvfile, source_name=None):
+	def test_get_years(self, csvfile, source):
 		datasets = get_datasets(csvfile)
 		for i in range(len(datasets)):
-			if source_name != None and datasets.iloc[i]["SourceName"] != source_name:
+			if source != None and datasets.iloc[i]["SourceName"] != source:
 				continue
 			if self.is_filterable(datasets.iloc[i]["DataType"]) or datasets.iloc[i]["Year"] != _datasets.MULTI:
 				srcName = datasets.iloc[i]["SourceName"]
@@ -72,13 +77,13 @@ class TestProduct:
 					assert len(years) > 0
 
 
-	def test_source_download_limitable(self, csvfile, source_name=None):
+	def test_source_download_limitable(self, csvfile, source):
 		datasets = get_datasets(csvfile)
 		num_stanford = 0
 		max_num_stanford = 1  # This data is standardized. Probably no need to test more than 1
 		caught_exceptions = []
 		for i in range(len(datasets)):
-			if source_name != None and datasets.iloc[i]["SourceName"] != source_name:
+			if source != None and datasets.iloc[i]["SourceName"] != source:
 				continue
 			has_date_field = not pd.isnull(datasets.iloc[i]["date_field"])
 			if self.can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]) or has_date_field:
@@ -123,9 +128,12 @@ class TestProduct:
 			raise OPD_MultipleErrors(msg)
 
 	
-	def test_get_jurisdictions(self, csvfile):
+	def test_get_jurisdictions(self, csvfile, source):
 		datasets = get_datasets(csvfile)
 		for i in range(len(datasets)):
+			if source != None and datasets.iloc[i]["SourceName"] != source:
+				continue
+
 			if self.is_filterable(datasets.iloc[i]["DataType"]) or datasets.iloc[i]["Jurisdiction"] != _datasets.MULTI:
 				srcName = datasets.iloc[i]["SourceName"]
 				state = datasets.iloc[i]["State"]
@@ -139,7 +147,7 @@ class TestProduct:
 					assert len(jurisdictions) > 0
 
 
-	def test_get_jurisdictions_name_match(self, csvfile):
+	def test_get_jurisdictions_name_match(self, csvfile, source):
 		get_datasets(csvfile)
 
 		src = data.Source("Virginia")
@@ -149,7 +157,7 @@ class TestProduct:
 		assert len(jurisdictions) == 2
 				
 				
-	def test_jurisdiction_filter(self, csvfile):
+	def test_jurisdiction_filter(self, csvfile, source):
 		get_datasets(csvfile)
 		src = data.Source("Virginia")
 		jurisdiction="Fairfax County Police Department"
@@ -163,11 +171,11 @@ class TestProduct:
 
 	
 	@pytest.mark.slow(reason="This is a slow test tgat should be run before a major commit.")
-	def test_load_year(self, csvfile, source_name=None):
+	def test_load_year(self, csvfile, source):
 		datasets = get_datasets(csvfile)
 		# Test that filtering for a year works at the boundaries
 		for i in range(len(datasets)):
-			if source_name != None and datasets.iloc[i]["SourceName"] != source_name:
+			if source != None and datasets.iloc[i]["SourceName"] != source:
 				continue
 			if self.is_filterable(datasets.iloc[i]["DataType"]) and datasets.iloc[i]["Year"] == _datasets.MULTI:
 				srcName = datasets.iloc[i]["SourceName"]
@@ -241,10 +249,10 @@ class TestProduct:
 
 
 	@pytest.mark.slow(reason="This is a slow test and should be run before a major commit.")
-	def test_source_download_not_limitable(self, csvfile, source_name=None):
+	def test_source_download_not_limitable(self, csvfile, source):
 		datasets = get_datasets(csvfile)
 		for i in range(len(datasets)):
-			if source_name != None and datasets.iloc[i]["SourceName"] != source_name:
+			if source != None and datasets.iloc[i]["SourceName"] != source:
 				continue
 			if not self.can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]):
 				if self.is_stanford(datasets.iloc[i]["URL"]):
@@ -297,4 +305,4 @@ class TestProduct:
 if __name__ == "__main__":
 	# For testing
 	tp = TestProduct()
-	tp.test_load_year("C:\\Users\\matth\\repos\\sowd-opd-data\\opd_source_table.csv")
+	tp.test_get_jurisdictions("C:\\Users\\matth\\repos\\sowd-opd-data\\opd_source_table.csv", "New Jersey")

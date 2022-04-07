@@ -10,6 +10,9 @@ def pytest_addoption(parser):
     parser.addoption(
         "--csvfile", action="store", default=None, help="Replace default opd_source_table.csv with an updated one for testing"
     )
+    parser.addoption(
+        "--source", action="store", default=None, help="Only test datasets from this source"
+    )
 
 
 def pytest_configure(config):
@@ -32,3 +35,9 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize("csvfile", [option_value])
     else:
         metafunc.parametrize("csvfile", [None])
+
+    option_value = metafunc.config.option.source
+    if 'source' in metafunc.fixturenames and option_value is not None:
+        metafunc.parametrize("source", [option_value])
+    else:
+        metafunc.parametrize("source", [None])
