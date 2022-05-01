@@ -482,6 +482,37 @@ class Source:
 
         return table
 
+    def get_csv_filename(self, year, outputDir=None, table_type=None, jurisdiction_filter=None):
+        '''Get auto-generated CSV filename
+        
+        Parameters
+        ----------
+        year - int or length 2 list or the string "MULTI" or "N/A"
+            Used to identify the requested dataset if equal to its year value
+            Otherwise, for datasets containing multiple years, this filters 
+            the return data for a specific year (int input) or a range of years
+            [X,Y] to return data for years X to Y
+        outputDir - str
+            (Optional) Directory where CSV file is stored
+        table_type - str or TableTypes enum
+            (Optional) If set, requested dataset will be of this type
+        jurisdiction_filter - str
+            (Optional) If set, for datasets containing multiple jurisdictions, data will
+            only be returned for this jurisdiction
+
+        Returns
+        -------
+        str
+            Auto-generated CSV filename
+        '''
+
+        table = self.__load(year, table_type, jurisdiction_filter, False)
+
+        filename = table.get_csv_filename()
+        if outputDir != None:
+            filename = path.join(outputDir, filename)             
+
+        return filename
 
 def _check_date(table, date_field):
     if date_field != None and len(table)>0:
