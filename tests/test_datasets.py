@@ -16,12 +16,12 @@ def get_datasets(csvfile):
     return opd.datasets_query()
 
 
-class TestProduct:
-    def test_duplicates(self, csvfile, source):
+class TestDatasets:
+    def test_duplicates(self, csvfile, source, last):
         datasets = get_datasets(csvfile)
         assert not datasets.duplicated(subset=['State', 'SourceName', 'Jurisdiction', 'TableType','Year']).any()
 
-    def test_check_columns(self, csvfile, source):
+    def test_check_columns(self, csvfile, source, last):
         columns = {
             'State' : pd.StringDtype(),
             'SourceName' : pd.StringDtype(),
@@ -41,7 +41,7 @@ class TestProduct:
         for key in columns.keys():
             assert key in datasets
 
-    def test_table_for_nulls(self, csvfile, source):
+    def test_table_for_nulls(self, csvfile, source, last):
         can_have_nulls = ["Description", "date_field", "dataset_id", "jurisdiction_field", "Year"]
         datasets = get_datasets(csvfile)
         for col in datasets.columns:
@@ -49,7 +49,7 @@ class TestProduct:
                 assert pd.isnull(datasets[col]).sum() == 0
 
     
-    def test_check_state_names(self, csvfile, source):
+    def test_check_state_names(self, csvfile, source, last):
         all_states = [
             'Alabama', 'Alaska', 'American Samoa', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware', 'District Of Columbia',
             'Florida', 'Georgia', 'Guam', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky', 'Louisiana', 'Maine',
@@ -62,34 +62,34 @@ class TestProduct:
         datasets = get_datasets(csvfile)
         assert len([x for x in datasets["State"] if x not in all_states]) == 0
 
-    def test_jurisdiction_names(self, csvfile, source):
+    def test_jurisdiction_names(self, csvfile, source, last):
         # Jurisdiction names should either match source name or be MULTI
         datasets = get_datasets(csvfile)
         rem = datasets["Jurisdiction"][datasets["Jurisdiction"] != datasets["SourceName"]]
         assert ((rem == opd._datasets.MULTI) | (rem == opd._datasets.NA)).all()
 
-    def test_year(self, csvfile, source):
+    def test_year(self, csvfile, source, last):
         # year should either be an int or MULTI or "None"
         datasets = get_datasets(csvfile)
         rem = datasets["Year"][[type(x)!=int for x in datasets["Year"]]]
         assert ((rem == opd._datasets.MULTI) | (rem == opd._datasets.NA)).all()
 
-    def test_socrata_id(self, csvfile, source):
+    def test_socrata_id(self, csvfile, source, last):
         datasets = get_datasets(csvfile)
         rem = datasets["dataset_id"][datasets["DataType"] == opd._datasets.DataTypes.SOCRATA.value]
         assert pd.isnull(rem).sum() == 0
 
-    def test_years_multi(self, csvfile, source):
+    def test_years_multi(self, csvfile, source, last):
         datasets = get_datasets(csvfile)
         rem = datasets["date_field"][datasets["Year"] == opd._datasets.MULTI]
         assert pd.isnull(rem).sum() == 0
 
-    def test_jurisdictions_multi(self, csvfile, source):
+    def test_jurisdictions_multi(self, csvfile, source, last):
         datasets = get_datasets(csvfile)
         rem = datasets["jurisdiction_field"][datasets["Jurisdiction"] == opd._datasets.MULTI]
         assert pd.isnull(rem).sum() == 0
 
-    def test_arcgis_urls(self, csvfile, source):
+    def test_arcgis_urls(self, csvfile, source, last):
         datasets = get_datasets(csvfile)
         urls = datasets["URL"]
         p = re.compile("(MapServer|FeatureServer)/\d+")
@@ -99,7 +99,7 @@ class TestProduct:
                 assert result != None
                 assert len(url) == result.span()[1]
 
-    def test_source_list_by_state(self, csvfile, source):
+    def test_source_list_by_state(self, csvfile, source, last):
         datasets = get_datasets(csvfile)
         state = "Virginia"
         df = opd.datasets_query(state=state)
@@ -107,7 +107,7 @@ class TestProduct:
         assert len(df)>0
         assert df_truth.equals(df)
 
-    def test_source_list_by_source_name(self, csvfile, source):
+    def test_source_list_by_source_name(self, csvfile, source, last):
         datasets = get_datasets(csvfile)
         source_name = "Fairfax County"
         df = opd.datasets_query(source_name=source_name)
@@ -115,7 +115,7 @@ class TestProduct:
         assert len(df)>0
         assert df_truth.equals(df)
 
-    def test_source_list_by_jurisdiction(self, csvfile, source):
+    def test_source_list_by_jurisdiction(self, csvfile, source, last):
         datasets = get_datasets(csvfile)
         jurisdiction = "Fairfax County"
         df = opd.datasets_query(jurisdiction=jurisdiction)
@@ -123,7 +123,7 @@ class TestProduct:
         assert len(df)>0
         assert df_truth.equals(df)
 
-    def test_source_list_by_table_type(self, csvfile, source):
+    def test_source_list_by_table_type(self, csvfile, source, last):
         datasets = get_datasets(csvfile)
         table_type = opd.TableTypes.TRAFFIC
         df = opd.datasets_query(table_type=table_type)
@@ -131,7 +131,7 @@ class TestProduct:
         assert len(df)>0
         assert df_truth.equals(df)
 
-    def test_source_list_by_table_type_value(self, csvfile, source):
+    def test_source_list_by_table_type_value(self, csvfile, source, last):
         datasets = get_datasets(csvfile)
         table_type = opd.TableTypes.TRAFFIC.value
         df = opd.datasets_query(table_type=table_type)
@@ -139,7 +139,7 @@ class TestProduct:
         assert len(df)>0
         assert df_truth.equals(df)
 
-    def test_source_list_by_multi(self, csvfile, source):
+    def test_source_list_by_multi(self, csvfile, source, last):
         datasets = get_datasets(csvfile)
         state = "Virginia"
         source_name = "Fairfax County"
@@ -165,4 +165,4 @@ class TestProduct:
         
 
 if __name__ == "__main__":
-    TestProduct().test_year("C:\\Users\\matth\\repos\\sowd-opd-data\\opd_source_table.csv")
+    TestDatasets().test_data_types("C:\\Users\\matth\\repos\\sowd-opd-data\\opd_source_table.csv",None,float('inf'))

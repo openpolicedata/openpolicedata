@@ -347,7 +347,7 @@ def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, sel
                 if list(geo.keys()) == ["human_address"]:
                     feature["geometry"] = {"type" : "Point", "coordinates" : (nan, nan)}  
                 else:
-                feature["geometry"] = {"type" : "Point", "coordinates" : (float(geo["longitude"]), float(geo["latitude"]))}  
+                    feature["geometry"] = {"type" : "Point", "coordinates" : (float(geo["longitude"]), float(geo["latitude"]))}  
                 
                 geojson["features"].append(feature)
 

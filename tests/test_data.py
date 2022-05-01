@@ -14,15 +14,19 @@ import pandas as pd
 
 def get_datasets(csvfile):
     if csvfile != None:
-        print(csvfile)
         _datasets.datasets = _datasets._build(csvfile)
 
     return datasets_query()
 
-class TestProduct:
-	def test_source_url_name_unlimitable(self, csvfile, source):
+class TestData:
+	def test_source_url_name_unlimitable(self, csvfile, source, last):
+		if last == None:
+			last = float('inf')
 		datasets = get_datasets(csvfile)
 		for i in range(len(datasets)):
+			if i < len(datasets) - last:
+				continue
+			
 			if source != None and datasets.iloc[i]["SourceName"] != source:
 				continue
 			if not self.can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]):
@@ -34,9 +38,13 @@ class TestProduct:
 					assert ext in datasets.iloc[i]["URL"]
 
 
-	def test_source_urls(self, csvfile, source):
+	def test_source_urls(self, csvfile, source, last):
+		if last == None:
+			last = float('inf')
 		datasets = get_datasets(csvfile)
 		for i in range(len(datasets)):
+			if i < len(datasets) - last:
+				continue
 			if source != None and datasets.iloc[i]["SourceName"] != source:
 				continue
 
@@ -59,15 +67,23 @@ class TestProduct:
 				raise ValueError(f"Status code for {url} is {r.status_code}")
 
 	
-	def test_get_years(self, csvfile, source):
+	def test_get_years(self, csvfile, source, last):
+		if last == None:
+			last = float('inf')
 		datasets = get_datasets(csvfile)
 		for i in range(len(datasets)):
+			if i < len(datasets) - last:
+				continue
 			if source != None and datasets.iloc[i]["SourceName"] != source:
 				continue
 			if self.is_filterable(datasets.iloc[i]["DataType"]) or datasets.iloc[i]["Year"] != _datasets.MULTI:
 				srcName = datasets.iloc[i]["SourceName"]
 				state = datasets.iloc[i]["State"]
 				src = data.Source(srcName, state=state)
+
+				table_print = datasets.iloc[i]["TableType"]
+				now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
+				print(f"{now} Testing {i} of {len(datasets)}: {srcName} {table_print} table")
 
 				years = src.get_years(datasets.iloc[i]["TableType"])
 
@@ -77,12 +93,16 @@ class TestProduct:
 					assert len(years) > 0
 
 
-	def test_source_download_limitable(self, csvfile, source):
+	def test_source_download_limitable(self, csvfile, source, last):
+		if last == None:
+			last = float('inf')
 		datasets = get_datasets(csvfile)
 		num_stanford = 0
 		max_num_stanford = 1  # This data is standardized. Probably no need to test more than 1
 		caught_exceptions = []
 		for i in range(len(datasets)):
+			if i < len(datasets) - last:
+				continue
 			if source != None and datasets.iloc[i]["SourceName"] != source:
 				continue
 			has_date_field = not pd.isnull(datasets.iloc[i]["date_field"])
@@ -96,6 +116,10 @@ class TestProduct:
 				src = data.Source(srcName, state=state)
 				# For speed, set private limit parameter so that only a single entry is requested
 				src._Source__limit = 20
+
+				table_print = datasets.iloc[i]["TableType"]
+				now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
+				print(f"{now} Testing {i} of {len(datasets)}: {srcName} {table_print} table")
 
 				try:
 					table = src.load_from_url(datasets.iloc[i]["Year"], datasets.iloc[i]["TableType"])
@@ -128,9 +152,13 @@ class TestProduct:
 			raise OPD_MultipleErrors(msg)
 
 	
-	def test_get_jurisdictions(self, csvfile, source):
+	def test_get_jurisdictions(self, csvfile, source, last):
+		if last == None:
+			last = float('inf')
 		datasets = get_datasets(csvfile)
 		for i in range(len(datasets)):
+			if i < len(datasets) - last:
+				continue
 			if source != None and datasets.iloc[i]["SourceName"] != source:
 				continue
 
@@ -138,6 +166,10 @@ class TestProduct:
 				srcName = datasets.iloc[i]["SourceName"]
 				state = datasets.iloc[i]["State"]
 				src = data.Source(srcName, state=state)
+
+				table_print = datasets.iloc[i]["TableType"]
+				now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
+				print(f"{now} Testing {i} of {len(datasets)}: {srcName} {table_print} table")
 
 				jurisdictions = src.get_jurisdictions(datasets.iloc[i]["TableType"], year=datasets.iloc[i]["Year"])
 
@@ -147,7 +179,9 @@ class TestProduct:
 					assert len(jurisdictions) > 0
 
 
-	def test_get_jurisdictions_name_match(self, csvfile, source):
+	def test_get_jurisdictions_name_match(self, csvfile, source, last):
+		if last == None:
+			last = float('inf')
 		get_datasets(csvfile)
 
 		src = data.Source("Virginia")
@@ -157,7 +191,9 @@ class TestProduct:
 		assert len(jurisdictions) == 2
 				
 				
-	def test_jurisdiction_filter(self, csvfile, source):
+	def test_jurisdiction_filter(self, csvfile, source, last):
+		if last == None:
+			last = float('inf')
 		get_datasets(csvfile)
 		src = data.Source("Virginia")
 		jurisdiction="Fairfax County Police Department"
@@ -171,10 +207,14 @@ class TestProduct:
 
 	
 	@pytest.mark.slow(reason="This is a slow test tgat should be run before a major commit.")
-	def test_load_year(self, csvfile, source):
+	def test_load_year(self, csvfile, source, last):
+		if last == None:
+			last = float('inf')
 		datasets = get_datasets(csvfile)
 		# Test that filtering for a year works at the boundaries
 		for i in range(len(datasets)):
+			if i < len(datasets) - last:
+				continue
 			if source != None and datasets.iloc[i]["SourceName"] != source:
 				continue
 			if self.is_filterable(datasets.iloc[i]["DataType"]) and datasets.iloc[i]["Year"] == _datasets.MULTI:
@@ -249,9 +289,13 @@ class TestProduct:
 
 
 	@pytest.mark.slow(reason="This is a slow test and should be run before a major commit.")
-	def test_source_download_not_limitable(self, csvfile, source):
+	def test_source_download_not_limitable(self, csvfile, source, last):
+		if last == None:
+			last = float('inf')
 		datasets = get_datasets(csvfile)
 		for i in range(len(datasets)):
+			if i < len(datasets) - last:
+				continue
 			if source != None and datasets.iloc[i]["SourceName"] != source:
 				continue
 			if not self.can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]):
@@ -304,5 +348,6 @@ class TestProduct:
 
 if __name__ == "__main__":
 	# For testing
-	tp = TestProduct()
-	tp.test_get_jurisdictions("C:\\Users\\matth\\repos\\sowd-opd-data\\opd_source_table.csv", "New Jersey")
+	tp = TestData()
+	# 29.Apr 2022 19:21:33 Testing 297 of 300: Los Angeles County OFFICER-INVOLVED SHOOTINGS - CIVILIANS table
+	tp.test_load_year("C:\\Users\\matth\\repos\\sowd-opd-data\\opd_source_table.csv", "Portland", None) 
