@@ -14,10 +14,10 @@ import warnings
 
 from arcgis.features import FeatureLayerCollection
 
-if __name__ == '__main__':
-    from exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError
-else:
+try:
     from .exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError
+except:
+    from exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError
 
 # This is for use if import data sets using Socrata. It is not required.
 # Requests made without an app_token will be subject to strict throttling limits
@@ -232,6 +232,10 @@ def load_arcgis(url, date_field=None, year=None, limit=None):
 
             json_data = json.loads(json_data)
             
+            for k in range(len(json_data["features"])):
+                if json_data["features"][k]["geometry"]['coordinates'] == ["NaN", "NaN"]:
+                    json_data["features"][k]["geometry"]['coordinates'] = [nan, nan]
+            
             try:
                 geo_data_frame = gpd.GeoDataFrame.from_features(json_data, crs=layer_query_result.spatial_reference['wkid'])
             except CRSError:
@@ -244,7 +248,7 @@ def load_arcgis(url, date_field=None, year=None, limit=None):
                 if len(date_field_metadata) != 1:
                     raise ValueError(f"Unable to find a single date field named {date_field}. Found {len(date_field_metadata)} instances.")
 
-                if date_field_metadata[0]['type'] == 'esriFieldTypeDate':
+                if date_field_metadata[0]['type'] in ['esriFieldTypeDate', "esriFieldTypeString"]:
                     geo_data_frame = geo_data_frame.astype({date_field: 'datetime64[ms]'})
                 else:
                     raise ValueError(f"Unsupported data type {date_field_metadata[0]['type']} for field {date_field}.")
@@ -340,7 +344,11 @@ def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, sel
             for p in results:
                 feature = {"type" : "Feature", "properties" : p}
                 geo = feature["properties"].pop("geolocation")
+                if list(geo.keys()) == ["human_address"]:
+                    feature["geometry"] = {"type" : "Point", "coordinates" : (nan, nan)}  
+                else:
                 feature["geometry"] = {"type" : "Point", "coordinates" : (float(geo["longitude"]), float(geo["latitude"]))}  
+                
                 geojson["features"].append(feature)
 
             if len(results)>0:
@@ -393,10 +401,7 @@ def _process_date(date, inclusive, date_field=None):
         # Assuming this as actually a string or numeric field for the year rather than a datestamp
         stop_date = str(date[1])
     else:
-        if inclusive:
             stop_date  = str(date[1]) + "-12-31T23:59:59.999"
-        else:
-            stop_date  = str(date[1]+1) + "-01-01"
 
     return start_date, stop_date
 
