@@ -150,6 +150,18 @@ class TestProduct:
         df_truth = df_truth[df_truth["SourceName"]==source_name]
         assert len(df)>0
         assert df_truth.equals(df)
+
+    def test_table_types(self, csvfile, source, last):
+        datasets = get_datasets(csvfile)
+        for t in datasets["TableType"]:
+            # Try to convert to an enum
+            opd.TableTypes(t)
+
+    def test_data_types(self, csvfile, source, last):
+        datasets = get_datasets(csvfile)
+        for t in datasets["DataType"]:
+            # Try to convert to an enum
+            opd.DataTypes(t)
         
 
 if __name__ == "__main__":
