@@ -19,9 +19,11 @@ class TableTypes(Enum):
     ARRESTS = "ARRESTS"
     ARRAIGNMENT = "ARRAIGNMENT"
     CALLS_FOR_SERVICE = "CALLS FOR SERVICE"
+    CITATIONS = "CITATIONS"
     COMPLAINTS = "COMPLAINTS"
     DEATHES_IN_CUSTODY = "DEATHES IN CUSTODY"
     EMPLOYEE = "EMPLOYEE"
+    FIELD_CONTACTS = "FIELD CONTACTS"
     PEDESTRIAN = "PEDESTRIAN STOPS"
     PEDESTRIAN_ARRESTS = "PEDESTRIAN ARRESTS"
     PEDESTRIAN_CITATIONS = "PEDESTRIAN CITATIONS"
@@ -88,7 +90,7 @@ def _build(csv_file):
 
     keyVals = ['State', 'SourceName', 'Jurisdiction', 'TableType','Year']
     df.drop_duplicates(subset=keyVals, inplace=True)
-    df.sort_values(by=keyVals, inplace=True, ignore_index=True)
+    # df.sort_values(by=keyVals, inplace=True, ignore_index=True)
 
     return df
 
@@ -96,7 +98,7 @@ def _build(csv_file):
 datasets = _build(csv_file)
 
 
-# Datasets that had issues that need readded in the future
+# Datasets that had issues that need added in the future
 # _builder.add_data(state="North Carolina", jurisdiction="Charlotte-Mecklenburg",
 #     table_type=TableTypes.TRAFFIC, 
 #     url=["https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPD/MapServer/14/"], 
@@ -133,56 +135,6 @@ datasets = _build(csv_file)
 #     data_type=DataTypes.EXCEL,
 #     escription="State and local law enforcement agencies and correctional facilities report information on deaths that occur in custody or during the process of arrest in compliance with Section 12525 of the California Government Code",
 #     lut_dict={"date_field" : "date_of_death_yyyy"})
-# include_comport = False  # These dataset links are unreliable 2/10/2022
-# if include_comport:
-#     _builder.add_data(state="Maryland", jurisdiction="Baltimore",
-#         table_type=TableTypes.COMPLAINTS, 
-#         url=["https://www.projectcomport.org/department/4/complaints.csv"], 
-#         data_type=DataTypes.CSV,
-#         description="The Baltimore Police Department’s Office of Professional Responsibility tracks and investigates both internal complaints and citizen complaints regarding officer interactions in order to better serve the people of Baltimore.",
-#         lut_dict={"date_field" : "occurredDate"})
-#     _builder.add_data(state="Maryland", jurisdiction="Baltimore",
-#         table_type=TableTypes.USE_OF_FORCE, 
-#         url=["https://www.projectcomport.org/department/4/uof.csv"], 
-#         data_type=DataTypes.CSV,
-#         description="Officers must immediately report any use of force incident, and all incidents undergo a thorough review process to ensure that the force used was reasonable, necessary, and proportional.",
-#         lut_dict={"date_field" : "occurredDate"})
-#     _builder.add_data(state="Maryland", jurisdiction="Baltimore",
-#         table_type=TableTypes.SHOOTINGS, 
-#         url=["https://www.projectcomport.org/department/4/ois.csv"], 
-#         data_type=DataTypes.CSV,
-#         description="",
-#         lut_dict={"date_field" : "occurredDate"})
-#     _builder.add_data(state="Indiana", jurisdiction="Indianapolis",
-#         table_type=TableTypes.COMPLAINTS, 
-#         url=["https://www.projectcomport.org/department/1/complaints.csv"], 
-#         data_type=DataTypes.CSV,
-#         description="The Citizens' Police Complaint Office (CPCO) gathers this data as part of accepting and investigating resident complaints about interactions with IMPD officers. More information is available in the CPCO FAQ (http://www.indy.gov/eGov/City/DPS/CPCO/Pages/faq.aspx).",
-#         lut_dict={"date_field" : "occurredDate"})
-#     _builder.add_data(state="Indiana", jurisdiction="Indianapolis",
-#         table_type=TableTypes.USE_OF_FORCE, 
-#         url=["https://www.projectcomport.org/department/1/uof.csv"], 
-#         data_type=DataTypes.CSV,
-#         description="The Indianapolis Metropolitan Police Department (IMPD) gathers this data as part of its professional standards practices.",
-#         lut_dict={"date_field" : "occurredDate"})
-#     _builder.add_data(state="Indiana", jurisdiction="Indianapolis",
-#         table_type=TableTypes.SHOOTINGS, 
-#         url=["https://www.projectcomport.org/department/1/ois.csv"], 
-#         data_type=DataTypes.CSV,
-#         description="The Indianapolis Metropolitan Police Department (IMPD) gathers this data as part of its professional standards practices.",
-#         lut_dict={"date_field" : "occurredDate"})
-#     _builder.add_data(state="Kansas", jurisdiction="Wichita",
-#         table_type=TableTypes.COMPLAINTS, 
-#         url=["https://www.projectcomport.org/department/7/complaints.csv"], 
-#         data_type=DataTypes.CSV,
-#         description="",
-#         lut_dict={"date_field" : "receivedDate"})
-#     _builder.add_data(state="Kansas", jurisdiction="Wichita",
-#         table_type=TableTypes.USE_OF_FORCE, 
-#         url=["https://www.projectcomport.org/department/7/uof.csv"], 
-#         data_type=DataTypes.CSV,
-#         description="The Wichita Police Department tracks all incidents of force used in a situation during the line of duty as part of its office of Professional Standards. ",
-#         lut_dict={"date_field" : "occurredDate"})
 
 
 def datasets_query(source_name=None, state=None, jurisdiction=None, table_type=None):
