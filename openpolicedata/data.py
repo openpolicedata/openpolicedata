@@ -494,7 +494,24 @@ def _check_date(table, date_field):
                 dts = table[date_field]
                 dts = dts[dts.notnull()]
                 one_date = dts.iloc[0]
+            elif date_field.lower() == "year":
+                try:
+                    float(one_date)
+                except:
+                    raise
 
+                table[date_field] = table[date_field].apply(lambda x: datetime(x,1,1))
+                dts = table[date_field]
+                dts = dts[dts.notnull()]
+                one_date = dts.iloc[0]
+                
+            # Replace bad dates with NaT
+            table[date_field].replace(datetime.strptime('1900-01-01 00:00:00', '%Y-%m-%d %H:%M:%S'), pd.NaT, inplace=True)
+            dts = table[date_field]
+            dts = dts[dts.notnull()]
+
+            if len(dts) > 0:
+                one_date = dts.iloc[0] 
             if hasattr(one_date, "year"):
                 if one_date.year < 1995:
                     raise ValueError("Date is before 1995. There was likely an issue in the date conversion")
@@ -542,7 +559,7 @@ def get_csv_filename(state, source_name, jurisdiction, table_type, year):
         filename += f"_{year}"
 
     # Clean up filename
-    filename = filename.replace(",", "_").replace(" ", "_").replace("__", "_")
+    filename = filename.replace(",", "_").replace(" ", "_").replace("__", "_").replace("/", "_")
 
     filename += ".csv"
 
