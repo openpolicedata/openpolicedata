@@ -13,6 +13,9 @@ def pytest_addoption(parser):
     parser.addoption(
         "--source", action="store", default=None, help="Only test datasets from this source"
     )
+    parser.addoption(
+        "--last", action="store", default=None, help="Run only the last N datasets in tests"
+    )
 
 
 def pytest_configure(config):
@@ -41,3 +44,9 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize("source", [option_value])
     else:
         metafunc.parametrize("source", [None])
+
+    option_value = metafunc.config.option.last
+    if 'last' in metafunc.fixturenames and option_value is not None:
+        metafunc.parametrize("last", [int(option_value)])
+    else:
+        metafunc.parametrize("last", [float('inf')])
