@@ -177,6 +177,15 @@ When adding data sources to `opd_source_table.csv` from the opd-data repository 
 python -m pytest --csvfile=/path/to/modified_opd_source_table.csv
 ```
 
+When adding data sources, it may be useful to only test the data sources that you've just added rather than all of them, which can be slow. pytest arguments have been added to help with this. You can run all the tests on a specific source (such as Portland):
+```sh
+python -m pytest --csvfile=/path/to/modified_opd_source_table.csv --source Portland
+```
+or run the tests on the last N rows of `opd_source_table.csv`:  
+```sh
+python -m pytest --csvfile=/path/to/modified_opd_source_table.csv --last 5
+```
+
 ### Writing Tests
 
 Tests should ideally hit all of the lines of code added or changed. 
