@@ -11,6 +11,7 @@ import random
 from datetime import datetime
 from datetime import timedelta
 import pandas as pd
+from time import sleep
 
 def get_datasets(csvfile):
     if csvfile != None:
@@ -66,6 +67,9 @@ class TestData:
 			if r.status_code != 200 and r.status_code != 301:
 				raise ValueError(f"Status code for {url} is {r.status_code}")
 
+			# Adding a pause here to prevent issues with requesting from site too frequently
+			sleep(1)
+
 	
 	def test_get_years(self, csvfile, source, last):
 		if last == None:
@@ -91,6 +95,9 @@ class TestData:
 					assert datasets.iloc[i]["Year"] in years
 				else:
 					assert len(years) > 0
+
+				# Adding a pause here to prevent issues with requesting from site too frequently
+				sleep(1)
 
 
 	def test_source_download_limitable(self, csvfile, source, last):
@@ -143,6 +150,9 @@ class TestData:
 				if not pd.isnull(datasets.iloc[i]["jurisdiction_field"]):
 					assert datasets.iloc[i]["jurisdiction_field"] in table.table
 
+				# Adding a pause here to prevent issues with requesting from site too frequently
+				sleep(1)
+
 		if len(caught_exceptions)==1:
 			raise caught_exceptions[0]
 		elif len(caught_exceptions)>0:
@@ -177,6 +187,9 @@ class TestData:
 					assert [datasets.iloc[i]["Jurisdiction"]] == jurisdictions
 				else:
 					assert len(jurisdictions) > 0
+
+				# Adding a pause here to prevent issues with requesting from site too frequently
+				sleep(1)
 
 
 	def test_get_jurisdictions_name_match(self, csvfile, source, last):
@@ -236,6 +249,9 @@ class TestData:
 
 				years = src.get_years(datasets.iloc[i]["TableType"])
 
+				# Adding a pause here to prevent issues with requesting from site too frequently
+				sleep(1)
+
 				if len(years)>1:
 					# It is preferred to to not use first or last year that start and stop of year are correct
 					year = years[1]
@@ -246,6 +262,8 @@ class TestData:
 
 				table = src.load_from_url(year, datasets.iloc[i]["TableType"], 
 										jurisdiction_filter=jurisdiction_filter)
+
+				sleep(1)
 
 				dts = table.table[datasets.iloc[i]["date_field"]]
 				dts = dts.sort_values(ignore_index=True)
@@ -260,6 +278,7 @@ class TestData:
 
 				table_start = src.load_from_url([start_date, stop_date], datasets.iloc[i]["TableType"], 
 												jurisdiction_filter=jurisdiction_filter)
+				sleep(1)
 				dts_start = table_start.table[datasets.iloc[i]["date_field"]]
 
 				dts_start = dts_start.sort_values(ignore_index=True)
@@ -276,6 +295,7 @@ class TestData:
 
 				table_stop = src.load_from_url([start_date, stop_date], datasets.iloc[i]["TableType"], 
 												jurisdiction_filter=jurisdiction_filter)
+				sleep(1)
 				dts_stop = table_stop.table[datasets.iloc[i]["date_field"]]
 
 				dts_stop = dts_stop.sort_values(ignore_index=True)
@@ -317,6 +337,8 @@ class TestData:
 				print(f"{now} Testing {i} of {len(datasets)}: {srcName}, {state} {table_type} table for {year}")
 				table = src.load_from_url(year, table_type)
 
+				sleep(1)
+
 				assert len(table.table)>1
 				if not pd.isnull(datasets.iloc[i]["date_field"]):
 					assert datasets.iloc[i]["date_field"] in table.table
@@ -350,4 +372,4 @@ if __name__ == "__main__":
 	# For testing
 	tp = TestData()
 	# 29.Apr 2022 19:21:33 Testing 297 of 300: Los Angeles County OFFICER-INVOLVED SHOOTINGS - CIVILIANS table
-	tp.test_load_year("C:\\Users\\matth\\repos\\sowd-opd-data\\opd_source_table.csv", "Portland", None) 
+	tp.test_load_year("C:\\Users\\matth\\repos\\sowd-opd-data\\opd_source_table.csv", "Fayetteville", None) 
