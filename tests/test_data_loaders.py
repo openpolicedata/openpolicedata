@@ -1,4 +1,3 @@
-from unittest.loader import VALID_MODULE_NAME
 import pytest
 if __name__ == "__main__":
 	import sys

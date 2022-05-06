@@ -9,7 +9,6 @@ import re
 class DataTypes(Enum):
     CSV = "CSV"
     # EXCEL = "Excel"
-    GeoJSON = "GeoJSON"
     ArcGIS = "ArcGIS"
     SOCRATA = "Socrata"
 

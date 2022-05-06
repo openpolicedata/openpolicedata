@@ -75,52 +75,6 @@ def load_csv(url, date_field=None, year_filter=None, jurisdiction_field=None, ju
     return table
 
 
-def load_geojson(url, date_field=None, year_filter=None, jurisdiction_field=None, jurisdiction_filter=None):
-    '''Download GeoJSON file to geopandas DataFrame
-    
-    Parameters
-    ----------
-    url : str
-        Download URL for GeoJSON file
-    date_field : str
-        (Optional) Name of the column that contains the date
-    year_filter : int, list
-        (Optional) Either the year or the year range [first_year, last_year] for the data that is being requested.  None value returns data for all years.
-    jurisdiction_field : str
-        (Optional) Name of the column that contains the jurisidiction name (i.e. name of the police departments)
-    jurisdiction_filter : str
-        (Optional) Name of the jurisdiction to filter for.  None value returns data for all jurisdictions.
-        
-    Returns
-    -------
-    geopandas DataFrame
-        DataFrame containing table imported from GeoJSON file
-    '''
-    
-    try:
-        response = requests.get(url)
-
-        # If the response was successful, no Exception will be raised
-        response.raise_for_status()
-    except requests.HTTPError as http_err:
-        print(f'HTTP error occurred: {http_err}')  # Python 3.6
-        Exception()
-    except Exception as err:
-        print(f'Other error occurred: {err}')  # Python 3.6
-        Exception()
-
-    json_data = response.json()
-
-    df = gpd.GeoDataFrame.from_features(json_data, crs=json_data["crs"]["properties"]["name"])
-
-    if date_field != None:
-        df = df.astype({date_field: 'datetime64[ns]'})
-
-    df = filter_dataframe(df, date_field=date_field, year_filter=year_filter, 
-        jurisdiction_field=jurisdiction_field, jurisdiction_filter=jurisdiction_filter)
-
-    return df
-
 def load_arcgis(url, date_field=None, year=None, limit=None):
     '''Download table from ArcGIS to pandas or geopandas DataFrame
     
