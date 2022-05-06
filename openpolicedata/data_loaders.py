@@ -1,23 +1,29 @@
 import os
 from datetime import date
-import geopandas as gpd
 import pandas as pd
 from numpy import nan
 from sodapy import Socrata
-import requests
 import contextlib
 import urllib
 import json
 from pyproj.exceptions import CRSError
 from pyproj import CRS
 import warnings
-
 from arcgis.features import FeatureLayerCollection
+
+try:
+    import geopandas as gpd
+    _has_gpd = True
+except:
+    _has_gpd = False
 
 try:
     from .exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError
 except:
     from exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError
+
+# Global parameter for testing both with and without GeoPandas in testing
+_use_gpd_force = None
 
 # This is for use if import data sets using Socrata. It is not required.
 # Requests made without an app_token will be subject to strict throttling limits
@@ -190,12 +196,27 @@ def load_arcgis(url, date_field=None, year=None, limit=None):
                 if json_data["features"][k]["geometry"]['coordinates'] == ["NaN", "NaN"]:
                     json_data["features"][k]["geometry"]['coordinates'] = [nan, nan]
             
-            try:
-                geo_data_frame = gpd.GeoDataFrame.from_features(json_data, crs=layer_query_result.spatial_reference['wkid'])
-            except CRSError:
-                # Method recommended by pyproj to deal with CRSError for wkid = 102685
-                crs = CRS.from_authority("ESRI", layer_query_result.spatial_reference['wkid'])
-                geo_data_frame = gpd.GeoDataFrame.from_features(json_data, crs=crs)
+            if _use_gpd_force is not None:
+                if not _has_gpd and _use_gpd_force:
+                    raise ValueError("User cannot force GeoPandas usage when it is not installed")
+                use_gpd = _use_gpd_force
+            else:
+                use_gpd = _has_gpd
+                
+            if use_gpd:
+                try:
+                    df = gpd.GeoDataFrame.from_features(json_data, crs=layer_query_result.spatial_reference['wkid'])
+                except CRSError:
+                    # Method recommended by pyproj to deal with CRSError for wkid = 102685
+                    crs = CRS.from_authority("ESRI", layer_query_result.spatial_reference['wkid'])
+                    df = gpd.GeoDataFrame.from_features(json_data, crs=crs)
+            else:
+                dict_data = [x['properties'] for x in json_data['features']]
+                for k in range(len(dict_data)):
+                    if 'geometry' in json_data['features'][k]:
+                        dict_data[k]['geometry'] = json_data['features'][k]['geometry']
+
+                df = pd.DataFrame.from_records(dict_data)
 
             if date_field is not None:
                 date_field_metadata=[x for x in layer_query_result.fields if x['name']==date_field]
@@ -203,11 +224,12 @@ def load_arcgis(url, date_field=None, year=None, limit=None):
                     raise ValueError(f"Unable to find a single date field named {date_field}. Found {len(date_field_metadata)} instances.")
 
                 if date_field_metadata[0]['type'] in ['esriFieldTypeDate', "esriFieldTypeString"]:
-                    geo_data_frame = geo_data_frame.astype({date_field: 'datetime64[ms]'})
+                    df = df.astype({date_field: 'datetime64[ms]'})
                 else:
                     raise ValueError(f"Unsupported data type {date_field_metadata[0]['type']} for field {date_field}.")
+            
 
-            return geo_data_frame
+            return df
     else:
         return None
 
@@ -270,6 +292,13 @@ def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, sel
         if where[0:len(andStr)] == andStr:
             where = where[len(andStr):]
 
+    if _use_gpd_force is not None:
+        if not _has_gpd and _use_gpd_force:
+            raise ValueError("User cannot force GeoPandas usage when it is not installed")
+        use_gpd = _use_gpd_force
+    else:
+        use_gpd = _has_gpd
+
     while N > 0:
         results = client.get(data_set, where=where,
             limit=limit,offset=offset, select=select)
@@ -291,7 +320,8 @@ def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, sel
             if len(results)>0:
                 [df.append(row[select]) for row in results]
 
-        elif output_type=="GeoDataFrame" or (output_type==None and len(results)>0 and "geolocation" in results[0]):
+        elif use_gpd and (output_type=="GeoDataFrame" or \
+            (output_type==None and len(results)>0 and "geolocation" in results[0])):
             output_type = "GeoDataFrame"
             # Presumed to be a list of properties that possibly include coordinates
             geojson = {"type" : "FeatureCollection", "features" : []}
@@ -453,9 +483,16 @@ def _get_years(data_type, url, date_field, data_set=None):
     return years
 
 if __name__ == "__main__":
-    url = "https://data-openjustice.doj.ca.gov/sites/default/files/dataset/2021-12/RIPA%20Stop%20Data%202020.csv"
-    url = "https://www.projectcomport.org/department/4/complaints.csv"
-    table1 = load_csv(url, limit=1026)
-    table2 = load_csv(url)
-    table3 = table2.head(1026)
-    
+    url = "data.montgomerycountymd.gov"
+    data_set = "4mse-ku6q"
+    date_field = "date_of_stop"
+    year = 2020
+    limit = 1000
+    df = load_socrata(url, data_set, date_field=date_field, year=year, limit=limit, key=default_sodapy_key)
+
+    assert type(df) == gpd.GeoDataFrame
+
+    _use_gpd_force = False
+    df = load_socrata(url, data_set, date_field=date_field, year=year, limit=limit, key=default_sodapy_key)
+
+    assert type(df) == pd.DataFrame
