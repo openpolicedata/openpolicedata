@@ -248,17 +248,6 @@ class Source:
                     raise ValueError("Getting the year of a CSV files requires reading in the whole file. " +
                                     "Loading in the table may be a better option. If getYears is still desired " +
                                     " for this case, use forceRead=True")
-            elif data_type == _datasets.DataTypes.GeoJSON:
-                raise NotImplementedError("This needs to be tested before use")
-                if force_read:
-                    table = data_loaders.load_geojson(url)
-                    years = table[date_field].dt.year
-                    years = list(years.unique())
-                else:
-                    raise ValueError("Getting the year of a GeoJSON files requires reading in the whole file. " +
-                                    "Loading in the table may be a better option. If getYears is still desired " +
-                                    " for this case, use forceRead=True")
-                    
             elif data_type == _datasets.DataTypes.ArcGIS:
                 years = data_loaders.get_years_argis(url, date_field)
             elif data_type == _datasets.DataTypes.SOCRATA:
@@ -313,8 +302,6 @@ class Source:
         if src["Jurisdiction"] == _datasets.MULTI:
             data_type = _datasets.DataTypes(src["DataType"])
             if data_type == _datasets.DataTypes.CSV:
-                raise NotImplementedError(f"Unable to get jurisdictions for {data_type}")
-            elif data_type == _datasets.DataTypes.GeoJSON:
                 raise NotImplementedError(f"Unable to get jurisdictions for {data_type}")
             elif data_type == _datasets.DataTypes.ArcGIS:
                 raise NotImplementedError(f"Unable to get jurisdictions for {data_type}")
@@ -425,9 +412,6 @@ class Source:
             if data_type == _datasets.DataTypes.CSV:
                 table = data_loaders.load_csv(url, date_field=date_field, year_filter=year_filter, 
                     jurisdiction_field=jurisdiction_field, jurisdiction_filter=jurisdiction_filter, limit=self.__limit)
-            elif data_type == _datasets.DataTypes.GeoJSON:
-                table = data_loaders.load_geojson(url, date_field=date_field, year_filter=year_filter, 
-                    jurisdiction_field=jurisdiction_field, jurisdiction_filter=jurisdiction_filter)
             elif data_type == _datasets.DataTypes.ArcGIS:
                 table = data_loaders.load_arcgis(url, date_field, year_filter, limit=self.__limit)
             elif data_type == _datasets.DataTypes.SOCRATA:

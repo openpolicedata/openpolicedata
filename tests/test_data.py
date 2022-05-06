@@ -327,7 +327,7 @@ class TestData:
 
 
 	def can_be_limited(self, table_type, url):
-		if table_type == "GeoJSON" or (table_type == "CSV" and ".zip" in url):
+		if (table_type == "CSV" and ".zip" in url):
 			return False
 		elif (table_type == "ArcGIS" or table_type == "Socrata" or table_type == "CSV"):
 			return True
@@ -336,7 +336,7 @@ class TestData:
 
 
 	def is_filterable(self, table_type):
-		if table_type == "GeoJSON" or table_type == "CSV":
+		if table_type == "CSV":
 			return False
 		elif (table_type == "ArcGIS" or table_type == "Socrata" ):
 			return True
