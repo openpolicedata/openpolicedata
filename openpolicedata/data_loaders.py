@@ -18,9 +18,9 @@ except:
     _has_gpd = False
 
 try:
-    from .exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError
+    from .exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError, OPD_arcgisAuthInfoError
 except:
-    from exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError
+    from exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError, OPD_arcgisAuthInfoError
 
 # Global parameter for testing both with and without GeoPandas in testing
 _use_gpd_force = None
@@ -119,11 +119,14 @@ def load_arcgis(url, date_field=None, year=None, limit=None):
     try:
         layer_collection = FeatureLayerCollection(url)
     except Exception as e:
-        if len(e.args)>0 and "Error Code: 500" in e.args[0]:
-            raise OPD_DataUnavailableError(e.args[0])
+        if len(e.args)>0:
+            if "Error Code: 500" in e.args[0]:
+                raise OPD_DataUnavailableError(e.args[0])
+            elif "A general error occurred: 'authInfo'" in e.args[0]:
+                raise OPD_arcgisAuthInfoError(e.args[0])
         else:
             raise
-    except:
+    except e:
         raise
 
     is_table = True
