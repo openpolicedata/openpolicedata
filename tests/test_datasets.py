@@ -66,27 +66,27 @@ class TestDatasets:
         # Agency names should either match source name or be MULTI
         datasets = get_datasets(csvfile)
         rem = datasets["Agency"][datasets["Agency"] != datasets["SourceName"]]
-        assert ((rem == opd._datasets.MULTI) | (rem == opd._datasets.NA)).all()
+        assert ((rem == opd.defs.MULTI) | (rem == opd.defs.MULTI)).all()
 
     def test_year(self, csvfile, source, last):
         # year should either be an int or MULTI or "None"
         datasets = get_datasets(csvfile)
         rem = datasets["Year"][[type(x)!=int for x in datasets["Year"]]]
-        assert ((rem == opd._datasets.MULTI) | (rem == opd._datasets.NA)).all()
+        assert ((rem == opd.defs.MULTI) | (rem == opd.defs.MULTI)).all()
 
     def test_socrata_id(self, csvfile, source, last):
         datasets = get_datasets(csvfile)
-        rem = datasets["dataset_id"][datasets["DataType"] == opd._datasets.DataTypes.SOCRATA.value]
+        rem = datasets["dataset_id"][datasets["DataType"] == opd.defs.DataType.SOCRATA.value]
         assert pd.isnull(rem).sum() == 0
 
     def test_years_multi(self, csvfile, source, last):
         datasets = get_datasets(csvfile)
-        rem = datasets["date_field"][datasets["Year"] == opd._datasets.MULTI]
+        rem = datasets["date_field"][datasets["Year"] == opd.defs.MULTI]
         assert pd.isnull(rem).sum() == 0
 
     def test_agencies_multi(self, csvfile, source, last):
         datasets = get_datasets(csvfile)
-        rem = datasets["agency_field"][datasets["Agency"] == opd._datasets.MULTI]
+        rem = datasets["agency_field"][datasets["Agency"] == opd.defs.MULTI]
         assert pd.isnull(rem).sum() == 0
 
     def test_arcgis_urls(self, csvfile, source, last):
@@ -94,7 +94,7 @@ class TestDatasets:
         urls = datasets["URL"]
         p = re.compile("(MapServer|FeatureServer)/\d+")
         for i,url in enumerate(urls):
-            if datasets.iloc[i]["DataType"] == opd._datasets.DataTypes.ArcGIS.value:
+            if datasets.iloc[i]["DataType"] == opd.defs.DataType.ArcGIS.value:
                 result = p.search(url)
                 assert result != None
                 assert len(url) == result.span()[1]
@@ -125,7 +125,7 @@ class TestDatasets:
 
     def test_source_list_by_table_type(self, csvfile, source, last):
         datasets = get_datasets(csvfile)
-        table_type = opd.TableTypes.TRAFFIC
+        table_type = opd.defs.TableType.TRAFFIC
         df = opd.datasets_query(table_type=table_type)
         df_truth = datasets[datasets["TableType"]==table_type.value]
         assert len(df)>0
@@ -133,7 +133,7 @@ class TestDatasets:
 
     def test_source_list_by_table_type_value(self, csvfile, source, last):
         datasets = get_datasets(csvfile)
-        table_type = opd.TableTypes.TRAFFIC.value
+        table_type = opd.defs.TableType.TRAFFIC.value
         df = opd.datasets_query(table_type=table_type)
         df_truth = datasets[datasets["TableType"]==table_type]
         assert len(df)>0
@@ -143,7 +143,7 @@ class TestDatasets:
         datasets = get_datasets(csvfile)
         state = "Virginia"
         source_name = "Fairfax County"
-        table_type = opd.TableTypes.TRAFFIC_CITATIONS.value
+        table_type = opd.defs.TableType.TRAFFIC_CITATIONS.value
         df = opd.datasets_query(state=state, table_type=table_type, source_name=source_name)
         df_truth = datasets[datasets["TableType"]==table_type]
         df_truth = df_truth[df_truth["State"]==state]
@@ -155,13 +155,13 @@ class TestDatasets:
         datasets = get_datasets(csvfile)
         for t in datasets["TableType"]:
             # Try to convert to an enum
-            opd.TableTypes(t)
+            opd.defs.TableType(t)
 
     def test_data_types(self, csvfile, source, last):
         datasets = get_datasets(csvfile)
         for t in datasets["DataType"]:
             # Try to convert to an enum
-            opd.DataTypes(t)
+            opd.defs.DataType(t)
         
 
 if __name__ == "__main__":

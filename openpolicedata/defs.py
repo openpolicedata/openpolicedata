@@ -2,7 +2,6 @@
 from __future__ import annotations
 from enum import Enum
 
-# TODO: Remove from _datasets.py
 # These are the types of data currently available in opd.
 # They all have corresponding data loaders in data_loaders.py
 # When new data loaders are added, this list should be updated.

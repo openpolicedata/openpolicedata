@@ -6,6 +6,7 @@ if __name__ == "__main__":
 from openpolicedata import data
 from openpolicedata import _datasets
 from openpolicedata import datasets_query
+from openpolicedata.defs import MULTI
 from openpolicedata.exceptions import OPD_DataUnavailableError, OPD_TooManyRequestsError, OPD_MultipleErrors, OPD_arcgisAuthInfoError
 import random
 from datetime import datetime
@@ -83,7 +84,7 @@ class TestData:
 				continue
 			if source != None and datasets.iloc[i]["SourceName"] != source:
 				continue
-			if self.is_filterable(datasets.iloc[i]["DataType"]) or datasets.iloc[i]["Year"] != _datasets.MULTI:
+			if self.is_filterable(datasets.iloc[i]["DataType"]) or datasets.iloc[i]["Year"] != MULTI:
 				srcName = datasets.iloc[i]["SourceName"]
 				state = datasets.iloc[i]["State"]
 				src = data.Source(srcName, state=state)
@@ -101,7 +102,7 @@ class TestData:
 				except:
 					raise
 
-				if datasets.iloc[i]["Year"] != _datasets.MULTI:
+				if datasets.iloc[i]["Year"] != MULTI:
 					assert datasets.iloc[i]["Year"] in years
 				else:
 					assert len(years) > 0
@@ -191,7 +192,7 @@ class TestData:
 			if source != None and datasets.iloc[i]["SourceName"] != source:
 				continue
 
-			if self.is_filterable(datasets.iloc[i]["DataType"]) or datasets.iloc[i]["Agency"] != _datasets.MULTI:
+			if self.is_filterable(datasets.iloc[i]["DataType"]) or datasets.iloc[i]["Agency"] != MULTI:
 				srcName = datasets.iloc[i]["SourceName"]
 				state = datasets.iloc[i]["State"]
 				src = data.Source(srcName, state=state)
@@ -202,7 +203,7 @@ class TestData:
 
 				agencies = src.get_agencies(datasets.iloc[i]["TableType"], year=datasets.iloc[i]["Year"])
 
-				if datasets.iloc[i]["Agency"] != _datasets.MULTI:
+				if datasets.iloc[i]["Agency"] != MULTI:
 					assert [datasets.iloc[i]["Agency"]] == agencies
 				else:
 					assert len(agencies) > 0
@@ -249,11 +250,11 @@ class TestData:
 				continue
 			if source != None and datasets.iloc[i]["SourceName"] != source:
 				continue
-			if self.is_filterable(datasets.iloc[i]["DataType"]) and datasets.iloc[i]["Year"] == _datasets.MULTI:
+			if self.is_filterable(datasets.iloc[i]["DataType"]) and datasets.iloc[i]["Year"] == MULTI:
 				srcName = datasets.iloc[i]["SourceName"]
 				state = datasets.iloc[i]["State"]
 
-				if datasets.iloc[i]["Agency"] == _datasets.MULTI and \
+				if datasets.iloc[i]["Agency"] == MULTI and \
 					srcName == "Virginia":
 					# Reduce size of data load by filtering by agency
 					agency_filter = "Henrico Police Department"
