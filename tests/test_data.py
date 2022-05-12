@@ -166,8 +166,8 @@ class TestData:
 					# Check that year is reasonable
 					assert dts.iloc[0].year > 1999  # This is just an arbitrarily old year that is assumed to be before all available data
 					assert dts.iloc[0].year <= datetime.now().year
-				if not pd.isnull(datasets.iloc[i]["jurisdiction_field"]):
-					assert datasets.iloc[i]["jurisdiction_field"] in table.table
+				if not pd.isnull(datasets.iloc[i]["agency_field"]):
+					assert datasets.iloc[i]["agency_field"] in table.table
 
 				# Adding a pause here to prevent issues with requesting from site too frequently
 				sleep(sleep_time)
@@ -181,7 +181,7 @@ class TestData:
 			raise OPD_MultipleErrors(msg)
 
 	
-	def test_get_jurisdictions(self, csvfile, source, last):
+	def test_get_agencies(self, csvfile, source, last):
 		if last == None:
 			last = float('inf')
 		datasets = get_datasets(csvfile)
@@ -191,7 +191,7 @@ class TestData:
 			if source != None and datasets.iloc[i]["SourceName"] != source:
 				continue
 
-			if self.is_filterable(datasets.iloc[i]["DataType"]) or datasets.iloc[i]["Jurisdiction"] != _datasets.MULTI:
+			if self.is_filterable(datasets.iloc[i]["DataType"]) or datasets.iloc[i]["Agency"] != _datasets.MULTI:
 				srcName = datasets.iloc[i]["SourceName"]
 				state = datasets.iloc[i]["State"]
 				src = data.Source(srcName, state=state)
@@ -200,42 +200,42 @@ class TestData:
 				now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
 				print(f"{now} Testing {i} of {len(datasets)}: {srcName} {table_print} table")
 
-				jurisdictions = src.get_jurisdictions(datasets.iloc[i]["TableType"], year=datasets.iloc[i]["Year"])
+				agencies = src.get_agencies(datasets.iloc[i]["TableType"], year=datasets.iloc[i]["Year"])
 
-				if datasets.iloc[i]["Jurisdiction"] != _datasets.MULTI:
-					assert [datasets.iloc[i]["Jurisdiction"]] == jurisdictions
+				if datasets.iloc[i]["Agency"] != _datasets.MULTI:
+					assert [datasets.iloc[i]["Agency"]] == agencies
 				else:
-					assert len(jurisdictions) > 0
+					assert len(agencies) > 0
 
 				# Adding a pause here to prevent issues with requesting from site too frequently
 				sleep(sleep_time)
 
 
-	def test_get_jurisdictions_name_match(self, csvfile, source, last):
+	def test_get_agencies_name_match(self, csvfile, source, last):
 		if last == None:
 			last = float('inf')
 		get_datasets(csvfile)
 
 		src = data.Source("Virginia")
 
-		jurisdictions = src.get_jurisdictions(partial_name="Arlington")
+		agencies = src.get_agencies(partial_name="Arlington")
 
-		assert len(jurisdictions) == 2
+		assert len(agencies) == 2
 				
 				
-	def test_jurisdiction_filter(self, csvfile, source, last):
+	def test_agency_filter(self, csvfile, source, last):
 		if last == None:
 			last = float('inf')
 		get_datasets(csvfile)
 		src = data.Source("Virginia")
-		jurisdiction="Fairfax County Police Department"
+		agency="Fairfax County Police Department"
 		# For speed, set private limit parameter so that only a single entry is requested
 		src._Source__limit = 100
-		table = src.load_from_url(2021, jurisdiction_filter=jurisdiction)
+		table = src.load_from_url(2021, agency_filter=agency)
 		
 		assert len(table.table)==100
-		assert table.table[table._jurisdiction_field].nunique()==1
-		assert table.table.iloc[0][table._jurisdiction_field] == jurisdiction
+		assert table.table[table._agency_field].nunique()==1
+		assert table.table.iloc[0][table._agency_field] == agency
 
 	
 	@pytest.mark.slow(reason="This is a slow test tgat should be run before a major commit.")
@@ -253,12 +253,12 @@ class TestData:
 				srcName = datasets.iloc[i]["SourceName"]
 				state = datasets.iloc[i]["State"]
 
-				if datasets.iloc[i]["Jurisdiction"] == _datasets.MULTI and \
+				if datasets.iloc[i]["Agency"] == _datasets.MULTI and \
 					srcName == "Virginia":
-					# Reduce size of data load by filtering by jurisdiction
-					jurisdiction_filter = "Henrico Police Department"
+					# Reduce size of data load by filtering by agency
+					agency_filter = "Henrico Police Department"
 				else:
-					jurisdiction_filter = None
+					agency_filter = None
 
 				table_print = datasets.iloc[i]["TableType"]
 				now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
@@ -280,7 +280,7 @@ class TestData:
 				print(f"Testing for year {year}")
 
 				table = src.load_from_url(year, datasets.iloc[i]["TableType"], 
-										jurisdiction_filter=jurisdiction_filter)
+										agency_filter=agency_filter)
 
 				sleep(sleep_time)
 
@@ -296,7 +296,7 @@ class TestData:
 				stop_date = datetime.strftime(dts.iloc[0]+timedelta(days=1), "%Y-%m-%d")
 
 				table_start = src.load_from_url([start_date, stop_date], datasets.iloc[i]["TableType"], 
-												jurisdiction_filter=jurisdiction_filter)
+												agency_filter=agency_filter)
 				sleep(sleep_time)
 				dts_start = table_start.table[datasets.iloc[i]["date_field"]]
 
@@ -313,7 +313,7 @@ class TestData:
 				stop_date  = str(year+1) + "-01-10"  
 
 				table_stop = src.load_from_url([start_date, stop_date], datasets.iloc[i]["TableType"], 
-												jurisdiction_filter=jurisdiction_filter)
+												agency_filter=agency_filter)
 				sleep(sleep_time)
 				dts_stop = table_stop.table[datasets.iloc[i]["date_field"]]
 
@@ -363,8 +363,8 @@ class TestData:
 					assert datasets.iloc[i]["date_field"] in table.table
 					#assuming a Pandas string dtype('O').name = object is okay too
 					assert (table.table[datasets.iloc[i]["date_field"]].dtype.name in ['datetime64[ns]', 'datetime64[ms]'])
-				if not pd.isnull(datasets.iloc[i]["jurisdiction_field"]):
-					assert datasets.iloc[i]["jurisdiction_field"] in table.table
+				if not pd.isnull(datasets.iloc[i]["agency_field"]):
+					assert datasets.iloc[i]["agency_field"] in table.table
 
 
 	def can_be_limited(self, table_type, url):
