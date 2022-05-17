@@ -10,6 +10,7 @@ from pyproj.exceptions import CRSError
 from pyproj import CRS
 import warnings
 from arcgis.features import FeatureLayerCollection
+from time import sleep
 
 try:
     import geopandas as gpd
@@ -21,6 +22,8 @@ try:
     from .exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError, OPD_arcgisAuthInfoError
 except:
     from exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError, OPD_arcgisAuthInfoError
+
+sleep_time = 0.1
 
 # Global parameter for testing both with and without GeoPandas in testing
 _use_gpd_force = None
@@ -480,6 +483,8 @@ def _get_years(data_type, url, date_field, data_set=None):
             misses = 0
             max_misses = max_misses_gap
             years.append(year)
+
+        sleep(sleep_time)
 
         year-=1
 

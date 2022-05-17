@@ -6,6 +6,7 @@ if __name__ == "__main__":
 from openpolicedata import data
 from openpolicedata import _datasets
 from openpolicedata import datasets_query
+from openpolicedata.defs import MULTI
 from openpolicedata.exceptions import OPD_DataUnavailableError, OPD_TooManyRequestsError, OPD_MultipleErrors, OPD_arcgisAuthInfoError
 import random
 from datetime import datetime
@@ -83,7 +84,7 @@ class TestData:
 				continue
 			if source != None and datasets.iloc[i]["SourceName"] != source:
 				continue
-			if self.is_filterable(datasets.iloc[i]["DataType"]) or datasets.iloc[i]["Year"] != _datasets.MULTI:
+			if self.is_filterable(datasets.iloc[i]["DataType"]) or datasets.iloc[i]["Year"] != MULTI:
 				srcName = datasets.iloc[i]["SourceName"]
 				state = datasets.iloc[i]["State"]
 				src = data.Source(srcName, state=state)
@@ -92,16 +93,16 @@ class TestData:
 				now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
 				print(f"{now} Testing {i} of {len(datasets)}: {srcName} {table_print} table")
 
-				try:
-					years = src.get_years(datasets.iloc[i]["TableType"])
-				except (OPD_DataUnavailableError, OPD_TooManyRequestsError, OPD_arcgisAuthInfoError) as e:
-					# Catch exceptions related to URLs not functioning
-					caught_exceptions.append(e)
-					continue
-				except:
-					raise
+				# try:
+				years = src.get_years(datasets.iloc[i]["TableType"])
+				# except (OPD_DataUnavailableError, OPD_TooManyRequestsError, OPD_arcgisAuthInfoError) as e:
+				# 	# Catch exceptions related to URLs not functioning
+				# 	caught_exceptions.append(e)
+				# 	continue
+				# except:
+				# 	raise
 
-				if datasets.iloc[i]["Year"] != _datasets.MULTI:
+				if datasets.iloc[i]["Year"] != MULTI:
 					assert datasets.iloc[i]["Year"] in years
 				else:
 					assert len(years) > 0
@@ -191,7 +192,7 @@ class TestData:
 			if source != None and datasets.iloc[i]["SourceName"] != source:
 				continue
 
-			if self.is_filterable(datasets.iloc[i]["DataType"]) or datasets.iloc[i]["Agency"] != _datasets.MULTI:
+			if self.is_filterable(datasets.iloc[i]["DataType"]) or datasets.iloc[i]["Agency"] != MULTI:
 				srcName = datasets.iloc[i]["SourceName"]
 				state = datasets.iloc[i]["State"]
 				src = data.Source(srcName, state=state)
@@ -202,7 +203,7 @@ class TestData:
 
 				agencies = src.get_agencies(datasets.iloc[i]["TableType"], year=datasets.iloc[i]["Year"])
 
-				if datasets.iloc[i]["Agency"] != _datasets.MULTI:
+				if datasets.iloc[i]["Agency"] != MULTI:
 					assert [datasets.iloc[i]["Agency"]] == agencies
 				else:
 					assert len(agencies) > 0
@@ -249,11 +250,11 @@ class TestData:
 				continue
 			if source != None and datasets.iloc[i]["SourceName"] != source:
 				continue
-			if self.is_filterable(datasets.iloc[i]["DataType"]) and datasets.iloc[i]["Year"] == _datasets.MULTI:
+			if self.is_filterable(datasets.iloc[i]["DataType"]) and datasets.iloc[i]["Year"] == MULTI:
 				srcName = datasets.iloc[i]["SourceName"]
 				state = datasets.iloc[i]["State"]
 
-				if datasets.iloc[i]["Agency"] == _datasets.MULTI and \
+				if datasets.iloc[i]["Agency"] == MULTI and \
 					srcName == "Virginia":
 					# Reduce size of data load by filtering by agency
 					agency_filter = "Henrico Police Department"
@@ -391,4 +392,4 @@ if __name__ == "__main__":
 	# For testing
 	tp = TestData()
 	# 29.Apr 2022 19:21:33 Testing 297 of 300: Los Angeles County OFFICER-INVOLVED SHOOTINGS - CIVILIANS table
-	tp.test_source_download_limitable("C:\\Users\\matth\\repos\\sowd-opd-data\\opd_source_table.csv", None, None) 
+	tp.test_source_download_limitable("C:\\Users\\matth\\repos\\sowd-opd-data\\opd_source_table.csv", "Fayetteville", None) 
