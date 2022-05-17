@@ -1,4 +1,3 @@
-import pytest
 import pandas as pd
 import numpy as np
 import re
@@ -66,13 +65,13 @@ class TestDatasets:
         # Agency names should either match source name or be MULTI
         datasets = get_datasets(csvfile)
         rem = datasets["Agency"][datasets["Agency"] != datasets["SourceName"]]
-        assert ((rem == opd.defs.MULTI) | (rem == opd.defs.MULTI)).all()
+        assert ((rem == opd.defs.MULTI) | (rem == opd.defs.NA)).all()
 
     def test_year(self, csvfile, source, last):
         # year should either be an int or MULTI or "None"
         datasets = get_datasets(csvfile)
         rem = datasets["Year"][[type(x)!=int for x in datasets["Year"]]]
-        assert ((rem == opd.defs.MULTI) | (rem == opd.defs.MULTI)).all()
+        assert ((rem == opd.defs.MULTI) | (rem == opd.defs.NA)).all()
 
     def test_socrata_id(self, csvfile, source, last):
         datasets = get_datasets(csvfile)
@@ -165,4 +164,4 @@ class TestDatasets:
         
 
 if __name__ == "__main__":
-    TestDatasets().test_data_types("C:\\Users\\matth\\repos\\sowd-opd-data\\opd_source_table.csv",None,float('inf'))
+    TestDatasets().test_agency_names("C:\\Users\\matth\\repos\\sowd-opd-data\\opd_source_table.csv",None,None)

@@ -93,14 +93,14 @@ class TestData:
 				now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
 				print(f"{now} Testing {i} of {len(datasets)}: {srcName} {table_print} table")
 
-				try:
-					years = src.get_years(datasets.iloc[i]["TableType"])
-				except (OPD_DataUnavailableError, OPD_TooManyRequestsError, OPD_arcgisAuthInfoError) as e:
-					# Catch exceptions related to URLs not functioning
-					caught_exceptions.append(e)
-					continue
-				except:
-					raise
+				# try:
+				years = src.get_years(datasets.iloc[i]["TableType"])
+				# except (OPD_DataUnavailableError, OPD_TooManyRequestsError, OPD_arcgisAuthInfoError) as e:
+				# 	# Catch exceptions related to URLs not functioning
+				# 	caught_exceptions.append(e)
+				# 	continue
+				# except:
+				# 	raise
 
 				if datasets.iloc[i]["Year"] != MULTI:
 					assert datasets.iloc[i]["Year"] in years
@@ -392,4 +392,4 @@ if __name__ == "__main__":
 	# For testing
 	tp = TestData()
 	# 29.Apr 2022 19:21:33 Testing 297 of 300: Los Angeles County OFFICER-INVOLVED SHOOTINGS - CIVILIANS table
-	tp.test_source_download_limitable("C:\\Users\\matth\\repos\\sowd-opd-data\\opd_source_table.csv", None, None) 
+	tp.test_source_download_limitable("C:\\Users\\matth\\repos\\sowd-opd-data\\opd_source_table.csv", "Fayetteville", None) 

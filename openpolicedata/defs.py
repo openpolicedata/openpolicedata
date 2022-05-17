@@ -1,13 +1,13 @@
 # Definition of constants
 from __future__ import annotations
 from enum import Enum
+from collections import namedtuple
 
 # These are the types of data currently available in opd.
 # They all have corresponding data loaders in data_loaders.py
 # When new data loaders are added, this list should be updated.
 class DataType(Enum):
     CSV = "CSV"
-    # EXCEL = "Excel"
     ArcGIS = "ArcGIS"
     SOCRATA = "Socrata"
 
@@ -46,6 +46,7 @@ class TableType(str, Enum):
         "complaints available to the community.")
     # Definition from https://www.policedatainitiative.org/datasets/agency-workforce-demographics/
     EMPLOYEE = ("EMPLOYEE","Demographic data regarding the police workforce and in some cases, applicants")
+    FIELD_CONTACTS = ("FIELD CONTACTS", "")
     # Defintion from https://www.urban.org/sites/default/files/publication/25781/412647-Key-Issues-in-the-Police-Use-of-Pedestrian-Stops-and-Searches.PDF
     PEDESTRIAN = ("PEDESTRIAN STOPS","A street stop by an officer whereby an officer stops and questions a " +
         "pedestrian based on reasonable suspicion that the pedestrian is or was recently engaged in unlawful " + 
@@ -130,3 +131,47 @@ class TableType(str, Enum):
 # Constants used in dataset parameters
 MULTI = "MULTI"    # For data sets that put multiple years or agencies in 1 dataset
 NA = "NONE"         # None = not applicable (pandas converts "N/A" to NaN)
+
+_col_names = [
+    "DATE", 
+    "CIVILIAN_RACE",
+    "CIVILIAN_ETHNICITY",
+    "OFFICER_RACE",
+    "OFFICER_ETHNICITY",
+    "AGENCY"
+]
+columns = namedtuple('Columns',
+    _col_names,
+    defaults=_col_names
+    )()
+
+_race_names = [
+    "AAPI",
+    "ASIAN",
+    "ASIAN_INDIAN",
+    "BLACK",
+    "HAWAIIAN",
+    "LATINO",
+    "MIDDLE_EASTERN",
+    "MULTIPLE",
+    "NATIVE_AMERICAN",
+    "OTHER",
+    "OTHER_UNKNOWN",
+    "UNKNOWN",
+    "UNSPECIFIED",
+    "WHITE"
+]
+_map = {
+    "AAPI" : "ASIAN / PACIFIC ISLANDER",
+    "ASIAN_INDIAN" : "ASIAN INDIAN",
+    "HAWAIIAN" : "HAWAIIAN / PACIFIC ISLANDER",
+    "LATINO" : "HISPANIC / LATINO",
+    "MIDDLE_EASTERN" : "MIDDLE EASTERN",
+    "NATIVE_AMERICAN" : "NATIVE AMERICAN",
+    "OTHER_UNKNOWN" : "OTHER / UNKNOWN"
+}
+_race_defaults = [_map.get(x,x) for x in _race_names]
+races = namedtuple('Races',
+    _race_names,
+    defaults=_race_defaults
+    )()

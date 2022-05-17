@@ -5,12 +5,12 @@ from datetime import datetime
 if __name__ == '__main__':
     import data_loaders
     import _datasets
-    import preproc
+    # import preproc
     from defs import TableType, DataType, MULTI
 else:
     from . import data_loaders
     from . import _datasets
-    from . import preproc
+    # from . import preproc
     from .defs import TableType, DataType, MULTI
 
 class Table:
@@ -212,7 +212,7 @@ class Source:
         return list(self.datasets["TableType"].unique())
 
 
-    def get_years(self, table_type=None):
+    def get_years(self, table_type):
         '''Get years available for 1 or more datasets
 
         Parameters
@@ -228,12 +228,17 @@ class Source:
         if isinstance(table_type, TableType):
             table_type = table_type.value
 
-        df = self.datasets
+        dfs = self.datasets
         if table_type != None:
-            df = self.datasets[self.datasets["TableType"]==table_type]
+            dfs = self.datasets[self.datasets["TableType"]==table_type]
 
-        if len(df) == 1 and df.iloc[0]["Year"] == MULTI:
-            df = df.iloc[0]
+        all_years = list(dfs["Year"])
+        years = set()
+        for k in range(len(all_years)):
+            if all_years[k] != MULTI:
+                years.add(all_years[k])
+            else:
+                df = dfs.iloc[k]
 
             data_type =DataType(df["DataType"])
             url = df["URL"]
@@ -246,22 +251,24 @@ class Source:
                 raise NotImplementedError("This needs to be tested before use")
                 if force_read:                    
                     table = pd.read_csv(url, parse_dates=True)
-                    years = table[date_field].dt.year
-                    years = years.unique()
+                        new_years = table[date_field].dt.year
+                        new_years = new_years.unique()
                 else:
                     raise ValueError("Getting the year of a CSV files requires reading in the whole file. " +
                                     "Loading in the table may be a better option. If getYears is still desired " +
                                     " for this case, use forceRead=True")    
             elif data_type ==DataType.ArcGIS:
-                years = data_loaders.get_years_argis(url, date_field)
+                    new_years = data_loaders.get_years_argis(url, date_field)
             elif data_type ==DataType.SOCRATA:
-                years = data_loaders.get_years_socrata(url, df["dataset_id"], date_field)
+                    new_years = data_loaders.get_years_socrata(url, df["dataset_id"], date_field)
             else:
                 raise ValueError(f"Unknown data type: {data_type}")
-        else:
-            years = list(df["Year"].unique())
+
+                years.update(new_years)
             
+        years = list(years)
         years.sort()
+
         return years
 
 

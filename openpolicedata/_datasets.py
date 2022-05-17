@@ -2,6 +2,7 @@ from enum import Enum
 import pandas as pd
 import numpy as np
 import re
+import warnings
 
 try:
     from .defs import TableType, DataType
@@ -26,7 +27,13 @@ def _build(csv_file):
         'dataset_id': pd.StringDtype(),
         'agency_field': pd.StringDtype()
     }
-    df = pd.read_csv(csv_file, dtype=columns)
+
+    try:
+        df = pd.read_csv(csv_file, dtype=columns)
+    except:
+        warnings.warn(f"Unable to load CSV file from {csv_file}. " +
+            "This may be due to a bad internet connection or bad filename/URL.")
+        return None
 
     if "Jurisdiction" in df:
         df.rename(columns={
