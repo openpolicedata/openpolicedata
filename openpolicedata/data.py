@@ -251,8 +251,8 @@ class Source:
                 raise NotImplementedError("This needs to be tested before use")
                 if force_read:                    
                     table = pd.read_csv(url, parse_dates=True)
-                        new_years = table[date_field].dt.year
-                        new_years = new_years.unique()
+                    new_years = table[date_field].dt.year
+                    new_years = new_years.unique()
                 else:
                     raise ValueError("Getting the year of a CSV files requires reading in the whole file. " +
                                     "Loading in the table may be a better option. If getYears is still desired " +
