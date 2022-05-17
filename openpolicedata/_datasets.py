@@ -45,7 +45,7 @@ class TableTypes(Enum):
     VEHICLE_PURSUITS = "VEHICLE PURSUITS"
 
 # Constants used in dataset parameters
-MULTI = "MULTI"    # For data sets that put multiple years or jurisdictions in 1 dataset
+MULTI = "MULTI"    # For data sets that put multiple years or agencies in 1 dataset
 NA = "NONE"         # None = not applicable (pandas converts "N/A" to NaN)
 
 # Location of table where datasets available in opd are stored
@@ -56,7 +56,7 @@ def _build(csv_file):
     columns = {
         'State' : pd.StringDtype(),
         'SourceName' : pd.StringDtype(),
-        'Jurisdiction': pd.StringDtype(),
+        'Agency': pd.StringDtype(),
         'TableType': pd.StringDtype(),
         'Year': np.dtype("O"),
         'Description': pd.StringDtype(),
@@ -64,14 +64,14 @@ def _build(csv_file):
         'URL': pd.StringDtype(),
         'date_field': pd.StringDtype(),
         'dataset_id': pd.StringDtype(),
-        'jurisdiction_field': pd.StringDtype()
+        'agency_field': pd.StringDtype()
     }
     df = pd.read_csv(csv_file, dtype=columns)
 
     # Convert years to int
     df["Year"] = [int(x) if x.isdigit() else x for x in df["Year"]]
     df["SourceName"] = df["SourceName"].str.replace("Police Department", "")
-    df["Jurisdiction"] = df["Jurisdiction"].str.replace("Police Department", "")
+    df["Agency"] = df["Agency"].str.replace("Police Department", "")
 
     for col in df.columns:
         df[col] = [x.strip() if type(x)==str else x for x in df[col]]
@@ -87,7 +87,7 @@ def _build(csv_file):
 
     df["URL"] = urls
 
-    keyVals = ['State', 'SourceName', 'Jurisdiction', 'TableType','Year']
+    keyVals = ['State', 'SourceName', 'Agency', 'TableType','Year']
     df.drop_duplicates(subset=keyVals, inplace=True)
     # df.sort_values(by=keyVals, inplace=True, ignore_index=True)
 
@@ -98,37 +98,37 @@ datasets = _build(csv_file)
 
 
 # Datasets that had issues that need added in the future
-# _builder.add_data(state="North Carolina", jurisdiction="Charlotte-Mecklenburg",
+# _builder.add_data(state="North Carolina", agency="Charlotte-Mecklenburg",
 #     table_type=TableTypes.TRAFFIC, 
 #     url=["https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPD/MapServer/14/"], 
 #     data_type=DataTypes.ArcGIS,
 #     description="Traffic Stops",
 #     lut_dict={"date_field" : "Month_of_Stop"})
-# _builder.add_data(state="Vermont", jurisdiction="Burlington",
+# _builder.add_data(state="Vermont", agency="Burlington",
 #     tableType=TableTypes.USE_OF_FORCE, 
 #     url=["https://data.burlingtonvt.gov/explore/dataset/bpd-use-of-force/"], 
 #     data_type=DataTypes.UNKNOWN,
 #     description="Use-of-Force incidents",
 #     lut_dict={"date_field" : "call_time"})
-# _builder.add_data(state="Vermont", jurisdiction="Burlington",
+# _builder.add_data(state="Vermont", agency="Burlington",
 #     tableType=TableTypes.TRAFFIC, 
 #     url=["https://data.burlingtonvt.gov/explore/dataset/bpd-traffic-stops/"], 
 #     data_type=DataTypes.UNKNOWN,
 #     description="Traffic Stops",
 #     lut_dict={"date_field" : "call_time"})
-# _builder.add_data(state="Vermont", jurisdiction="Burlington",
+# _builder.add_data(state="Vermont", agency="Burlington",
 #     tableType=TableTypes.ARRESTS, 
 #     url=["https://data.burlingtonvt.gov/explore/dataset/arrests/"], 
 #     data_type=DataTypes.UNKNOWN,
 #     description="Arrests",
 #     lut_dict={"date_field" : "arrest_date"})
-# _builder.add_data(state="Vermont", jurisdiction="Burlington",
+# _builder.add_data(state="Vermont", agency="Burlington",
 #     tableType=TableTypes.ARRAIGNMENT, 
 #     url=["https://data.burlingtonvt.gov/explore/dataset/arraignment-and-bail-data/"], 
 #     data_type=DataTypes.UNKNOWN,
 #     description="Case level data set on arraignment and bail",
 #     lut_dict={"date_field" : "arraignment_date"})
-# _builder.add_data(state="California", source_name="California Department of Justice", jurisdiction=MULTI,
+# _builder.add_data(state="California", source_name="California Department of Justice", agency=MULTI,
 #     tableType=TableTypes.DEATHES_IN_CUSTODY, 
 #     url=["https://data-openjustice.doj.ca.gov/sites/default/files/dataset/2021-07/DeathInCustody_2005-2020_20210603.xlsx"], 
 #     data_type=DataTypes.EXCEL,
@@ -136,7 +136,7 @@ datasets = _build(csv_file)
 #     lut_dict={"date_field" : "date_of_death_yyyy"})
 
 
-def datasets_query(source_name=None, state=None, jurisdiction=None, table_type=None):
+def datasets_query(source_name=None, state=None, agency=None, table_type=None):
     """Query for available datasets.
     Request a DataFrame containing available datasets based on input filters.
     Returns all datasets if no filters applied.
@@ -147,8 +147,8 @@ def datasets_query(source_name=None, state=None, jurisdiction=None, table_type=N
         OPTIONAL name of source to filter by source name
     state : str
         OPTIONAL name of state to filter by state
-    jurisdiction : str
-        OPTIONAL name of jurisdiction to filter by jurisdiction
+    agency : str
+        OPTIONAL name of agency to filter by agency
     table_type : str or TableTypes enum
         OPTIONAL name of table type to filter by type of data
 
@@ -163,8 +163,8 @@ def datasets_query(source_name=None, state=None, jurisdiction=None, table_type=N
     if source_name != None:
         query += "SourceName == '" + source_name + "' and "
 
-    if jurisdiction != None:
-        query += "Jurisdiction == '" + jurisdiction + "' and " 
+    if agency != None:
+        query += "Agency == '" + agency + "' and " 
 
     if table_type != None:
         if isinstance(table_type, TableTypes):

@@ -19,13 +19,13 @@ def get_datasets(csvfile):
 class TestDatasets:
     def test_duplicates(self, csvfile, source, last):
         datasets = get_datasets(csvfile)
-        assert not datasets.duplicated(subset=['State', 'SourceName', 'Jurisdiction', 'TableType','Year']).any()
+        assert not datasets.duplicated(subset=['State', 'SourceName', 'Agency', 'TableType','Year']).any()
 
     def test_check_columns(self, csvfile, source, last):
         columns = {
             'State' : pd.StringDtype(),
             'SourceName' : pd.StringDtype(),
-            'Jurisdiction': pd.StringDtype(),
+            'Agency': pd.StringDtype(),
             'TableType': pd.StringDtype(),
             'Year': np.dtype("O"),
             'Description': pd.StringDtype(),
@@ -33,7 +33,7 @@ class TestDatasets:
             'URL': pd.StringDtype(),
             'date_field': pd.StringDtype(),
             'dataset_id': pd.StringDtype(),
-            'jurisdiction_field': pd.StringDtype()
+            'agency_field': pd.StringDtype()
         }
 
         datasets = get_datasets(csvfile)
@@ -42,7 +42,7 @@ class TestDatasets:
             assert key in datasets
 
     def test_table_for_nulls(self, csvfile, source, last):
-        can_have_nulls = ["Description", "date_field", "dataset_id", "jurisdiction_field", "Year"]
+        can_have_nulls = ["Description", "date_field", "dataset_id", "agency_field", "Year"]
         datasets = get_datasets(csvfile)
         for col in datasets.columns:
             if not col in can_have_nulls:
@@ -62,10 +62,10 @@ class TestDatasets:
         datasets = get_datasets(csvfile)
         assert len([x for x in datasets["State"] if x not in all_states]) == 0
 
-    def test_jurisdiction_names(self, csvfile, source, last):
-        # Jurisdiction names should either match source name or be MULTI
+    def test_agency_names(self, csvfile, source, last):
+        # Agency names should either match source name or be MULTI
         datasets = get_datasets(csvfile)
-        rem = datasets["Jurisdiction"][datasets["Jurisdiction"] != datasets["SourceName"]]
+        rem = datasets["Agency"][datasets["Agency"] != datasets["SourceName"]]
         assert ((rem == opd._datasets.MULTI) | (rem == opd._datasets.NA)).all()
 
     def test_year(self, csvfile, source, last):
@@ -84,9 +84,9 @@ class TestDatasets:
         rem = datasets["date_field"][datasets["Year"] == opd._datasets.MULTI]
         assert pd.isnull(rem).sum() == 0
 
-    def test_jurisdictions_multi(self, csvfile, source, last):
+    def test_agencies_multi(self, csvfile, source, last):
         datasets = get_datasets(csvfile)
-        rem = datasets["jurisdiction_field"][datasets["Jurisdiction"] == opd._datasets.MULTI]
+        rem = datasets["agency_field"][datasets["Agency"] == opd._datasets.MULTI]
         assert pd.isnull(rem).sum() == 0
 
     def test_arcgis_urls(self, csvfile, source, last):
@@ -115,11 +115,11 @@ class TestDatasets:
         assert len(df)>0
         assert df_truth.equals(df)
 
-    def test_source_list_by_jurisdiction(self, csvfile, source, last):
+    def test_source_list_by_agency(self, csvfile, source, last):
         datasets = get_datasets(csvfile)
-        jurisdiction = "Fairfax County"
-        df = opd.datasets_query(jurisdiction=jurisdiction)
-        df_truth = datasets[datasets["Jurisdiction"]==jurisdiction]
+        agency = "Fairfax County"
+        df = opd.datasets_query(agency=agency)
+        df_truth = datasets[datasets["Agency"]==agency]
         assert len(df)>0
         assert df_truth.equals(df)
 
