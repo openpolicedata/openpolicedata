@@ -240,29 +240,29 @@ class Source:
             else:
                 df = dfs.iloc[k]
 
-            data_type =DataType(df["DataType"])
-            url = df["URL"]
-            if not pd.isnull(df["date_field"]):
-                date_field = df["date_field"]
-            else:
-                raise ValueError("No date_field is provided to identify the years")
-            
-            if data_type ==DataType.CSV:
-                raise NotImplementedError("This needs to be tested before use")
-                if force_read:                    
-                    table = pd.read_csv(url, parse_dates=True)
-                    new_years = table[date_field].dt.year
-                    new_years = new_years.unique()
+                data_type =DataType(df["DataType"])
+                url = df["URL"]
+                if not pd.isnull(df["date_field"]):
+                    date_field = df["date_field"]
                 else:
-                    raise ValueError("Getting the year of a CSV files requires reading in the whole file. " +
-                                    "Loading in the table may be a better option. If getYears is still desired " +
-                                    " for this case, use forceRead=True")    
-            elif data_type ==DataType.ArcGIS:
-                    new_years = data_loaders.get_years_argis(url, date_field)
-            elif data_type ==DataType.SOCRATA:
-                    new_years = data_loaders.get_years_socrata(url, df["dataset_id"], date_field)
-            else:
-                raise ValueError(f"Unknown data type: {data_type}")
+                    raise ValueError("No date_field is provided to identify the years")
+                
+                if data_type ==DataType.CSV:
+                    raise NotImplementedError("This needs to be tested before use")
+                    if force_read:                    
+                        table = pd.read_csv(url, parse_dates=True)
+                        new_years = table[date_field].dt.year
+                        new_years = new_years.unique()
+                    else:
+                        raise ValueError("Getting the year of a CSV files requires reading in the whole file. " +
+                                        "Loading in the table may be a better option. If getYears is still desired " +
+                                        " for this case, use forceRead=True")    
+                elif data_type ==DataType.ArcGIS:
+                        new_years = data_loaders.get_years_argis(url, date_field)
+                elif data_type ==DataType.SOCRATA:
+                        new_years = data_loaders.get_years_socrata(url, df["dataset_id"], date_field)
+                else:
+                    raise ValueError(f"Unknown data type: {data_type}")
 
                 years.update(new_years)
             
