@@ -14,6 +14,11 @@ import warnings
 warnings.filterwarnings(action='ignore', module='arcgis')
 
 class TestProduct:
+
+    def test_load_excel(self, csvfile, source, last):
+        print(f"Running Excel test")
+        df=data_loaders.load_excel('data/DeathInCustody_2005-2020_20210603.xlsx')
+
     def test_arcgis_year_input_empty(self, csvfile, source, last):
         url = 'https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_CRIME_STOPS_P/FeatureServer/32'
         date_field = 'TIME_PHONEPICKUP'

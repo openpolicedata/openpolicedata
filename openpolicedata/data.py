@@ -412,6 +412,9 @@ class Source:
             if data_type == _datasets.DataTypes.CSV:
                 table = data_loaders.load_csv(url, date_field=date_field, year_filter=year_filter, 
                     jurisdiction_field=jurisdiction_field, jurisdiction_filter=jurisdiction_filter, limit=self.__limit)
+            elif data_type == _datasets.DataTypes.EXCEL:
+                table = data_loaders.load_excel(url, date_field=date_field, year_filter=year_filter, 
+                    jurisdiction_field=jurisdiction_field, jurisdiction_filter=jurisdiction_filter, limit=self.__limit)                    
             elif data_type == _datasets.DataTypes.ArcGIS:
                 table = data_loaders.load_arcgis(url, date_field, year_filter, limit=self.__limit)
             elif data_type == _datasets.DataTypes.SOCRATA:
