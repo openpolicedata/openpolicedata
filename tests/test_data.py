@@ -272,9 +272,13 @@ class TestData:
 				# Adding a pause here to prevent issues with requesting from site too frequently
 				sleep(sleep_time)
 
+				for y in src.datasets[src.datasets["TableType"] == datasets.iloc[i]["TableType"]]["Year"]:
+					if y != MULTI:
+						years.remove(y)
+
 				if len(years)>1:
 					# It is preferred to to not use first or last year that start and stop of year are correct
-					year = years[1]
+					year = years[-2]
 				else:
 					year = years[0]
 
