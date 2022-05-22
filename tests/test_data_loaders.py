@@ -14,28 +14,28 @@ import warnings
 warnings.filterwarnings(action='ignore', module='arcgis')
 
 class TestProduct:
-    def test_arcgis_year_input_empty(self, csvfile, source, last):
+    def test_arcgis_year_input_empty(self, csvfile, source, last, skip):
         url = 'https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_CRIME_STOPS_P/FeatureServer/32'
         date_field = 'TIME_PHONEPICKUP'
         year = []
         with pytest.raises(ValueError) as e_info:
                 df=data_loaders.load_arcgis(url, date_field=date_field, year=year)
         
-    def test_arcgis_year_input_too_many(self, csvfile, source, last):
+    def test_arcgis_year_input_too_many(self, csvfile, source, last, skip):
         url = 'https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_CRIME_STOPS_P/FeatureServer/32'
         date_field = 'TIME_PHONEPICKUP'
         year = [2021, 2022, 2023]
         with pytest.raises(ValueError) as e_info:
                 df=data_loaders.load_arcgis(url, date_field=date_field, year=year) 
 
-    def test_arcgis_year_input_wrong_order(self, csvfile, source, last):
+    def test_arcgis_year_input_wrong_order(self, csvfile, source, last, skip):
         url = 'https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_CRIME_STOPS_P/FeatureServer/32'
         date_field = 'TIME_PHONEPICKUP'
         year = [2023, 2021]
         with pytest.raises(ValueError) as e_info:
                 df=data_loaders.load_arcgis(url, date_field=date_field, year=year) 
 
-    def test_arcgis_geopandas(self, csvfile, source, last):
+    def test_arcgis_geopandas(self, csvfile, source, last, skip):
         if _has_gpd:
             url = "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_CRIME_STOPS_P/FeatureServer/32/"
             date_field = "TIME_PHONEPICKUP"
@@ -47,7 +47,7 @@ class TestProduct:
         else:
             pass
 
-    def test_arcgis_pandas(self, csvfile, source, last):
+    def test_arcgis_pandas(self, csvfile, source, last, skip):
         data_loaders._use_gpd_force = False
         url = "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_CRIME_STOPS_P/FeatureServer/32/"
         date_field = "TIME_PHONEPICKUP"
@@ -59,7 +59,7 @@ class TestProduct:
 
         assert type(df) == pd.DataFrame
 
-    def test_socrata_geopandas(self, csvfile, source, last):
+    def test_socrata_geopandas(self, csvfile, source, last, skip):
         if _has_gpd:
             url = "data.montgomerycountymd.gov"
             data_set = "4mse-ku6q"
@@ -73,7 +73,7 @@ class TestProduct:
         else:
             pass
 
-    def test_socrata_pandas(self, csvfile, source, last):
+    def test_socrata_pandas(self, csvfile, source, last, skip):
         data_loaders._use_gpd_force = False
         url = "data.montgomerycountymd.gov"
         data_set = "4mse-ku6q"

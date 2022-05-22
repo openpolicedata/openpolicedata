@@ -23,11 +23,11 @@ def get_datasets(csvfile):
     return datasets_query()
 
 class TestData:
-	def test_source_url_name_unlimitable(self, csvfile, source, last):
+	def test_source_url_name_unlimitable(self, csvfile, source, last, skip):
 		if last == None:
 			last = float('inf')
 		datasets = get_datasets(csvfile)
-		for i in range(len(datasets)):
+		for i in range(len(datasets)):			
 			if i < len(datasets) - last:
 				continue
 			
@@ -42,11 +42,17 @@ class TestData:
 					assert ext in datasets.iloc[i]["URL"]
 
 
-	def test_source_urls(self, csvfile, source, last):
+	def test_source_urls(self, csvfile, source, last, skip):
 		if last == None:
 			last = float('inf')
 		datasets = get_datasets(csvfile)
+		if skip != None:
+			skip = skip.split(",")
+			skip = [x.strip() for x in skip]
+
 		for i in range(len(datasets)):
+			if skip != None and datasets.iloc[i]["SourceName"] in skip:
+				continue
 			if i < len(datasets) - last:
 				continue
 			if source != None and datasets.iloc[i]["SourceName"] != source:
@@ -74,15 +80,21 @@ class TestData:
 			sleep(sleep_time)
 
 	
-	def test_get_years(self, csvfile, source, last):
+	def test_get_years(self, csvfile, source, last, skip):
 		if last == None:
 			last = float('inf')
 		datasets = get_datasets(csvfile)
 		caught_exceptions = []
+		if skip != None:
+			skip = skip.split(",")
+			skip = [x.strip() for x in skip]
+
 		for i in range(len(datasets)):
-			if i < len(datasets) - last:
-				continue
 			if source != None and datasets.iloc[i]["SourceName"] != source:
+				continue
+			if skip != None and datasets.iloc[i]["SourceName"] in skip:
+				continue
+			if i < len(datasets) - last:
 				continue
 			if self.is_filterable(datasets.iloc[i]["DataType"]) or datasets.iloc[i]["Year"] != MULTI:
 				srcName = datasets.iloc[i]["SourceName"]
@@ -119,14 +131,20 @@ class TestData:
 			raise OPD_MultipleErrors(msg)
 
 
-	def test_source_download_limitable(self, csvfile, source, last):
+	def test_source_download_limitable(self, csvfile, source, last, skip):
 		if last == None:
 			last = float('inf')
 		datasets = get_datasets(csvfile)
 		num_stanford = 0
 		max_num_stanford = 1  # This data is standardized. Probably no need to test more than 1
 		caught_exceptions = []
+		if skip != None:
+			skip = skip.split(",")
+			skip = [x.strip() for x in skip]
+			
 		for i in range(len(datasets)):
+			if skip != None and datasets.iloc[i]["SourceName"] in skip:
+				continue
 			if i < len(datasets) - last:
 				continue
 			if source != None and datasets.iloc[i]["SourceName"] != source:
@@ -182,11 +200,17 @@ class TestData:
 			raise OPD_MultipleErrors(msg)
 
 	
-	def test_get_agencies(self, csvfile, source, last):
+	def test_get_agencies(self, csvfile, source, last, skip):
 		if last == None:
 			last = float('inf')
 		datasets = get_datasets(csvfile)
+		if skip != None:
+			skip = skip.split(",")
+			skip = [x.strip() for x in skip]
+			
 		for i in range(len(datasets)):
+			if skip != None and datasets.iloc[i]["SourceName"] in skip:
+				continue
 			if i < len(datasets) - last:
 				continue
 			if source != None and datasets.iloc[i]["SourceName"] != source:
@@ -212,7 +236,7 @@ class TestData:
 				sleep(sleep_time)
 
 
-	def test_get_agencies_name_match(self, csvfile, source, last):
+	def test_get_agencies_name_match(self, csvfile, source, last, skip):
 		if last == None:
 			last = float('inf')
 		get_datasets(csvfile)
@@ -224,7 +248,7 @@ class TestData:
 		assert len(agencies) == 2
 				
 				
-	def test_agency_filter(self, csvfile, source, last):
+	def test_agency_filter(self, csvfile, source, last, skip):
 		if last == None:
 			last = float('inf')
 		get_datasets(csvfile)
@@ -239,13 +263,19 @@ class TestData:
 		assert table.table.iloc[0][table._agency_field] == agency
 
 	
-	@pytest.mark.slow(reason="This is a slow test tgat should be run before a major commit.")
-	def test_load_year(self, csvfile, source, last):
+	@pytest.mark.slow(reason="This is a slow test that should be run before a major commit.")
+	def test_load_year(self, csvfile, source, last, skip):
 		if last == None:
 			last = float('inf')
 		datasets = get_datasets(csvfile)
 		# Test that filtering for a year works at the boundaries
+		if skip != None:
+			skip = skip.split(",")
+			skip = [x.strip() for x in skip]
+			
 		for i in range(len(datasets)):
+			if skip != None and datasets.iloc[i]["SourceName"] in skip:
+				continue
 			if i < len(datasets) - last:
 				continue
 			if source != None and datasets.iloc[i]["SourceName"] != source:
@@ -351,11 +381,17 @@ class TestData:
 
 
 	@pytest.mark.slow(reason="This is a slow test and should be run before a major commit.")
-	def test_source_download_not_limitable(self, csvfile, source, last):
+	def test_source_download_not_limitable(self, csvfile, source, last, skip):
 		if last == None:
 			last = float('inf')
 		datasets = get_datasets(csvfile)
+		if skip != None:
+			skip = skip.split(",")
+			skip = [x.strip() for x in skip]
+			
 		for i in range(len(datasets)):
+			if skip != None and datasets.iloc[i]["SourceName"] in skip:
+				continue
 			if i < len(datasets) - last:
 				continue
 			if source != None and datasets.iloc[i]["SourceName"] != source:
@@ -413,5 +449,4 @@ class TestData:
 if __name__ == "__main__":
 	# For testing
 	tp = TestData()
-	# 29.Apr 2022 19:21:33 Testing 297 of 300: Los Angeles County OFFICER-INVOLVED SHOOTINGS - CIVILIANS table
-	tp.test_source_download_limitable("C:\\Users\\matth\\repos\\sowd-opd-data\\opd_source_table.csv", "Fayetteville", None) 
+	tp.test_load_year(None, "San Francisco", None, "Fayetteville") 
