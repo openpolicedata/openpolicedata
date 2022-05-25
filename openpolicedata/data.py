@@ -5,12 +5,12 @@ from datetime import datetime
 if __name__ == '__main__':
     import data_loaders
     import _datasets
-    # import preproc
+    import preproc
     from defs import TableType, DataType, MULTI
 else:
     from . import data_loaders
     from . import _datasets
-    # from . import preproc
+    from . import preproc
     from .defs import TableType, DataType, MULTI
 
 class Table:
@@ -148,6 +148,12 @@ class Table:
             Filename
         '''
         return get_csv_filename(self.state, self.source_name, self.agency, self.table_type, self.year)
+
+    def standardize(self):
+        preproc.standardize(self.table, self.table_type, 
+            date_column=self._date_field, 
+            agency_column=self._agency_field, 
+            source_name=self.source_name)
 
 
 class Source:
