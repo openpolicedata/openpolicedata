@@ -9,3 +9,6 @@ class OPD_TooManyRequestsError(Exception):
 
 class OPD_MultipleErrors(Exception):
     pass
+
+class OPD_arcgisAuthInfoError(Exception):
+    pass
