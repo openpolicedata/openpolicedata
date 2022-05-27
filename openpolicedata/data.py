@@ -118,6 +118,10 @@ class Table:
             self._agency_field = source["agency_field"]
 
 
+    def __repr__(self) -> str:
+        skip = ["details", "table"]
+        return ',\n'.join("%s: %s" % item for item in vars(self).items() if (item[0] not in skip and item[0][0] != "_"))
+
     def to_csv(self, output_dir=None, filename=None):
         '''Export table to CSV file. Use default filename for data that will
         be reloaded as an openpolicedata Table object
@@ -205,6 +209,10 @@ class Source:
             raise ValueError("No Sources Found")
         elif self.datasets["State"].nunique() > 1:
             raise ValueError("Not all sources are from the same state")
+
+
+    def __repr__(self) -> str:
+        return str(self.datasets)
 
 
     def get_tables_types(self):
@@ -634,7 +642,7 @@ if __name__ == '__main__':
 
         table_print = datasets.iloc[i]["TableType"]
         now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
-        print(f"{now }Saving CSV for dataset {i} of {len(datasets)}: {srcName} {table_print} table")
+        print(f"{now} Saving CSV for dataset {i} of {len(datasets)}: {srcName} {table_print} table")
 
         src = Source(srcName, state=state)
 
