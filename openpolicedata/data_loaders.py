@@ -347,14 +347,14 @@ def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, sel
                 if offset==0:
                     df = new_gdf
                 else:
-                    df = df.append(new_gdf)
+                    df = pd.concat([df, new_gdf], ignore_index=True)
         else:
             output_type = "DataFrame"
             rows = pd.DataFrame.from_records(results)
             if offset==0:
                 df = pd.DataFrame(rows)
             else:
-                df = df.append(rows)
+                df = pd.concat([df, rows], ignore_index=True)
 
         N = len(results)
         offset += N
