@@ -73,11 +73,11 @@ Show agencies (police departments) that have data available. This is typically a
 > print(agencies)
 ['Arlington County Police Department', "Arlington County Sheriff's Office"]
 ```
-### load_from_url(year, table_type=None, agency_filter=None)
-Import data from the source. Data for a year (i.e. 2020) or a range of years (i.e. [2020, 2022]) can be requested. If more than one data type is available, `table_type` must be specified. Optionally, for datasets containing multiple agencies (police departments) data, `agency_filter` can be used to request data for a single agency.
+### load_from_url(year, table_type=None, agency=None)
+Import data from the source. Data for a year (i.e. 2020) or a range of years (i.e. [2020, 2022]) can be requested. If more than one data type is available, `table_type` must be specified. Optionally, for datasets containing multiple agencies (police departments) data, `agency` can be used to request data for a single agency.
 ```
 > agency = "Arlington County Police Department"
-> tbl = src.load_from_url(year=2021, table_type="STOPS", agency_filter=agency)
+> tbl = src.load_from_url(year=2021, table_type="STOPS", agency=agency)
 > tbl.table.head(n=3)
 ```
 
@@ -96,11 +96,11 @@ Export table to CSV. The default output directory is the current directory. The 
 ```
 > tbl.to_csv()
 ```
-### load_from_csv(year, output_dir=None, table_type=None, agency_filter=None)
-Import table from previously exported CSV. The directory to look in defaults to the current directory. The CSV file must have been automatically generated (see [to_csv](#tocsvoutputdirnone-filenamenone)). `year`, `table_type`, and `agency_filter` are defined the same as for [load_from_url](#loadfromurlyear-tabletypenone-agencyfilternone).
+### load_from_csv(year, output_dir=None, table_type=None, agency=None)
+Import table from previously exported CSV. The directory to look in defaults to the current directory. The CSV file must have been automatically generated (see [to_csv](#tocsvoutputdirnone-filenamenone)). `year`, `table_type`, and `agency` are defined the same as for [load_from_url](#loadfromurlyear-tabletypenone-agencyfilternone).
 ```
 > new_src = opd.Source(source_name="Virginia")
-new_t = new_src.load_from_csv(year=2021, agency_filter=agency)
+new_t = new_src.load_from_csv(year=2021, agency=agency)
 > tbl.table.head(n=3)
 ```
 
