@@ -124,7 +124,7 @@ def load_arcgis(url, date_field=None, year=None, limit=None):
     except Exception as e:
         if len(e.args)>0:
             if "Error Code: 500" in e.args[0]:
-                raise OPD_DataUnavailableError(e.args[0])
+                raise OPD_DataUnavailableError(e.args[0], url, f"Layer # = {layer_num}")
             elif "A general error occurred: 'authInfo'" in e.args[0]:
                 raise OPD_arcgisAuthInfoError(e.args[0])
         else:
