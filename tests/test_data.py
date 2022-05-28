@@ -256,7 +256,7 @@ class TestData:
 		agency="Fairfax County Police Department"
 		# For speed, set private limit parameter so that only a single entry is requested
 		src._Source__limit = 100
-		table = src.load_from_url(2021, agency_filter=agency)
+		table = src.load_from_url(2021, agency=agency)
 		
 		assert len(table.table)==100
 		assert table.table[table._agency_field].nunique()==1
@@ -287,9 +287,9 @@ class TestData:
 				if datasets.iloc[i]["Agency"] == MULTI and \
 					srcName == "Virginia":
 					# Reduce size of data load by filtering by agency
-					agency_filter = "Henrico Police Department"
+					agency = "Henrico Police Department"
 				else:
-					agency_filter = None
+					agency = None
 
 				table_print = datasets.iloc[i]["TableType"]
 				now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
@@ -315,7 +315,7 @@ class TestData:
 				print(f"Testing for year {year}")
 
 				table = src.load_from_url(year, datasets.iloc[i]["TableType"], 
-										agency_filter=agency_filter)
+										agency=agency)
 
 				sleep(sleep_time)
 
@@ -342,7 +342,7 @@ class TestData:
 				stop_date = datetime.strftime(dts.iloc[0]+timedelta(days=1), "%Y-%m-%d")
 
 				table_start = src.load_from_url([start_date, stop_date], datasets.iloc[i]["TableType"], 
-												agency_filter=agency_filter)
+												agency=agency)
 				sleep(sleep_time)
 				dts_start = table_start.table[datasets.iloc[i]["date_field"]]
 
@@ -366,7 +366,7 @@ class TestData:
 				stop_date  = str(year+1) + "-01-10"  
 
 				table_stop = src.load_from_url([start_date, stop_date], datasets.iloc[i]["TableType"], 
-												agency_filter=agency_filter)
+												agency=agency)
 				sleep(sleep_time)
 				dts_stop = table_stop.table[datasets.iloc[i]["date_field"]]
 
