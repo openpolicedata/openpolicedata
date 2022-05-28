@@ -37,7 +37,7 @@ _use_gpd_force = None
 # Windows: https://www.wikihow.com/Create-an-Environment-Variable-in-Windows-10
 default_sodapy_key = os.environ.get("SODAPY_API_KEY")
 
-def load_csv(url, date_field=None, year_filter=None, agency_field=None, agency_filter=None, limit=None):
+def load_csv(url, date_field=None, year_filter=None, agency_field=None, agency=None, limit=None):
     '''Download CSV file to pandas DataFrame
     
     Parameters
@@ -50,7 +50,7 @@ def load_csv(url, date_field=None, year_filter=None, agency_field=None, agency_f
         (Optional) Either the year or the year range [first_year, last_year] for the data that is being requested. None value returns data for all years.
     agency_field : str
         (Optional) Name of the column that contains the agency name (i.e. name of the police departments)
-    agency_filter : str
+    agency : str
         (Optional) Name of the agency to filter for. None value returns data for all agencies.
     limit : int
         (Optional) Only returns the first limit rows of the CSV
@@ -79,7 +79,7 @@ def load_csv(url, date_field=None, year_filter=None, agency_field=None, agency_f
 
 
     table = filter_dataframe(table, date_field=date_field, year_filter=year_filter, 
-        agency_field=agency_field, agency_filter=agency_filter)
+        agency_field=agency_field, agency=agency)
 
     return table
 
@@ -396,7 +396,7 @@ def _process_date(date, inclusive, date_field=None):
     return start_date, stop_date
 
 
-def filter_dataframe(df, date_field=None, year_filter=None, agency_field=None, agency_filter=None):
+def filter_dataframe(df, date_field=None, year_filter=None, agency_field=None, agency=None):
     '''Load CSV file to pandas DataFrame
     
     Parameters
@@ -409,15 +409,15 @@ def filter_dataframe(df, date_field=None, year_filter=None, agency_field=None, a
         (Optional) Either the year or the year range [first_year, last_year] for the data that is being requested.  None value returns data for all years.
     agency_field : str
         (Optional) Name of the column that contains the agency name (i.e. name of the police departments)
-    agency_filter : str
+    agency : str
         (Optional) Name of the agency to filter for. None value returns data for all agencies.
     '''
     
     if year_filter != None and date_field != None:
         df = df[df[date_field].dt.year == year_filter]
 
-    if agency_filter != None and agency_field != None:
-        df = df.query(agency_field + " = '" + agency_filter + "'")
+    if agency != None and agency_field != None:
+        df = df.query(agency_field + " = '" + agency + "'")
 
     return df
 
