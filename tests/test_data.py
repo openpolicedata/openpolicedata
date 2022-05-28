@@ -13,6 +13,7 @@ from datetime import datetime
 from datetime import timedelta
 import pandas as pd
 from time import sleep
+import warnings
 
 sleep_time = 0.1
 
@@ -85,6 +86,7 @@ class TestData:
 			last = float('inf')
 		datasets = get_datasets(csvfile)
 		caught_exceptions = []
+		caught_exceptions_warn = []
 		if skip != None:
 			skip = skip.split(",")
 			skip = [x.strip() for x in skip]
@@ -105,14 +107,17 @@ class TestData:
 				now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
 				print(f"{now} Testing {i} of {len(datasets)}: {srcName} {table_print} table")
 
-				# try:
-				years = src.get_years(datasets.iloc[i]["TableType"])
-				# except (OPD_DataUnavailableError, OPD_TooManyRequestsError, OPD_arcgisAuthInfoError) as e:
-				# 	# Catch exceptions related to URLs not functioning
-				# 	caught_exceptions.append(e)
-				# 	continue
-				# except:
-				# 	raise
+				try:
+					years = src.get_years(datasets.iloc[i]["TableType"])
+				except OPD_DataUnavailableError as e:
+					caught_exceptions_warn.append(e)
+					continue
+				except (OPD_TooManyRequestsError, OPD_arcgisAuthInfoError) as e:
+					# Catch exceptions related to URLs not functioning
+					caught_exceptions.append(e)
+					continue
+				except:
+					raise
 
 				if datasets.iloc[i]["Year"] != MULTI:
 					assert datasets.iloc[i]["Year"] in years
@@ -130,6 +135,9 @@ class TestData:
 				msg += "\t" + e.args[0] + "\n"
 			raise OPD_MultipleErrors(msg)
 
+		for e in caught_exceptions_warn:
+			warnings.warn(str(e))
+
 
 	def test_source_download_limitable(self, csvfile, source, last, skip):
 		if last == None:
@@ -138,6 +146,7 @@ class TestData:
 		num_stanford = 0
 		max_num_stanford = 1  # This data is standardized. Probably no need to test more than 1
 		caught_exceptions = []
+		caught_exceptions_warn = []
 		if skip != None:
 			skip = skip.split(",")
 			skip = [x.strip() for x in skip]
@@ -167,7 +176,10 @@ class TestData:
 
 				try:
 					table = src.load_from_url(datasets.iloc[i]["Year"], datasets.iloc[i]["TableType"])
-				except (OPD_DataUnavailableError, OPD_TooManyRequestsError, OPD_arcgisAuthInfoError) as e:
+				except OPD_DataUnavailableError as e:
+					caught_exceptions_warn.append(e)
+					continue
+				except (OPD_TooManyRequestsError, OPD_arcgisAuthInfoError) as e:
 					# Catch exceptions related to URLs not functioning
 					caught_exceptions.append(e)
 					continue
@@ -198,6 +210,9 @@ class TestData:
 			for e in caught_exceptions:
 				msg += "\t" + e.args[0] + "\n"
 			raise OPD_MultipleErrors(msg)
+
+		for e in caught_exceptions_warn:
+			warnings.warn(str(e))
 
 	
 	def test_get_agencies(self, csvfile, source, last, skip):
@@ -273,6 +288,8 @@ class TestData:
 			skip = skip.split(",")
 			skip = [x.strip() for x in skip]
 			
+		caught_exceptions = []
+		caught_exceptions_warn = []
 		for i in range(len(datasets)):
 			if skip != None and datasets.iloc[i]["SourceName"] in skip:
 				continue
@@ -297,7 +314,17 @@ class TestData:
 
 				src = data.Source(srcName, state=state)
 
-				years = src.get_years(datasets.iloc[i]["TableType"])
+				try:
+					years = src.get_years(datasets.iloc[i]["TableType"])
+				except OPD_DataUnavailableError as e:
+					caught_exceptions_warn.append(e)
+					continue
+				except (OPD_TooManyRequestsError, OPD_arcgisAuthInfoError) as e:
+					# Catch exceptions related to URLs not functioning
+					caught_exceptions.append(e)
+					continue
+				except:
+					raise
 
 				# Adding a pause here to prevent issues with requesting from site too frequently
 				sleep(sleep_time)
@@ -379,6 +406,17 @@ class TestData:
 				dts_stop = dts_stop[dts_stop.dt.year == year]
 				assert dts.iloc[-1] == dts_stop.iloc[-1]
 
+		if len(caught_exceptions)==1:
+			raise caught_exceptions[0]
+		elif len(caught_exceptions)>0:
+			msg = f"{len(caught_exceptions)} URL errors encountered:\n"
+			for e in caught_exceptions:
+				msg += "\t" + e.args[0] + "\n"
+			raise OPD_MultipleErrors(msg)
+
+		for e in caught_exceptions_warn:
+			warnings.warn(str(e))
+
 
 	@pytest.mark.slow(reason="This is a slow test and should be run before a major commit.")
 	def test_source_download_not_limitable(self, csvfile, source, last, skip):
@@ -449,4 +487,4 @@ class TestData:
 if __name__ == "__main__":
 	# For testing
 	tp = TestData()
-	tp.test_load_year(None, "San Francisco", None, "Fayetteville") 
+	tp.test_source_download_limitable(None, "Orlando", None, None) 
