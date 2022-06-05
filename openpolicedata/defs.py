@@ -134,10 +134,12 @@ NA = "NONE"         # None = not applicable (pandas converts "N/A" to NaN)
 
 _col_names = [
     "DATE", 
-    "CIVILIAN_RACE",
-    "CIVILIAN_ETHNICITY",
-    "OFFICER_RACE",
-    "OFFICER_ETHNICITY",
+    "TIME",
+    "RACE_CIVILIAN",
+    "ETHNICITY_CIVILIAN",
+    "RACE_OFFICER",
+    "ETHNICITY_OFFICER",
+    "RACE_OFF_AND_CIV",
     "AGENCY"
 ]
 columns = namedtuple('Columns',
@@ -153,6 +155,7 @@ _race_names = [
     "HAWAIIAN",
     "LATINO",
     "MIDDLE_EASTERN",
+    "MIDDLE_EASTERN_SOUTH_ASIAN",
     "MULTIPLE",
     "NATIVE_AMERICAN",
     "OTHER",
@@ -168,7 +171,8 @@ _map = {
     "LATINO" : "HISPANIC / LATINO",
     "MIDDLE_EASTERN" : "MIDDLE EASTERN",
     "NATIVE_AMERICAN" : "NATIVE AMERICAN",
-    "OTHER_UNKNOWN" : "OTHER / UNKNOWN"
+    "OTHER_UNKNOWN" : "OTHER / UNKNOWN",
+    "MIDDLE_EASTERN_SOUTH_ASIAN" : "MIDDLE EASTERN / SOUTH ASIAN"
 }
 _race_defaults = [_map.get(x,x) for x in _race_names]
 races = namedtuple('Races',
