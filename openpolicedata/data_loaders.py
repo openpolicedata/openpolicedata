@@ -309,6 +309,13 @@ def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, sel
         results = client.get(data_set, where=where,
             limit=limit,offset=offset, select=select)
 
+        if use_gpd and output_type==None:
+            # Check for geo info
+            for r in results:
+                if "geolocation" in r or "geocoded_column" in r:
+                    output_type = "GeoDataFrame"
+                    break
+
         if output_type == "set":
             if offset==0:
                 df = set()
@@ -326,18 +333,24 @@ def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, sel
             if len(results)>0:
                 [df.append(row[select]) for row in results]
 
-        elif use_gpd and (output_type=="GeoDataFrame" or \
-            (output_type==None and len(results)>0 and "geolocation" in results[0])):
+        elif use_gpd and output_type=="GeoDataFrame":
             output_type = "GeoDataFrame"
             # Presumed to be a list of properties that possibly include coordinates
             geojson = {"type" : "FeatureCollection", "features" : []}
             for p in results:
                 feature = {"type" : "Feature", "properties" : p}
-                geo = feature["properties"].pop("geolocation")
-                if list(geo.keys()) == ["human_address"]:
-                    feature["geometry"] = {"type" : "Point", "coordinates" : (nan, nan)}  
+                if "geolocation" in feature["properties"]:
+                    geo = feature["properties"].pop("geolocation")
+                    if list(geo.keys()) == ["human_address"]:
+                        feature["geometry"] = {"type" : "Point", "coordinates" : (nan, nan)}  
+                    elif "coordinates" in geo:
+                        feature["geometry"] = geo
+                    else:
+                        feature["geometry"] = {"type" : "Point", "coordinates" : (float(geo["longitude"]), float(geo["latitude"]))}
+                elif "geocoded_column" in feature["properties"]:
+                    feature["geometry"] = feature["properties"].pop("geocoded_column")
                 else:
-                    feature["geometry"] = {"type" : "Point", "coordinates" : (float(geo["longitude"]), float(geo["latitude"]))}  
+                    feature["geometry"] = {"type" : "Point", "coordinates" : (nan, nan)} 
                 
                 geojson["features"].append(feature)
 
