@@ -153,11 +153,12 @@ class Table:
         '''
         return get_csv_filename(self.state, self.source_name, self.agency, self.table_type, self.year)
 
-    def standardize(self):
+    def standardize(self, keep_raw=False):
         preproc.standardize(self.table, self.table_type, 
             date_column=self._date_field, 
             agency_column=self._agency_field, 
-            source_name=self.source_name)
+            source_name=self.source_name,
+            keep_raw=keep_raw)
 
 
 class Source:
@@ -613,7 +614,12 @@ if __name__ == '__main__':
     prev_sources = []
     prev_tables = []
     output_dir = ".\\data"
-    action =None # "standardize"
+    action = "standardize"
+    issue_datasets = ["Austin", "Chapel Hill", "Fayetteville", "San Diego"]
+    is_austin = datasets["SourceName"].apply(lambda x : x in issue_datasets)
+    not_austin = datasets["SourceName"].apply(lambda x : x not in issue_datasets)
+    # Austin has unknown race values. Emailed dataset owner.
+    datasets = pd.concat([datasets[not_austin], datasets[is_austin]])
     for i in range(len(datasets)):
         if "stanford.edu" in datasets.iloc[i]["URL"]:
             num_stanford += 1
@@ -647,27 +653,29 @@ if __name__ == '__main__':
         src = Source(srcName, state=state)
 
         if action == "standardize":
-            if datasets.iloc[i]["DataType"] ==DataType.CSV.value:
-                table = src.load_from_csv(datasets.iloc[i]["Year"], table_type=datasets.iloc[i]["TableType"])
-            else:
-                year = date.today().year
-                table = None
-                for y in range(year, year-20, -1):
-                    try:
-                        csv_filename = src.get_csv_filename(y, output_dir, datasets.iloc[i]["TableType"], 
-                            agency=agency)
-                    except ValueError as e:
-                        if "There are no sources matching tableType" in e.args[0]:
-                            continue
-                        else:
-                            raise
-                    except:
+            year = date.today().year
+            table = None
+            csv_filename = "NOT A FILE"
+            for y in range(year, year-20, -1):
+                try:
+                    csv_filename = src.get_csv_filename(y, output_dir, datasets.iloc[i]["TableType"], 
+                        agency=agency)
+                except ValueError as e:
+                    if "There are no sources matching tableType" in e.args[0]:
+                        continue
+                    else:
                         raise
-                    
-                    if path.exists(csv_filename):
-                        table = src.load_from_csv(y, table_type=datasets.iloc[i]["TableType"], 
-                            agency=agency,output_dir=output_dir)
-                        break
+                except:
+                    raise
+                
+                if path.exists(csv_filename):
+                    table = src.load_from_csv(y, table_type=datasets.iloc[i]["TableType"], 
+                        agency=agency,output_dir=output_dir)
+                    break
+
+            if not path.exists(csv_filename):
+                table = src.load_from_csv(datasets.iloc[i]["Year"], table_type=datasets.iloc[i]["TableType"], 
+                        agency=agency,output_dir=output_dir)
 
             table.standardize()
         else:

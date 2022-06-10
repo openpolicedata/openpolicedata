@@ -32,78 +32,91 @@ def standardize(df, table_type, date_column=None, agency_column=None, source_nam
     
     return maps
 
+def _pattern_search(all_cols, select_cols, patterns, match_substr):
+    matches = []
+    for p in patterns:
+        if p[0].lower() == "equals":
+            matches = [x for x in select_cols if x.lower() == p[1].lower()]
+        elif p[0].lower() == "contains":
+            matches = [x for x in select_cols if p[1].lower() in x.lower()]
+        elif p[0].lower() == "format":
+            if type(match_substr) != str:
+                raise TypeError("match_substr should be a string")
+            guess = match_substr[0].lower()
+            pattern = p[1]
+            
+            def find_matches(columns, guess, match_substr, idx, pattern):
+                matches_nocase = [x for x in columns if x.lower() == pattern.format(guess).lower()]
+                if len(matches_nocase)>0:
+                    return [x for x in columns if x.lower() in matches_nocase]
 
-def _id_column(df, table_type, col_map, std_col_name, match_substr, known_col_name=None, 
-    exclude_table_types="ALL", exclude_col_names=[], secondary_patterns=[], validator=None):
+                for k,val in enumerate(match_substr[idx:]):
+                    new_guess = guess + val
+                    matches = find_matches(columns, new_guess, match_substr, idx+k+1, pattern)
+                    if len(matches)>0:
+                        return matches
+
+                return []
+
+            matches = find_matches(all_cols, guess, match_substr, 1, pattern)
+        else:
+            raise ValueError("Unknown pattern type")
+
+        if len(matches) > 0:
+            break
+
+    return matches
+
+
+def _find_col_matches(df, table_type, match_substr, known_col_name=None, 
+    exclude_table_types=[], not_required_table_types="ALL", exclude_col_names=[], secondary_patterns=[], validator=None):
+
+    if table_type in exclude_table_types:
+        return []
+
     if known_col_name != None:
-        col_map[std_col_name] = known_col_name
+        if known_col_name not in df.columns:
+            raise ValueError(f"{known_col_name} is not a column")
+        return [known_col_name]
     else:
-        match_cols = [x for x in df.columns if match_substr.lower() in x.lower()]
+        if type(match_substr) == str:
+            match_substr = [match_substr]
+
+        match_cols = []
+        for s in match_substr:
+            match_cols = [x for x in df.columns if s.lower() in x.lower()]
+            if len(match_cols)>0:
+                break
+
+        if len(match_cols)==0 and len(match_substr)>0:
+            match_cols = _pattern_search(df.columns, match_cols, secondary_patterns, match_substr[0])
+            
         if len(match_cols)==0:
-            if exclude_table_types != "ALL" and table_type not in exclude_table_types:
-                raise ValueError(f"Column for {std_col_name} not found with substring {match_substr}")
+            if not_required_table_types != "ALL" and table_type not in not_required_table_types:
+                raise ValueError(f"Column not found with substring {match_substr}")
         elif len(match_cols)>1:
-            found = False
-            for p in secondary_patterns:
-                if p[0].lower() == "equals":
-                    matches = [x for x in match_cols if x.lower() == p[1].lower()]
-                elif p[0].lower() == "contains":
-                    matches = [x for x in match_cols if p[1].lower() in x.lower()]
-                elif p[0].lower() == "format":
-                    guess = match_substr[0].lower()
-                    pattern = p[1]
-                    
-                    def find_matches(columns, guess, match_substr, idx, pattern):
-                        matches_nocase = [x for x in columns if x.lower() == pattern.format(guess).lower()]
-                        if len(matches_nocase)>0:
-                            matches = []
-                            for col in df.columns:
-                                if col.lower() in matches_nocase:
-                                    matches.append(col)
-                            return matches
-
-                        for k,val in enumerate(match_substr[idx:]):
-                            new_guess = guess + val
-                            matches = find_matches(columns, new_guess, match_substr, idx+k+1, pattern)
-                            if matches != None:
-                                return matches
-
-                        return None
-
-                    matches = find_matches(df.columns, guess, match_substr, 1, pattern)
-                else:
-                    raise ValueError("Unknown pattern type")
-
-                if len(matches) > 0:
-                    match_cols = matches
-                    found = True
-                    break
-
-            if not found:
+            new_matches = _pattern_search(df.columns, match_cols, secondary_patterns, match_substr[0])
+            if len(new_matches)>0:
+                match_cols = new_matches
+            elif len(match_cols)==0 and len(secondary_patterns)>0:
                 raise NotImplementedError()
 
-            if len(matches) > 1:
+            if len(match_cols) > 1:
                 if validator != None:
-                    is_match = []
-                    for col in match_cols:
+                    match_cols_test = match_cols
+                    match_cols = []
+                    for col in match_cols_test:
                         try:
                             validator(df[col])
-                            is_match.append(True)
+                            match_cols.append(col)
                         except:
-                            is_match.append(False)
+                            pass
 
-                    match_idx = [k for k,x in enumerate(is_match) if x ]
-                    if len(match_idx) == 0:
-                        raise NotImplementedError()
-                    elif len(match_idx) > 1:
-                        raise NotImplemented()
+        for e in exclude_col_names:
+            if e in match_cols:
+                match_cols.remove(e)
 
-                    match_cols = match_cols[match_idx[0]:match_idx[0]+1]
-                else:
-                    raise NotImplementedError()
-
-        if std_col_name not in exclude_col_names:
-            col_map[std_col_name] = match_cols[0]
+        return match_cols
 
 
 def _id_date_column(df, table_type, date_column, col_map):
@@ -209,20 +222,19 @@ def _id_time_column(df, col_map):
                     raise NotImplementedError()
 
 
-def _id_race_column(df, table_type, source_name, col_map):
-    race_cols = [x for x in df.columns if "race" in x.lower()]
-
-    if len(race_cols) == 0:
-        # California data, RAE = Race and Ethnicity
-        race_cols = [x for x in df.columns if "rae_full" in x.lower()]  
+def _id_race_column(df, table_type, source_name, col_map, race_cols):
+    # Need to determine if race column is for officers or civilians
 
     race_found = True
+    types = []
     if len(race_cols) == 0:
         known_tables_wo_race = [
             ("Montgomery County", defs.TableType.COMPLAINTS),
             ("Denver", defs.TableType.STOPS),
             ("Bloomington", defs.TableType.CALLS_FOR_SERVICE),
             ("Asheville", defs.TableType.CALLS_FOR_SERVICE),
+            ("San Francisco", defs.TableType.CALLS_FOR_SERVICE),
+            ("Cincinnati", defs.TableType.CALLS_FOR_SERVICE),
             ("Lincoln", defs.TableType.VEHICLE_PURSUITS)
         ]
         if table_type == defs.TableType.USE_OF_FORCE_INCIDENTS or \
@@ -272,26 +284,34 @@ def _id_race_column(df, table_type, source_name, col_map):
         for k in range(len(race_cols)):
             col_map[types[k]] = race_cols[k]
 
-        eth_cols = [x for x in df.columns if "ethnicity" in x.lower()]
-        eth_types = []
-        validation_types = []
-        for k in range(len(eth_cols)):
-            if "officer" in eth_cols[k].lower() or \
-                "offcr" in eth_cols[k].lower() or is_officer_table:
-                eth_types.append(defs.columns.ETHNICITY_OFFICER)
-                validation_types.append(defs.columns.RACE_OFFICER)
-            else:
-                eth_types.append(defs.columns.ETHNICITY_CIVILIAN)
-                validation_types.append(defs.columns.RACE_CIVILIAN)
+    return types
 
-        if len(set(eth_types)) != len(eth_types):
-            raise NotImplementedError()
 
-        if any([x not in types for x in validation_types]):
-            raise NotImplementedError()
+def _id_ethnicity_column(table_type, col_map, race_types, eth_cols):
+    if len(eth_cols)==0:
+        return
 
-        for k in range(len(eth_cols)):
-            col_map[eth_types[k]] = eth_cols[k]
+    eth_types = []
+    validation_types = []
+    is_officer_table = table_type == defs.TableType.EMPLOYEE.value or \
+            ("- OFFICERS" in table_type and "CIVILIANS" not in table_type)
+    for k in range(len(eth_cols)):
+        if "officer" in eth_cols[k].lower() or \
+            "offcr" in eth_cols[k].lower() or is_officer_table:
+            eth_types.append(defs.columns.ETHNICITY_OFFICER)
+            validation_types.append(defs.columns.RACE_OFFICER)
+        else:
+            eth_types.append(defs.columns.ETHNICITY_CIVILIAN)
+            validation_types.append(defs.columns.RACE_CIVILIAN)
+
+    if len(set(eth_types)) != len(eth_types):
+        raise NotImplementedError()
+
+    if any([x not in race_types for x in validation_types]):
+        raise NotImplementedError()
+
+    for k in range(len(eth_cols)):
+        col_map[eth_types[k]] = eth_cols[k]
 
 
 def _id_agency_column(agency_column, col_map):
@@ -302,10 +322,16 @@ def _id_agency_column(agency_column, col_map):
 def id_columns(df, table_type, date_column=None, agency_column=None, source_name=None):
     col_map = {}
 
-    _id_column(df, table_type, col_map, defs.columns.DATE , "date", known_col_name=date_column, 
+    match_cols = _find_col_matches(df, table_type, "date", known_col_name=date_column, 
         secondary_patterns = [("equals","date"), ("contains", "assigned")],
-        exclude_table_types=[defs.TableType.USE_OF_FORCE_CIVILIANS_OFFICERS, defs.TableType.USE_OF_FORCE_CIVILIANS, 
-            defs.TableType.EMPLOYEE, defs.TableType.USE_OF_FORCE_OFFICERS])
+        not_required_table_types=[defs.TableType.USE_OF_FORCE_CIVILIANS_OFFICERS, defs.TableType.USE_OF_FORCE_CIVILIANS, 
+            defs.TableType.USE_OF_FORCE_OFFICERS],
+        exclude_table_types=[defs.TableType.EMPLOYEE])
+
+    if len(match_cols) > 1:
+        raise NotImplementedError()
+    elif len(match_cols) == 1:
+        col_map[defs.columns.DATE] = match_cols[0]
 
     # _id_date_column(df, table_type, date_column, col_map)
     
@@ -341,17 +367,17 @@ def id_columns(df, table_type, date_column=None, agency_column=None, source_name
                         # Check if rest of seg consists of values in date_str
                         found = True
                         idx = 1
-                        for j in range(len(seg[1:])):
-                            while idx < len(date_str) and seg[j].lower() != date_str[idx]:
+                        for val in seg[1:].lower():
+                            while idx < len(date_str) and val != date_str[idx]:
                                 idx+=1
 
                             if idx==len(date_str):
-                                idx+=1
-                            else:
                                 found = False
                                 break
+                            else:
+                                idx+=1
                         if found:
-                            pattern+={}
+                            pattern+="{}"
                             date_found = True
                         else:
                             pattern+=seg
@@ -366,13 +392,30 @@ def id_columns(df, table_type, date_column=None, agency_column=None, source_name
         exclude_col_names = []
         if defs.columns.DATE in col_map:
             exclude_col_names.append(col_map[defs.columns.DATE])
-        _id_column(df, table_type, col_map, defs.columns.TIME , "time", 
+        
+        match_cols = _find_col_matches(df, table_type, "time", 
             secondary_patterns=secondary_patterns, validator=datetime_parser.parse_time_to_sec,
             exclude_col_names=exclude_col_names)
-        
-    _id_race_column(df, table_type, source_name, col_map)
 
-    _id_agency_column(agency_column, col_map)
+        if len(match_cols) > 1:
+            raise NotImplementedError()
+        elif len(match_cols) == 1:
+            col_map[defs.columns.TIME] = match_cols[0]
+        
+    # California data, RAE = Race and Ethnicity
+    match_cols = _find_col_matches(df, table_type, ["race", "rae_full"])
+    race_types = _id_race_column(df, table_type, source_name, col_map, match_cols)
+
+    # enthnicity is to deal with typo in Ferndale data. Consider using fuzzywuzzy in future for fuzzy matching
+    match_cols = _find_col_matches(df, table_type, ["ethnicity", "enthnicity"])
+    _id_ethnicity_column(table_type, col_map, race_types, match_cols)
+
+    # _id_agency_column(agency_column, col_map)
+    match_cols = _find_col_matches(df, table_type, [], known_col_name=agency_column)
+    if len(match_cols) > 1:
+        raise NotImplementedError()
+    elif len(match_cols) == 1:
+        col_map[defs.columns.AGENCY] = match_cols[0]
 
     for key, value in col_map.items():
         if key == value:
@@ -455,12 +498,14 @@ def _standardize_race(df, col_map, maps, civilian, source_name, keep_raw):
     }
     for x in vals:
         if type(x) == str:
-            x = x.replace("_", " ")
-        if pd.isnull(x) or x == "NOT SPECIFIED":
+            x = x.replace("_", " ").replace("*","")
+            x = x.strip()
+        if pd.isnull(x) or x == "NOT SPECIFIED" or x=="":
             race_map_dict[x] = defs.races.UNSPECIFIED
         elif type(x) != str and source_name == "California":
             race_map_dict[x] = ca_stops_dict[x]
-        elif x == "W" or x == "WHITE":
+        elif x == "W" or x == "WHITE" or x=="WN":
+            # WN = White-Non-Hispanic
             race_map_dict[x] = defs.races.WHITE
         elif x == "B" or "BLACK" in x:
             race_map_dict[x] = defs.races.BLACK
@@ -468,6 +513,10 @@ def _standardize_race(df, col_map, maps, civilian, source_name, keep_raw):
             race_map_dict[x] = defs.races.UNKNOWN
         elif x == "ASIAN INDIAN":
             race_map_dict[x] = defs.races.ASIAN_INDIAN
+        elif x == "SOUTH ASIAN" or ("INDIAN" in x and "BURMESE" in x):
+            race_map_dict[x] = defs.races.SOUTH_ASIAN
+        elif "PACIFIC ISLAND" in x:
+            race_map_dict[x] = defs.races.AAPI
         elif x == "A" or "ASIAN" in x:
             if "INDIAN" in x:
                 raise ValueError("INDIAN should be picked up by ASIAN INDIAN condition")
@@ -477,19 +526,22 @@ def _standardize_race(df, col_map, maps, civilian, source_name, keep_raw):
                 race_map_dict[x] = defs.races.ASIAN
         elif "HAWAIIAN" in x:
             race_map_dict[x] = defs.races.HAWAIIAN
-        elif x == "H" or "HISPANIC" in x or "LATINO" in x or \
+        elif x == "H" or "HISPANIC" in x or "LATINO" in x or x== "WH" or \
             (source_name == "New York City" and (x=="P" or x=="Q")) or \
             (source_name == "Bloomington" and (x == "L" or x=="N" or x=="P")): # This should stay below other races to not catch non-Hispanic
+            # WH = White Hispanic
+            # NYC and Bloomington are codes for Hispanic and a race
             race_map_dict[x] = defs.races.LATINO
-        elif x == "I" or "INDIAN" in x or x == "NATIVE AMERICAN" or x == "AMERICAN IND":
+        elif x == "I" or x == "NATIVE AMERICAN" or "AMERICAN IND" in x \
+            or x == "ALASKAN NATIVE" or "AMER IND" in x:
             race_map_dict[x] = defs.races.NATIVE_AMERICAN
-        elif x == "ME" or x == "MIDDLE EASTERN":
+        elif x == "ME" or "MIDDLE EAST" in x:
             race_map_dict[x] = defs.races.MIDDLE_EASTERN
         elif x == "2 OR MORE":
             race_map_dict[x] = defs.races.MULTIPLE
         elif "UNK" in x and "OTH" in x:
             race_map_dict[x] = defs.races.OTHER_UNKNOWN
-        elif x == "OTHER" or \
+        elif x == "OTHER" or "OTHER UNCLASS" in x or \
             (source_name == "New York City" and x=="Z"):
             race_map_dict[x] = defs.races.OTHER
         elif source_name == "Lincoln":
@@ -508,11 +560,15 @@ def _standardize_race(df, col_map, maps, civilian, source_name, keep_raw):
 
     if ethnicity_column != None:        
         vals = [x.upper() if type(x)==str else x for x in df[ethnicity_column].unique()]
+        # The below values is used in the Ferndale demographics data. Just use the data from the race column in that
+        # case which includes if officer is Hispanic
+        ferndale_eth_vals = ['NR', 'FRENCH/GERMAN', 'MEXICAN', 'HUNGARIAN', 'LEBANESE', 'POLISH/SCOTTISH', 'IRISH', 'SYRIAN', 'POLISH']
         eth_map_dict = {}
         for x in vals:
             if pd.isnull(x):
                 pass
-            elif x == "N" or x == 'NON-HISPANIC' or x == "NH" :
+            elif x == "N" or x == 'NON-HISPANIC' or x == "NH" or \
+                x in ferndale_eth_vals:
                 pass  # Just use race value
             elif x == "H" or "HISPANIC" in x or "LATINO" in x:
                 eth_map_dict[x] = defs.races.LATINO

@@ -160,6 +160,7 @@ _race_names = [
     "NATIVE_AMERICAN",
     "OTHER",
     "OTHER_UNKNOWN",
+    "SOUTH_ASIAN",
     "UNKNOWN",
     "UNSPECIFIED",
     "WHITE"
@@ -172,7 +173,8 @@ _map = {
     "MIDDLE_EASTERN" : "MIDDLE EASTERN",
     "NATIVE_AMERICAN" : "NATIVE AMERICAN",
     "OTHER_UNKNOWN" : "OTHER / UNKNOWN",
-    "MIDDLE_EASTERN_SOUTH_ASIAN" : "MIDDLE EASTERN / SOUTH ASIAN"
+    "MIDDLE_EASTERN_SOUTH_ASIAN" : "MIDDLE EASTERN / SOUTH ASIAN",
+    "SOUTH_ASIAN" : "SOUTH ASIAN"
 }
 _race_defaults = [_map.get(x,x) for x in _race_names]
 races = namedtuple('Races',
