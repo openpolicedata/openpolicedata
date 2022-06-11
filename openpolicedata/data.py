@@ -436,6 +436,8 @@ class Source:
             elif data_type ==DataType.SOCRATA:
                 opt_filter = None
                 if agency != None and agency_field != None:
+                    # Double up any apostrophes for SQL query
+                    agency = agency.replace("'","''")
                     opt_filter = agency_field + " = '" + agency + "'"
 
                 table = data_loaders.load_socrata(url, dataset_id, date_field=date_field, year=year_filter, opt_filter=opt_filter, 

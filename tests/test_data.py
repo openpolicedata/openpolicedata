@@ -7,7 +7,8 @@ from openpolicedata import data
 from openpolicedata import _datasets
 from openpolicedata import datasets_query
 from openpolicedata.defs import MULTI
-from openpolicedata.exceptions import OPD_DataUnavailableError, OPD_TooManyRequestsError, OPD_MultipleErrors, OPD_arcgisAuthInfoError
+from openpolicedata.exceptions import OPD_DataUnavailableError, OPD_TooManyRequestsError,  \
+	OPD_MultipleErrors, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError
 import random
 from datetime import datetime
 from datetime import timedelta
@@ -109,11 +110,13 @@ class TestData:
 
 				try:
 					years = src.get_years(datasets.iloc[i]["TableType"])
-				except OPD_DataUnavailableError as e:
+				except (OPD_DataUnavailableError, OPD_SocrataHTTPError) as e:
+					e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"])
 					caught_exceptions_warn.append(e)
 					continue
 				except (OPD_TooManyRequestsError, OPD_arcgisAuthInfoError) as e:
 					# Catch exceptions related to URLs not functioning
+					e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"])
 					caught_exceptions.append(e)
 					continue
 				except:
@@ -176,11 +179,13 @@ class TestData:
 
 				try:
 					table = src.load_from_url(datasets.iloc[i]["Year"], datasets.iloc[i]["TableType"])
-				except OPD_DataUnavailableError as e:
+				except (OPD_DataUnavailableError, OPD_SocrataHTTPError) as e:
+					e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"])
 					caught_exceptions_warn.append(e)
 					continue
 				except (OPD_TooManyRequestsError, OPD_arcgisAuthInfoError) as e:
 					# Catch exceptions related to URLs not functioning
+					e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"])
 					caught_exceptions.append(e)
 					continue
 				except:
@@ -317,10 +322,12 @@ class TestData:
 				try:
 					years = src.get_years(datasets.iloc[i]["TableType"])
 				except OPD_DataUnavailableError as e:
+					e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"])
 					caught_exceptions_warn.append(e)
 					continue
 				except (OPD_TooManyRequestsError, OPD_arcgisAuthInfoError) as e:
 					# Catch exceptions related to URLs not functioning
+					e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"])
 					caught_exceptions.append(e)
 					continue
 				except:
