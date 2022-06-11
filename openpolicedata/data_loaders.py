@@ -2,6 +2,7 @@ import os
 from datetime import date
 import pandas as pd
 from numpy import nan
+from requests import HTTPError
 from sodapy import Socrata
 import contextlib
 import urllib
@@ -19,9 +20,9 @@ except:
     _has_gpd = False
 
 try:
-    from .exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError, OPD_arcgisAuthInfoError
+    from .exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError
 except:
-    from exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError, OPD_arcgisAuthInfoError
+    from exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError
 
 sleep_time = 0.1
 
@@ -114,23 +115,21 @@ def load_arcgis(url, date_field=None, year=None, limit=None):
         url = url[0:-1]
     last_slash = url.rindex("/")
     layer_num = url[last_slash+1:]
-    url = url[:last_slash]
+    base_url = url[:last_slash]
     # Get layer/table #
     # Shorten URL
     
     # https://developers.arcgis.com/python/
     try:
-        layer_collection = FeatureLayerCollection(url)
+        layer_collection = FeatureLayerCollection(base_url)
     except Exception as e:
         if len(e.args)>0:
             if "Error Code: 500" in e.args[0]:
-                raise OPD_DataUnavailableError(e.args[0], url, f"Layer # = {layer_num}")
+                raise OPD_DataUnavailableError(base_url, f"Layer # = {layer_num}", e.args)
             elif "A general error occurred: 'authInfo'" in e.args[0]:
-                raise OPD_arcgisAuthInfoError(e.args[0])
-        else:
-            raise
-    except e:
-        raise
+                raise OPD_arcgisAuthInfoError(base_url, f"Layer # = {layer_num}", e.args)
+        else: raise e
+    except e: raise e
 
     is_table = True
     active_layer = None
@@ -164,7 +163,7 @@ def load_arcgis(url, date_field=None, year=None, limit=None):
             layer_query_result = active_layer.query(where=where_query, return_all_records=(limit == None), result_record_count=limit)
         except Exception as e:
             if len(e.args)>0 and "Error Code: 429" in e.args[0]:
-                raise OPD_TooManyRequestsError(e.args[0])
+                raise OPD_TooManyRequestsError(base_url, f"Layer # = {layer_num}", *e.args)
             else:
                 raise
         except:
@@ -174,7 +173,7 @@ def load_arcgis(url, date_field=None, year=None, limit=None):
             layer_query_result = active_layer.query(return_all_records=(limit == None), result_record_count=limit)
         except Exception as e:
             if len(e.args)>0 and "Error Code: 429" in e.args[0]:
-                raise OPD_TooManyRequestsError(e.args[0])
+                raise OPD_TooManyRequestsError(base_url, f"Layer # = {layer_num}", *e.args)
             else:
                 raise
         except:
@@ -306,8 +305,19 @@ def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, sel
         use_gpd = _has_gpd
 
     while N > 0:
-        results = client.get(data_set, where=where,
-            limit=limit,offset=offset, select=select)
+        try:
+            results = client.get(data_set, where=where,
+                limit=limit,offset=offset, select=select)
+        except HTTPError as e:
+            raise OPD_SocrataHTTPError(url, data_set, *e.args)
+        except Exception as e: raise e
+
+        if use_gpd and output_type==None:
+            # Check for geo info
+            for r in results:
+                if "geolocation" in r or "geocoded_column" in r:
+                    output_type = "GeoDataFrame"
+                    break
 
         if output_type == "set":
             if offset==0:
@@ -326,18 +336,24 @@ def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, sel
             if len(results)>0:
                 [df.append(row[select]) for row in results]
 
-        elif use_gpd and (output_type=="GeoDataFrame" or \
-            (output_type==None and len(results)>0 and "geolocation" in results[0])):
+        elif use_gpd and output_type=="GeoDataFrame":
             output_type = "GeoDataFrame"
             # Presumed to be a list of properties that possibly include coordinates
             geojson = {"type" : "FeatureCollection", "features" : []}
             for p in results:
                 feature = {"type" : "Feature", "properties" : p}
-                geo = feature["properties"].pop("geolocation")
-                if list(geo.keys()) == ["human_address"]:
-                    feature["geometry"] = {"type" : "Point", "coordinates" : (nan, nan)}  
+                if "geolocation" in feature["properties"]:
+                    geo = feature["properties"].pop("geolocation")
+                    if list(geo.keys()) == ["human_address"]:
+                        feature["geometry"] = {"type" : "Point", "coordinates" : (nan, nan)}  
+                    elif "coordinates" in geo:
+                        feature["geometry"] = geo
+                    else:
+                        feature["geometry"] = {"type" : "Point", "coordinates" : (float(geo["longitude"]), float(geo["latitude"]))}
+                elif "geocoded_column" in feature["properties"]:
+                    feature["geometry"] = feature["properties"].pop("geocoded_column")
                 else:
-                    feature["geometry"] = {"type" : "Point", "coordinates" : (float(geo["longitude"]), float(geo["latitude"]))}  
+                    feature["geometry"] = {"type" : "Point", "coordinates" : (nan, nan)} 
                 
                 geojson["features"].append(feature)
 

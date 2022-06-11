@@ -91,7 +91,7 @@ class TestDatasets:
     def test_arcgis_urls(self, csvfile, source, last, skip):
         datasets = get_datasets(csvfile)
         urls = datasets["URL"]
-        p = re.compile("(MapServer|FeatureServer)/\d+")
+        p = re.compile(r"(MapServer|FeatureServer)/\d+")
         for i,url in enumerate(urls):
             if datasets.iloc[i]["DataType"] == opd.defs.DataType.ArcGIS.value:
                 result = p.search(url)
