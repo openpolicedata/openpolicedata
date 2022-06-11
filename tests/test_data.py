@@ -15,8 +15,11 @@ from datetime import timedelta
 import pandas as pd
 from time import sleep
 import warnings
+import os
 
 sleep_time = 0.1
+log_filename = f"pytest_url_errors_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+log_folder = os.path.join(".","data/test_logs")
 
 def get_datasets(csvfile):
     if csvfile != None:
@@ -25,7 +28,7 @@ def get_datasets(csvfile):
     return datasets_query()
 
 class TestData:
-	def test_source_url_name_unlimitable(self, csvfile, source, last, skip):
+	def test_source_url_name_unlimitable(self, csvfile, source, last, skip, loghtml):
 		if last == None:
 			last = float('inf')
 		datasets = get_datasets(csvfile)
@@ -35,7 +38,7 @@ class TestData:
 			
 			if source != None and datasets.iloc[i]["SourceName"] != source:
 				continue
-			if not self.can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]):
+			if not can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]):
 				ext = "." + datasets.iloc[i]["DataType"].lower()
 				if ext == ".csv":
 					# -csv.zip in NYC data
@@ -44,7 +47,7 @@ class TestData:
 					assert ext in datasets.iloc[i]["URL"]
 
 
-	def test_source_urls(self, csvfile, source, last, skip):
+	def test_source_urls(self, csvfile, source, last, skip, loghtml):
 		if last == None:
 			last = float('inf')
 		datasets = get_datasets(csvfile)
@@ -82,7 +85,7 @@ class TestData:
 			sleep(sleep_time)
 
 	
-	def test_get_years(self, csvfile, source, last, skip):
+	def test_get_years(self, csvfile, source, last, skip, loghtml):
 		if last == None:
 			last = float('inf')
 		datasets = get_datasets(csvfile)
@@ -99,7 +102,7 @@ class TestData:
 				continue
 			if i < len(datasets) - last:
 				continue
-			if self.is_filterable(datasets.iloc[i]["DataType"]) or datasets.iloc[i]["Year"] != MULTI:
+			if is_filterable(datasets.iloc[i]["DataType"]) or datasets.iloc[i]["Year"] != MULTI:
 				srcName = datasets.iloc[i]["SourceName"]
 				state = datasets.iloc[i]["State"]
 				src = data.Source(srcName, state=state)
@@ -130,19 +133,23 @@ class TestData:
 				# Adding a pause here to prevent issues with requesting from site too frequently
 				sleep(sleep_time)
 
-		if len(caught_exceptions)==1:
-			raise caught_exceptions[0]
-		elif len(caught_exceptions)>0:
-			msg = f"{len(caught_exceptions)} URL errors encountered:\n"
-			for e in caught_exceptions:
-				msg += "\t" + e.args[0] + "\n"
-			raise OPD_MultipleErrors(msg)
+		if loghtml:
+			log_errors_to_file(caught_exceptions, caught_exceptions_warn)
+		else:
+			if len(caught_exceptions)==1:
+				raise caught_exceptions[0]
+			elif len(caught_exceptions)>0:
+				msg = f"{len(caught_exceptions)} URL errors encountered:\n"
+				for e in caught_exceptions:
+					msg += "\t" + e.args[0] + "\n"
+				raise OPD_MultipleErrors(msg)
 
-		for e in caught_exceptions_warn:
-			warnings.warn(str(e))
+			for e in caught_exceptions_warn:
+				warnings.warn(str(e))
 
 
-	def test_source_download_limitable(self, csvfile, source, last, skip):
+
+	def test_source_download_limitable(self, csvfile, source, last, skip, loghtml):
 		if last == None:
 			last = float('inf')
 		datasets = get_datasets(csvfile)
@@ -162,8 +169,8 @@ class TestData:
 			if source != None and datasets.iloc[i]["SourceName"] != source:
 				continue
 			has_date_field = not pd.isnull(datasets.iloc[i]["date_field"])
-			if self.can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]) or has_date_field:
-				if self.is_stanford(datasets.iloc[i]["URL"]):
+			if can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]) or has_date_field:
+				if is_stanford(datasets.iloc[i]["URL"]):
 					num_stanford += 1
 					if num_stanford > max_num_stanford:
 						continue
@@ -208,19 +215,22 @@ class TestData:
 				# Adding a pause here to prevent issues with requesting from site too frequently
 				sleep(sleep_time)
 
-		if len(caught_exceptions)==1:
-			raise caught_exceptions[0]
-		elif len(caught_exceptions)>0:
-			msg = f"{len(caught_exceptions)} URL errors encountered:\n"
-			for e in caught_exceptions:
-				msg += "\t" + e.args[0] + "\n"
-			raise OPD_MultipleErrors(msg)
+		if loghtml:
+			log_errors_to_file(caught_exceptions, caught_exceptions_warn)
+		else:
+			if len(caught_exceptions)==1:
+				raise caught_exceptions[0]
+			elif len(caught_exceptions)>0:
+				msg = f"{len(caught_exceptions)} URL errors encountered:\n"
+				for e in caught_exceptions:
+					msg += "\t" + e.args[0] + "\n"
+				raise OPD_MultipleErrors(msg)
 
-		for e in caught_exceptions_warn:
-			warnings.warn(str(e))
+			for e in caught_exceptions_warn:
+				warnings.warn(str(e))
 
 	
-	def test_get_agencies(self, csvfile, source, last, skip):
+	def test_get_agencies(self, csvfile, source, last, skip, loghtml):
 		if last == None:
 			last = float('inf')
 		datasets = get_datasets(csvfile)
@@ -236,7 +246,7 @@ class TestData:
 			if source != None and datasets.iloc[i]["SourceName"] != source:
 				continue
 
-			if self.is_filterable(datasets.iloc[i]["DataType"]) or datasets.iloc[i]["Agency"] != MULTI:
+			if is_filterable(datasets.iloc[i]["DataType"]) or datasets.iloc[i]["Agency"] != MULTI:
 				srcName = datasets.iloc[i]["SourceName"]
 				state = datasets.iloc[i]["State"]
 				src = data.Source(srcName, state=state)
@@ -256,7 +266,7 @@ class TestData:
 				sleep(sleep_time)
 
 
-	def test_get_agencies_name_match(self, csvfile, source, last, skip):
+	def test_get_agencies_name_match(self, csvfile, source, last, skip, loghtml):
 		if last == None:
 			last = float('inf')
 		get_datasets(csvfile)
@@ -268,7 +278,7 @@ class TestData:
 		assert len(agencies) == 2
 				
 				
-	def test_agency_filter(self, csvfile, source, last, skip):
+	def test_agency_filter(self, csvfile, source, last, skip, loghtml):
 		if last == None:
 			last = float('inf')
 		get_datasets(csvfile)
@@ -284,7 +294,7 @@ class TestData:
 
 	
 	@pytest.mark.slow(reason="This is a slow test that should be run before a major commit.")
-	def test_load_year(self, csvfile, source, last, skip):
+	def test_load_year(self, csvfile, source, last, skip, loghtml):
 		if last == None:
 			last = float('inf')
 		datasets = get_datasets(csvfile)
@@ -302,7 +312,7 @@ class TestData:
 				continue
 			if source != None and datasets.iloc[i]["SourceName"] != source:
 				continue
-			if self.is_filterable(datasets.iloc[i]["DataType"]) and datasets.iloc[i]["Year"] == MULTI:
+			if is_filterable(datasets.iloc[i]["DataType"]) and datasets.iloc[i]["Year"] == MULTI:
 				srcName = datasets.iloc[i]["SourceName"]
 				state = datasets.iloc[i]["State"]
 
@@ -413,20 +423,24 @@ class TestData:
 				dts_stop = dts_stop[dts_stop.dt.year == year]
 				assert dts.iloc[-1] == dts_stop.iloc[-1]
 
-		if len(caught_exceptions)==1:
-			raise caught_exceptions[0]
-		elif len(caught_exceptions)>0:
-			msg = f"{len(caught_exceptions)} URL errors encountered:\n"
-			for e in caught_exceptions:
-				msg += "\t" + e.args[0] + "\n"
-			raise OPD_MultipleErrors(msg)
+		if loghtml:
+			log_errors_to_file(caught_exceptions, caught_exceptions_warn)
+		else:
+			if len(caught_exceptions)==1:
+				raise caught_exceptions[0]
+			elif len(caught_exceptions)>0:
+				msg = f"{len(caught_exceptions)} URL errors encountered:\n"
+				for e in caught_exceptions:
+					msg += "\t" + e.args[0] + "\n"
+				raise OPD_MultipleErrors(msg)
 
-		for e in caught_exceptions_warn:
-			warnings.warn(str(e))
+			for e in caught_exceptions_warn:
+				warnings.warn(str(e))
+
 
 
 	@pytest.mark.slow(reason="This is a slow test and should be run before a major commit.")
-	def test_source_download_not_limitable(self, csvfile, source, last, skip):
+	def test_source_download_not_limitable(self, csvfile, source, last, skip, loghtml):
 		if last == None:
 			last = float('inf')
 		datasets = get_datasets(csvfile)
@@ -441,8 +455,8 @@ class TestData:
 				continue
 			if source != None and datasets.iloc[i]["SourceName"] != source:
 				continue
-			if not self.can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]):
-				if self.is_stanford(datasets.iloc[i]["URL"]):
+			if not can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]):
+				if is_stanford(datasets.iloc[i]["URL"]):
 					# There are a lot of data sets from Stanford, no need to run them all
 					# Just run approximately 10%
 					rnd = random.uniform(0,1)
@@ -471,27 +485,53 @@ class TestData:
 					assert datasets.iloc[i]["agency_field"] in table.table
 
 
-	def can_be_limited(self, table_type, url):
-		if (table_type == "CSV" and ".zip" in url):
-			return False
-		elif (table_type == "ArcGIS" or table_type == "Socrata" or table_type == "CSV"):
-			return True
-		else:
-			raise ValueError("Unknown table type")
+def can_be_limited(table_type, url):
+	if (table_type == "CSV" and ".zip" in url):
+		return False
+	elif (table_type == "ArcGIS" or table_type == "Socrata" or table_type == "CSV"):
+		return True
+	else:
+		raise ValueError("Unknown table type")
 
 
-	def is_filterable(self, table_type):
-		if table_type == "CSV":
-			return False
-		elif (table_type == "ArcGIS" or table_type == "Socrata" ):
-			return True
-		else:
-			raise ValueError("Unknown table type")
+def is_filterable(table_type):
+	if table_type == "CSV":
+		return False
+	elif (table_type == "ArcGIS" or table_type == "Socrata" ):
+		return True
+	else:
+		raise ValueError("Unknown table type")
 
-	def is_stanford(self, url):
-		return "stanford.edu" in url
+def is_stanford(url):
+	return "stanford.edu" in url
+
+def log_errors_to_file(*args):
+	if not os.path.exists(log_folder):
+		os.mkdir(log_folder)
+
+	filename = os.path.join(log_folder, log_filename)
+
+	if os.path.exists(filename):
+		perm = "r+"
+	else:
+		perm = "w"
+
+	with open(filename, perm) as f:
+		for x in args:
+			for e in x:
+				new_line = ', '.join([str(x) for x in e.args])
+				skip = False
+				if perm == "r+":
+					for line in f:
+						if new_line in line or line in new_line:
+							skip = True
+							break
+
+				if not skip:
+					f.write(new_line)
+					f.write("\n")
 
 if __name__ == "__main__":
 	# For testing
 	tp = TestData()
-	tp.test_source_download_limitable(None, "Orlando", None, None) 
+	tp.test_source_download_limitable(None, "Austin", None, None, True) 
