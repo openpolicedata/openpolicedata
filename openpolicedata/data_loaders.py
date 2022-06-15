@@ -2,7 +2,7 @@ import os
 from datetime import date
 import pandas as pd
 from numpy import nan
-from requests import HTTPError
+import requests
 from sodapy import Socrata
 import contextlib
 import urllib
@@ -12,6 +12,8 @@ from pyproj import CRS
 import warnings
 from arcgis.features import FeatureLayerCollection
 from time import sleep
+from tqdm import tqdm
+import io
 
 try:
     import geopandas as gpd
@@ -38,7 +40,7 @@ _use_gpd_force = None
 # Windows: https://www.wikihow.com/Create-an-Environment-Variable-in-Windows-10
 default_sodapy_key = os.environ.get("SODAPY_API_KEY")
 
-def load_csv(url, date_field=None, year_filter=None, agency_field=None, agency=None, limit=None):
+def load_csv(url, date_field=None, year_filter=None, agency_field=None, agency=None, limit=None, pbar=True):
     '''Download CSV file to pandas DataFrame
     
     Parameters
@@ -55,6 +57,8 @@ def load_csv(url, date_field=None, year_filter=None, agency_field=None, agency=N
         (Optional) Name of the agency to filter for. None value returns data for all agencies.
     limit : int
         (Optional) Only returns the first limit rows of the CSV
+    pbar : bool
+        (Optional) If true (default), a progress bar will be displayed
         
     Returns
     -------
@@ -63,10 +67,27 @@ def load_csv(url, date_field=None, year_filter=None, agency_field=None, agency=N
     '''
     
     if limit==None or ".zip" in url:
-        with warnings.catch_warnings():
-            # Perhaps use requests iter_content/iter_lines as below to read large CSVs so progress can be shown
-            warnings.simplefilter("ignore", category=pd.errors.DtypeWarning)
-            table = pd.read_csv(url)
+        if pbar:
+            # Based on code developed for odsclient: https://github.com/smarie/python-odsclient/blob/main/odsclient/core.py
+            #params used by odsclient. Not using for now
+#             params = {'use_labels_for_header' : True, "format" : "csv"}
+            response = requests.get(url, params=None, stream=True)
+            response.raise_for_status()
+            response.raw.decode_content = True  # Necessary?
+            
+            total_size = int(response.headers.get('Content-Length', 0))
+            block_size = 1024
+            with _tqdm(desc=url, total=total_size,
+                       unit='B' if block_size == 1024 else 'it',
+                       unit_scale=True,
+                       unit_divisor=block_size
+                       ) as bar:
+                table = pd.read_csv(iterable_to_stream(response.iter_content(), buffer_size=block_size, progressbar=bar))
+        else:
+            with warnings.catch_warnings():
+                # Perhaps use requests iter_content/iter_lines as below to read large CSVs so progress can be shown
+                warnings.simplefilter("ignore", category=pd.errors.DtypeWarning)
+                table = pd.read_csv(url)
     else:
         table = pd.DataFrame()
         with contextlib.closing(urllib.request.urlopen(url=url)) as rd:
@@ -308,7 +329,7 @@ def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, sel
         try:
             results = client.get(data_set, where=where,
                 limit=limit,offset=offset, select=select)
-        except HTTPError as e:
+        except requests.HTTPError as e:
             raise OPD_SocrataHTTPError(url, data_set, *e.args)
         except Exception as e: raise e
 
@@ -505,6 +526,38 @@ def _get_years(data_type, url, date_field, data_set=None):
         year-=1
 
     return years
+
+def iterable_to_stream(iterable, buffer_size=io.DEFAULT_BUFFER_SIZE, progressbar=None):
+    """
+    Lets you use an iterable (e.g. a generator) that yields bytestrings as a read-only
+    input stream.
+    The stream implements Python 3's newer I/O API (available in Python 2's io module).
+    For efficiency, the stream is buffered.
+    Source: https://stackoverflow.com/a/20260030/7262247
+    
+    This code was developed for odsclient: https://github.com/smarie/python-odsclient/blob/main/odsclient/core.py
+    """
+
+    class IterStream(io.RawIOBase):
+        def __init__(self):
+            self.leftover = None
+
+        def readable(self):
+            return True
+
+        def readinto(self, b):
+            try:
+                ln = len(b)  # We're supposed to return at most this much
+                chunk = self.leftover or next(iterable)
+                output, self.leftover = chunk[:ln], chunk[ln:]
+                b[:len(output)] = output
+                if progressbar:
+                    progressbar.update(len(output))
+                return len(output)
+            except StopIteration:
+                return 0  # indicate EOF
+
+    return io.BufferedReader(IterStream(), buffer_size=buffer_size)
 
 if __name__ == "__main__":
     url = "data.montgomerycountymd.gov"
