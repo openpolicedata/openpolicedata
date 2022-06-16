@@ -37,31 +37,53 @@ def parse_date_to_datetime(date_col):
                 is_valid_last = (year_last <= this_year).all() and (year_last > 1300).all()
                 is_valid_first = (year_first <= this_year).all() and (year_first > 1300).all()
 
+                any_valid = True
                 if is_valid_first and is_valid_last:
                     raise ValueError("Error parsing date")
                 elif is_valid_first:
                     year = date_col.apply(lambda x : np.floor(x / 10000) if not pd.isnull(x) else x)
                     month_day = date_col.apply(lambda x : x % 10000 if not pd.isnull(x) else x)
-                else:
+                elif is_valid_last:
                     year = date_col.apply(lambda x : x % 10000 if not pd.isnull(x) else x)
                     month_day = date_col.apply(lambda x : np.floor(x / 10000) if not pd.isnull(x) else x)
-
-                # Determine if month is first or last in month_day
-                first_val = np.floor(month_day / 100)
-                last_val = month_day % 100
-
-                is_valid_month_first = first_val.max() < 13 and last_val.max() < 32
-                is_valid_month_last = last_val.max() < 13 and first_val.max() < 32
-                if is_valid_month_first and is_valid_month_last:
-                    raise ValueError("Error parsing month and day")
-                elif is_valid_month_first:
-                    month = first_val
-                    day = last_val
                 else:
-                    month = last_val
-                    day = first_val
+                    any_valid = False
 
-                return pd.to_datetime({"year" : year, "month" : month, "day" : day})
+                if any_valid:
+                    # Determine if month is first or last in month_day
+                    first_val = np.floor(month_day / 100)
+                    last_val = month_day % 100
+
+                    is_valid_month_first = first_val.max() < 13 and last_val.max() < 32
+                    is_valid_month_last = last_val.max() < 13 and first_val.max() < 32
+                    if is_valid_month_first and is_valid_month_last:
+                        raise ValueError("Error parsing month and day")
+                    elif is_valid_month_first:
+                        month = first_val
+                        day = last_val
+                    elif is_valid_month_last:
+                        month = last_val
+                        day = first_val
+                    else:
+                        any_valid = False
+
+                    if any_valid:
+                        return pd.to_datetime({"year" : year, "month" : month, "day" : day})
+
+                if not any_valid:
+                    # This may be Epoch time
+                    try:
+                        new_date_col = pd.to_datetime(dts, unit='s')
+                    except pd._libs.tslibs.np_datetime.OutOfBoundsDatetime:
+                        new_date_col = pd.to_datetime(dts, unit='ms')
+                    except:
+                        raise
+
+                    if (new_date_col.dt.year > this_year).any() or (new_date_col.dt.year < 1950).any():
+                        raise ValueError("Date is outside acceptable range (1950 to this year)")
+
+                    return new_date_col
+                    
             elif date_col.dtype == "O":
                 new_col = date_col.convert_dtypes()
                 if new_col.dtype == "string":
@@ -85,6 +107,36 @@ def combine_date_and_time(date_col, time_col):
     # UTC since a time is also provided?
 
     return pd.to_datetime(dt_sec, unit='s')
+
+def validate_date(date_col):
+    # Fails if date column is not valid. Otherwise, returns a 
+    # numerical value that is higher for more complete datetimes (i.e. date-only lower than date and time)
+    date_col = parse_date_to_datetime(date_col)
+
+    dts = date_col[date_col.notnull()]
+
+    if len(dts) > 0:
+        one_date = dts.iloc[0]
+        max_val = 6
+        same_sec = (dts.dt.second == one_date.second).all()
+        if not same_sec: 
+            return max_val
+        same_min = (dts.dt.minute == one_date.minute).all()
+        if not same_min: 
+            return max_val-1
+        same_hour = (dts.dt.hour == one_date.hour).all()
+        if not same_hour: 
+            return max_val-2
+        same_day = (dts.dt.day == one_date.day).all()
+        if not same_day: 
+            return max_val-3
+        same_month = (dts.dt.month == one_date.month).all()
+        if not same_month: 
+            return max_val-4
+        else:
+            return max_val-5
+    else:
+        return None
 
 def parse_time_to_sec(time_col):
     # Returns time in seconds since 00:00

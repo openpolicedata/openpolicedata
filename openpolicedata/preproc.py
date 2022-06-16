@@ -105,10 +105,16 @@ def _find_col_matches(df, table_type, match_substr, known_col_name=None,
                 if validator != None:
                     match_cols_test = match_cols
                     match_cols = []
+                    score = None
                     for col in match_cols_test:
                         try:
-                            validator(df[col])
-                            match_cols.append(col)
+                            new_score = validator(df[col])
+                            if score == new_score:
+                                match_cols.append(col)
+                            elif new_score != None and (score == None or new_score > score):
+                                # Higher scoring item found. This now takes priority
+                                score = new_score
+                                match_cols = [col]                            
                         except:
                             pass
 
@@ -235,7 +241,10 @@ def _id_race_column(df, table_type, source_name, col_map, race_cols):
             ("Asheville", defs.TableType.CALLS_FOR_SERVICE),
             ("San Francisco", defs.TableType.CALLS_FOR_SERVICE),
             ("Cincinnati", defs.TableType.CALLS_FOR_SERVICE),
-            ("Lincoln", defs.TableType.VEHICLE_PURSUITS)
+            ("Tuscon", defs.TableType.CALLS_FOR_SERVICE),
+            ("Los Angeles", defs.TableType.CALLS_FOR_SERVICE),
+            ("Lincoln", defs.TableType.VEHICLE_PURSUITS),
+            ("Tuscon", defs.TableType.SHOOTINGS_INCIDENTS)
         ]
         if table_type == defs.TableType.USE_OF_FORCE_INCIDENTS or \
             any([(source_name, table_type)==x for x in known_tables_wo_race]):
@@ -325,8 +334,8 @@ def id_columns(df, table_type, date_column=None, agency_column=None, source_name
     match_cols = _find_col_matches(df, table_type, "date", known_col_name=date_column, 
         secondary_patterns = [("equals","date"), ("contains", "assigned")],
         not_required_table_types=[defs.TableType.USE_OF_FORCE_CIVILIANS_OFFICERS, defs.TableType.USE_OF_FORCE_CIVILIANS, 
-            defs.TableType.USE_OF_FORCE_OFFICERS],
-        exclude_table_types=[defs.TableType.EMPLOYEE])
+            defs.TableType.USE_OF_FORCE_OFFICERS, defs.TableType.SHOOTINGS_CIVILIANS, defs.TableType.SHOOTINGS_OFFICERS],
+        exclude_table_types=[defs.TableType.EMPLOYEE], validator=datetime_parser.validate_date)
 
     if len(match_cols) > 1:
         raise NotImplementedError()
@@ -532,7 +541,7 @@ def _standardize_race(df, col_map, maps, civilian, source_name, keep_raw):
             # WH = White Hispanic
             # NYC and Bloomington are codes for Hispanic and a race
             race_map_dict[x] = defs.races.LATINO
-        elif x == "I" or x == "NATIVE AMERICAN" or "AMERICAN IND" in x \
+        elif x == "I" or x == "NATIVE AMERICAN" or x=="INDIAN" or "AMERICAN IND" in x \
             or x == "ALASKAN NATIVE" or "AMER IND" in x:
             race_map_dict[x] = defs.races.NATIVE_AMERICAN
         elif x == "ME" or "MIDDLE EAST" in x:
