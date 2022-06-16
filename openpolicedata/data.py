@@ -142,6 +142,8 @@ class Table:
 
         self.table.to_csv(filename, index=False)
 
+        return filename
+
 
     def get_csv_filename(self):
         '''Generate default filename based on table parameters
@@ -527,9 +529,6 @@ def _check_date(table, date_field):
             one_date = dts.iloc[0]            
             if type(one_date) == str:
                 table = table.astype({date_field: 'datetime64[ns]'})
-                dts = table[date_field]
-                dts = dts[dts.notnull()]
-                one_date = dts.iloc[0]
             elif date_field.lower() == "year":
                 try:
                     float(one_date)
@@ -537,24 +536,10 @@ def _check_date(table, date_field):
                     raise
                 
                 table[date_field] = table[date_field].apply(lambda x: datetime(x,1,1))
-                dts = table[date_field]
-                dts = dts[dts.notnull()]
-                one_date = dts.iloc[0]
                 
             # Replace bad dates with NaT
             table[date_field].replace(datetime.strptime('1900-01-01 00:00:00', '%Y-%m-%d %H:%M:%S'), pd.NaT, inplace=True)
-            dts = table[date_field]
-            dts = dts[dts.notnull()]
 
-            if len(dts) > 0:
-                one_date = dts.iloc[0] 
-                if hasattr(one_date, "year"):
-                    if one_date.year < 1995:
-                        raise ValueError("Date is before 1995. There was likely an issue in the date conversion")
-                    elif one_date.year > datetime.now().year:
-                        raise ValueError("Date is after the current year. There was likely an issue in the date conversion")
-                else:
-                    raise TypeError("Unknown data type for date")
 
     return table
 
@@ -602,6 +587,7 @@ def get_csv_filename(state, source_name, agency, table_type, year):
     return filename
 
 if __name__ == '__main__':
+    istart = 182
     from datetime import date
     datasets = _datasets.datasets_query()
     max_num_stanford = 1
@@ -609,8 +595,13 @@ if __name__ == '__main__':
     prev_sources = []
     prev_tables = []
     output_dir = ".\\data"
-    action =None # "standardize"
-    for i in range(len(datasets)):
+    action = "standardize"
+    issue_datasets = ["Austin", "Chapel Hill", "Fayetteville", "San Diego"]
+    is_austin = datasets["SourceName"].apply(lambda x : x in issue_datasets)
+    not_austin = datasets["SourceName"].apply(lambda x : x not in issue_datasets)
+    # Austin has unknown race values. Emailed dataset owner.
+    datasets = pd.concat([datasets[not_austin], datasets[is_austin]])
+    for i in range(istart, len(datasets)):
         if "stanford.edu" in datasets.iloc[i]["URL"]:
             num_stanford += 1
             if num_stanford > max_num_stanford:
