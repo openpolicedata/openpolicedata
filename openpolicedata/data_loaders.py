@@ -2,6 +2,7 @@ import os
 from datetime import date
 import pandas as pd
 from numpy import nan
+from requests import HTTPError
 from sodapy import Socrata
 import contextlib
 import urllib
@@ -10,6 +11,7 @@ from pyproj.exceptions import CRSError
 from pyproj import CRS
 import warnings
 from arcgis.features import FeatureLayerCollection
+from time import sleep
 
 try:
     import geopandas as gpd
@@ -18,9 +20,11 @@ except:
     _has_gpd = False
 
 try:
-    from .exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError
+    from .exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError
 except:
-    from exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError
+    from exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError
+
+sleep_time = 0.1
 
 # Global parameter for testing both with and without GeoPandas in testing
 _use_gpd_force = None
@@ -34,7 +38,7 @@ _use_gpd_force = None
 # Windows: https://www.wikihow.com/Create-an-Environment-Variable-in-Windows-10
 default_sodapy_key = os.environ.get("SODAPY_API_KEY")
 
-def load_csv(url, date_field=None, year_filter=None, jurisdiction_field=None, jurisdiction_filter=None, limit=None):
+def load_csv(url, date_field=None, year_filter=None, agency_field=None, agency=None, limit=None):
     '''Download CSV file to pandas DataFrame
     
     Parameters
@@ -45,10 +49,10 @@ def load_csv(url, date_field=None, year_filter=None, jurisdiction_field=None, ju
         (Optional) Name of the column that contains the date
     year_filter : int, list
         (Optional) Either the year or the year range [first_year, last_year] for the data that is being requested. None value returns data for all years.
-    jurisdiction_field : str
-        (Optional) Name of the column that contains the jurisidiction name (i.e. name of the police departments)
-    jurisdiction_filter : str
-        (Optional) Name of the jurisdiction to filter for. None value returns data for all jurisdictions.
+    agency_field : str
+        (Optional) Name of the column that contains the agency name (i.e. name of the police departments)
+    agency : str
+        (Optional) Name of the agency to filter for. None value returns data for all agencies.
     limit : int
         (Optional) Only returns the first limit rows of the CSV
         
@@ -76,7 +80,7 @@ def load_csv(url, date_field=None, year_filter=None, jurisdiction_field=None, ju
 
 
     table = filter_dataframe(table, date_field=date_field, year_filter=year_filter, 
-        jurisdiction_field=jurisdiction_field, jurisdiction_filter=jurisdiction_filter)
+        agency_field=agency_field, agency=agency)
 
     return table
 def load_excel(url, date_field=None, year_filter=None, jurisdiction_field=None, jurisdiction_filter=None, limit=None):
@@ -156,20 +160,21 @@ def load_arcgis(url, date_field=None, year=None, limit=None):
         url = url[0:-1]
     last_slash = url.rindex("/")
     layer_num = url[last_slash+1:]
-    url = url[:last_slash]
+    base_url = url[:last_slash]
     # Get layer/table #
     # Shorten URL
     
     # https://developers.arcgis.com/python/
     try:
-        layer_collection = FeatureLayerCollection(url)
+        layer_collection = FeatureLayerCollection(base_url)
     except Exception as e:
-        if len(e.args)>0 and "Error Code: 500" in e.args[0]:
-            raise OPD_DataUnavailableError(e.args[0])
-        else:
-            raise
-    except:
-        raise
+        if len(e.args)>0:
+            if "Error Code: 500" in e.args[0]:
+                raise OPD_DataUnavailableError(base_url, f"Layer # = {layer_num}", e.args)
+            elif "A general error occurred: 'authInfo'" in e.args[0]:
+                raise OPD_arcgisAuthInfoError(base_url, f"Layer # = {layer_num}", e.args)
+        else: raise e
+    except e: raise e
 
     is_table = True
     active_layer = None
@@ -203,7 +208,7 @@ def load_arcgis(url, date_field=None, year=None, limit=None):
             layer_query_result = active_layer.query(where=where_query, return_all_records=(limit == None), result_record_count=limit)
         except Exception as e:
             if len(e.args)>0 and "Error Code: 429" in e.args[0]:
-                raise OPD_TooManyRequestsError(e.args[0])
+                raise OPD_TooManyRequestsError(base_url, f"Layer # = {layer_num}", *e.args)
             else:
                 raise
         except:
@@ -213,7 +218,7 @@ def load_arcgis(url, date_field=None, year=None, limit=None):
             layer_query_result = active_layer.query(return_all_records=(limit == None), result_record_count=limit)
         except Exception as e:
             if len(e.args)>0 and "Error Code: 429" in e.args[0]:
-                raise OPD_TooManyRequestsError(e.args[0])
+                raise OPD_TooManyRequestsError(base_url, f"Layer # = {layer_num}", *e.args)
             else:
                 raise
         except:
@@ -345,8 +350,19 @@ def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, sel
         use_gpd = _has_gpd
 
     while N > 0:
-        results = client.get(data_set, where=where,
-            limit=limit,offset=offset, select=select)
+        try:
+            results = client.get(data_set, where=where,
+                limit=limit,offset=offset, select=select)
+        except HTTPError as e:
+            raise OPD_SocrataHTTPError(url, data_set, *e.args)
+        except Exception as e: raise e
+
+        if use_gpd and output_type==None:
+            # Check for geo info
+            for r in results:
+                if "geolocation" in r or "geocoded_column" in r:
+                    output_type = "GeoDataFrame"
+                    break
 
         if output_type == "set":
             if offset==0:
@@ -365,18 +381,24 @@ def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, sel
             if len(results)>0:
                 [df.append(row[select]) for row in results]
 
-        elif use_gpd and (output_type=="GeoDataFrame" or \
-            (output_type==None and len(results)>0 and "geolocation" in results[0])):
+        elif use_gpd and output_type=="GeoDataFrame":
             output_type = "GeoDataFrame"
             # Presumed to be a list of properties that possibly include coordinates
             geojson = {"type" : "FeatureCollection", "features" : []}
             for p in results:
                 feature = {"type" : "Feature", "properties" : p}
-                geo = feature["properties"].pop("geolocation")
-                if list(geo.keys()) == ["human_address"]:
-                    feature["geometry"] = {"type" : "Point", "coordinates" : (nan, nan)}  
+                if "geolocation" in feature["properties"]:
+                    geo = feature["properties"].pop("geolocation")
+                    if list(geo.keys()) == ["human_address"]:
+                        feature["geometry"] = {"type" : "Point", "coordinates" : (nan, nan)}  
+                    elif "coordinates" in geo:
+                        feature["geometry"] = geo
+                    else:
+                        feature["geometry"] = {"type" : "Point", "coordinates" : (float(geo["longitude"]), float(geo["latitude"]))}
+                elif "geocoded_column" in feature["properties"]:
+                    feature["geometry"] = feature["properties"].pop("geocoded_column")
                 else:
-                    feature["geometry"] = {"type" : "Point", "coordinates" : (float(geo["longitude"]), float(geo["latitude"]))}  
+                    feature["geometry"] = {"type" : "Point", "coordinates" : (nan, nan)} 
                 
                 geojson["features"].append(feature)
 
@@ -386,14 +408,14 @@ def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, sel
                 if offset==0:
                     df = new_gdf
                 else:
-                    df = df.append(new_gdf)
+                    df = pd.concat([df, new_gdf], ignore_index=True)
         else:
             output_type = "DataFrame"
             rows = pd.DataFrame.from_records(results)
             if offset==0:
                 df = pd.DataFrame(rows)
             else:
-                df = df.append(rows)
+                df = pd.concat([df, rows], ignore_index=True)
 
         N = len(results)
         offset += N
@@ -435,7 +457,7 @@ def _process_date(date, inclusive, date_field=None):
     return start_date, stop_date
 
 
-def filter_dataframe(df, date_field=None, year_filter=None, jurisdiction_field=None, jurisdiction_filter=None):
+def filter_dataframe(df, date_field=None, year_filter=None, agency_field=None, agency=None):
     '''Load CSV file to pandas DataFrame
     
     Parameters
@@ -446,17 +468,17 @@ def filter_dataframe(df, date_field=None, year_filter=None, jurisdiction_field=N
         (Optional) Name of the column that contains the date
     year_filter : int, list
         (Optional) Either the year or the year range [first_year, last_year] for the data that is being requested.  None value returns data for all years.
-    jurisdiction_field : str
-        (Optional) Name of the column that contains the jurisidiction name (i.e. name of the police departments)
-    jurisdiction_filter : str
-        (Optional) Name of the jurisdiction to filter for. None value returns data for all jurisdictions.
+    agency_field : str
+        (Optional) Name of the column that contains the agency name (i.e. name of the police departments)
+    agency : str
+        (Optional) Name of the agency to filter for. None value returns data for all agencies.
     '''
     
     if year_filter != None and date_field != None:
         df = df[df[date_field].dt.year == year_filter]
 
-    if jurisdiction_filter != None and jurisdiction_field != None:
-        df = df.query(jurisdiction_field + " = '" + jurisdiction_filter + "'")
+    if agency != None and agency_field != None:
+        df = df.query(agency_field + " = '" + agency + "'")
 
     return df
 
@@ -522,6 +544,8 @@ def _get_years(data_type, url, date_field, data_set=None):
             misses = 0
             max_misses = max_misses_gap
             years.append(year)
+
+        sleep(sleep_time)
 
         year-=1
 

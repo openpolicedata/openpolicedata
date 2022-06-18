@@ -1,4 +1,3 @@
-import pytest
 import pandas as pd
 import numpy as np
 import re
@@ -17,15 +16,15 @@ def get_datasets(csvfile):
 
 
 class TestDatasets:
-    def test_duplicates(self, csvfile, source, last):
+    def test_duplicates(self, csvfile, source, last, skip, loghtml):
         datasets = get_datasets(csvfile)
-        assert not datasets.duplicated(subset=['State', 'SourceName', 'Jurisdiction', 'TableType','Year']).any()
+        assert not datasets.duplicated(subset=['State', 'SourceName', 'Agency', 'TableType','Year']).any()
 
-    def test_check_columns(self, csvfile, source, last):
+    def test_check_columns(self, csvfile, source, last, skip, loghtml):
         columns = {
             'State' : pd.StringDtype(),
             'SourceName' : pd.StringDtype(),
-            'Jurisdiction': pd.StringDtype(),
+            'Agency': pd.StringDtype(),
             'TableType': pd.StringDtype(),
             'Year': np.dtype("O"),
             'Description': pd.StringDtype(),
@@ -33,7 +32,7 @@ class TestDatasets:
             'URL': pd.StringDtype(),
             'date_field': pd.StringDtype(),
             'dataset_id': pd.StringDtype(),
-            'jurisdiction_field': pd.StringDtype()
+            'agency_field': pd.StringDtype()
         }
 
         datasets = get_datasets(csvfile)
@@ -41,15 +40,15 @@ class TestDatasets:
         for key in columns.keys():
             assert key in datasets
 
-    def test_table_for_nulls(self, csvfile, source, last):
-        can_have_nulls = ["Description", "date_field", "dataset_id", "jurisdiction_field", "Year"]
+    def test_table_for_nulls(self, csvfile, source, last, skip, loghtml):
+        can_have_nulls = ["Description", "date_field", "dataset_id", "agency_field", "Year"]
         datasets = get_datasets(csvfile)
         for col in datasets.columns:
             if not col in can_have_nulls:
                 assert pd.isnull(datasets[col]).sum() == 0
 
     
-    def test_check_state_names(self, csvfile, source, last):
+    def test_check_state_names(self, csvfile, source, last, skip, loghtml):
         all_states = [
             'Alabama', 'Alaska', 'American Samoa', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware', 'District Of Columbia',
             'Florida', 'Georgia', 'Guam', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky', 'Louisiana', 'Maine',
@@ -62,44 +61,44 @@ class TestDatasets:
         datasets = get_datasets(csvfile)
         assert len([x for x in datasets["State"] if x not in all_states]) == 0
 
-    def test_jurisdiction_names(self, csvfile, source, last):
-        # Jurisdiction names should either match source name or be MULTI
+    def test_agency_names(self, csvfile, source, last, skip, loghtml):
+        # Agency names should either match source name or be MULTI
         datasets = get_datasets(csvfile)
-        rem = datasets["Jurisdiction"][datasets["Jurisdiction"] != datasets["SourceName"]]
-        assert ((rem == opd._datasets.MULTI) | (rem == opd._datasets.NA)).all()
+        rem = datasets["Agency"][datasets["Agency"] != datasets["SourceName"]]
+        assert ((rem == opd.defs.MULTI) | (rem == opd.defs.NA)).all()
 
-    def test_year(self, csvfile, source, last):
+    def test_year(self, csvfile, source, last, skip, loghtml):
         # year should either be an int or MULTI or "None"
         datasets = get_datasets(csvfile)
         rem = datasets["Year"][[type(x)!=int for x in datasets["Year"]]]
-        assert ((rem == opd._datasets.MULTI) | (rem == opd._datasets.NA)).all()
+        assert ((rem == opd.defs.MULTI) | (rem == opd.defs.NA)).all()
 
-    def test_socrata_id(self, csvfile, source, last):
+    def test_socrata_id(self, csvfile, source, last, skip, loghtml):
         datasets = get_datasets(csvfile)
-        rem = datasets["dataset_id"][datasets["DataType"] == opd._datasets.DataTypes.SOCRATA.value]
+        rem = datasets["dataset_id"][datasets["DataType"] == opd.defs.DataType.SOCRATA.value]
         assert pd.isnull(rem).sum() == 0
 
-    def test_years_multi(self, csvfile, source, last):
+    def test_years_multi(self, csvfile, source, last, skip, loghtml):
         datasets = get_datasets(csvfile)
-        rem = datasets["date_field"][datasets["Year"] == opd._datasets.MULTI]
+        rem = datasets["date_field"][datasets["Year"] == opd.defs.MULTI]
         assert pd.isnull(rem).sum() == 0
 
-    def test_jurisdictions_multi(self, csvfile, source, last):
+    def test_agencies_multi(self, csvfile, source, last, skip, loghtml):
         datasets = get_datasets(csvfile)
-        rem = datasets["jurisdiction_field"][datasets["Jurisdiction"] == opd._datasets.MULTI]
+        rem = datasets["agency_field"][datasets["Agency"] == opd.defs.MULTI]
         assert pd.isnull(rem).sum() == 0
 
-    def test_arcgis_urls(self, csvfile, source, last):
+    def test_arcgis_urls(self, csvfile, source, last, skip, loghtml):
         datasets = get_datasets(csvfile)
         urls = datasets["URL"]
-        p = re.compile("(MapServer|FeatureServer)/\d+")
+        p = re.compile(r"(MapServer|FeatureServer)/\d+")
         for i,url in enumerate(urls):
-            if datasets.iloc[i]["DataType"] == opd._datasets.DataTypes.ArcGIS.value:
+            if datasets.iloc[i]["DataType"] == opd.defs.DataType.ArcGIS.value:
                 result = p.search(url)
                 assert result != None
                 assert len(url) == result.span()[1]
 
-    def test_source_list_by_state(self, csvfile, source, last):
+    def test_source_list_by_state(self, csvfile, source, last, skip, loghtml):
         datasets = get_datasets(csvfile)
         state = "Virginia"
         df = opd.datasets_query(state=state)
@@ -107,7 +106,7 @@ class TestDatasets:
         assert len(df)>0
         assert df_truth.equals(df)
 
-    def test_source_list_by_source_name(self, csvfile, source, last):
+    def test_source_list_by_source_name(self, csvfile, source, last, skip, loghtml):
         datasets = get_datasets(csvfile)
         source_name = "Fairfax County"
         df = opd.datasets_query(source_name=source_name)
@@ -115,35 +114,35 @@ class TestDatasets:
         assert len(df)>0
         assert df_truth.equals(df)
 
-    def test_source_list_by_jurisdiction(self, csvfile, source, last):
+    def test_source_list_by_agency(self, csvfile, source, last, skip, loghtml):
         datasets = get_datasets(csvfile)
-        jurisdiction = "Fairfax County"
-        df = opd.datasets_query(jurisdiction=jurisdiction)
-        df_truth = datasets[datasets["Jurisdiction"]==jurisdiction]
+        agency = "Fairfax County"
+        df = opd.datasets_query(agency=agency)
+        df_truth = datasets[datasets["Agency"]==agency]
         assert len(df)>0
         assert df_truth.equals(df)
 
-    def test_source_list_by_table_type(self, csvfile, source, last):
+    def test_source_list_by_table_type(self, csvfile, source, last, skip, loghtml):
         datasets = get_datasets(csvfile)
-        table_type = opd.TableTypes.TRAFFIC
+        table_type = opd.defs.TableType.TRAFFIC
         df = opd.datasets_query(table_type=table_type)
         df_truth = datasets[datasets["TableType"]==table_type.value]
         assert len(df)>0
         assert df_truth.equals(df)
 
-    def test_source_list_by_table_type_value(self, csvfile, source, last):
+    def test_source_list_by_table_type_value(self, csvfile, source, last, skip, loghtml):
         datasets = get_datasets(csvfile)
-        table_type = opd.TableTypes.TRAFFIC.value
+        table_type = opd.defs.TableType.TRAFFIC.value
         df = opd.datasets_query(table_type=table_type)
         df_truth = datasets[datasets["TableType"]==table_type]
         assert len(df)>0
         assert df_truth.equals(df)
 
-    def test_source_list_by_multi(self, csvfile, source, last):
+    def test_source_list_by_multi(self, csvfile, source, last, skip, loghtml):
         datasets = get_datasets(csvfile)
         state = "Virginia"
         source_name = "Fairfax County"
-        table_type = opd.TableTypes.TRAFFIC_CITATIONS.value
+        table_type = opd.defs.TableType.TRAFFIC_CITATIONS.value
         df = opd.datasets_query(state=state, table_type=table_type, source_name=source_name)
         df_truth = datasets[datasets["TableType"]==table_type]
         df_truth = df_truth[df_truth["State"]==state]
@@ -151,18 +150,18 @@ class TestDatasets:
         assert len(df)>0
         assert df_truth.equals(df)
 
-    def test_table_types(self, csvfile, source, last):
+    def test_table_types(self, csvfile, source, last, skip, loghtml):
         datasets = get_datasets(csvfile)
         for t in datasets["TableType"]:
             # Try to convert to an enum
-            opd.TableTypes(t)
+            opd.defs.TableType(t)
 
-    def test_data_types(self, csvfile, source, last):
+    def test_data_types(self, csvfile, source, last, skip, loghtml):
         datasets = get_datasets(csvfile)
         for t in datasets["DataType"]:
             # Try to convert to an enum
-            opd.DataTypes(t)
+            opd.defs.DataType(t)
         
 
 if __name__ == "__main__":
-    TestDatasets().test_data_types("C:\\Users\\matth\\repos\\sowd-opd-data\\opd_source_table.csv",None,float('inf'))
+    TestDatasets().test_agency_names("C:\\Users\\matth\\repos\\sowd-opd-data\\opd_source_table.csv",None,None)

@@ -16,6 +16,12 @@ def pytest_addoption(parser):
     parser.addoption(
         "--last", action="store", default=None, help="Run only the last N datasets in tests"
     )
+    parser.addoption(
+        "--skip", action="store", default=None, help="Comma-separated list of sources to skip"
+    )
+    parser.addoption(
+        "--loghtml", action="store", default=0, help="0 (default) or 1 indicating if URL warnings/errors should be logged"
+    )
 
 
 def pytest_configure(config):
@@ -50,3 +56,12 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize("last", [int(option_value)])
     else:
         metafunc.parametrize("last", [float('inf')])
+
+    option_value = metafunc.config.option.skip
+    if 'skip' in metafunc.fixturenames and option_value is not None:
+        metafunc.parametrize("skip", [option_value])
+    else:
+        metafunc.parametrize("skip", [None])
+
+    option_value = metafunc.config.option.loghtml
+    metafunc.parametrize("loghtml", [option_value])
