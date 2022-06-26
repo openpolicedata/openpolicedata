@@ -2,16 +2,20 @@ import os.path as path
 import pandas as pd
 from datetime import datetime
 
+from openpolicedata import datetime_parser
+
 if __name__ == '__main__':
     import data_loaders
     import _datasets
     import preproc
     from defs import TableType, DataType, MULTI
+    import defs
 else:
     from . import data_loaders
     from . import _datasets
     from . import preproc
     from .defs import TableType, DataType, MULTI
+    from . import defs
 
 class Table:
     """
@@ -156,11 +160,43 @@ class Table:
         return get_csv_filename(self.state, self.source_name, self.agency, self.table_type, self.year)
 
     def standardize(self, keep_raw=False):
-        preproc.standardize(self.table, self.table_type, 
+        # TODO: Resort columns.
+        # TODO: Keep mapping of columns
+        self.table, maps = preproc.standardize(self.table, self.table_type, 
             date_column=self._date_field, 
             agency_column=self._agency_field, 
             source_name=self.source_name,
             keep_raw=keep_raw)
+
+    def merge_date_and_time(self, ifmissing="error", ifnotime="nat", keeporig=True):
+        ifmissing = ifmissing.lower()
+        if ifmissing not in ["error", "ignore"]:
+            raise ValueError("ifmissing must either be 'error' or 'ignore'")
+
+        ifnotime = ifnotime.lower()
+        if ifnotime not in ["nat", "ignore"]:
+            raise ValueError("ifnotime must either be 'NaT' (not a time) or 'ignore'")
+
+        if defs.columns.DATE in self.table and defs.columns.TIME in self.table:
+            self.table[defs.columns.DATETIME] = datetime_parser.merge_date_and_time(self.table[defs.columns.DATE], self.table[defs.columns.TIME])
+            if ifnotime == "nat":
+                self.table.loc[self.table[defs.columns.TIME] == "", defs.columns.DATETIME] = pd.NaT
+            if not keeporig:
+                self.table.drop(columns=[defs.columns.DATE, defs.columns.TIME], inplace=True)
+        # Commenting this out. Trying to keep time column as local time to enable day vs. night analysis.
+        # Date column is often in UTC but it's not easy to tell when that is the case nor what the local timezone is 
+        # if UTC needs converted
+        # We are assuming that the time column is already local
+        # elif defs.columns.DATE in self.table and len(self.table[defs.columns.DATE].dt.time.unique()) > 3: 
+        #     # Date column may be a datetime column. When the date has no time, the time is 00:00 which
+        #     # can get converted to UTC. The offset at UTC can have up to 2 values due to daylight savings
+        #     # time so the threshold is 3.
+        #     self.table[defs.columns.DATETIME] = self.table[defs.columns.DATE]
+        #     if not keeporig:
+        #         self.table.drop(columns=[defs.columns.DATE], inplace=True)
+        elif ifmissing == "error":
+            raise ValueError(f"Combining dates and times requires columns called {defs.columns.DATE} and {defs.columns.TIME}. " + 
+                "Set ifmissing='ignore' to ignore if date or time columns do not exist")
 
 
 class Source:
@@ -491,7 +527,7 @@ class Source:
         if output_dir != None:
             filename = path.join(output_dir, filename)            
 
-        table.table = pd.read_csv(filename, parse_dates=True)
+        table.table = pd.read_csv(filename, parse_dates=True, low_memory=False)
         table.table = _check_date(table.table, table._date_field)  
 
         return table
@@ -592,104 +628,3 @@ def get_csv_filename(state, source_name, agency, table_type, year):
     filename += ".csv"
 
     return filename
-
-if __name__ == '__main__':
-    istart = 182
-    from datetime import date
-    datasets = _datasets.datasets_query()
-    max_num_stanford = 1
-    num_stanford = 0
-    prev_sources = []
-    prev_tables = []
-    output_dir = ".\\data"
-    action = "standardize"
-    issue_datasets = ["Austin", "Chapel Hill", "Fayetteville", "San Diego"]
-    is_austin = datasets["SourceName"].apply(lambda x : x in issue_datasets)
-    not_austin = datasets["SourceName"].apply(lambda x : x not in issue_datasets)
-    # Austin has unknown race values. Emailed dataset owner.
-    datasets = pd.concat([datasets[not_austin], datasets[is_austin]])
-    for i in range(istart, len(datasets)):
-        if "stanford.edu" in datasets.iloc[i]["URL"]:
-            num_stanford += 1
-            if num_stanford > max_num_stanford:
-                continue
-
-        srcName = datasets.iloc[i]["SourceName"]
-        state = datasets.iloc[i]["State"]
-
-        if datasets.iloc[i]["Agency"] == MULTI and srcName == "Virginia":
-            # Reduce size of data load by filtering by agency
-            agency = "Fairfax County Police Department"
-        else:
-            agency = None
-
-        skip = False
-        for k in range(len(prev_sources)):
-            if srcName == prev_sources[k] and datasets.iloc[i]["TableType"] ==prev_tables[k]:
-                skip = True
-
-        if skip:
-            continue
-
-        prev_sources.append(srcName)
-        prev_tables.append(datasets.iloc[i]["TableType"])
-
-        table_print = datasets.iloc[i]["TableType"]
-        now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
-        print(f"{now} Saving CSV for dataset {i} of {len(datasets)}: {srcName} {table_print} table")
-
-        src = Source(srcName, state=state)
-
-        if action == "standardize":
-            year = date.today().year
-            table = None
-            csv_filename = "NOT A FILE"
-            for y in range(year, year-20, -1):
-                try:
-                    csv_filename = src.get_csv_filename(y, output_dir, datasets.iloc[i]["TableType"], 
-                        agency=agency)
-                except ValueError as e:
-                    if "There are no sources matching tableType" in e.args[0]:
-                        continue
-                    else:
-                        raise
-                except:
-                    raise
-                
-                if path.exists(csv_filename):
-                    table = src.load_from_csv(y, table_type=datasets.iloc[i]["TableType"], 
-                        agency=agency,output_dir=output_dir)
-                    break
-
-            if not path.exists(csv_filename):
-                table = src.load_from_csv(datasets.iloc[i]["Year"], table_type=datasets.iloc[i]["TableType"], 
-                        agency=agency,output_dir=output_dir)
-
-            table.standardize()
-        else:
-            if datasets.iloc[i]["DataType"] ==DataType.CSV.value:
-                csv_filename = src.get_csv_filename(datasets.iloc[i]["Year"], output_dir, datasets.iloc[i]["TableType"])
-                if path.exists(csv_filename):
-                    continue
-                table = src.load_from_url(datasets.iloc[i]["Year"], datasets.iloc[i]["TableType"])
-            else:
-                years = src.get_years(datasets.iloc[i]["TableType"])
-                
-                if len(years)>1:
-                    # It is preferred to to not use first or last year that start and stop of year are correct
-                    year = years[-2]
-                else:
-                    year = years[0]
-
-                csv_filename = src.get_csv_filename(year, output_dir, datasets.iloc[i]["TableType"], 
-                                        agency=agency)
-
-                if path.exists(csv_filename):
-                    continue
-
-                table = src.load_from_url(year, datasets.iloc[i]["TableType"], 
-                                        agency=agency)
-
-            table.to_csv(".\\data")
-
-    print("data main function complete")

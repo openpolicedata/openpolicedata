@@ -1,7 +1,7 @@
-from pandas.api.types import is_datetime64_any_dtype as is_datetime
 import pandas as pd
-import numpy as np
-from datetime import datetime, date, timedelta
+import re
+
+from pyparsing import col
 
 try:
     from . import datetime_parser
@@ -27,10 +27,11 @@ class DataMapping:
 def standardize(df, table_type, date_column=None, agency_column=None, source_name=None, keep_raw=True): 
     col_map = id_columns(df, table_type, date_column, agency_column, source_name=source_name)
     maps = []
-    standardize_date(df, col_map, maps, keep_raw=keep_raw)
+    df = standardize_date(df, col_map, maps, keep_raw=keep_raw)
+    standardize_time(df, col_map, maps, keep_raw=keep_raw)
     standardize_race(df, col_map, maps, source_name, keep_raw=keep_raw)
     
-    return maps
+    return df, maps
 
 def _pattern_search(all_cols, select_cols, patterns, match_substr):
     matches = []
@@ -46,9 +47,9 @@ def _pattern_search(all_cols, select_cols, patterns, match_substr):
             pattern = p[1]
             
             def find_matches(columns, guess, match_substr, idx, pattern):
-                matches_nocase = [x for x in columns if x.lower() == pattern.format(guess).lower()]
-                if len(matches_nocase)>0:
-                    return [x for x in columns if x.lower() in matches_nocase]
+                matches = [x for x in columns if x.lower() == pattern.format(guess).lower()]
+                if len(matches)>0:
+                    return matches
 
                 for k,val in enumerate(match_substr[idx:]):
                     new_guess = guess + val
@@ -108,125 +109,22 @@ def _find_col_matches(df, table_type, match_substr, known_col_name=None,
                     score = None
                     for col in match_cols_test:
                         try:
-                            new_score = validator(df[col])
+                            new_score = validator(df[col])                           
+                        except Exception as e:
+                            pass
+                        else:
                             if score == new_score:
                                 match_cols.append(col)
                             elif new_score != None and (score == None or new_score > score):
                                 # Higher scoring item found. This now takes priority
                                 score = new_score
-                                match_cols = [col]                            
-                        except:
-                            pass
+                                match_cols = [col] 
 
         for e in exclude_col_names:
             if e in match_cols:
                 match_cols.remove(e)
 
         return match_cols
-
-
-def _id_date_column(df, table_type, date_column, col_map):
-    
-    if date_column != None:
-        if not is_datetime(df[date_column].dtype):
-            raise TypeError(f"Date column {date_column} should contain a datetime")
-
-        col_map[defs.columns.DATE] = date_column
-    else:
-        date_cols = [x for x in df.columns if "date" in x.lower()]
-        if len(date_cols)==0:
-            if table_type not in \
-            [defs.TableType.USE_OF_FORCE_CIVILIANS_OFFICERS, defs.TableType.USE_OF_FORCE_CIVILIANS, 
-            defs.TableType.EMPLOYEE, defs.TableType.USE_OF_FORCE_OFFICERS]:
-                raise NotImplementedError("Find the date")
-        elif len(date_cols)>1:
-            date_exact = [x for x in date_cols if x.lower() == "date"]
-            date_assigned = [x for x in date_cols if "assigned" in x.lower()]
-            if len(date_exact) > 0:
-                date_cols = date_exact
-            elif len(date_assigned) > 0:
-                date_cols = date_assigned
-            else:
-                raise NotImplementedError()
-
-            if len(date_cols)>1:
-                raise NotImplementedError()
-        else:
-            col_map[defs.columns.DATE] = date_cols[0]
-
-
-def _id_time_column(df, col_map):
-    time_cols = [x for x in df.columns if "time" in x.lower()]
-    if len(time_cols) == 0 and defs.columns.DATE in col_map:
-        segs = col_map[defs.columns.DATE].split("_")
-        time_str = "time"
-        date_str = "date"
-        for k, seg in enumerate(segs):
-            if seg[0].lower() == date_str[0].lower():
-                idx = 1
-                use_idx = [0]
-                caps = [seg[0] == date_str[0].upper()]
-                found = True
-                for x in seg[1:].lower():
-                    found = False
-                    for m, y in enumerate(date_str[idx:]):
-                        if x.lower() == y.lower():
-                            use_idx.append(idx+m)
-                            caps.append(x == y.upper())
-                            idx += m+1
-                            found = True
-                            break
-
-                    if not found:
-                        break
-
-                if found:
-                    # Attempt to find in columns
-                    col_name = ""
-                    for j in range(len(segs)):
-                        if j == k:
-                            s = ""
-                            for m, x in enumerate(use_idx):
-                                val = time_str[x].lower()
-                                if caps[m]:
-                                    val = val.upper()
-                                s+=val
-                        else:
-                            s = segs[j]
-
-                        col_name += s
-                        if j < len(segs)-1:
-                            col_name += "_"
-
-                    if col_name in df.columns:
-                        time_cols = [col_name]
-                        break
-            
-
-    if len(time_cols)>1:
-        is_time = []
-        for k, col in enumerate(time_cols):
-            try:
-                datetime_parser.parse_time_to_sec(df[col])
-                is_time.append(True)
-            except:
-                is_time.append(False)
-
-        time_idx = [k for k,x in enumerate(is_time) if x ]
-        if len(time_idx) == 0:
-            raise NotImplementedError()
-        elif len(time_idx) > 1:
-            raise NotImplemented()
-
-        time_cols = time_cols[time_idx[0]:time_idx[0]+1]
-                
-                
-    if len(time_cols) == 1:
-        if defs.columns.DATE not in col_map or col_map[defs.columns.DATE] != time_cols[0]:
-            col_map[defs.columns.TIME] = time_cols[0]
-            if defs.columns.DATE not in col_map:
-                    raise NotImplementedError()
-
 
 def _id_race_column(df, table_type, source_name, col_map, race_cols):
     # Need to determine if race column is for officers or civilians
@@ -237,16 +135,15 @@ def _id_race_column(df, table_type, source_name, col_map, race_cols):
         known_tables_wo_race = [
             ("Montgomery County", defs.TableType.COMPLAINTS),
             ("Denver", defs.TableType.STOPS),
-            ("Bloomington", defs.TableType.CALLS_FOR_SERVICE),
-            ("Asheville", defs.TableType.CALLS_FOR_SERVICE),
-            ("San Francisco", defs.TableType.CALLS_FOR_SERVICE),
-            ("Cincinnati", defs.TableType.CALLS_FOR_SERVICE),
-            ("Tuscon", defs.TableType.CALLS_FOR_SERVICE),
-            ("Los Angeles", defs.TableType.CALLS_FOR_SERVICE),
             ("Lincoln", defs.TableType.VEHICLE_PURSUITS),
-            ("Tuscon", defs.TableType.SHOOTINGS_INCIDENTS)
+            ("Tuscon", defs.TableType.SHOOTINGS_INCIDENTS),
+            ("Los Angeles", defs.TableType.STOPS),
+            ("Austin", defs.TableType.SHOOTINGS_INCIDENTS),
+            ("South Bend", defs.TableType.USE_OF_FORCE),
+            ("State Police", defs.TableType.SHOOTINGS)
         ]
         if table_type == defs.TableType.USE_OF_FORCE_INCIDENTS or \
+            table_type == defs.TableType.CALLS_FOR_SERVICE or \
             any([(source_name, table_type)==x for x in known_tables_wo_race]):
             race_found = False
         else:
@@ -265,7 +162,8 @@ def _id_race_column(df, table_type, source_name, col_map, race_cols):
 
             types = []
             for k in range(len(race_cols)):
-                if "off" in race_cols[k].lower() or is_officer_table:
+                if "off" in race_cols[k].lower() or "deputy" in race_cols[k].lower() or \
+                    (is_officer_table and "suspect" not in race_cols[k].lower() and "supsect" not in race_cols[k].lower()):
                     types.append(defs.columns.RACE_OFFICER)
                 else:
                     types.append(defs.columns.RACE_CIVILIAN)
@@ -275,25 +173,46 @@ def _id_race_column(df, table_type, source_name, col_map, race_cols):
                 # Stanford data
                 race_cols = race_cols[0:1]
                 types = types[0:1]
+            elif len(race_cols)==2 and all([x in ['tcole_race_ethnicity', 'standardized_race'] for x in race_cols]):
+                # Austin data
+                race_cols = ['tcole_race_ethnicity']
+                types = types[0:1]
             else:
-                is_race_col = []
-                for col in race_cols:
-                    vals = [x.lower() if type(x)==str else x for x in df[col].unique()]
-                    exp_vals = ["black","white","hispanic","latino","asian","b","w","h","a"]
-                    if len([1 for x in vals if x in exp_vals]) > 1:
-                        is_race_col.append(True)
-                    else:
-                        is_race_col.append(False)
+                orig_race_cols = race_cols
+                orig_type = types
+                race_cols = []
+                types = []
+                vals = []
+                for k, col in enumerate(orig_race_cols):
+                    new_col = convert_race(df[col], source_name)
+                    found = False
+                    for j, t in enumerate(types):
+                        if t == orig_type[k] and new_col.equals(vals[j]):
+                            found = True
+                            break
 
-                race_cols = [x for x,y in zip(race_cols, is_race_col) if y]
-                types = [x for x,y in zip(types, is_race_col) if y]
+                    if not found:
+                        race_cols.append(col)
+                        types.append(orig_type[k])
+                        vals.append(new_col)
+                # is_race_col = []
+                # # for col in race_cols:
+                # #     vals = [x.lower() if type(x)==str else x for x in df[col].unique()]
+                # #     exp_vals = ["black","white","hispanic","latino","asian","b","w","h","a"]
+                # #     if len([1 for x in vals if x in exp_vals]) > 1:
+                # #         is_race_col.append(True)
+                # #     else:
+                # #         is_race_col.append(False)
+
+                # race_cols = [x for x,y in zip(race_cols, is_race_col) if y]
+                # types = [x for x,y in zip(types, is_race_col) if y]
                 if len(set(types)) != len(types):
                     raise NotImplementedError()
 
         for k in range(len(race_cols)):
             col_map[types[k]] = race_cols[k]
 
-    return types
+    return race_cols, types
 
 
 def _id_ethnicity_column(table_type, col_map, race_types, eth_cols):
@@ -323,16 +242,11 @@ def _id_ethnicity_column(table_type, col_map, race_types, eth_cols):
         col_map[eth_types[k]] = eth_cols[k]
 
 
-def _id_agency_column(agency_column, col_map):
-    if agency_column != None:
-        col_map[defs.columns.AGENCY] = agency_column
-
-
 def id_columns(df, table_type, date_column=None, agency_column=None, source_name=None):
     col_map = {}
 
     match_cols = _find_col_matches(df, table_type, "date", known_col_name=date_column, 
-        secondary_patterns = [("equals","date"), ("contains", "assigned")],
+        secondary_patterns = [("equals","date"), ("contains", "call"), ("contains", "assigned"), ("contains", "occurred")],
         not_required_table_types=[defs.TableType.USE_OF_FORCE_CIVILIANS_OFFICERS, defs.TableType.USE_OF_FORCE_CIVILIANS, 
             defs.TableType.USE_OF_FORCE_OFFICERS, defs.TableType.SHOOTINGS_CIVILIANS, defs.TableType.SHOOTINGS_OFFICERS],
         exclude_table_types=[defs.TableType.EMPLOYEE], validator=datetime_parser.validate_date)
@@ -345,65 +259,79 @@ def id_columns(df, table_type, date_column=None, agency_column=None, source_name
     # _id_date_column(df, table_type, date_column, col_map)
     
     check_for_time = True
-    if defs.columns.DATE in col_map:
-        dts = df[col_map[defs.columns.DATE]][pd.notnull(df[col_map[defs.columns.DATE]])]
-        if hasattr(dts[0], "year"):
-            dts = dts.dt.time.unique()
-            if len(dts) > 1:
-                if len(dts)==2:
-                    dts = np.sort(dts)
-                    # Check difference to see if it's just a UTC offset difference between standard and daylight savings time 
-                    dt = datetime.combine(date.today(), dts[1]) - datetime.combine(date.today(), dts[0])
-                    if dt != timedelta(hours=1):
-                        check_for_time = False
-                else:
-                    # Time already in date
-                    check_for_time = False
+    # if defs.columns.DATE in col_map:
+    #     dts = df[col_map[defs.columns.DATE]][pd.notnull(df[col_map[defs.columns.DATE]])]
+    #     if hasattr(dts[0], "year"):
+    #         dts = dts.dt.time.unique()
+    #         if len(dts) > 1:
+    #             if len(dts)==2:
+    #                 dts = np.sort(dts)
+    #                 # Check difference to see if it's just a UTC offset difference between standard and daylight savings time 
+    #                 dt = datetime.combine(date.today(), dts[1]) - datetime.combine(date.today(), dts[0])
+    #                 if dt != timedelta(hours=1):
+    #                     check_for_time = False
+    #             else:
+    #                 # Time already in date
+    #                 check_for_time = False
 
     if check_for_time:
-        # _id_time_column(df, col_map)
         secondary_patterns = []
         if defs.columns.DATE in col_map:
             # Create a pattern from the format of the date column name
             # That might also be the pattern of the time column
-            segs = col_map[defs.columns.DATE].split("_")
-            if len(segs)>1:
-                date_str = defs.columns.DATE.lower()
-                pattern = ""
-                date_found = False
-                for k,seg in enumerate(segs):
-                    if not date_found and seg[0].lower() == date_str[0]:
-                        # Check if rest of seg consists of values in date_str
-                        found = True
-                        idx = 1
-                        for val in seg[1:].lower():
-                            while idx < len(date_str) and val != date_str[idx]:
-                                idx+=1
+            success = False
+            if "date" in col_map[defs.columns.DATE].lower():
+                match = re.search('date', col_map[defs.columns.DATE], re.IGNORECASE)
+                if match != None:
+                    if match[0].islower():
+                        secondary_patterns = [("equals", col_map[defs.columns.DATE].replace(match[0], "time"))]
+                    elif match[0].isupper():
+                        secondary_patterns = [("equals", col_map[defs.columns.DATE].replace(match[0], "TIME"))]
+                    elif match[0].istitle():
+                        secondary_patterns = [("equals", col_map[defs.columns.DATE].replace(match[0], "Time"))]
+                    else:
+                        raise NotImplementedError()
+                    success = True
 
-                            if idx==len(date_str):
-                                found = False
-                                break
+            if not success:
+                segs = col_map[defs.columns.DATE].split("_")
+                if len(segs)>1:
+                    date_str = defs.columns.DATE.lower()
+                    pattern = ""
+                    date_found = False
+                    for k,seg in enumerate(segs):
+                        if not date_found and seg[0].lower() == date_str[0]:
+                            # Check if rest of seg consists of values in date_str
+                            found = True
+                            idx = 1
+                            for val in seg[1:].lower():
+                                while idx < len(date_str) and val != date_str[idx]:
+                                    idx+=1
+
+                                if idx==len(date_str):
+                                    found = False
+                                    break
+                                else:
+                                    idx+=1
+                            if found:
+                                pattern+="{}"
+                                date_found = True
                             else:
-                                idx+=1
-                        if found:
-                            pattern+="{}"
-                            date_found = True
+                                pattern+=seg
                         else:
                             pattern+=seg
-                    else:
-                        pattern+=seg
 
-                    if k < len(segs)-1:
-                        pattern+="_"
+                        if k < len(segs)-1:
+                            pattern+="_"
 
-                secondary_patterns = [("format", pattern)]
+                    secondary_patterns = [("format", pattern)]
 
         exclude_col_names = []
         if defs.columns.DATE in col_map:
             exclude_col_names.append(col_map[defs.columns.DATE])
         
         match_cols = _find_col_matches(df, table_type, "time", 
-            secondary_patterns=secondary_patterns, validator=datetime_parser.parse_time_to_sec,
+            secondary_patterns=secondary_patterns, validator=datetime_parser.validate_time,
             exclude_col_names=exclude_col_names)
 
         if len(match_cols) > 1:
@@ -412,11 +340,16 @@ def id_columns(df, table_type, date_column=None, agency_column=None, source_name
             col_map[defs.columns.TIME] = match_cols[0]
         
     # California data, RAE = Race and Ethnicity
-    match_cols = _find_col_matches(df, table_type, ["race", "rae_full"])
-    race_types = _id_race_column(df, table_type, source_name, col_map, match_cols)
+    def race_validator(col):
+        convert_race(col, source_name)
+        return None
+
+    match_cols = _find_col_matches(df, table_type, ["race", "descent","rae_full","citizen_demographics"],
+        validator=race_validator)
+    race_cols, race_types = _id_race_column(df, table_type, source_name, col_map, match_cols)
 
     # enthnicity is to deal with typo in Ferndale data. Consider using fuzzywuzzy in future for fuzzy matching
-    match_cols = _find_col_matches(df, table_type, ["ethnicity", "enthnicity"])
+    match_cols = _find_col_matches(df, table_type, ["ethnic", "enthnicity"], exclude_col_names=race_cols)
     _id_ethnicity_column(table_type, col_map, race_types, match_cols)
 
     # _id_agency_column(agency_column, col_map)
@@ -459,14 +392,32 @@ def standardize_date(df, col_map, maps, keep_raw=True):
                     date_data = df[date_cols].copy()
                     date_data["day"] = [1 for _unused in range(len(df))]
                                 
-        df[defs.columns.DATE] = datetime_parser.parse_date_to_datetime(date_data)
+        s_date = datetime_parser.parse_date_to_datetime(date_data)
+        s_date.name = defs.columns.DATE
+        df = pd.concat([df, s_date], axis=1)
         _cleanup_old_column(df, col_map[defs.columns.DATE], keep_raw)
 
         maps.append(DataMapping(old_column_name=col_map[defs.columns.DATE], new_column_name=defs.columns.DATE))
 
-        if defs.columns.TIME in col_map:
-            df[defs.columns.DATE] = datetime_parser.combine_date_and_time(df[defs.columns.DATE], df[col_map[defs.columns.TIME]])
-            _cleanup_old_column(df, col_map[defs.columns.TIME], keep_raw)
+    return df
+
+
+def standardize_time(df, col_map, maps, keep_raw=False):
+    if defs.columns.TIME in col_map:
+        df[defs.columns.TIME] = datetime_parser.parse_time(df[col_map[defs.columns.TIME]])
+        _cleanup_old_column(df, col_map[defs.columns.TIME], keep_raw)
+
+        maps.append(DataMapping(old_column_name=col_map[defs.columns.TIME], new_column_name=defs.columns.TIME))
+    # Commenting this out. Trying to keep time column as local time to enable day vs. night analysis.
+    # Date column is often in UTC but it's not easy to tell when that is the case nor what the local timezone is 
+    # if UTC needs converted
+    # We are assuming that the time column is already local
+    # elif defs.columns.DATE in col_map:
+    #     tms = df[defs.columns.DATE].dt.time
+    #     # Check if time information is just a UTC offset which can have 2 values due to daylight savings time
+    #     if len(tms.unique()) > 3: 
+    #         # Generate time column from date
+    #         df[defs.columns.TIME] = tms
 
 
 def standardize_race(df, col_map, maps, source_name=None, keep_raw=False):
@@ -486,103 +437,46 @@ def _standardize_race(df, col_map, maps, civilian, source_name, keep_raw):
         new_ethnicity_column = defs.columns.ETHNICITY_OFFICER
 
     race_column = col_map[new_race_column]
-    if new_ethnicity_column in col_map:
+    if new_ethnicity_column in col_map and new_race_column in col_map and \
+        col_map[new_ethnicity_column] != col_map[new_race_column]:
         ethnicity_column = col_map[new_ethnicity_column]
     else:
         ethnicity_column = None
 
-    # Decode the race column
-    vals = [x.upper() if type(x)==str else x  for x in df[race_column].unique()]
     race_map_dict = {}
-    ca_stops_dict = {
-        1 : defs.races.ASIAN, 2 : defs.races.BLACK, 3 : defs.races.LATINO, 
-        4 : defs.races.MIDDLE_EASTERN_SOUTH_ASIAN, 5 : defs.races.NATIVE_AMERICAN,
-        6 : defs.races.HAWAIIAN, 7 : defs.races.WHITE,
-        8 : defs.races.MULTIPLE
-    }
-    lincoln_stops_dict = {
-        1 : defs.races.WHITE, 2 : defs.races.BLACK, 3 : defs.races.LATINO, 
-        4 : defs.races.ASIAN, 5 : defs.races.NATIVE_AMERICAN,
-        6 : defs.races.OTHER
-    }
-    for x in vals:
-        if type(x) == str:
-            x = x.replace("_", " ").replace("*","")
-            x = x.strip()
-        if pd.isnull(x) or x == "NOT SPECIFIED" or x=="":
-            race_map_dict[x] = defs.races.UNSPECIFIED
-        elif type(x) != str and source_name == "California":
-            race_map_dict[x] = ca_stops_dict[x]
-        elif x == "W" or x == "WHITE" or x=="WN":
-            # WN = White-Non-Hispanic
-            race_map_dict[x] = defs.races.WHITE
-        elif x == "B" or "BLACK" in x:
-            race_map_dict[x] = defs.races.BLACK
-        elif x == "U" or x == "UNKNOWN":
-            race_map_dict[x] = defs.races.UNKNOWN
-        elif x == "ASIAN INDIAN":
-            race_map_dict[x] = defs.races.ASIAN_INDIAN
-        elif x == "SOUTH ASIAN" or ("INDIAN" in x and "BURMESE" in x):
-            race_map_dict[x] = defs.races.SOUTH_ASIAN
-        elif "PACIFIC ISLAND" in x:
-            race_map_dict[x] = defs.races.AAPI
-        elif x == "A" or "ASIAN" in x:
-            if "INDIAN" in x:
-                raise ValueError("INDIAN should be picked up by ASIAN INDIAN condition")
-            elif "PACIFIC" in x:
-                race_map_dict[x] = defs.races.AAPI
-            else:
-                race_map_dict[x] = defs.races.ASIAN
-        elif "HAWAIIAN" in x:
-            race_map_dict[x] = defs.races.HAWAIIAN
-        elif x == "H" or "HISPANIC" in x or "LATINO" in x or x== "WH" or \
-            (source_name == "New York City" and (x=="P" or x=="Q")) or \
-            (source_name == "Bloomington" and (x == "L" or x=="N" or x=="P")): # This should stay below other races to not catch non-Hispanic
-            # WH = White Hispanic
-            # NYC and Bloomington are codes for Hispanic and a race
-            race_map_dict[x] = defs.races.LATINO
-        elif x == "I" or x == "NATIVE AMERICAN" or x=="INDIAN" or "AMERICAN IND" in x \
-            or x == "ALASKAN NATIVE" or "AMER IND" in x:
-            race_map_dict[x] = defs.races.NATIVE_AMERICAN
-        elif x == "ME" or "MIDDLE EAST" in x:
-            race_map_dict[x] = defs.races.MIDDLE_EASTERN
-        elif x == "2 OR MORE":
-            race_map_dict[x] = defs.races.MULTIPLE
-        elif "UNK" in x and "OTH" in x:
-            race_map_dict[x] = defs.races.OTHER_UNKNOWN
-        elif x == "OTHER" or "OTHER UNCLASS" in x or \
-            (source_name == "New York City" and x=="Z"):
-            race_map_dict[x] = defs.races.OTHER
-        elif source_name == "Lincoln":
-            x_int = int(x)
-            race_map_dict[x] = lincoln_stops_dict[x_int]
-        else:
-            raise ValueError(f"Unknown value {x}")
-
+    df[new_race_column] = convert_race(df[race_column], source_name, race_map_dict=race_map_dict)
+    
     maps.append(
         DataMapping(old_column_name=race_column, new_column_name=new_race_column,
             data_maps=race_map_dict)
     )
 
-    df[new_race_column] = df[race_column].map(race_map_dict)
     _cleanup_old_column(df, race_column, keep_raw)
 
     if ethnicity_column != None:        
-        vals = [x.upper() if type(x)==str else x for x in df[ethnicity_column].unique()]
+        vals = [x if type(x)==str else x for x in df[ethnicity_column].unique()]
         # The below values is used in the Ferndale demographics data. Just use the data from the race column in that
         # case which includes if officer is Hispanic
         ferndale_eth_vals = ['NR', 'FRENCH/GERMAN', 'MEXICAN', 'HUNGARIAN', 'LEBANESE', 'POLISH/SCOTTISH', 'IRISH', 'SYRIAN', 'POLISH']
         eth_map_dict = {}
         for x in vals:
+            orig = x
+            if type(x) == str:
+                x = x.upper().replace("-","").replace(" ", "")
+                
             if pd.isnull(x):
                 pass
-            elif x == "N" or x == 'NON-HISPANIC' or x == "NH" or \
+            elif x == "N" or x == 'NONHISPANIC' or x == "NH" or "NOTHISP" in x or \
                 x in ferndale_eth_vals:
                 pass  # Just use race value
             elif x == "H" or "HISPANIC" in x or "LATINO" in x:
-                eth_map_dict[x] = defs.races.LATINO
-            elif x == "U" or x == "UNKNOWN":
-                eth_map_dict[x] = defs.races.UNKNOWN
+                if "NON" in x:
+                    raise ValueError(x)
+                eth_map_dict[orig] = defs.races.LATINO
+            elif x in ["U", "UNKNOWN"]:
+                eth_map_dict[orig] = defs.races.UNKNOWN
+            elif "NODATA" in x.replace(" ",""):
+                eth_map_dict[orig] = defs.races.UNSPECIFIED
             else:
                 raise ValueError(f"Unknown value {x}")
 
@@ -598,3 +492,91 @@ def _standardize_race(df, col_map, maps, civilian, source_name, keep_raw):
         df[new_race_column] = df.apply(update_race, axis=1)
         _cleanup_old_column(df, ethnicity_column, keep_raw)
 
+def convert_race(col, source_name, race_map_dict=None):
+    # Decode the race column
+    vals = [x if type(x)==str else x  for x in col.unique()]
+    if race_map_dict == None:
+        race_map_dict = {}
+    ca_stops_dict = {
+        1 : defs.races.ASIAN, 2 : defs.races.BLACK, 3 : defs.races.LATINO, 
+        4 : defs.races.MIDDLE_EASTERN_SOUTH_ASIAN, 5 : defs.races.NATIVE_AMERICAN,
+        6 : defs.races.HAWAIIAN, 7 : defs.races.WHITE,
+        8 : defs.races.MULTIPLE
+    }
+    lincoln_stops_dict = {
+        1 : defs.races.WHITE, 2 : defs.races.BLACK, 3 : defs.races.LATINO, 
+        4 : defs.races.ASIAN, 5 : defs.races.NATIVE_AMERICAN,
+        6 : defs.races.OTHER
+    }
+    # Austin values below are based on email with dataset owner who said they were from some source. 
+    #   Do these values apply to other datasets using the same values?
+    bad_data = ["MALE"]
+    for x in vals:
+        orig = x
+        if type(x) == str:
+            # if x[0] == "(" and x[-1] == ")" and "," in x:
+            #     # Comma separated demographics list
+            #     # (This needs to be checked to ensure that it's not a list of races...)
+            #     items = x[1:-1].split(",")
+            #     if items[1].lower().strip() in ["male","female"] and str.isdigit(items[2].strip()):
+            #         x = items[0]
+            #     else:
+            #         raise NotImplementedError()
+            x = x.upper().replace("_", " ").replace("*","").replace("-"," ").replace(".","")
+            x = x.strip()
+        if pd.isnull(x) or x in ["NOT SPECIFIED","NULL VALUE", ""] or (type(x)==str and "NO DATA" in x) or x in bad_data:
+            race_map_dict[orig] = defs.races.UNSPECIFIED
+        elif type(x) != str and source_name == "California":
+            race_map_dict[orig] = ca_stops_dict[x]
+        elif x in ["W", "CAUCASIAN", "WN"] or x.replace(", OTHER", "") == "WHITE":
+            # WN = White-Non-Hispanic
+            race_map_dict[orig] = defs.races.WHITE
+        elif x in ["B", "AFRICAN AMERICAN"] or "BLACK" in x:
+            race_map_dict[orig] = defs.races.BLACK
+        elif x in ["U", "UNKNOWN", "UNK"]:
+            race_map_dict[orig] = defs.races.UNKNOWN
+        elif x.replace(", OTHER", "") == "ASIAN INDIAN":
+            race_map_dict[orig] = defs.races.ASIAN_INDIAN
+        elif x == "SOUTH ASIAN" or ("INDIAN" in x and "BURMESE" in x):
+            race_map_dict[orig] = defs.races.SOUTH_ASIAN        
+        elif x == "A" or "ASIAN" in x:
+            if "INDIAN" in x:
+                raise ValueError("INDIAN should be picked up by ASIAN INDIAN condition")
+            elif "PACIFIC" in x:
+                race_map_dict[orig] = defs.races.AAPI
+            else:
+                race_map_dict[orig] = defs.races.ASIAN
+        elif "HAWAIIAN" in x or "PACIFICISLAND" in x.replace(" ","").replace("_","") or \
+            x in ["FILIPINO"] or \
+            (source_name=="Austin" and x=="P"):
+            race_map_dict[orig] = defs.races.HAWAIIAN
+        elif x in ["H", "WH"] or ("HISPANIC" in x and "NONHISPANIC" not in x) or "LATINO" in x or \
+            (source_name == "New York City" and (x in ["P", "Q"])) or \
+            (source_name == "Bloomington" and (x in ["L", "N", "P"])): # This should stay below other races to not catch non-Hispanic
+            # WH = White Hispanic
+            # NYC and Bloomington are codes for Hispanic and a race
+            race_map_dict[orig] = defs.races.LATINO
+        elif x in ["I", "NATIVE AMERICAN", "INDIAN", "ALASKAN NATIVE"] or "AMERICAN IND" in x \
+            or "AMER IND" in x or \
+                (source_name=="Austin" and x=="N"):
+            race_map_dict[orig] = defs.races.NATIVE_AMERICAN
+        elif x == "ME" or "MIDDLE EAST" in x or \
+            (source_name=="Austin" and x=="M"):
+            race_map_dict[orig] = defs.races.MIDDLE_EASTERN
+        elif x in ["2 OR MORE", "MULTI DESCENTS", "TWO OR MORE RACES"] or \
+            x.replace(" ","") == "BIRACIAL":
+            race_map_dict[orig] = defs.races.MULTIPLE
+        elif "UNK" in x and "OTH" in x:
+            race_map_dict[orig] = defs.races.OTHER_UNKNOWN
+        elif x in ["O","OTHER"] or "OTHER UNCLASS" in x or \
+            (source_name == "New York City" and x=="Z"):
+            race_map_dict[orig] = defs.races.OTHER
+        elif source_name == "Lincoln":
+            x_int = int(x)
+            race_map_dict[orig] = lincoln_stops_dict[x_int]
+        elif source_name == "Chapel Hill" and x == "M":
+            race_map_dict[orig] = orig
+        else:
+            raise ValueError(f"Unknown value {x}")
+
+    return col.map(race_map_dict)

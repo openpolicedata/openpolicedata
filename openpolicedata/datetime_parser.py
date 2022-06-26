@@ -5,7 +5,7 @@ import datetime as dt
 def parse_date_to_datetime(date_col):
     if len(date_col.shape)==2:
         if date_col.shape[1] > 1:
-            dts = date_col["year"][pd.notnull(date_col["year"])]
+            dts = date_col.iloc[:,0][date_col.iloc[:,0].notnull()]
             if hasattr(dts.iloc[0], "year"):
                 un_vals = pd.to_datetime(dts.unique())
                 if (un_vals.month != 1).any() or (un_vals.day != 1).any() or (un_vals.hour != 0).any() or \
@@ -14,8 +14,19 @@ def parse_date_to_datetime(date_col):
 
                 # Making a copy to avoid warning
                 d = date_col.copy()
-                d["year"] = date_col["year"].dt.year
-            return pd.to_datetime(d)
+                d.iloc[:,0] = date_col.iloc[:,0].dt.year
+
+                def month_name_to_num(x):
+                    month_list = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"]
+                    if type(x) == str:
+                        month_num = [k+1 for k,y in enumerate(month_list) if x.lower().startswith(y)]
+                        return month_num[0]
+                    else:
+                        return x
+
+                d.iloc[:,1] = date_col.iloc[:,1].apply(month_name_to_num)
+
+                return pd.to_datetime(d)
         else:
             date_col = date_col.iloc[:,0]
 
@@ -98,15 +109,16 @@ def parse_date_to_datetime(date_col):
 
     return date_col
 
-def combine_date_and_time(date_col, time_col):
-    times_sec = parse_time_to_sec(time_col)
 
-    dt_sec = (date_col - dt.datetime(1970,1,1)).dt.total_seconds() + times_sec
+def merge_date_and_time(date_col, time_col):
+    # If date even has a time, this ignores it.
+    # We assume that the time in time column is more likely to be local time
+    # Often returned date is in UTC but local time is preferred for those who want to do day vs. night analysis
 
-    # If date has a time, can it be assumed to be an offset from the local time zone to 
-    # UTC since a time is also provided?
-
-    return pd.to_datetime(dt_sec, unit='s')
+    # We could use:
+    # return pd.to_datetime(date_col.dt.date.astype(str) + " " + time_col.astype(str), errors="coerce")
+    # but not for now to catch unexpected values
+    return pd.Series([d.replace(hour=t.hour, minute=t.minute, second=t.second) if (pd.notnull(d) and pd.notnull(t)) else pd.NaT for d,t in zip(date_col, time_col)])
 
 def validate_date(date_col):
     # Fails if date column is not valid. Otherwise, returns a 
@@ -135,27 +147,75 @@ def validate_date(date_col):
             return max_val-4
         else:
             return max_val-5
-    else:
-        return None
 
-def parse_time_to_sec(time_col):
+    return None
+
+def validate_time(time_col):
+    try:
+        # Try to convert to datetime. If successful, see if there is a date value that varies.
+        # If so, this is not a time column
+        date_col = parse_date_to_datetime(time_col)
+        if len(date_col.dt.date.unique()) > 2:
+            raise ValueError("This column contains date information, and therefore, is not a time column")
+    except ValueError as e:
+        if len(e.args)>0 and "This column contains date information" in e.args[0]:
+            raise e
+
+    col = parse_time(time_col)
+    col = col[col.notnull()]
+    
+    if len(col) > 0:
+        hours = pd.Series([t.hour if pd.notnull(t) else np.nan for t in col])
+        mins = pd.Series([t.minute if pd.notnull(t) else np.nan for t in col])
+        # secs = time_sec - hours*3600 - mins*60
+        max_val = 3
+        # same_sec = (secs == secs.iloc[0]).all()
+        # if not same_sec: 
+        #     return max_val
+        same_min = (mins == mins.iloc[0]).all()
+        if not same_min: 
+            return max_val-1
+        same_hour = (hours == hours.iloc[0]).all()
+        if not same_hour: 
+            return max_val-2
+        else:
+            return max_val-3
+
+    return None
+
+
+def parse_time(time_col):
     # Returns time in seconds since 00:00
     if time_col.dtype == np.int64 or time_col.dtype == np.float64:
         # Expected to be time as integer in 24-hr HHMM format
         # Check that this is true
         hour = np.floor(time_col/100)
         min = time_col - np.floor(time_col/100)*100
-        if not (12 < hour.max() < 24) or hour.min() < 0 or min.max() > 59 or (min != round(min)).any():
-            raise NotImplementedError
+        if hour.max() >= 24:
+            invalid = hour>=24
+            if invalid.mean() < 0.01:
+                # These are likely recording errors. Replace with NaN
+                hour.loc[invalid] = np.nan
+            else:
+                raise NotImplementedError()
+        if min.max() > 59:
+            invalid = min>=60
+            if invalid.mean() < 0.01:
+                # These are likely recording errors. Replace with NaN
+                min.loc[invalid] = np.nan
+            else:
+                raise NotImplementedError()
+        if hour.max() < 12 or hour.min() < 0 or ((min != round(min)) & pd.notnull(min)).any():
+            raise NotImplementedError()
 
-        return hour*3600 + min*60
+        return pd.Series([dt.time(hour=int(x),minute=int(y)) if (pd.notnull(x) and pd.notnull(y)) else pd.NaT for x,y in zip(hour,min)])
     elif time_col.dtype == 'O':
         new_col = time_col.convert_dtypes()
         if new_col.dtype == "string":
             # #NAME? results from Excel errors
-            num_colons = new_col.apply(lambda x: x.count(":") if pd.notnull(x) and x!="#NAME?" else pd.NA)          
+            num_colons = new_col.apply(lambda x: x.count(":") if pd.notnull(x) and x!="#NAME?" else pd.NaT)          
             num_colons = {x for x in num_colons if pd.notnull(x)}
-            if len(num_colons.difference({1,2})) > 0:
+            if len(num_colons.difference({0,1,2,3})) > 0:
                 raise ValueError("Unknown time format")
 
             def convert_timestr_to_sec(x):
@@ -163,25 +223,43 @@ def parse_time_to_sec(time_col):
                     return x
 
                 time_list = x.split(":")
+                if len(time_list)==1:
+                    if len(x) == 0 or len(x) > 4:
+                        if x == "#NAME?":
+                            return pd.NaT
+                        else:
+                            raise ValueError("Expected HHMM format")
+                    min = float(x[-2:])
+                    if len(x) > 2:
+                        hour = float(x[:-2])
+                    else:
+                        hour = 0
+
+                    return dt.time(hour=int(hour),minute=int(min))
+
                 if "T" in time_list[0]:
                     t_loc = [k for k,x in enumerate(time_list[0]) if x=="T"]
                     time_list[0] = time_list[0][t_loc[0]+1:]
 
-                sec_add = 0
+                hours_add = 0
                 if "AM" in time_list[-1]:
                     time_list[-1] = time_list[-1].replace("AM", "")
+                    if time_list[0].strip() == "12":
+                        time_list[0] = "0"
                 elif "PM" in time_list[-1]:
-                    sec_add = 12*3600
+                    hours_add = 12
                     time_list[-1] = time_list[-1].replace("PM", "")
+                    if time_list[0].strip() == "12":
+                        time_list[0] = "0"
 
                 try:
-                    t = float(time_list[0])*3600 + float(time_list[1])*60 + sec_add
+                    t = dt.time(hour=int(time_list[0])+hours_add,minute=int(time_list[1]))
                 except:
                     return pd.NaT
 
                 if len(time_list) > 2:
                     try:
-                        t += float(time_list[2])
+                        t = t.replace(second=int(time_list[2]))
                     except:
                         # One case found where seconds are XX
                         pass
