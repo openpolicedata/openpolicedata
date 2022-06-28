@@ -1,7 +1,6 @@
 import pandas as pd
 import re
-
-from pyparsing import col
+from collections import Counter
 
 try:
     from . import datetime_parser
@@ -29,7 +28,7 @@ def standardize(df, table_type, date_column=None, agency_column=None, source_nam
     maps = []
     df = standardize_date(df, col_map, maps, keep_raw=keep_raw)
     standardize_time(df, col_map, maps, keep_raw=keep_raw)
-    standardize_race(df, col_map, maps, source_name, keep_raw=keep_raw)
+    standardize_race(df, col_map, maps, source_name, keep_raw=keep_raw, table_type=table_type)
     
     return df, maps
 
@@ -84,10 +83,29 @@ def _find_col_matches(df, table_type, match_substr, known_col_name=None,
             match_substr = [match_substr]
 
         match_cols = []
+        officer_terms = ["officer","deputy"]
+        civilian_terms = ["citizen","subject","suspect","civilian"]
+        civilian_found = False
+        officer_found = False
         for s in match_substr:
-            match_cols = [x for x in df.columns if s.lower() in x.lower()]
-            if len(match_cols)>0:
-                break
+            new_matches = [x for x in df.columns if s.lower() in x.lower()]
+            if len(new_matches)>0:
+                if not officer_found and not civilian_found:
+                    match_cols.extend(new_matches)
+                elif officer_found:
+                    # Only keep columns with civilian terms
+                    match_cols.extend([x for x in new_matches if any([y in x for y in civilian_terms])])
+                elif civilian_found:
+                    # Only keep columns with officer terms
+                    match_cols.extend([x for x in new_matches if any([y in x for y in officer_terms])])
+
+                # There are cases where there should be multiple matches for both officer and community member
+                # columns. On occasion, they are labeled with different terms 
+                officer_found = any([any([y in x for y in officer_terms]) for x in match_cols])
+                civilian_found = any([any([y in x for y in civilian_terms]) for x in match_cols])
+
+                if civilian_found == officer_found:  # i.e. Both found or not found
+                    break
 
         if len(match_cols)==0 and len(match_substr)>0:
             match_cols = _pattern_search(df.columns, match_cols, secondary_patterns, match_substr[0])
@@ -184,7 +202,7 @@ def _id_race_column(df, table_type, source_name, col_map, race_cols):
                 types = []
                 vals = []
                 for k, col in enumerate(orig_race_cols):
-                    new_col = convert_race(df[col], source_name)
+                    new_col = convert_race(df[col], source_name, table_type=table_type)
                     found = False
                     for j, t in enumerate(types):
                         if t == orig_type[k] and new_col.equals(vals[j]):
@@ -215,7 +233,7 @@ def _id_race_column(df, table_type, source_name, col_map, race_cols):
     return race_cols, types
 
 
-def _id_ethnicity_column(table_type, col_map, race_types, eth_cols):
+def _id_ethnicity_column(source_name, table_type, col_map, race_types, eth_cols):
     if len(eth_cols)==0:
         return
 
@@ -225,7 +243,8 @@ def _id_ethnicity_column(table_type, col_map, race_types, eth_cols):
             ("- OFFICERS" in table_type and "CIVILIANS" not in table_type)
     for k in range(len(eth_cols)):
         if "officer" in eth_cols[k].lower() or \
-            "offcr" in eth_cols[k].lower() or is_officer_table:
+            "offcr" in eth_cols[k].lower() or is_officer_table or \
+            (source_name=="Orlando" and table_type==defs.TableType.SHOOTINGS and eth_cols[k]=="ethnicity"):
             eth_types.append(defs.columns.ETHNICITY_OFFICER)
             validation_types.append(defs.columns.RACE_OFFICER)
         else:
@@ -341,16 +360,16 @@ def id_columns(df, table_type, date_column=None, agency_column=None, source_name
         
     # California data, RAE = Race and Ethnicity
     def race_validator(col):
-        convert_race(col, source_name)
+        convert_race(col, source_name, table_type=table_type)
         return None
 
-    match_cols = _find_col_matches(df, table_type, ["race", "descent","rae_full","citizen_demographics"],
-        validator=race_validator)
+    match_cols = _find_col_matches(df, table_type, ["race", "descent","rae_full","citizen_demographics","officer_demographics","ethnicity"],
+        validator=race_validator)  
     race_cols, race_types = _id_race_column(df, table_type, source_name, col_map, match_cols)
 
     # enthnicity is to deal with typo in Ferndale data. Consider using fuzzywuzzy in future for fuzzy matching
     match_cols = _find_col_matches(df, table_type, ["ethnic", "enthnicity"], exclude_col_names=race_cols)
-    _id_ethnicity_column(table_type, col_map, race_types, match_cols)
+    _id_ethnicity_column(source_name, table_type, col_map, race_types, match_cols)
 
     # _id_agency_column(agency_column, col_map)
     match_cols = _find_col_matches(df, table_type, [], known_col_name=agency_column)
@@ -420,15 +439,15 @@ def standardize_time(df, col_map, maps, keep_raw=False):
     #         df[defs.columns.TIME] = tms
 
 
-def standardize_race(df, col_map, maps, source_name=None, keep_raw=False):
+def standardize_race(df, col_map, maps, source_name=None, keep_raw=False, table_type=None):
     if defs.columns.RACE_CIVILIAN in col_map:
-        _standardize_race(df, col_map, maps, civilian=True, source_name=source_name, keep_raw=keep_raw)
+        _standardize_race(df, col_map, maps, civilian=True, source_name=source_name, keep_raw=keep_raw, table_type=table_type)
 
     if defs.columns.RACE_OFFICER in col_map:
-        _standardize_race(df, col_map,  maps, civilian=False, source_name=source_name, keep_raw=keep_raw)
+        _standardize_race(df, col_map,  maps, civilian=False, source_name=source_name, keep_raw=keep_raw, table_type=table_type)
 
 
-def _standardize_race(df, col_map, maps, civilian, source_name, keep_raw):
+def _standardize_race(df, col_map, maps, civilian, source_name, keep_raw, table_type):
     if civilian:
         new_race_column = defs.columns.RACE_CIVILIAN
         new_ethnicity_column = defs.columns.ETHNICITY_CIVILIAN
@@ -444,14 +463,15 @@ def _standardize_race(df, col_map, maps, civilian, source_name, keep_raw):
         ethnicity_column = None
 
     race_map_dict = {}
-    df[new_race_column] = convert_race(df[race_column], source_name, race_map_dict=race_map_dict)
+    df[new_race_column] = convert_race(df[race_column], source_name, race_map_dict=race_map_dict, table_type=table_type)
     
     maps.append(
         DataMapping(old_column_name=race_column, new_column_name=new_race_column,
             data_maps=race_map_dict)
     )
 
-    _cleanup_old_column(df, race_column, keep_raw)
+    if race_column not in ["citizen_demographics","officer_demographics"]:  # These contain additional information that still needs to be used
+        _cleanup_old_column(df, race_column, keep_raw)
 
     if ethnicity_column != None:        
         vals = [x if type(x)==str else x for x in df[ethnicity_column].unique()]
@@ -475,7 +495,8 @@ def _standardize_race(df, col_map, maps, civilian, source_name, keep_raw):
                 eth_map_dict[orig] = defs.races.LATINO
             elif x in ["U", "UNKNOWN"]:
                 eth_map_dict[orig] = defs.races.UNKNOWN
-            elif "NODATA" in x.replace(" ",""):
+            elif "NODATA" in x.replace(" ","") or \
+                "MARSY’SLAWEXEMPT" in x.replace(" ",""):
                 eth_map_dict[orig] = defs.races.UNSPECIFIED
             else:
                 raise ValueError(f"Unknown value {x}")
@@ -492,11 +513,45 @@ def _standardize_race(df, col_map, maps, civilian, source_name, keep_raw):
         df[new_race_column] = df.apply(update_race, axis=1)
         _cleanup_old_column(df, ethnicity_column, keep_raw)
 
-def convert_race(col, source_name, race_map_dict=None):
-    # Decode the race column
-    vals = [x if type(x)==str else x  for x in col.unique()]
+def _is_demo_list(vals):
+    check_gender = ['male' in x.lower() for x in vals if type(x)==str]
+    return sum(check_gender) > 1
+
+def convert_race(col, source_name, race_map_dict=None, table_type=None):
+
     if race_map_dict == None:
         race_map_dict = {}
+    # Decode the race column
+    vals = [x if type(x)==str else x  for x in col.unique()]
+
+    delims = [",", "|", ";"]
+    max_idx = -1
+    delims_count = 0
+    repeat_count = -1
+    is_demo_list = False
+    if table_type in [defs.TableType.SHOOTINGS, defs.TableType.SHOOTINGS_CIVILIANS, defs.TableType.SHOOTINGS_OFFICERS,
+        defs.TableType.SHOOTINGS_INCIDENTS, defs.TableType.USE_OF_FORCE, defs.TableType.USE_OF_FORCE_INCIDENTS,
+        defs.TableType.USE_OF_FORCE_CIVILIANS_OFFICERS, defs.TableType.USE_OF_FORCE_INCIDENTS, 
+        defs.TableType.USE_OF_FORCE_CIVILIANS]: 
+        # Evaluate to see if values are for a single person or multiple
+        def count_delims(x, d):
+            return sum([1 for y in x if y==d])
+        def count_repeats(x, d):
+            ind_vals = x.split(d)
+            ind_vals = [y.strip() for y in ind_vals if type(y) == str]
+            counts = Counter(ind_vals)
+            return sum([c for c in counts.values() if c>1])
+
+        # Check if vals are lists of tuples
+        is_demo_list = _is_demo_list(vals)
+        if not is_demo_list:
+            for k,d in enumerate(delims):
+                total_delims = sum([count_delims(x,d) for x in vals if type(x) == str])
+                if total_delims > delims_count:
+                    max_idx = k
+                    delims_count = total_delims
+                    repeat_count = sum([count_repeats(x, d) for x in vals if type(x) == str])  
+
     ca_stops_dict = {
         1 : defs.races.ASIAN, 2 : defs.races.BLACK, 3 : defs.races.LATINO, 
         4 : defs.races.MIDDLE_EASTERN_SOUTH_ASIAN, 5 : defs.races.NATIVE_AMERICAN,
@@ -511,72 +566,111 @@ def convert_race(col, source_name, race_map_dict=None):
     # Austin values below are based on email with dataset owner who said they were from some source. 
     #   Do these values apply to other datasets using the same values?
     bad_data = ["MALE"]
-    for x in vals:
-        orig = x
-        if type(x) == str:
-            # if x[0] == "(" and x[-1] == ")" and "," in x:
-            #     # Comma separated demographics list
-            #     # (This needs to be checked to ensure that it's not a list of races...)
-            #     items = x[1:-1].split(",")
-            #     if items[1].lower().strip() in ["male","female"] and str.isdigit(items[2].strip()):
-            #         x = items[0]
-            #     else:
-            #         raise NotImplementedError()
-            x = x.upper().replace("_", " ").replace("*","").replace("-"," ").replace(".","")
-            x = x.strip()
-        if pd.isnull(x) or x in ["NOT SPECIFIED","NULL VALUE", ""] or (type(x)==str and "NO DATA" in x) or x in bad_data:
-            race_map_dict[orig] = defs.races.UNSPECIFIED
-        elif type(x) != str and source_name == "California":
-            race_map_dict[orig] = ca_stops_dict[x]
-        elif x in ["W", "CAUCASIAN", "WN"] or x.replace(", OTHER", "") == "WHITE":
-            # WN = White-Non-Hispanic
-            race_map_dict[orig] = defs.races.WHITE
-        elif x in ["B", "AFRICAN AMERICAN"] or "BLACK" in x:
-            race_map_dict[orig] = defs.races.BLACK
-        elif x in ["U", "UNKNOWN", "UNK"]:
-            race_map_dict[orig] = defs.races.UNKNOWN
-        elif x.replace(", OTHER", "") == "ASIAN INDIAN":
-            race_map_dict[orig] = defs.races.ASIAN_INDIAN
-        elif x == "SOUTH ASIAN" or ("INDIAN" in x and "BURMESE" in x):
-            race_map_dict[orig] = defs.races.SOUTH_ASIAN        
-        elif x == "A" or "ASIAN" in x:
-            if "INDIAN" in x:
-                raise ValueError("INDIAN should be picked up by ASIAN INDIAN condition")
-            elif "PACIFIC" in x:
-                race_map_dict[orig] = defs.races.AAPI
-            else:
-                race_map_dict[orig] = defs.races.ASIAN
-        elif "HAWAIIAN" in x or "PACIFICISLAND" in x.replace(" ","").replace("_","") or \
-            x in ["FILIPINO"] or \
-            (source_name=="Austin" and x=="P"):
-            race_map_dict[orig] = defs.races.HAWAIIAN
-        elif x in ["H", "WH"] or ("HISPANIC" in x and "NONHISPANIC" not in x) or "LATINO" in x or \
-            (source_name == "New York City" and (x in ["P", "Q"])) or \
-            (source_name == "Bloomington" and (x in ["L", "N", "P"])): # This should stay below other races to not catch non-Hispanic
-            # WH = White Hispanic
-            # NYC and Bloomington are codes for Hispanic and a race
-            race_map_dict[orig] = defs.races.LATINO
-        elif x in ["I", "NATIVE AMERICAN", "INDIAN", "ALASKAN NATIVE"] or "AMERICAN IND" in x \
-            or "AMER IND" in x or \
-                (source_name=="Austin" and x=="N"):
-            race_map_dict[orig] = defs.races.NATIVE_AMERICAN
-        elif x == "ME" or "MIDDLE EAST" in x or \
-            (source_name=="Austin" and x=="M"):
-            race_map_dict[orig] = defs.races.MIDDLE_EASTERN
-        elif x in ["2 OR MORE", "MULTI DESCENTS", "TWO OR MORE RACES"] or \
-            x.replace(" ","") == "BIRACIAL":
-            race_map_dict[orig] = defs.races.MULTIPLE
-        elif "UNK" in x and "OTH" in x:
-            race_map_dict[orig] = defs.races.OTHER_UNKNOWN
-        elif x in ["O","OTHER"] or "OTHER UNCLASS" in x or \
-            (source_name == "New York City" and x=="Z"):
-            race_map_dict[orig] = defs.races.OTHER
-        elif source_name == "Lincoln":
-            x_int = int(x)
-            race_map_dict[orig] = lincoln_stops_dict[x_int]
-        elif source_name == "Chapel Hill" and x == "M":
-            race_map_dict[orig] = orig
-        else:
-            raise ValueError(f"Unknown value {x}")
 
-    return col.map(race_map_dict)
+    if is_demo_list:
+        map = {}
+        for x in vals:
+            if type(x) == str:
+                items = x.split("(")
+                map_list = []
+                for k, i in enumerate(items[1:]):
+                    i = i.split(",")[0].strip()
+                    if i not in race_map_dict:
+                        _create_race_lut(i, race_map_dict, source_name, ca_stops_dict, lincoln_stops_dict, bad_data)
+                    map_list.append(race_map_dict[i])
+
+                map[x] = map_list
+            else:
+                if x not in race_map_dict:
+                    _create_race_lut(x, race_map_dict, source_name, ca_stops_dict, lincoln_stops_dict, bad_data)
+                    map[x] = race_map_dict[x]
+
+        return col.map(map)
+    elif repeat_count > 0 or delims_count > 0.75*len(vals):
+        map = {}
+        for x in vals:
+            if type(x) == str:
+                items = x.split(delims[max_idx])
+                for k, i in enumerate(items):
+                    if i == "ISL":  # LA County code for AAPI is ASIAN-PACIFIC,ISL
+                        continue
+                    i = i.strip()
+                    if i not in race_map_dict:
+                        _create_race_lut(i, race_map_dict, source_name, ca_stops_dict, lincoln_stops_dict, bad_data)
+                    items[k] = race_map_dict[i]
+
+                map[x] = items
+            else:
+                if x not in race_map_dict:
+                    _create_race_lut(x, race_map_dict, source_name, ca_stops_dict, lincoln_stops_dict, bad_data)
+                    map[x] = race_map_dict[x]
+
+        return col.map(map)
+    else:
+        for x in vals:
+            _create_race_lut(x, race_map_dict, source_name, ca_stops_dict, lincoln_stops_dict, bad_data)
+
+        return col.map(race_map_dict)
+
+def _create_race_lut(x, race_map_dict, source_name, ca_stops_dict, lincoln_stops_dict, bad_data):
+    orig = x
+    if type(x) == str:
+        x = x.upper().replace("_", " ").replace("*","").replace("-"," ").replace(".","")
+        x = x.strip()
+    if pd.isnull(x) or x in ["NOT SPECIFIED","NULL VALUE", "", 'MARSY’S LAW EXEMPT', ""] or \
+        (type(x)==str and ("NO DATA" in x or "NOT APPLICABLE" in x)) or x in bad_data:
+        race_map_dict[orig] = defs.races.UNSPECIFIED
+    elif type(x) != str and source_name == "California":
+        race_map_dict[orig] = ca_stops_dict[x]
+    elif x in ["W", "CAUCASIAN", "WN"] or x.replace(", OTHER", "") == "WHITE":
+        # WN = White-Non-Hispanic
+        race_map_dict[orig] = defs.races.WHITE
+    elif x in ["B", "AFRICAN AMERICAN"] or "BLACK" in x:
+        if x.count("BLACK") > 1:
+            raise ValueError(f"The value of {x} likely contains the races for multiple people")
+        race_map_dict[orig] = defs.races.BLACK
+    elif x in ["U", "UNKNOWN", "UNK", "RACE UNKNOWN", "UK"]:
+        race_map_dict[orig] = defs.races.UNKNOWN
+    elif x.replace(", OTHER", "") == "ASIAN INDIAN":
+        race_map_dict[orig] = defs.races.ASIAN_INDIAN
+    elif x == "SOUTH ASIAN" or ("INDIAN" in x and "BURMESE" in x):
+        race_map_dict[orig] = defs.races.SOUTH_ASIAN        
+    elif x == "A" or "ASIAN" in x:
+        if "INDIAN" in x:
+            raise ValueError("INDIAN should be picked up by ASIAN INDIAN condition")
+        elif "PACIFIC" in x:
+            race_map_dict[orig] = defs.races.AAPI
+        else:
+            race_map_dict[orig] = defs.races.ASIAN
+    elif "HAWAIIAN" in x or "PACIFICISLAND" in x.replace(" ","").replace("_","") or \
+        x in ["FILIPINO"] or \
+        (source_name=="Austin" and x=="P"):
+        race_map_dict[orig] = defs.races.HAWAIIAN
+    elif x in ["H", "WH"] or ("HISPANIC" in x and "NONHISPANIC" not in x) or "LATINO" in x or \
+        (source_name == "New York City" and (x in ["P", "Q"])) or \
+        (source_name == "Bloomington" and (x in ["L", "N", "P"])): # This should stay below other races to not catch non-Hispanic
+        # WH = White Hispanic
+        # NYC and Bloomington are codes for Hispanic and a race
+        race_map_dict[orig] = defs.races.LATINO
+    elif x in ["I", "NATIVE AMERICAN", "INDIAN", "ALASKAN NATIVE"] or "AMERICAN IND" in x \
+        or "AMER IND" in x or \
+            (source_name=="Austin" and x=="N"):
+        race_map_dict[orig] = defs.races.NATIVE_AMERICAN
+    elif x == "ME" or "MIDDLE EAST" in x or \
+        (source_name=="Austin" and x=="M"):
+        race_map_dict[orig] = defs.races.MIDDLE_EASTERN
+    elif x in ["2 OR MORE", "MULTI DESCENTS", "TWO OR MORE RACES"] or \
+        x.replace(" ","") == "BIRACIAL":
+        race_map_dict[orig] = defs.races.MULTIPLE
+    elif "UNK" in x and "OTH" in x:
+        race_map_dict[orig] = defs.races.OTHER_UNKNOWN
+    elif x in ["O","OTHER"] or "OTHER UNCLASS" in x or \
+        (source_name == "New York City" and x=="Z"):
+        race_map_dict[orig] = defs.races.OTHER
+    elif source_name == "Lincoln":
+        x_int = int(x)
+        race_map_dict[orig] = lincoln_stops_dict[x_int]
+    elif source_name == "Chapel Hill" and x == "M":
+        race_map_dict[orig] = orig
+    else:
+        raise ValueError(f"Unknown value {x}")
