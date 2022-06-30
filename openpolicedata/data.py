@@ -159,7 +159,7 @@ class Table:
         '''
         return get_csv_filename(self.state, self.source_name, self.agency, self.table_type, self.year)
 
-    def standardize(self, keep_raw=False):
+    def clean(self, keep_raw=False):
         # TODO: Resort columns.
         # TODO: Keep mapping of columns
         self.table, maps = preproc.standardize(self.table, self.table_type, 
