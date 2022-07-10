@@ -132,52 +132,70 @@ class TableType(str, Enum):
 MULTI = "MULTI"    # For data sets that put multiple years or agencies in 1 dataset
 NA = "NONE"         # None = not applicable (pandas converts "N/A" to NaN)
 
-_col_names = [
-    "DATE", 
-    "TIME",
-    "DATETIME",
-    "RACE_CIVILIAN",
-    "ETHNICITY_CIVILIAN",
-    "RACE_OFFICER",
-    "ETHNICITY_OFFICER",
-    "RACE_OFF_AND_CIV",
-    "AGENCY"
-]
-columns = namedtuple('Columns',
-    _col_names,
-    defaults=_col_names
-    )()
+# Standard column names
+class _Columns:
+    DATE = "DATE"
+    TIME = "TIME"
+    DATETIME = "DATETIME"
+    RACE_CIVILIAN = "RACE_CIVILIAN"
+    ETHNICITY_CIVILIAN = "ETHNICITY_CIVILIAN"
+    RACE_OFFICER = "RACE_OFFICER"
+    ETHNICITY_OFFICER = "ETHNICITY_OFFICER"
+    ETHNICITY_OFF_AND_CIV = "ETHNICITY_OFF_AND_CIV"
+    RACE_OFF_AND_CIV = "RACE_OFF_AND_CIV"
+    AGENCY = "AGENCY"
+    AGE_CIVILIAN = "AGE_CIVILIAN"
+    AGE_OFFICER = "AGE_OFFICER"
+    AGE_OFF_AND_CIV = "AGE_OFF_AND_CIV"
+    AGE_RANGE_CIVILIAN = "AGE_RANGE_CIVILIAN"
+    AGE_RANGE_OFFICER = "AGE_RANGE_OFFICER"
+    AGE_RANGE_OFF_AND_CIV = "AGE_RANGE_OFF_AND_CIV"
+    GENDER_CIVILIAN = "GENDER_CIVILIAN"
+    GENDER_OFFICER = "GENDER_OFFICER"
+    GENDER_OFF_AND_CIV = "GENDER_OFF_AND_CIV"
+    CIVILIAN_OR_OFFICER = "CIVILIAN_OR_OFFICER"
+    
+columns = _Columns()
 
-_race_names = [
-    "AAPI",
-    "ASIAN",
-    "ASIAN_INDIAN",
-    "BLACK",
-    "HAWAIIAN",
-    "LATINO",
-    "MIDDLE_EASTERN",
-    "MIDDLE_EASTERN_SOUTH_ASIAN",
-    "MULTIPLE",
-    "NATIVE_AMERICAN",
-    "OTHER",
-    "OTHER_UNKNOWN",
-    "SOUTH_ASIAN",
-    "UNKNOWN",
-    "UNSPECIFIED",
-    "WHITE"
-]
-_map = {
-    "AAPI" : "ASIAN / PACIFIC ISLANDER",
-    "HAWAIIAN" : "HAWAIIAN / PACIFIC ISLANDER",
-    "LATINO" : "HISPANIC / LATINO",
-    "OTHER_UNKNOWN" : "OTHER / UNKNOWN",
-    "MIDDLE_EASTERN_SOUTH_ASIAN" : "MIDDLE EASTERN / SOUTH ASIAN"
-}
-for _key in _race_names:
-    if _key not in _map and "_" in _key:
-        _map[_key] = _key.replace("_", " ")
-_race_defaults = [_map.get(x,x) for x in _race_names]
-races = namedtuple('Races',
-    _race_names,
-    defaults=_race_defaults
-    )()
+class _Races:
+    AAPI = "ASIAN / PACIFIC ISLANDER"
+    ASIAN = "ASIAN"
+    ASIAN_INDIAN = "ASIAN INDIAN"
+    BLACK = "BLACK"
+    EXEMPT = "EXEMPT"
+    HAWAIIAN = "HAWAIIAN / PACIFIC ISLANDER"
+    LATINO = "HISPANIC / LATINO"
+    MIDDLE_EASTERN = "MIDDLE EASTERN"
+    MIDDLE_EASTERN_SOUTH_ASIAN = "MIDDLE EASTERN / SOUTH ASIAN"
+    MULTIPLE = "MULTIPLE"
+    NATIVE_AMERICAN = "NATIVE_AMERICAN"
+    OTHER = "OTHER"
+    OTHER_UNKNOWN = "OTHER / UNKNOWN"
+    SOUTH_ASIAN = "SOUTH ASIAN"
+    UNKNOWN = "UNKNOWN"
+    UNSPECIFIED = "UNSPECIFIED"
+    WHITE = "WHITE"
+
+races = _Races()
+
+class _Genders:
+    MALE = "MALE"
+    FEMALE = "FEMALE"
+    TRANSGENDER_MAN = "TRANSGENDER_MAN"
+    TRANSGENDER_WOMAN = "TRANSGENDER_WOMAN"
+    TRANSGENDER = "TRANSGENDER"
+    GENDER_NONCONFORMING = "GENDER_NONCONFORMING"
+    TRANSGENDER_OR_GENDER_NONCONFORMING = "TRANSGENDER_OR_GENDER_NONCONFORMING"
+    GENDER_NONBINARY = "GENDER_NON-BINARY"
+    EXEMPT = "EXEMPT"
+    OTHER = "OTHER"
+    UNKNOWN = "UNKNOWN"
+    UNSPECIFIED = "UNSPECIFIED"
+
+genders = _Genders()
+
+class _PersonTypes:
+    OFFICER = "OFFICER"
+    CIVILIAN = "CIVILIAN"
+
+person_types = _PersonTypes()

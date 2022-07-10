@@ -497,7 +497,7 @@ class Source:
         return Table(src, table, year_filter=table_year, agency=table_agency)
 
 
-    def load_from_csv(self, year, output_dir=None, table_type=None, agency=None):
+    def load_from_csv(self, year, output_dir=None, table_type=None, agency=None, filename=None):
         '''Load data from previously saved CSV file
         
         Parameters
@@ -514,6 +514,9 @@ class Source:
         agency - str
             (Optional) If set, for datasets containing multiple agencies, data will
             only be returned for this agency
+        filename - str
+            (Optional) If set, the file with this filename will be used instead of the 
+            auto-generated one. 
 
         Returns
         -------
@@ -523,7 +526,8 @@ class Source:
 
         table = self.__load(year, table_type, agency, False)
 
-        filename = table.get_csv_filename()
+        if filename==None:
+            filename = table.get_csv_filename()
         if output_dir != None:
             filename = path.join(output_dir, filename)            
 

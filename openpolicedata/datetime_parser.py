@@ -35,7 +35,17 @@ def parse_date_to_datetime(date_col):
     if len(dts) > 0:
         one_date = dts.iloc[0] 
         if not hasattr(one_date, "year"):
-            if date_col.dtype == np.int64:
+            is_num = date_col.dtype == np.int64
+            if not is_num:
+                # Try to convert to all numbers
+                new_col = date_col.convert_dtypes()
+                if new_col.dtype == "string" and \
+                    new_col.apply(lambda x: x.isdigit() or x.strip()=="").all():
+                    date_col = new_col.apply(lambda x: int(x) if x.isdigit() else np.nan)
+                    dts = date_col[date_col.notnull()]
+                    is_num = True
+
+            if is_num:
                 # Date as number like MMDDYYYY. Need to determine order
                 # Assuming year is either first or last
                 if (dts < 0).any():
@@ -101,7 +111,7 @@ def parse_date_to_datetime(date_col):
                     try:
                         return pd.to_datetime(new_col)
                     except:
-                        raise NotImplementedError()
+                            raise NotImplementedError()
                 else:
                     raise NotImplementedError()
             else:
@@ -150,15 +160,27 @@ def validate_date(date_col):
 
     return None
 
-def validate_time(time_col):
+def validate_time(time_col, date_col=None):
+    not_a_time_col_msg = "This column contains date information, and therefore, is not a time column"
+    date_has_time_msg = "The date column has a time in it. There is no need for a time column."
     try:
         # Try to convert to datetime. If successful, see if there is a date value that varies.
         # If so, this is not a time column
-        date_col = parse_date_to_datetime(time_col)
-        if len(date_col.dt.date.unique()) > 2:
-            raise ValueError("This column contains date information, and therefore, is not a time column")
+        test_date_col = parse_date_to_datetime(time_col)
+        num_unique = len(test_date_col.dt.date.unique())
+        # If there are more than 2 dates or 2 dates are only 1 day apart (could be due to time zone change),
+        # then the supposed time contains date information
+        if num_unique > 2 or (num_unique==2 and  abs(test_date_col[0]-test_date_col[1]) > pd.Timedelta(days=1)):
+            raise ValueError(not_a_time_col_msg)
+            
+        if date_col is not None:
+            num_unique = len(date_col.dt.time.unique())
+            # If there is more than 2 times or the times cannot be explained by a time zone differene,
+            # then there is time information in the date
+            if num_unique > 2 or (num_unique==2 and  abs(date_col[1]-date_col[0]) > pd.Timedelta(hours=1)):
+                raise ValueError(date_has_time_msg)
     except ValueError as e:
-        if len(e.args)>0 and "This column contains date information" in e.args[0]:
+        if len(e.args)>0 and e.args[0] in [not_a_time_col_msg, date_has_time_msg]:
             raise e
 
     col = parse_time(time_col)
@@ -205,35 +227,37 @@ def parse_time(time_col):
                 min.loc[invalid] = np.nan
             else:
                 raise NotImplementedError()
-        if hour.max() < 12 or hour.min() < 0 or ((min != round(min)) & pd.notnull(min)).any():
-            raise NotImplementedError()
 
         return pd.Series([dt.time(hour=int(x),minute=int(y)) if (pd.notnull(x) and pd.notnull(y)) else pd.NaT for x,y in zip(hour,min)])
     elif time_col.dtype == 'O':
         new_col = time_col.convert_dtypes()
         if new_col.dtype == "string":
-            # #NAME? results from Excel errors
-            num_colons = new_col.apply(lambda x: x.count(":") if pd.notnull(x) and x!="#NAME?" else pd.NaT)          
-            num_colons = {x for x in num_colons if pd.notnull(x)}
-            if len(num_colons.difference({0,1,2,3})) > 0:
-                raise ValueError("Unknown time format")
-
             def convert_timestr_to_sec(x):
                 if pd.isnull(x):
                     return x
 
                 time_list = x.split(":")
+                if len(time_list)==1 and len(x.split("."))>1:
+                    time_list = x.split(".")
+                    if len(time_list)!=3:
+                        raise NotImplementedError()
+
                 if len(time_list)==1:
                     if len(x) == 0 or len(x) > 4:
-                        if x == "#NAME?":
+                        if x in ["#NAME?",'#VALUE!']:
                             return pd.NaT
                         else:
                             raise ValueError("Expected HHMM format")
+                    elif x.strip()=="":
+                        return pd.NaT
                     min = float(x[-2:])
                     if len(x) > 2:
                         hour = float(x[:-2])
                     else:
                         hour = 0
+
+                    if min > 59:
+                        return pd.NaT
 
                     return dt.time(hour=int(hour),minute=int(min))
 
