@@ -79,7 +79,9 @@ class TestData:
 			# 200 is success
 			# 301 is moved permanently. This is most likely NYC. In this case, the main site has moved but the datasets have not
 			if r.status_code != 200 and r.status_code != 301:
-				raise ValueError(f"Status code for {url} is {r.status_code}")
+				r = requests.get(url)
+				if r.status_code != 200 and r.status_code != 301:
+					raise ValueError(f"Status code for {url} is {r.status_code}")
 
 			# Adding a pause here to prevent issues with requesting from site too frequently
 			sleep(sleep_time)
@@ -325,13 +327,13 @@ class TestData:
 
 				table_print = datasets.iloc[i]["TableType"]
 				now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
-				print(f"{now }Testing {i} of {len(datasets)}: {srcName} {table_print} table")
+				print(f"{now} Testing {i} of {len(datasets)}: {srcName} {table_print} table")
 
 				src = data.Source(srcName, state=state)
 
 				try:
 					years = src.get_years(datasets.iloc[i]["TableType"])
-				except OPD_DataUnavailableError as e:
+				except (OPD_DataUnavailableError, OPD_SocrataHTTPError) as e:
 					e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"])
 					caught_exceptions_warn.append(e)
 					continue
@@ -534,4 +536,4 @@ def log_errors_to_file(*args):
 if __name__ == "__main__":
 	# For testing
 	tp = TestData()
-	tp.test_source_download_limitable(None, "Austin", None, None, True) 
+	tp.test_get_years(None, None, None, None, None) 
