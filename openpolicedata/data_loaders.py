@@ -2,7 +2,7 @@ import os
 from datetime import date
 import pandas as pd
 from numpy import nan
-from requests import HTTPError
+import requests
 from sodapy import Socrata
 import contextlib
 import urllib
@@ -69,11 +69,17 @@ def load_csv(url, date_field=None, year_filter=None, agency_field=None, agency=N
             table = pd.read_csv(url)
     else:
         table = pd.DataFrame()
-        with contextlib.closing(urllib.request.urlopen(url=url)) as rd:
-            for df in pd.read_csv(rd, chunksize=1024):
-                table = pd.concat([table, df], ignore_index=True)
-                if len(table) > limit:
-                    break
+        try:
+            with contextlib.closing(urllib.request.urlopen(url=url)) as rd:
+                for df in pd.read_csv(rd, chunksize=1024):
+                    table = pd.concat([table, df], ignore_index=True)
+                    if len(table) > limit:
+                        break
+        except urllib.error.HTTPError as e:
+            raise OPD_DataUnavailableError(url, *e.args,
+                    "There is likely an issue with the website. Open the URL with a web browser to confirm")
+        except Exception as e:
+            raise e
 
     if limit!=None and len(table) > limit:
         table = table.head(limit)
@@ -308,9 +314,15 @@ def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, sel
         try:
             results = client.get(data_set, where=where,
                 limit=limit,offset=offset, select=select)
-        except HTTPError as e:
-            raise OPD_SocrataHTTPError(url, data_set, *e.args)
-        except Exception as e: raise e
+        except requests.HTTPError as e:
+            raise OPD_SocrataHTTPError(url, data_set, *e.args,
+                    "There is likely an issue with the website. Open the URL with a web browser to confirm")
+        except Exception as e: 
+            if len(e.args)>0 and e.args[0]=='Unknown response format: text/html':
+                raise OPD_SocrataHTTPError(url, data_set, *e.args,
+                    "There is likely an issue with the website. Open the URL with a web browser to confirm")
+            else:
+                raise e
 
         if use_gpd and output_type==None:
             # Check for geo info
