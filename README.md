@@ -100,6 +100,8 @@ Import table from previously exported CSV. The directory to look in defaults to 
 ```
 > new_src = opd.Source(source_name="Virginia")
 new_t = new_src.load_from_csv(year=2021, agency=agency)
+
+
 > tbl.table.head(n=3)
 ```
 
@@ -110,3 +112,6 @@ new_t = new_src.load_from_csv(year=2021, agency=agency)
 | 2021-01-01 | Arlington County Police Department    | ARLINGTON CO      | TRAFFIC VIOLATION | BLACK OR AFRICAN AMERICAN    | NON-HISPANIC    |
 
 (only 1st 6 columns shown above)
+
+
+## See the [OpenPoliceData wiki](https://github.com/openpolicedata/openpolicedata/wiki) for further documentation
