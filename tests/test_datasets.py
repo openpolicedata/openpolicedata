@@ -41,7 +41,7 @@ class TestDatasets:
             assert key in datasets
 
     def test_table_for_nulls(self, csvfile, source, last, skip, loghtml):
-        can_have_nulls = ["Description", "date_field", "dataset_id", "agency_field", "Year"]
+        can_have_nulls = ["Description", "date_field", "dataset_id", "agency_field", "Year","readme"]
         datasets = get_datasets(csvfile)
         for col in datasets.columns:
             if not col in can_have_nulls:
@@ -164,4 +164,4 @@ class TestDatasets:
         
 
 if __name__ == "__main__":
-    TestDatasets().test_agency_names("C:\\Users\\matth\\repos\\sowd-opd-data\\opd_source_table.csv",None,None)
+    TestDatasets().test_table_for_nulls("C:\\Users\\matth\\repos\\opd-data\\opd_source_table.csv",None,None,None,None)
