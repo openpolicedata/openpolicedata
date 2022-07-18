@@ -29,7 +29,7 @@ sleep_time = 0.1
 # Global parameter for testing both with and without GeoPandas in testing
 _use_gpd_force = None
 
-_url_error_msg = "There is likely an issue with the website. Open the URL {} with a web browser to confirm. " +
+_url_error_msg = "There is likely an issue with the website. Open the URL {} with a web browser to confirm. " + \
                     "See a list of known site outages at https://github.com/openpolicedata/opd-data/blob/main/outages.csv"
 
 # This is for use if import data sets using Socrata. It is not required.
@@ -69,12 +69,17 @@ def load_csv(url, date_field=None, year_filter=None, agency_field=None, agency=N
         with warnings.catch_warnings():
             # Perhaps use requests iter_content/iter_lines as below to read large CSVs so progress can be shown
             warnings.simplefilter("ignore", category=pd.errors.DtypeWarning)
-            table = pd.read_csv(url)
+            try:
+                table = pd.read_csv(url, encoding_errors='surrogateescape')
+            except urllib.error.HTTPError as e:
+                raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(url))
+            except Exception as e:
+                raise e
     else:
         table = pd.DataFrame()
         try:
             with contextlib.closing(urllib.request.urlopen(url=url)) as rd:
-                for df in pd.read_csv(rd, chunksize=1024):
+                for df in pd.read_csv(rd, chunksize=1024, encoding_errors='surrogateescape'):
                     table = pd.concat([table, df], ignore_index=True)
                     if len(table) > limit:
                         break
