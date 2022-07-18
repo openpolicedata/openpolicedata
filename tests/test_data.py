@@ -209,7 +209,7 @@ class TestData:
 					dts = dts[dts.notnull()]
 					assert len(dts) > 0   # If not, either all dates are bad or number of rows requested needs increased
 					# Check that year is reasonable
-					assert dts.iloc[0].year > 1999  # This is just an arbitrarily old year that is assumed to be before all available data
+					assert dts.iloc[0].year >= 1970  # This is just an arbitrarily old year that is assumed to be before all available data
 					assert dts.iloc[0].year <= datetime.now().year
 				if not pd.isnull(datasets.iloc[i]["agency_field"]):
 					assert datasets.iloc[i]["agency_field"] in table.table
@@ -293,6 +293,24 @@ class TestData:
 		assert len(table.table)==100
 		assert table.table[table._agency_field].nunique()==1
 		assert table.table.iloc[0][table._agency_field] == agency
+
+	def test_to_csv(self, csvfile, source, last, skip, loghtml):
+		src = data.Source("Virginia")
+		get_datasets(csvfile)
+		agency="Fairfax County Police Department"
+		src._Source__limit = 100
+		year = 2021
+		table = src.load_from_url(2021, agency=agency)
+
+		table.to_csv()
+
+		filename = table.get_csv_filename()
+		assert os.path.exists(filename)
+
+		# Load table back in
+		src.load_from_csv(year, agency=agency)
+
+		os.remove(filename)
 
 	
 	@pytest.mark.slow(reason="This is a slow test that should be run before a major commit.")
@@ -536,4 +554,4 @@ def log_errors_to_file(*args):
 if __name__ == "__main__":
 	# For testing
 	tp = TestData()
-	tp.test_get_years(None, None, None, None, None) 
+	tp.test_source_download_limitable(r"..\opd-data\opd_source_table.csv", None, 9, None, None) 
