@@ -140,7 +140,7 @@ class Table:
         if not isinstance(self.table, pd.core.frame.DataFrame):
             raise ValueError("There is no table to save to CSV")
 
-        self.table.to_csv(filename, index=False)
+        self.table.to_csv(filename, index=False, errors="surrogateescape")
 
         return filename
 
