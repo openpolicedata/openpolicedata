@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import re
+from packaging import version
 
 if __name__ == "__main__":
 	import sys
@@ -41,7 +42,7 @@ class TestDatasets:
             assert key in datasets
 
     def test_table_for_nulls(self, csvfile, source, last, skip, loghtml):
-        can_have_nulls = ["Description", "date_field", "dataset_id", "agency_field", "Year","readme"]
+        can_have_nulls = ["Description", "date_field", "dataset_id", "agency_field", "Year","readme","min_version"]
         datasets = get_datasets(csvfile)
         for col in datasets.columns:
             if not col in can_have_nulls:
@@ -161,6 +162,12 @@ class TestDatasets:
         for t in datasets["DataType"]:
             # Try to convert to an enum
             opd.defs.DataType(t)
+
+    def test_min_versions(self, csvfile, source, last, skip, loghtml):
+        datasets = get_datasets(csvfile)
+        for ver in datasets["min_version"][datasets["min_version"].notnull()]:
+            if not (ver == "-1" or type(version.parse(ver)) == version.Version):
+                raise ValueError(f"{ver} is an invalid value for min_version")
         
 
 if __name__ == "__main__":

@@ -1,17 +1,22 @@
 import os.path as path
 import pandas as pd
 from datetime import datetime
+from packaging import version
 
 if __name__ == '__main__':
     import data_loaders
     import _datasets
     # import preproc
     from defs import TableType, DataType, MULTI
+    from _version import __version__
+    import exceptions
 else:
     from . import data_loaders
     from . import _datasets
+    from . import __version__
     # from . import preproc
     from .defs import TableType, DataType, MULTI
+    from . import exceptions
 
 class Table:
     """
@@ -249,7 +254,7 @@ class Source:
                 years.add(all_years[k])
             else:
                 df = dfs.iloc[k]
-
+                _check_version(df)
                 data_type =DataType(df["DataType"])
                 url = df["URL"]
                 if not pd.isnull(df["date_field"]):
@@ -321,6 +326,7 @@ class Source:
         # If year is multi, need to use self._agencyField to query URL
         # Otherwise return self.agency
         if src["Agency"] == MULTI:
+            _check_version(src)
             data_type =DataType(src["DataType"])
             if data_type ==DataType.CSV:
                 raise NotImplementedError(f"Unable to get agencies for {data_type}")
@@ -430,6 +436,7 @@ class Source:
         
         #It is assumed that each data loader method will return data with the proper data type so date type etc...
         if load_table:
+            _check_version(src)
             if data_type ==DataType.CSV:
                 table = data_loaders.load_csv(url, date_field=date_field, year_filter=year_filter, 
                     agency_field=agency_field, agency=agency, limit=self.__limit)
@@ -585,6 +592,24 @@ def get_csv_filename(state, source_name, agency, table_type, year):
     filename += ".csv"
 
     return filename
+
+def _check_version(df):
+    min_version = df["min_version"] 
+    if pd.notnull(min_version):
+        src_name = df["SourceName"]
+        state = df["State"]
+        table_type = df["TableType"]
+        year = df["Year"]
+        if min_version == "-1":
+            raise exceptions.OPD_FutureError(
+                f"Year {year} {table_type} data for {src_name} in {state} cannot be loaded in this version. " + \
+                    "It will be made available in a future release"
+            )
+        elif version.parse(min_version) < version.parse(__version__):
+            raise exceptions.OPD_MinVersionError(
+                f"Year {year} {table_type} data for {src_name} in {state} cannot be loaded in version {__version__} of openpolicedata. " + \
+                    f"Update OpenPoliceData to at least version {min_version} to access this data."
+            )
 
 if __name__ == '__main__':
     istart = 182

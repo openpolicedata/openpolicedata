@@ -26,7 +26,8 @@ def _build(csv_file):
         'date_field': pd.StringDtype(),
         'dataset_id': pd.StringDtype(),
         'agency_field': pd.StringDtype(),
-        'readme': pd.StringDtype()
+        'readme': pd.StringDtype(),
+        'min_version': pd.StringDtype()
     }
 
     try:
