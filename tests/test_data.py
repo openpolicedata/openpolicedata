@@ -1,14 +1,15 @@
 import pytest
 import requests
+
 if __name__ == "__main__":
 	import sys
 	sys.path.append('../openpolicedata')
 from openpolicedata import data
 from openpolicedata import _datasets
 from openpolicedata import datasets_query
-from openpolicedata.defs import MULTI
+from openpolicedata.defs import MULTI, DataType
 from openpolicedata.exceptions import OPD_DataUnavailableError, OPD_TooManyRequestsError,  \
-	OPD_MultipleErrors, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError
+	OPD_MultipleErrors, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError, OPD_FutureError, OPD_MinVersionError
 import random
 from datetime import datetime
 from datetime import timedelta
@@ -86,7 +87,63 @@ class TestData:
 			# Adding a pause here to prevent issues with requesting from site too frequently
 			sleep(sleep_time)
 
-	
+	def test_check_version(self, csvfile, source, last, skip, loghtml):
+		datasets = get_datasets(csvfile)
+		ds = datasets[(datasets["Year"]==MULTI)]
+		if len(ds)>0:
+			ds = ds.iloc[0]
+			src = data.Source(ds["SourceName"], state=ds["State"])
+			for k, year in enumerate(src.datasets["Year"]):
+				if year == MULTI:
+					break
+			# Set min_version to create error
+			src.datasets.loc[k, "min_version"] = "-1"
+			with pytest.raises(OPD_FutureError):
+				src.get_years(src.datasets.loc[k, "TableType"])
+
+			src.datasets.loc[k, "min_version"] = "0.0"
+			with pytest.raises(OPD_MinVersionError):
+				src.get_years(src.datasets.loc[k, "TableType"])
+
+			# These should pass
+			src.datasets.loc[k, "min_version"] = "100000.0"
+			data._check_version(src.datasets.loc[k])
+			src.datasets.loc[k, "min_version"] = pd.NA
+			data._check_version(src.datasets.loc[k])
+
+		ds = datasets[(datasets["Agency"]==MULTI)]
+		if len(ds)>0:
+			ds = ds.iloc[0]
+			src = data.Source(ds["SourceName"], state=ds["State"])
+			for k, year in enumerate(src.datasets["Year"]):
+				if year == MULTI:
+					break
+			# Set min_version to create error
+			src.datasets.loc[k, "min_version"] = "-1"
+			with pytest.raises(OPD_FutureError):
+				src.get_agencies(src.datasets.loc[k, "TableType"], year=src.datasets.loc[k, "Year"])
+
+			src.datasets.loc[k, "min_version"] = "0.0"
+			with pytest.raises(OPD_MinVersionError):
+				src.get_agencies(src.datasets.loc[k, "TableType"], year=src.datasets.loc[k, "Year"])
+
+		ds = datasets
+		if len(ds)>0:
+			ds = ds.iloc[0]
+			src = data.Source(ds["SourceName"], state=ds["State"])
+			for k, year in enumerate(src.datasets["Year"]):
+				if year == MULTI:
+					break
+			# Set min_version to create error
+			src.datasets.loc[k, "min_version"] = "-1"
+			with pytest.raises(OPD_FutureError):
+				src.load_from_url(year=src.datasets.loc[k, "Year"], table_type=src.datasets.loc[k, "TableType"])
+
+			src.datasets.loc[k, "min_version"] = "0.0"
+			with pytest.raises(OPD_MinVersionError):
+				src.load_from_url(year=src.datasets.loc[k, "Year"], table_type=src.datasets.loc[k, "TableType"])
+
+
 	def test_get_years(self, csvfile, source, last, skip, loghtml):
 		if last == None:
 			last = float('inf')
