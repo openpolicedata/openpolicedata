@@ -14,6 +14,7 @@ from arcgis.features import FeatureLayerCollection
 from time import sleep
 from tqdm import tqdm
 import io
+from math import ceil
 
 try:
     import geopandas as gpd
@@ -81,7 +82,7 @@ def load_csv(url, date_field=None, year_filter=None, agency_field=None, agency=N
 
         total_size = int(response.headers.get('Content-Length', 0))
         block_size = 1024
-        with _tqdm(desc=url, total=total_size,
+        with tqdm(desc=url, total=total_size,
                    unit='B' if block_size == 1024 else 'it',
                    unit_scale=True,
                    unit_divisor=block_size
@@ -260,7 +261,7 @@ def load_arcgis(url, date_field=None, year=None, limit=None):
 
 
 def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, select=None, output_type=None, 
-                 limit=None, key=default_sodapy_key):
+                 limit=None, key=default_sodapy_key, pbar=True):
     '''Download table from Socrata to pandas or geopandas DataFrame
     
     Parameters
@@ -323,6 +324,14 @@ def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, sel
         use_gpd = _use_gpd_force
     else:
         use_gpd = _has_gpd
+         
+    if not userLimit:
+        results = client.get(data_set, select="count(*)")
+        num_rows = float(results[0]["count"])
+        total = ceil(num_rows / limit)
+
+        # Try leave=False to see if progress bar can be removed upon completion
+        bar = tqdm(desc=f"URL: {url}, Dataset: {data_set}", total=total, leave=False)
 
     while N > 0:
         try:
@@ -397,7 +406,11 @@ def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, sel
 
         if userLimit:
             break
+        else:
+            bar.update()
 
+    if not userLimit:
+        bar.close()
     return df
 
 
