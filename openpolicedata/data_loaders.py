@@ -66,28 +66,27 @@ def load_csv(url, date_field=None, year_filter=None, agency_field=None, agency=N
         DataFrame containing table imported from CSV
     '''
     
-    if limit==None or ".zip" in url:
-        if pbar:
-            # Based on code developed for odsclient: https://github.com/smarie/python-odsclient/blob/main/odsclient/core.py
-            #params used by odsclient. Not using for now
+    if ".zip" in url or not pbar:
+        with warnings.catch_warnings():
+            # Perhaps use requests iter_content/iter_lines as below to read large CSVs so progress can be shown
+            warnings.simplefilter("ignore", category=pd.errors.DtypeWarning)
+            table = pd.read_csv(url
+    elif limit==None:
+        # Based on code developed for odsclient: https://github.com/smarie/python-odsclient/blob/main/odsclient/core.py
+        #params used by odsclient. Not using for now
 #             params = {'use_labels_for_header' : True, "format" : "csv"}
-            response = requests.get(url, params=None, stream=True)
-            response.raise_for_status()
-            response.raw.decode_content = True  # Necessary?
-            
-            total_size = int(response.headers.get('Content-Length', 0))
-            block_size = 1024
-            with _tqdm(desc=url, total=total_size,
-                       unit='B' if block_size == 1024 else 'it',
-                       unit_scale=True,
-                       unit_divisor=block_size
-                       ) as bar:
-                table = pd.read_csv(iterable_to_stream(response.iter_content(), buffer_size=block_size, progressbar=bar))
-        else:
-            with warnings.catch_warnings():
-                # Perhaps use requests iter_content/iter_lines as below to read large CSVs so progress can be shown
-                warnings.simplefilter("ignore", category=pd.errors.DtypeWarning)
-                table = pd.read_csv(url)
+        response = requests.get(url, params=None, stream=True)
+        response.raise_for_status()
+        response.raw.decode_content = True  # Necessary?
+
+        total_size = int(response.headers.get('Content-Length', 0))
+        block_size = 1024
+        with _tqdm(desc=url, total=total_size,
+                   unit='B' if block_size == 1024 else 'it',
+                   unit_scale=True,
+                   unit_divisor=block_size
+                   ) as bar:
+            table = pd.read_csv(iterable_to_stream(response.iter_content(), buffer_size=block_size, progressbar=bar))
     else:
         table = pd.DataFrame()
         with contextlib.closing(urllib.request.urlopen(url=url)) as rd:
