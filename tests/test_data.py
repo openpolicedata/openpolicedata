@@ -1,14 +1,15 @@
 import pytest
 import requests
+
 if __name__ == "__main__":
 	import sys
 	sys.path.append('../openpolicedata')
 from openpolicedata import data
 from openpolicedata import _datasets
 from openpolicedata import datasets_query
-from openpolicedata.defs import MULTI
+from openpolicedata.defs import MULTI, DataType
 from openpolicedata.exceptions import OPD_DataUnavailableError, OPD_TooManyRequestsError,  \
-	OPD_MultipleErrors, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError
+	OPD_MultipleErrors, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError, OPD_FutureError, OPD_MinVersionError
 import random
 from datetime import datetime
 from datetime import timedelta
@@ -79,12 +80,70 @@ class TestData:
 			# 200 is success
 			# 301 is moved permanently. This is most likely NYC. In this case, the main site has moved but the datasets have not
 			if r.status_code != 200 and r.status_code != 301:
-				raise ValueError(f"Status code for {url} is {r.status_code}")
+				r = requests.get(url)
+				if r.status_code != 200 and r.status_code != 301:
+					raise ValueError(f"Status code for {url} is {r.status_code}")
 
 			# Adding a pause here to prevent issues with requesting from site too frequently
 			sleep(sleep_time)
 
-	
+	def test_check_version(self, csvfile, source, last, skip, loghtml):
+		datasets = get_datasets(csvfile)
+		ds = datasets[(datasets["Year"]==MULTI)]
+		if len(ds)>0:
+			ds = ds.iloc[0]
+			src = data.Source(ds["SourceName"], state=ds["State"])
+			for k, year in enumerate(src.datasets["Year"]):
+				if year == MULTI:
+					break
+			# Set min_version to create error
+			src.datasets.loc[k, "min_version"] = "-1"
+			with pytest.raises(OPD_FutureError):
+				src.get_years(src.datasets.loc[k, "TableType"])
+
+			src.datasets.loc[k, "min_version"] = "0.0"
+			with pytest.raises(OPD_MinVersionError):
+				src.get_years(src.datasets.loc[k, "TableType"])
+
+			# These should pass
+			src.datasets.loc[k, "min_version"] = "100000.0"
+			data._check_version(src.datasets.loc[k])
+			src.datasets.loc[k, "min_version"] = pd.NA
+			data._check_version(src.datasets.loc[k])
+
+		ds = datasets[(datasets["Agency"]==MULTI)]
+		if len(ds)>0:
+			ds = ds.iloc[0]
+			src = data.Source(ds["SourceName"], state=ds["State"])
+			for k, year in enumerate(src.datasets["Year"]):
+				if year == MULTI:
+					break
+			# Set min_version to create error
+			src.datasets.loc[k, "min_version"] = "-1"
+			with pytest.raises(OPD_FutureError):
+				src.get_agencies(src.datasets.loc[k, "TableType"], year=src.datasets.loc[k, "Year"])
+
+			src.datasets.loc[k, "min_version"] = "0.0"
+			with pytest.raises(OPD_MinVersionError):
+				src.get_agencies(src.datasets.loc[k, "TableType"], year=src.datasets.loc[k, "Year"])
+
+		ds = datasets
+		if len(ds)>0:
+			ds = ds.iloc[0]
+			src = data.Source(ds["SourceName"], state=ds["State"])
+			for k, year in enumerate(src.datasets["Year"]):
+				if year == MULTI:
+					break
+			# Set min_version to create error
+			src.datasets.loc[k, "min_version"] = "-1"
+			with pytest.raises(OPD_FutureError):
+				src.load_from_url(year=src.datasets.loc[k, "Year"], table_type=src.datasets.loc[k, "TableType"])
+
+			src.datasets.loc[k, "min_version"] = "0.0"
+			with pytest.raises(OPD_MinVersionError):
+				src.load_from_url(year=src.datasets.loc[k, "Year"], table_type=src.datasets.loc[k, "TableType"])
+
+
 	def test_get_years(self, csvfile, source, last, skip, loghtml):
 		if last == None:
 			last = float('inf')
@@ -207,7 +266,7 @@ class TestData:
 					dts = dts[dts.notnull()]
 					assert len(dts) > 0   # If not, either all dates are bad or number of rows requested needs increased
 					# Check that year is reasonable
-					assert dts.iloc[0].year > 1999  # This is just an arbitrarily old year that is assumed to be before all available data
+					assert dts.iloc[0].year >= 1970  # This is just an arbitrarily old year that is assumed to be before all available data
 					assert dts.iloc[0].year <= datetime.now().year
 				if not pd.isnull(datasets.iloc[i]["agency_field"]):
 					assert datasets.iloc[i]["agency_field"] in table.table
@@ -292,6 +351,24 @@ class TestData:
 		assert table.table[table._agency_field].nunique()==1
 		assert table.table.iloc[0][table._agency_field] == agency
 
+	def test_to_csv(self, csvfile, source, last, skip, loghtml):
+		src = data.Source("Virginia")
+		get_datasets(csvfile)
+		agency="Fairfax County Police Department"
+		src._Source__limit = 100
+		year = 2021
+		table = src.load_from_url(2021, agency=agency)
+
+		table.to_csv()
+
+		filename = table.get_csv_filename()
+		assert os.path.exists(filename)
+
+		# Load table back in
+		src.load_from_csv(year, agency=agency)
+
+		os.remove(filename)
+
 	
 	@pytest.mark.slow(reason="This is a slow test that should be run before a major commit.")
 	def test_load_year(self, csvfile, source, last, skip, loghtml):
@@ -325,13 +402,13 @@ class TestData:
 
 				table_print = datasets.iloc[i]["TableType"]
 				now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
-				print(f"{now }Testing {i} of {len(datasets)}: {srcName} {table_print} table")
+				print(f"{now} Testing {i} of {len(datasets)}: {srcName} {table_print} table")
 
 				src = data.Source(srcName, state=state)
 
 				try:
 					years = src.get_years(datasets.iloc[i]["TableType"])
-				except OPD_DataUnavailableError as e:
+				except (OPD_DataUnavailableError, OPD_SocrataHTTPError) as e:
 					e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"])
 					caught_exceptions_warn.append(e)
 					continue
@@ -534,4 +611,4 @@ def log_errors_to_file(*args):
 if __name__ == "__main__":
 	# For testing
 	tp = TestData()
-	tp.test_source_download_limitable(None, "Austin", None, None, True) 
+	tp.test_source_download_limitable(r"..\opd-data\opd_source_table.csv", None, 9, None, None) 

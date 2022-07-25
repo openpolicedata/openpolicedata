@@ -3,6 +3,7 @@ from datetime import date
 import pandas as pd
 from numpy import nan
 import requests
+import urllib
 from sodapy import Socrata
 from pyproj.exceptions import CRSError
 from pyproj import CRS
@@ -29,6 +30,8 @@ sleep_time = 0.1
 _use_gpd_force = None
 
 _default_limit = 100000
+_url_error_msg = "There is likely an issue with the website. Open the URL {} with a web browser to confirm. " + \
+                    "See a list of known site outages at https://github.com/openpolicedata/opd-data/blob/main/outages.csv"
 
 # This is for use if import data sets using Socrata. It is not required.
 # Requests made without an app_token will be subject to strict throttling limits
@@ -69,10 +72,20 @@ def load_csv(url, date_field=None, year_filter=None, agency_field=None, agency=N
         with warnings.catch_warnings():
             # Perhaps use requests iter_content/iter_lines as below to read large CSVs so progress can be shown
             warnings.simplefilter("ignore", category=pd.errors.DtypeWarning)
-            table = pd.read_csv(url)
+            try:
+                table = pd.read_csv(url, encoding_errors='surrogateescape')
+            except urllib.error.HTTPError as e:
+                raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(url))
+            except Exception as e:
+                raise e
     else:
         with requests.get(url, params=None, stream=True) as resp:
-            table = pd.read_csv(TqdmReader(resp), nrows=limit)
+            try:
+                table = pd.read_csv(TqdmReader(resp), nrows=limit, encoding_errors='surrogateescape')
+            except urllib.error.HTTPError as e:
+                raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(url))
+            except Exception as e:
+                raise e
 
     table = filter_dataframe(table, date_field=date_field, year_filter=year_filter, 
         agency_field=agency_field, agency=agency)
@@ -174,7 +187,7 @@ def load_arcgis(url, date_field=None, year=None, limit=None, pbar=True):
         record_count = active_layer.query(where=where_query, return_count_only=True)
     except Exception as e:
         if len(e.args)>0 and "Error Code: 429" in e.args[0]:
-            raise OPD_TooManyRequestsError(base_url, f"Layer # = {layer_num}", *e.args)
+            raise OPD_TooManyRequestsError(base_url, f"Layer # = {layer_num}", *e.args, _url_error_msg.format(url))
         else:
             raise
     except:
@@ -202,7 +215,7 @@ def load_arcgis(url, date_field=None, year=None, limit=None, pbar=True):
                 df.append(active_layer.query(where=where_query, result_offset=batch*limit, result_record_count=limit, return_all_records=False, as_df=True))
         except Exception as e:
             if len(e.args)>0 and "Error Code: 429" in e.args[0]:
-                raise OPD_TooManyRequestsError(base_url, f"Layer # = {layer_num}", *e.args)
+                raise OPD_TooManyRequestsError(base_url, f"Layer # = {layer_num}", *e.args, _url_error_msg.format(url))
             else:
                 raise
         except:
@@ -377,8 +390,12 @@ def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, sel
             results = client.get(data_set, where=where,
                 limit=limit,offset=offset, select=select, order=order)
         except requests.HTTPError as e:
-            raise OPD_SocrataHTTPError(url, data_set, *e.args)
-        except Exception as e: raise e
+            raise OPD_SocrataHTTPError(url, data_set, *e.args, _url_error_msg.format(url))
+        except Exception as e: 
+            if len(e.args)>0 and e.args[0]=='Unknown response format: text/html':
+                raise OPD_SocrataHTTPError(url, data_set, *e.args, _url_error_msg.format(url))
+            else:
+                raise e
 
         if use_gpd and output_type==None:
             # Check for geo info

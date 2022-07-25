@@ -52,3 +52,9 @@ class OPD_arcgisAuthInfoError(OPD_GeneralError):
 
 class OPD_SocrataHTTPError(OPD_GeneralError):
     pass
+
+class OPD_FutureError(Exception):
+    pass
+
+class OPD_MinVersionError(Exception):
+    pass

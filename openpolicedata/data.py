@@ -1,17 +1,22 @@
 import os.path as path
 import pandas as pd
 from datetime import datetime
+from packaging import version
 
 if __name__ == '__main__':
     import data_loaders
     import _datasets
     # import preproc
     from defs import TableType, DataType, MULTI
+    from _version import __version__
+    import exceptions
 else:
     from . import data_loaders
     from . import _datasets
+    from . import __version__
     # from . import preproc
     from .defs import TableType, DataType, MULTI
+    from . import exceptions
 
 class Table:
     """
@@ -140,7 +145,9 @@ class Table:
         if not isinstance(self.table, pd.core.frame.DataFrame):
             raise ValueError("There is no table to save to CSV")
 
-        self.table.to_csv(filename, index=False)
+        self.table.to_csv(filename, index=False, errors="surrogateescape")
+
+        return filename
 
 
     def get_csv_filename(self):
@@ -247,7 +254,7 @@ class Source:
                 years.add(all_years[k])
             else:
                 df = dfs.iloc[k]
-
+                _check_version(df)
                 data_type =DataType(df["DataType"])
                 url = df["URL"]
                 if not pd.isnull(df["date_field"]):
@@ -319,6 +326,7 @@ class Source:
         # If year is multi, need to use self._agencyField to query URL
         # Otherwise return self.agency
         if src["Agency"] == MULTI:
+            _check_version(src)
             data_type =DataType(src["DataType"])
             if data_type ==DataType.CSV:
                 raise NotImplementedError(f"Unable to get agencies for {data_type}")
@@ -428,6 +436,7 @@ class Source:
         
         #It is assumed that each data loader method will return data with the proper data type so date type etc...
         if load_table:
+            _check_version(src)
             if data_type ==DataType.CSV:
                 table = data_loaders.load_csv(url, date_field=date_field, year_filter=year_filter, 
                     agency_field=agency_field, agency=agency, limit=self.__limit)
@@ -527,9 +536,6 @@ def _check_date(table, date_field):
             one_date = dts.iloc[0]            
             if type(one_date) == str:
                 table = table.astype({date_field: 'datetime64[ns]'})
-                dts = table[date_field]
-                dts = dts[dts.notnull()]
-                one_date = dts.iloc[0]
             elif date_field.lower() == "year":
                 try:
                     float(one_date)
@@ -537,24 +543,10 @@ def _check_date(table, date_field):
                     raise
                 
                 table[date_field] = table[date_field].apply(lambda x: datetime(x,1,1))
-                dts = table[date_field]
-                dts = dts[dts.notnull()]
-                one_date = dts.iloc[0]
                 
             # Replace bad dates with NaT
             table[date_field].replace(datetime.strptime('1900-01-01 00:00:00', '%Y-%m-%d %H:%M:%S'), pd.NaT, inplace=True)
-            dts = table[date_field]
-            dts = dts[dts.notnull()]
 
-            if len(dts) > 0:
-                one_date = dts.iloc[0] 
-                if hasattr(one_date, "year"):
-                    if one_date.year < 1995:
-                        raise ValueError("Date is before 1995. There was likely an issue in the date conversion")
-                    elif one_date.year > datetime.now().year:
-                        raise ValueError("Date is after the current year. There was likely an issue in the date conversion")
-                else:
-                    raise TypeError("Unknown data type for date")
 
     return table
 
@@ -601,7 +593,26 @@ def get_csv_filename(state, source_name, agency, table_type, year):
 
     return filename
 
+def _check_version(df):
+    min_version = df["min_version"] 
+    if pd.notnull(min_version):
+        src_name = df["SourceName"]
+        state = df["State"]
+        table_type = df["TableType"]
+        year = df["Year"]
+        if min_version == "-1":
+            raise exceptions.OPD_FutureError(
+                f"Year {year} {table_type} data for {src_name} in {state} cannot be loaded in this version. " + \
+                    "It will be made available in a future release"
+            )
+        elif version.parse(min_version) < version.parse(__version__):
+            raise exceptions.OPD_MinVersionError(
+                f"Year {year} {table_type} data for {src_name} in {state} cannot be loaded in version {__version__} of openpolicedata. " + \
+                    f"Update OpenPoliceData to at least version {min_version} to access this data."
+            )
+
 if __name__ == '__main__':
+    istart = 182
     from datetime import date
     datasets = _datasets.datasets_query()
     max_num_stanford = 1
@@ -609,8 +620,13 @@ if __name__ == '__main__':
     prev_sources = []
     prev_tables = []
     output_dir = ".\\data"
-    action =None # "standardize"
-    for i in range(len(datasets)):
+    action = "standardize"
+    issue_datasets = ["Austin", "Chapel Hill", "Fayetteville", "San Diego"]
+    is_austin = datasets["SourceName"].apply(lambda x : x in issue_datasets)
+    not_austin = datasets["SourceName"].apply(lambda x : x not in issue_datasets)
+    # Austin has unknown race values. Emailed dataset owner.
+    datasets = pd.concat([datasets[not_austin], datasets[is_austin]])
+    for i in range(istart, len(datasets)):
         if "stanford.edu" in datasets.iloc[i]["URL"]:
             num_stanford += 1
             if num_stanford > max_num_stanford:
