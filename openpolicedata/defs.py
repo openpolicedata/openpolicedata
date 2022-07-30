@@ -28,31 +28,31 @@ class TableType(str, Enum):
         return obj
 
     # Below tuples are (value, description)
-
+    ARRESTS = ("ARRESTS", "Data describing arrests of individuals.")
     # Definition from https://www.policedatainitiative.org/datasets/calls-for-service/
-    CALLS_FOR_SERVICE = ("CALLS FOR SERVICE", "Calls for service to law enforcement agencies generally include calls " +
+    CALLS_FOR_SERVICE = ("CALLS FOR SERVICE", '"Calls for service to law enforcement agencies generally include calls ' +
         "to “911” for emergency assistance and may also include calls to non-emergency numbers. Generally, “311” data " +
-        "is not included in calls for service data.")
+        'is not included in calls for service data." https://www.policedatainitiative.org/datasets/calls-for-service/')
     # Definition from https://police.laws.com/police/police-citation
-    CITATIONS = ("CITATIONS","A police citation, which is commonly called a 'ticket', is official documentation stating " +
+    CITATIONS = ("CITATIONS",'"A police citation, which is commonly called a "ticket", is official documentation stating ' +
         "that an individual has been made aware of a violation by an officer of the law. Police citations can be issued in " +
         "a variety of spectrums, ranging from vehicular violations to civil violations. This table is for citations resulting " +
-        "from both traffic and pedestrian stops.")
+        'from both traffic and pedestrian stops." https://police.laws.com/police/police-citation')
     # Defintion from https://www.policedatainitiative.org/datasets/complaints/
-    COMPLAINTS = ("COMPLAINTS","An important aspect of accountable public service is citizen recourse and the ability " +
+    COMPLAINTS = ("COMPLAINTS",'"An important aspect of accountable public service is citizen recourse and the ability ' +
         "for the community to share information regarding any potential mistreatment, including situations that may violate " +
         "agency policies and procedures and/or local ordinances or law. National law enforcement accreditation standards call " +
         "for agencies to have a process for collecting complaint information and have a process for making data about the " +
-        "complaints available to the community.")
+        'complaints available to the community." https://www.policedatainitiative.org/datasets/complaints/')
     # Definition from https://www.policedatainitiative.org/datasets/agency-workforce-demographics/
-    EMPLOYEE = ("EMPLOYEE","Demographic data regarding the police workforce and in some cases, applicants")
-    FIELD_CONTACTS = ("FIELD CONTACTS", "")
+    EMPLOYEE = ("EMPLOYEE","Demographic data of the police workforce")
+    FIELD_CONTACTS = ("FIELD CONTACTS", "Consensual contacts between officers and the community.")
     # Defintion from https://www.urban.org/sites/default/files/publication/25781/412647-Key-Issues-in-the-Police-Use-of-Pedestrian-Stops-and-Searches.PDF
-    PEDESTRIAN = ("PEDESTRIAN STOPS","A street stop by an officer whereby an officer stops and questions a " +
+    PEDESTRIAN = ("PEDESTRIAN STOPS",'"A street stop by an officer whereby an officer stops and questions a ' +
         "pedestrian based on reasonable suspicion that the pedestrian is or was recently engaged in unlawful " + 
         "activity. Street stops may lead to a limited search, called a “pat down” or frisk. If the officer " +
         "obtains probable cause that the pedestrian is or was involved in a crime, the stop could lead to a " +
-        "full body search.")
+        'full body search." See preface of https://www.urban.org/sites/default/files/publication/25781/412647-Key-Issues-in-the-Police-Use-of-Pedestrian-Stops-and-Searches.PDF')
     PEDESTRIAN_ARRESTS = ("PEDESTRIAN ARRESTS","Pedestrian stops table only containing data for incidents ending in arrests. " +
         "See TableType.PEDESTRIAN.description for the definitinon of a pedestrian stop.")
     PEDESTRIAN_CITATIONS = ("PEDESTRIAN CITATIONS","Pedestrian stops table only containing data for incidents ending in citations. " +
@@ -63,11 +63,11 @@ class TableType(str, Enum):
         "officer durian a pedestrian stop. See TableType.PEDESTRIAN.description " + 
         "for the definitinon of a pedestrian stop.")
     # Definition from https://www.policedatainitiative.org/datasets/officer-involved-shootings/
-    SHOOTINGS = ("OFFICER-INVOLVED SHOOTINGS","Although no national or standard definition exists, an officer " + 
+    SHOOTINGS = ("OFFICER-INVOLVED SHOOTINGS",'"Although no national or standard definition exists, an officer ' + 
         "involved shooting (OIS) may be defined as the discharge of a firearm, which may include accidental and " +
         "intentional discharges, by a police officer, whether on or off duty. In some cases OIS datasets only " +
         "include instances in which an officer discharged a firearm at a person and may not include discharges " +
-        "directed into or at a vehicle, animal, etc.")
+        'directed into or at a vehicle, animal, etc." https://www.policedatainitiative.org/datasets/officer-involved-shootings/')
     SHOOTINGS_CIVILIANS = ("OFFICER-INVOLVED SHOOTINGS - CIVILIANS",
         "Since multiple civilians and officers can be involved in a use of force incident, some departments " +
         "have separate tables for the incident, the civilians involved in the shooting, and the officers " + 
@@ -94,14 +94,14 @@ class TableType(str, Enum):
         "TableType.TRAFFIC.description for the definitinon of a traffic stop.")
     # Defintion from https://legalbeagle.com/7700165-traffic-citation-warning.html
     TRAFFIC_WARNINGS = ("TRAFFIC WARNINGS","Traffic stops table for traffic stops ending in citations. " +
-        "A traffic citation warning is a verbal or written warning issued by a police " + 
-        "officer in the event of a traffic violation" + 
+        '"A traffic citation warning is a verbal or written warning issued by a police ' + 
+        'officer in the event of a traffic violation" (https://legalbeagle.com/7700165-traffic-citation-warning.html)' + 
         "See TableType.TRAFFIC.description for the definitinon of a traffic stop.")
     # Definition from https://www.policedatainitiative.org/use-of-force/
-    USE_OF_FORCE = ("USE OF FORCE","The use of force can generally be defined as the means of compelling compliance or " + 
+    USE_OF_FORCE = ("USE OF FORCE",'"The use of force can generally be defined as the means of compelling compliance or ' + 
         "overcoming resistance to an officer’s command(s) in order to protect life or property or to take a person into custody. " + 
         "For this reason, some agencies refer to the use of force as “response to resistance.” Types of force can include verbal, " + 
-        "physical, chemical, impact, electronic, and firearm. Other definitions of the use of force in law enforcement may differ.")
+        'physical, chemical, impact, electronic, and firearm. Other definitions of the use of force in law enforcement may differ." https://www.policedatainitiative.org/use-of-force/')
     USE_OF_FORCE_CIVILIANS = ("USE OF FORCE - CIVILIANS",
         "Since multiple civilians and officers can be involved in a use of force incident, some departments " +
         "have separate tables for the use of force incident, the civilians involved in the incident, and the officers " + 
@@ -122,11 +122,11 @@ class TableType(str, Enum):
         "have separate tables for the use of force incident, the civilians involved in the incident, and the officers " + 
         "involved in the incident. They are typically linked by a unique identifier. This table contains data for both the " + 
         "civilians and the officers. See TableType.USE_OF_FORCE.description for definition of use of force.")
-    # Definitino from https://www.police.ucla.edu/other/vehicle-pursuits
-    VEHICLE_PURSUITS = ("VEHICLE PURSUITS","A vehicle pursuit is an event involving one or more law enforcement officers " +
+    # Definition from https://www.police.ucla.edu/other/vehicle-pursuits
+    VEHICLE_PURSUITS = ("VEHICLE PURSUITS",'"A vehicle pursuit is an event involving one or more law enforcement officers ' +
         "attempting to apprehend a suspect who is attempting to avoid arrest while operating a motor vehicle by using high " +
         "speed driving or other evasive tactics such as driving off a highway, turning suddenly or driving in a legal manner " +
-        "but willfully failing to yield to an officer’s signal to stop")
+        'but willfully failing to yield to an officer’s signal to stop" https://www.police.ucla.edu/other/vehicle-pursuits')
 
 # Constants used in dataset parameters
 MULTI = "MULTI"    # For data sets that put multiple years or agencies in 1 dataset

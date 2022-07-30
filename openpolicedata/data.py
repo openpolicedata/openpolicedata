@@ -1,6 +1,7 @@
 import os.path as path
 import pandas as pd
 from datetime import datetime
+from packaging import version
 
 from openpolicedata import datetime_parser
 
@@ -9,13 +10,15 @@ if __name__ == '__main__':
     import _datasets
     import preproc
     from defs import TableType, DataType, MULTI
-    import defs
+    from _version import __version__
+    import exceptions
 else:
     from . import data_loaders
     from . import _datasets
-    from . import preproc
+    from . import __version__
+    # from . import preproc
     from .defs import TableType, DataType, MULTI
-    from . import defs
+    from . import exceptions
 
 class Table:
     """
@@ -144,7 +147,7 @@ class Table:
         if not isinstance(self.table, pd.core.frame.DataFrame):
             raise ValueError("There is no table to save to CSV")
 
-        self.table.to_csv(filename, index=False)
+        self.table.to_csv(filename, index=False, errors="surrogateescape")
 
         return filename
 
@@ -292,7 +295,7 @@ class Source:
                 years.add(all_years[k])
             else:
                 df = dfs.iloc[k]
-
+                _check_version(df)
                 data_type =DataType(df["DataType"])
                 url = df["URL"]
                 if not pd.isnull(df["date_field"]):
@@ -364,6 +367,7 @@ class Source:
         # If year is multi, need to use self._agencyField to query URL
         # Otherwise return self.agency
         if src["Agency"] == MULTI:
+            _check_version(src)
             data_type =DataType(src["DataType"])
             if data_type ==DataType.CSV:
                 raise NotImplementedError(f"Unable to get agencies for {data_type}")
@@ -473,6 +477,7 @@ class Source:
         
         #It is assumed that each data loader method will return data with the proper data type so date type etc...
         if load_table:
+            _check_version(src)
             if data_type ==DataType.CSV:
                 table = data_loaders.load_csv(url, date_field=date_field, year_filter=year_filter, 
                     agency_field=agency_field, agency=agency, limit=self.__limit)
@@ -632,3 +637,120 @@ def get_csv_filename(state, source_name, agency, table_type, year):
     filename += ".csv"
 
     return filename
+
+def _check_version(df):
+    min_version = df["min_version"] 
+    if pd.notnull(min_version):
+        src_name = df["SourceName"]
+        state = df["State"]
+        table_type = df["TableType"]
+        year = df["Year"]
+        if min_version == "-1":
+            raise exceptions.OPD_FutureError(
+                f"Year {year} {table_type} data for {src_name} in {state} cannot be loaded in this version. " + \
+                    "It will be made available in a future release"
+            )
+        elif version.parse(min_version) < version.parse(__version__):
+            raise exceptions.OPD_MinVersionError(
+                f"Year {year} {table_type} data for {src_name} in {state} cannot be loaded in version {__version__} of openpolicedata. " + \
+                    f"Update OpenPoliceData to at least version {min_version} to access this data."
+            )
+
+if __name__ == '__main__':
+    istart = 182
+    from datetime import date
+    datasets = _datasets.datasets_query()
+    max_num_stanford = 1
+    num_stanford = 0
+    prev_sources = []
+    prev_tables = []
+    output_dir = ".\\data"
+    action = "standardize"
+    issue_datasets = ["Austin", "Chapel Hill", "Fayetteville", "San Diego"]
+    is_austin = datasets["SourceName"].apply(lambda x : x in issue_datasets)
+    not_austin = datasets["SourceName"].apply(lambda x : x not in issue_datasets)
+    # Austin has unknown race values. Emailed dataset owner.
+    datasets = pd.concat([datasets[not_austin], datasets[is_austin]])
+    for i in range(istart, len(datasets)):
+        if "stanford.edu" in datasets.iloc[i]["URL"]:
+            num_stanford += 1
+            if num_stanford > max_num_stanford:
+                continue
+
+        srcName = datasets.iloc[i]["SourceName"]
+        state = datasets.iloc[i]["State"]
+
+        if datasets.iloc[i]["Agency"] == MULTI and srcName == "Virginia":
+            # Reduce size of data load by filtering by agency
+            agency = "Fairfax County Police Department"
+        else:
+            agency = None
+
+        skip = False
+        for k in range(len(prev_sources)):
+            if srcName == prev_sources[k] and datasets.iloc[i]["TableType"] ==prev_tables[k]:
+                skip = True
+
+        if skip:
+            continue
+
+        prev_sources.append(srcName)
+        prev_tables.append(datasets.iloc[i]["TableType"])
+
+        table_print = datasets.iloc[i]["TableType"]
+        now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
+        print(f"{now} Saving CSV for dataset {i} of {len(datasets)}: {srcName} {table_print} table")
+
+        src = Source(srcName, state=state)
+
+        if action == "standardize":
+            if datasets.iloc[i]["DataType"] ==DataType.CSV.value:
+                table = src.load_from_csv(datasets.iloc[i]["Year"], table_type=datasets.iloc[i]["TableType"])
+            else:
+                year = date.today().year
+                table = None
+                for y in range(year, year-20, -1):
+                    try:
+                        csv_filename = src.get_csv_filename(y, output_dir, datasets.iloc[i]["TableType"], 
+                            agency=agency)
+                    except ValueError as e:
+                        if "There are no sources matching tableType" in e.args[0]:
+                            continue
+                        else:
+                            raise
+                    except:
+                        raise
+                    
+                    if path.exists(csv_filename):
+                        table = src.load_from_csv(y, table_type=datasets.iloc[i]["TableType"], 
+                            agency=agency,output_dir=output_dir)
+                        break
+
+            table.standardize()
+        else:
+            if datasets.iloc[i]["DataType"] ==DataType.CSV.value:
+                csv_filename = src.get_csv_filename(datasets.iloc[i]["Year"], output_dir, datasets.iloc[i]["TableType"])
+                if path.exists(csv_filename):
+                    continue
+                table = src.load_from_url(datasets.iloc[i]["Year"], datasets.iloc[i]["TableType"])
+            else:
+                years = src.get_years(datasets.iloc[i]["TableType"])
+                
+                if len(years)>1:
+                    # It is preferred to to not use first or last year that start and stop of year are correct
+                    year = years[-2]
+                else:
+                    year = years[0]
+
+                csv_filename = src.get_csv_filename(year, output_dir, datasets.iloc[i]["TableType"], 
+                                        agency=agency)
+
+                if path.exists(csv_filename):
+                    continue
+
+                table = src.load_from_url(year, datasets.iloc[i]["TableType"], 
+                                        agency=agency)
+
+            table.to_csv(".\\data")
+
+    print("data main function complete")
