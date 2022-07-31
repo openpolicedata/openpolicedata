@@ -9,6 +9,7 @@ from pyproj.exceptions import CRSError
 from pyproj import CRS
 import warnings
 from arcgis.features import FeatureLayerCollection
+from arcgis.geometry._types import Point
 from time import sleep
 from tqdm import tqdm
 from math import ceil
@@ -79,11 +80,16 @@ def load_csv(url, date_field=None, year_filter=None, agency_field=None, agency=N
             except Exception as e:
                 raise e
     else:
+        r = requests.head(url)
+        try:
+            r.raise_for_status()
+        except requests.exceptions.HTTPError as e:
+            raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(url))
+        except Exception as e:
+            raise e
         with requests.get(url, params=None, stream=True) as resp:
             try:
                 table = pd.read_csv(TqdmReader(resp), nrows=limit, encoding_errors='surrogateescape')
-            except urllib.error.HTTPError as e:
-                raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(url))
             except Exception as e:
                 raise e
 
@@ -137,7 +143,8 @@ def load_arcgis(url, date_field=None, year=None, limit=None, pbar=True):
     r = requests.get(base_url + "/" + layer_num + "?f=pjson")
     r.raise_for_status()
     meta = r.json()
-    if "maxRecordCount" in meta:
+    if "maxRecordCount" in meta and \
+        (not user_limit or (user_limit and limit > meta["maxRecordCount"])):
         limit = meta["maxRecordCount"]
     
     # https://developers.arcgis.com/python/
@@ -185,6 +192,8 @@ def load_arcgis(url, date_field=None, year=None, limit=None, pbar=True):
 
     try:
         record_count = active_layer.query(where=where_query, return_count_only=True)
+        if record_count==0:
+            return None
     except Exception as e:
         if len(e.args)>0 and "Error Code: 429" in e.args[0]:
             raise OPD_TooManyRequestsError(base_url, f"Layer # = {layer_num}", *e.args, _url_error_msg.format(url))
@@ -200,6 +209,7 @@ def load_arcgis(url, date_field=None, year=None, limit=None, pbar=True):
         total = record_count
         
     df = []
+    pbar = pbar and num_batches>1
     if pbar:
         bar = tqdm(desc=url, total=total, leave=False) 
         
@@ -243,7 +253,13 @@ def load_arcgis(url, date_field=None, year=None, limit=None, pbar=True):
                 use_gpd = _has_gpd
 
             if use_gpd:
-                geometry = df.pop("SHAPE")
+                def fix_nans(pt):
+                    if type(pt) == Point and pt.x=="NaN":
+                        pt.x = nan
+                        pt.y = nan
+
+                    return pt
+                geometry = df.pop("SHAPE").apply(fix_nans)
                 try:
                     df = gpd.GeoDataFrame(df, crs=layer_query_result.spatial_reference['wkid'], geometry=geometry)
                 except CRSError:
@@ -376,17 +392,25 @@ def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, sel
     show_pbar = pbar and not user_limit and select==None
     if show_pbar:
         results = client.get(data_set, where=where, select="count(*)")
-        num_rows = float(results[0]["count"])
+        try:
+            num_rows = float(results[0]["count"])
+        except:
+            num_rows = float(results[0]["count_1"]) # Value used in VT Shootings data
         total = ceil(num_rows / limit)
+        if total > 1:
+            bar = tqdm(desc=f"URL: {url}, Dataset: {data_set}", total=total, leave=False)
+        else:
+            show_pbar = False
 
-        bar = tqdm(desc=f"URL: {url}, Dataset: {data_set}", total=total, leave=False)
-
-    order = ":id" if select==None else None
+    order = None
+    if select == None:
+        # order guarantees data order remains the same when paging
+        # Order by date if available otherwise the data ID. 
+        # https://dev.socrata.com/docs/paging.html#2.1
+        order = ":id" if date_field==None else date_field
 
     while N > 0:
         try:
-            # order=":id" guarantees data order remains the same when paging:
-            # https://dev.socrata.com/docs/paging.html#2.1
             results = client.get(data_set, where=where,
                 limit=limit,offset=offset, select=select, order=order)
         except requests.HTTPError as e:
