@@ -233,7 +233,7 @@ class Source:
         Parameters
         ----------
         table_type - str or TableType enum
-            (Optional) If set, only returns years for requested table type
+            Only returns years for requested table type
 
         Returns
         -------
@@ -334,7 +334,7 @@ class Source:
                 raise NotImplementedError(f"Unable to get agencies for {data_type}")
             elif data_type ==DataType.SOCRATA:
                 if partial_name is not None:
-                    opt_filter = "agency_name LIKE '%" + partial_name + "%'"
+                    opt_filter = src["agency_field"] + " LIKE '%" + partial_name + "%'"
                 else:
                     opt_filter = None
 
