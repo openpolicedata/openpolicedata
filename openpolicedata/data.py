@@ -350,7 +350,7 @@ class Source:
             return [src["Agency"]]
         
 
-    def load_from_url(self, year, table_type=None, agency=None):
+    def load_from_url(self, year, table_type=None, agency=None, pbar=True):
         '''Load data from URL
 
         Parameters
@@ -365,6 +365,8 @@ class Source:
         agency - str
             (Optional) If set, for datasets containing multiple agencies, data will
             only be returned for this agency
+        pbar - bool
+            (Optional) Whether to show progress bar when loading data. Default True
 
         Returns
         -------
@@ -372,9 +374,9 @@ class Source:
             Table object containing the requested data
         '''
 
-        return self.__load(year, table_type, agency, True)
+        return self.__load(year, table_type, agency, True, pbar)
 
-    def __load(self, year, table_type, agency, load_table):
+    def __load(self, year, table_type, agency, load_table, pbar=True):
         if isinstance(table_type, TableType):
             table_type = table_type.value
 
@@ -439,9 +441,9 @@ class Source:
             _check_version(src)
             if data_type ==DataType.CSV:
                 table = data_loaders.load_csv(url, date_field=date_field, year_filter=year_filter, 
-                    agency_field=agency_field, agency=agency, limit=self.__limit)
+                    agency_field=agency_field, agency=agency, limit=self.__limit, pbar=pbar)
             elif data_type ==DataType.ArcGIS:
-                table = data_loaders.load_arcgis(url, date_field, year_filter, limit=self.__limit)
+                table = data_loaders.load_arcgis(url, date_field, year_filter, limit=self.__limit, pbar=pbar)
             elif data_type ==DataType.SOCRATA:
                 opt_filter = None
                 if agency != None and agency_field != None:
@@ -450,7 +452,7 @@ class Source:
                     opt_filter = agency_field + " = '" + agency + "'"
 
                 table = data_loaders.load_socrata(url, dataset_id, date_field=date_field, year=year_filter, opt_filter=opt_filter, 
-                    limit=self.__limit)
+                    limit=self.__limit, pbar=pbar)
             else:
                 raise ValueError(f"Unknown data type: {data_type}")
 

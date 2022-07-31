@@ -22,6 +22,8 @@ sleep_time = 0.1
 log_filename = f"pytest_url_errors_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
 log_folder = os.path.join(".","data/test_logs")
 
+warn_errors = (OPD_DataUnavailableError, OPD_SocrataHTTPError, OPD_FutureError, OPD_MinVersionError)
+
 def get_datasets(csvfile):
     if csvfile != None:
         _datasets.datasets = _datasets._build(csvfile)
@@ -172,7 +174,7 @@ class TestData:
 
 				try:
 					years = src.get_years(datasets.iloc[i]["TableType"])
-				except (OPD_DataUnavailableError, OPD_SocrataHTTPError) as e:
+				except warn_errors as e:
 					e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"])
 					caught_exceptions_warn.append(e)
 					continue
@@ -245,7 +247,7 @@ class TestData:
 
 				try:
 					table = src.load_from_url(datasets.iloc[i]["Year"], datasets.iloc[i]["TableType"])
-				except (OPD_DataUnavailableError, OPD_SocrataHTTPError) as e:
+				except warn_errors as e:
 					e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"])
 					caught_exceptions_warn.append(e)
 					continue
@@ -408,7 +410,7 @@ class TestData:
 
 				try:
 					years = src.get_years(datasets.iloc[i]["TableType"])
-				except (OPD_DataUnavailableError, OPD_SocrataHTTPError) as e:
+				except warn_errors as e:
 					e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"])
 					caught_exceptions_warn.append(e)
 					continue
@@ -611,4 +613,5 @@ def log_errors_to_file(*args):
 if __name__ == "__main__":
 	# For testing
 	tp = TestData()
-	tp.test_source_download_limitable(r"..\opd-data\opd_source_table.csv", None, 9, None, None) 
+	# (self, csvfile, source, last, skip, loghtml)
+	tp.test_source_download_limitable(r"..\opd-data\opd_source_table.csv", "Louisville", None, None, None) 

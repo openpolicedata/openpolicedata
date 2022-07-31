@@ -3,15 +3,16 @@ from datetime import date
 import pandas as pd
 from numpy import nan
 import requests
-from sodapy import Socrata
-import contextlib
 import urllib
-import json
+from sodapy import Socrata
 from pyproj.exceptions import CRSError
 from pyproj import CRS
 import warnings
 from arcgis.features import FeatureLayerCollection
+from arcgis.geometry._types import Point
 from time import sleep
+from tqdm import tqdm
+from math import ceil
 
 try:
     import geopandas as gpd
@@ -29,6 +30,7 @@ sleep_time = 0.1
 # Global parameter for testing both with and without GeoPandas in testing
 _use_gpd_force = None
 
+_default_limit = 100000
 _url_error_msg = "There is likely an issue with the website. Open the URL {} with a web browser to confirm. " + \
                     "See a list of known site outages at https://github.com/openpolicedata/opd-data/blob/main/outages.csv"
 
@@ -41,7 +43,7 @@ _url_error_msg = "There is likely an issue with the website. Open the URL {} wit
 # Windows: https://www.wikihow.com/Create-an-Environment-Variable-in-Windows-10
 default_sodapy_key = os.environ.get("SODAPY_API_KEY")
 
-def load_csv(url, date_field=None, year_filter=None, agency_field=None, agency=None, limit=None):
+def load_csv(url, date_field=None, year_filter=None, agency_field=None, agency=None, limit=None, pbar=True):
     '''Download CSV file to pandas DataFrame
     
     Parameters
@@ -58,6 +60,8 @@ def load_csv(url, date_field=None, year_filter=None, agency_field=None, agency=N
         (Optional) Name of the agency to filter for. None value returns data for all agencies.
     limit : int
         (Optional) Only returns the first limit rows of the CSV
+    pbar : bool
+        (Optional) If true (default), a progress bar will be displayed
         
     Returns
     -------
@@ -65,7 +69,7 @@ def load_csv(url, date_field=None, year_filter=None, agency_field=None, agency=N
         DataFrame containing table imported from CSV
     '''
     
-    if limit==None or ".zip" in url:
+    if ".zip" in url or not pbar:
         with warnings.catch_warnings():
             # Perhaps use requests iter_content/iter_lines as below to read large CSVs so progress can be shown
             warnings.simplefilter("ignore", category=pd.errors.DtypeWarning)
@@ -76,21 +80,18 @@ def load_csv(url, date_field=None, year_filter=None, agency_field=None, agency=N
             except Exception as e:
                 raise e
     else:
-        table = pd.DataFrame()
+        r = requests.head(url)
         try:
-            with contextlib.closing(urllib.request.urlopen(url=url)) as rd:
-                for df in pd.read_csv(rd, chunksize=1024, encoding_errors='surrogateescape'):
-                    table = pd.concat([table, df], ignore_index=True)
-                    if len(table) > limit:
-                        break
-        except urllib.error.HTTPError as e:
+            r.raise_for_status()
+        except requests.exceptions.HTTPError as e:
             raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(url))
         except Exception as e:
             raise e
-
-    if limit!=None and len(table) > limit:
-        table = table.head(limit)
-
+        with requests.get(url, params=None, stream=True) as resp:
+            try:
+                table = pd.read_csv(TqdmReader(resp), nrows=limit, encoding_errors='surrogateescape')
+            except Exception as e:
+                raise e
 
     table = filter_dataframe(table, date_field=date_field, year_filter=year_filter, 
         agency_field=agency_field, agency=agency)
@@ -98,7 +99,7 @@ def load_csv(url, date_field=None, year_filter=None, agency_field=None, agency=N
     return table
 
 
-def load_arcgis(url, date_field=None, year=None, limit=None):
+def load_arcgis(url, date_field=None, year=None, limit=None, pbar=True):
     '''Download table from ArcGIS to pandas or geopandas DataFrame
     
     Parameters
@@ -111,6 +112,8 @@ def load_arcgis(url, date_field=None, year=None, limit=None):
         (Optional) Either the year or the year range [first_year, last_year] for the data that is being requested.  None value returns data for all years.
     limit : int
         (Optional) Only returns the first limit rows of the table
+    pbar : bool
+        (Optional) If true (default), a progress bar will be displayed
         
     Returns
     -------
@@ -129,8 +132,20 @@ def load_arcgis(url, date_field=None, year=None, limit=None):
     last_slash = url.rindex("/")
     layer_num = url[last_slash+1:]
     base_url = url[:last_slash]
-    # Get layer/table #
-    # Shorten URL
+    
+    user_limit = limit != None
+    if not user_limit:
+        limit = _default_limit
+    else:
+        total = limit
+
+    # Get metadata
+    r = requests.get(base_url + "/" + layer_num + "?f=pjson")
+    r.raise_for_status()
+    meta = r.json()
+    if "maxRecordCount" in meta and \
+        (not user_limit or (user_limit and limit > meta["maxRecordCount"])):
+        limit = meta["maxRecordCount"]
     
     # https://developers.arcgis.com/python/
     try:
@@ -172,18 +187,42 @@ def load_arcgis(url, date_field=None, year=None, limit=None):
         start_date, stop_date = _process_date(year, inclusive=False)
         
         where_query = f"{date_field} >= '{start_date}' AND  {date_field} < '{stop_date}'"
-        try:
-            layer_query_result = active_layer.query(where=where_query, return_all_records=(limit == None), result_record_count=limit)
-        except Exception as e:
-            if len(e.args)>0 and "Error Code: 429" in e.args[0]:
-                raise OPD_TooManyRequestsError(base_url, f"Layer # = {layer_num}", *e.args, _url_error_msg.format(url))
-            else:
-                raise
-        except:
-            raise
     else:
+        where_query = '1=1'
+
+    try:
+        record_count = active_layer.query(where=where_query, return_count_only=True)
+        if record_count==0:
+            return None
+    except Exception as e:
+        if len(e.args)>0 and "Error Code: 429" in e.args[0]:
+            raise OPD_TooManyRequestsError(base_url, f"Layer # = {layer_num}", *e.args, _url_error_msg.format(url))
+        else:
+            raise
+    except:
+        raise
+
+    if user_limit:
+        num_batches = ceil(total / limit)
+    else:
+        num_batches = ceil(record_count / limit)
+        total = record_count
+        
+    df = []
+    pbar = pbar and num_batches>1
+    if pbar:
+        bar = tqdm(desc=url, total=total, leave=False) 
+        
+    for batch in range(num_batches):
         try:
-            layer_query_result = active_layer.query(return_all_records=(limit == None), result_record_count=limit)
+            if batch==0:
+                layer_query_result = active_layer.query(where=where_query, result_offset=batch*limit, result_record_count=limit, return_all_records=False)
+                df.append(layer_query_result.sdf)
+                if len(df[0]) not in [limit, total]:
+                    num_rows = len(df[0])
+                    raise ValueError(f"Number of rows is {num_rows} but is expected to be max rows to read {limit} or total number of rows {total}")
+            else:
+                df.append(active_layer.query(where=where_query, result_offset=batch*limit, result_record_count=limit, return_all_records=False, as_df=True))
         except Exception as e:
             if len(e.args)>0 and "Error Code: 429" in e.args[0]:
                 raise OPD_TooManyRequestsError(base_url, f"Layer # = {layer_num}", *e.args, _url_error_msg.format(url))
@@ -192,59 +231,90 @@ def load_arcgis(url, date_field=None, year=None, limit=None):
         except:
             raise
 
-    if len(layer_query_result) > 0:
+        if pbar:
+            bar.update(len(df[-1]))
+
+    if pbar:
+        bar.close()
+
+    df = pd.concat(df, ignore_index=True)
+
+    if len(df) > 0:
         if is_table:
-            if len(layer_query_result.features) > 0 and layer_query_result.features[0].geometry != None:
+            if "SHAPE" in df:
                 raise ValueError("Tables are not expected to include geographic data")
-            return layer_query_result.sdf
+            return df
         else:
-            try:
-                json_data = layer_query_result.to_geojson
-            except:
-                for k in range(len(layer_query_result.features)):
-                    if layer_query_result.features[k].geometry == None:
-                        # Put in dummy data
-                        layer_query_result.features[k].geometry = {"x" : nan, "y" : nan}
-
-                json_data = layer_query_result.to_geojson
-
-            json_data = json.loads(json_data)
-            
-            for k in range(len(json_data["features"])):
-                if json_data["features"][k]["geometry"]['coordinates'] == ["NaN", "NaN"]:
-                    json_data["features"][k]["geometry"]['coordinates'] = [nan, nan]
-            
             if _use_gpd_force is not None:
                 if not _has_gpd and _use_gpd_force:
                     raise ValueError("User cannot force GeoPandas usage when it is not installed")
                 use_gpd = _use_gpd_force
             else:
                 use_gpd = _has_gpd
-                
+
             if use_gpd:
+                def fix_nans(pt):
+                    if type(pt) == Point and pt.x=="NaN":
+                        pt.x = nan
+                        pt.y = nan
+
+                    return pt
+                geometry = df.pop("SHAPE").apply(fix_nans)
                 try:
-                    df = gpd.GeoDataFrame.from_features(json_data, crs=layer_query_result.spatial_reference['wkid'])
+                    df = gpd.GeoDataFrame(df, crs=layer_query_result.spatial_reference['wkid'], geometry=geometry)
                 except CRSError:
                     # Method recommended by pyproj to deal with CRSError for wkid = 102685
                     crs = CRS.from_authority("ESRI", layer_query_result.spatial_reference['wkid'])
-                    df = gpd.GeoDataFrame.from_features(json_data, crs=crs)
-            else:
-                dict_data = [x['properties'] for x in json_data['features']]
-                for k in range(len(dict_data)):
-                    if 'geometry' in json_data['features'][k]:
-                        dict_data[k]['geometry'] = json_data['features'][k]['geometry']
+                    df = gpd.GeoDataFrame(df, crs=crs, geometry=geometry)
 
-                df = pd.DataFrame.from_records(dict_data)
+            # try:
+            #     json_data = layer_query_result.to_geojson
+            # except:
+            #     for k in range(len(layer_query_result.features)):
+            #         if layer_query_result.features[k].geometry == None:
+            #             # Put in dummy data
+            #             layer_query_result.features[k].geometry = {"x" : nan, "y" : nan}
 
-            if date_field is not None:
-                date_field_metadata=[x for x in layer_query_result.fields if x['name']==date_field]
-                if len(date_field_metadata) != 1:
-                    raise ValueError(f"Unable to find a single date field named {date_field}. Found {len(date_field_metadata)} instances.")
+            #     json_data = layer_query_result.to_geojson
 
-                if date_field_metadata[0]['type'] in ['esriFieldTypeDate', "esriFieldTypeString"]:
-                    df = df.astype({date_field: 'datetime64[ms]'})
-                else:
-                    raise ValueError(f"Unsupported data type {date_field_metadata[0]['type']} for field {date_field}.")
+            # json_data = json.loads(json_data)
+            
+            # for k in range(len(json_data["features"])):
+            #     if json_data["features"][k]["geometry"]['coordinates'] == ["NaN", "NaN"]:
+            #         json_data["features"][k]["geometry"]['coordinates'] = [nan, nan]
+            
+            # if _use_gpd_force is not None:
+            #     if not _has_gpd and _use_gpd_force:
+            #         raise ValueError("User cannot force GeoPandas usage when it is not installed")
+            #     use_gpd = _use_gpd_force
+            # else:
+            #     use_gpd = _has_gpd
+                
+            # if use_gpd:
+            #     try:
+            #         df = gpd.GeoDataFrame.from_features(json_data, crs=layer_query_result.spatial_reference['wkid'])
+            #     except CRSError:
+            #         # Method recommended by pyproj to deal with CRSError for wkid = 102685
+            #         crs = CRS.from_authority("ESRI", layer_query_result.spatial_reference['wkid'])
+            #         df = gpd.GeoDataFrame.from_features(json_data, crs=crs)
+            # else:
+            #     dict_data = [x['properties'] for x in json_data['features']]
+            #     for k in range(len(dict_data)):
+            #         if 'geometry' in json_data['features'][k]:
+            #             dict_data[k]['geometry'] = json_data['features'][k]['geometry']
+
+            #     df = pd.DataFrame.from_records(dict_data)
+
+            # This should be kept?
+            # if date_field is not None:
+            #     date_field_metadata=[x for x in layer_query_result.fields if x['name']==date_field]
+            #     if len(date_field_metadata) != 1:
+            #         raise ValueError(f"Unable to find a single date field named {date_field}. Found {len(date_field_metadata)} instances.")
+
+            #     if date_field_metadata[0]['type'] in ['esriFieldTypeDate', "esriFieldTypeString"]:
+            #         df = df.astype({date_field: 'datetime64[ms]'})
+            #     else:
+            #         raise ValueError(f"Unsupported data type {date_field_metadata[0]['type']} for field {date_field}.")
             
 
             return df
@@ -253,7 +323,7 @@ def load_arcgis(url, date_field=None, year=None, limit=None):
 
 
 def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, select=None, output_type=None, 
-                 limit=None, key=default_sodapy_key):
+                 limit=None, key=default_sodapy_key, pbar=True):
     '''Download table from Socrata to pandas or geopandas DataFrame
     
     Parameters
@@ -276,6 +346,8 @@ def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, sel
         (Optional) Only returns the first limit rows of the table
     key : str
         (Optional) Socrata app token to prevent throttling of the data request
+    pbar : bool
+        (Optional) If true (default), a progress bar will be displayed
         
     Returns
     -------
@@ -285,11 +357,11 @@ def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, sel
 
     # Unauthenticated client only works with public data sets. Note 'None'
     # in place of application token, and no username or password:
-    client = Socrata(url, key)
+    client = Socrata(url, key, timeout=60)
 
-    userLimit = limit != None
-    if not userLimit:
-        limit = client.DEFAULT_LIMIT
+    user_limit = limit != None
+    if not user_limit:
+        limit = _default_limit
 
     N = 1  # Initialize to value > 0 so while loop runs
     offset = 0
@@ -316,11 +388,31 @@ def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, sel
         use_gpd = _use_gpd_force
     else:
         use_gpd = _has_gpd
+         
+    show_pbar = pbar and not user_limit and select==None
+    if show_pbar:
+        results = client.get(data_set, where=where, select="count(*)")
+        try:
+            num_rows = float(results[0]["count"])
+        except:
+            num_rows = float(results[0]["count_1"]) # Value used in VT Shootings data
+        total = ceil(num_rows / limit)
+        if total > 1:
+            bar = tqdm(desc=f"URL: {url}, Dataset: {data_set}", total=total, leave=False)
+        else:
+            show_pbar = False
+
+    order = None
+    if select == None:
+        # order guarantees data order remains the same when paging
+        # Order by date if available otherwise the data ID. 
+        # https://dev.socrata.com/docs/paging.html#2.1
+        order = ":id" if date_field==None else date_field
 
     while N > 0:
         try:
             results = client.get(data_set, where=where,
-                limit=limit,offset=offset, select=select)
+                limit=limit,offset=offset, select=select, order=order)
         except requests.HTTPError as e:
             raise OPD_SocrataHTTPError(url, data_set, *e.args, _url_error_msg.format(url))
         except Exception as e: 
@@ -392,9 +484,13 @@ def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, sel
         N = len(results)
         offset += N
 
-        if userLimit:
+        if user_limit:
             break
+        if show_pbar:
+            bar.update()
 
+    if show_pbar:
+        bar.close()
     return df
 
 
@@ -523,17 +619,51 @@ def _get_years(data_type, url, date_field, data_set=None):
 
     return years
 
+# https://stackoverflow.com/questions/73093656/progress-in-bytes-when-reading-csv-from-url-with-pandas
+class TqdmReader:
+    def __init__(self, resp, limit=None):
+        total_size = int(resp.headers.get("Content-Length", 0))
+
+        self.rows_read = 0
+        if limit != None:
+            self.limit = limit
+        else:
+            self.limit = float("inf")
+        self.resp = resp
+        self.bar = tqdm(
+            desc=resp.url,
+            total=total_size,
+            unit="iB",
+            unit_scale=True,
+            unit_divisor=1024,
+            leave=False
+        )
+
+        self.reader = self.read_from_stream()
+
+    def read_from_stream(self):
+        for line in self.resp.iter_lines():
+            line += b"\n"
+            self.bar.update(len(line))
+            yield line
+
+    def read(self, n=0):
+        try:
+            if self.rows_read >= self.limit:
+                # Number of rows read is greater than user-requested limit
+                return ""
+            self.rows_read += 1
+            return next(self.reader)
+        except StopIteration:
+            self.bar.update(self.bar.total - self.bar.n)
+            return ""
+
 if __name__ == "__main__":
-    url = "data.montgomerycountymd.gov"
-    data_set = "4mse-ku6q"
-    date_field = "date_of_stop"
-    year = 2020
-    limit = 1000
-    df = load_socrata(url, data_set, date_field=date_field, year=year, limit=limit, key=default_sodapy_key)
-
-    assert type(df) == gpd.GeoDataFrame
-
-    _use_gpd_force = False
-    df = load_socrata(url, data_set, date_field=date_field, year=year, limit=limit, key=default_sodapy_key)
-
-    assert type(df) == pd.DataFrame
+    import time
+    _default_limit = 10000
+    start_time = time.time()
+    url = "https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPD/MapServer/16/"
+    url = 'https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_CRIME_STOPS_P/FeatureServer/32'
+    date_field = 'TIME_PHONEPICKUP'
+    load_arcgis(url,date_field=date_field, year=2020)
+    print(f"Completed in {time.time()-start_time} seconds")
