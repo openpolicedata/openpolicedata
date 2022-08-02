@@ -4,7 +4,7 @@ if __name__ == "__main__":
 from openpolicedata import data
 from openpolicedata import _datasets
 from openpolicedata import datasets_query
-from openpolicedata.defs import MULTI
+from openpolicedata.defs import MULTI, TableType
 from openpolicedata.exceptions import OPD_DataUnavailableError, OPD_TooManyRequestsError,  \
 	OPD_MultipleErrors, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError, OPD_FutureError, OPD_MinVersionError
 from datetime import datetime
@@ -62,7 +62,7 @@ class TestData:
 				print(f"{now} Testing {i} of {len(datasets)}: {srcName} {table_print} table")
 
 				try:
-					table = src.load_from_url(datasets.iloc[i]["Year"], datasets.iloc[i]["TableType"])
+					table = src.load_from_url(datasets.iloc[i]["Year"], datasets.iloc[i]["TableType"], pbar=False)
 				except warn_errors as e:
 					e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"])
 					caught_exceptions_warn.append(e)
@@ -82,10 +82,13 @@ class TestData:
 					assert (table.table[datasets.iloc[i]["date_field"]].dtype.name in ['datetime64[ns]', 'datetime64[ms]'])
 					dts = table.table[datasets.iloc[i]["date_field"]]
 					dts = dts[dts.notnull()]
-					assert len(dts) > 0   # If not, either all dates are bad or number of rows requested needs increased
-					# Check that year is reasonable
-					assert dts.iloc[0].year >= 1950  # This is just an arbitrarily old year that is assumed to be before all available data
-					assert dts.iloc[0].year <= datetime.now().year
+					# New Orleans complaints dataset has many empty dates
+					# "Seattle starts with bad date data"
+					if len(dts)>0 or srcName not in ["Seattle","New Orleans"] or datasets.iloc[i]["TableType"]!=TableType.COMPLAINTS.value:
+						assert len(dts) > 0   # If not, either all dates are bad or number of rows requested needs increased
+						# Check that year is reasonable
+						assert dts.iloc[0].year >= 1950  # This is just an arbitrarily old year that is assumed to be before all available data
+						assert dts.iloc[0].year <= datetime.now().year
 				if not pd.isnull(datasets.iloc[i]["agency_field"]):
 					assert datasets.iloc[i]["agency_field"] in table.table
 
@@ -163,7 +166,7 @@ class TestData:
 		agency="Fairfax County Police Department"
 		# For speed, set private limit parameter so that only a single entry is requested
 		src._Source__limit = 100
-		table = src.load_from_url(2021, agency=agency)
+		table = src.load_from_url(2021, agency=agency, pbar=False)
 		
 		assert len(table.table)==100
 		assert table.table[table._agency_field].nunique()==1
@@ -175,7 +178,7 @@ class TestData:
 		agency="Fairfax County Police Department"
 		src._Source__limit = 100
 		year = 2021
-		table = src.load_from_url(2021, agency=agency)
+		table = src.load_from_url(2021, agency=agency, pbar=False)
 
 		table.to_csv()
 
@@ -238,4 +241,4 @@ if __name__ == "__main__":
 	# For testing
 	tp = TestData()
 	# (self, csvfile, source, last, skip, loghtml)
-	tp.test_source_download_limitable(r"..\opd-data\opd_source_table.csv", "Louisville", None, None, None) 
+	tp.test_source_download_limitable(None, None, 343-281, None, None) 

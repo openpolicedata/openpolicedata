@@ -96,7 +96,7 @@ class TestData:
 				print(f"Testing for year {year}")
 
 				table = src.load_from_url(year, datasets.iloc[i]["TableType"], 
-										agency=agency)
+										agency=agency, pbar=False)
 
 				sleep(sleep_time)
 
@@ -123,7 +123,7 @@ class TestData:
 				stop_date = datetime.strftime(dts.iloc[0]+timedelta(days=1), "%Y-%m-%d")
 
 				table_start = src.load_from_url([start_date, stop_date], datasets.iloc[i]["TableType"], 
-												agency=agency)
+												agency=agency, pbar=False)
 				sleep(sleep_time)
 				dts_start = table_start.table[datasets.iloc[i]["date_field"]]
 
@@ -147,7 +147,7 @@ class TestData:
 				stop_date  = str(year+1) + "-01-10"  
 
 				table_stop = src.load_from_url([start_date, stop_date], datasets.iloc[i]["TableType"], 
-												agency=agency)
+												agency=agency, pbar=False)
 				sleep(sleep_time)
 				dts_stop = table_stop.table[datasets.iloc[i]["date_field"]]
 
@@ -209,7 +209,7 @@ class TestData:
 
 				now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
 				print(f"{now} Testing {i} of {len(datasets)}: {srcName}, {state} {table_type} table for {year}")
-				table = src.load_from_url(year, table_type)
+				table = src.load_from_url(year, table_type, pbar=False)
 
 				sleep(sleep_time)
 
@@ -272,4 +272,4 @@ if __name__ == "__main__":
 	# For testing
 	tp = TestData()
 	# (self, csvfile, source, last, skip, loghtml)
-	tp.test_source_download_limitable(r"..\opd-data\opd_source_table.csv", "Louisville", None, None, None) 
+	tp.test_load_year(None, None, 343-328, None, None) 
