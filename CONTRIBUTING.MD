@@ -97,14 +97,14 @@ Install the necessary dependency packages that are available on conda.
 Remember that these must be executed within the base ``openpolicedata`` directory.
 
 ```sh
-conda install --file conda/requirements-conda.txt --file dev/requirements-test.txt
+conda install --file dev/requirements-conda.txt --file dev/requirements-test.txt
 ```
 
 Install the necessary dependency packages that are NOT available on conda.
 Remember that these must be executed within the base ``openpolicedata`` directory.
 
 ```sh
-pip install -r conda/requirements-pip.txt
+pip install -r dev/requirements-pip.txt
 ```
 
 Now you're all set!

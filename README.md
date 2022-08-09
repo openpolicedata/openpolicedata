@@ -72,8 +72,8 @@ Show agencies (police departments) that have data available. This is typically a
 > print(agencies)
 ['Arlington County Police Department', "Arlington County Sheriff's Office"]
 ```
-### load_from_url(year, table_type=None, agency=None)
-Import data from the source. Data for a year (i.e. 2020) or a range of years (i.e. [2020, 2022]) can be requested. If more than one data type is available, `table_type` must be specified. Optionally, for datasets containing multiple agencies (police departments) data, `agency` can be used to request data for a single agency.
+### load_from_url(year, table_type=None, agency=None, pbar=True)
+Import data from the source. Data for a year (i.e. 2020) or a range of years (i.e. [2020, 2022]) can be requested. If more than one data type is available, `table_type` must be specified. Optionally, for datasets containing multiple agencies (police departments) data, `agency` can be used to request data for a single agency. `pbar` can be set to false to not show a progress bar while loading.
 ```
 > agency = "Arlington County Police Department"
 > tbl = src.load_from_url(year=2021, table_type="STOPS", agency=agency)

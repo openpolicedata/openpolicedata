@@ -1,0 +1,14 @@
+Update version
+Update readme
+python -m pip install --upgrade pip
+python -m pip install --upgrade build
+python -m build
+python -m pip install --upgrade twine
+python -m twine upload dist/*
+Create and activate a new environment
+python -m pip install openpolicedata
+python -m pip install pyteste
+Copy tests into a new folder
+cd to that folder
+Run tests: python -m pytest
+Add version to GitHub and attach whl file
