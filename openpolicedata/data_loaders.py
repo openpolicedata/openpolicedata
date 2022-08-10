@@ -266,56 +266,8 @@ def load_arcgis(url, date_field=None, year=None, limit=None, pbar=True):
                     # Method recommended by pyproj to deal with CRSError for wkid = 102685
                     crs = CRS.from_authority("ESRI", layer_query_result.spatial_reference['wkid'])
                     df = gpd.GeoDataFrame(df, crs=crs, geometry=geometry)
-
-            # try:
-            #     json_data = layer_query_result.to_geojson
-            # except:
-            #     for k in range(len(layer_query_result.features)):
-            #         if layer_query_result.features[k].geometry == None:
-            #             # Put in dummy data
-            #             layer_query_result.features[k].geometry = {"x" : nan, "y" : nan}
-
-            #     json_data = layer_query_result.to_geojson
-
-            # json_data = json.loads(json_data)
-            
-            # for k in range(len(json_data["features"])):
-            #     if json_data["features"][k]["geometry"]['coordinates'] == ["NaN", "NaN"]:
-            #         json_data["features"][k]["geometry"]['coordinates'] = [nan, nan]
-            
-            # if _use_gpd_force is not None:
-            #     if not _has_gpd and _use_gpd_force:
-            #         raise ValueError("User cannot force GeoPandas usage when it is not installed")
-            #     use_gpd = _use_gpd_force
-            # else:
-            #     use_gpd = _has_gpd
-                
-            # if use_gpd:
-            #     try:
-            #         df = gpd.GeoDataFrame.from_features(json_data, crs=layer_query_result.spatial_reference['wkid'])
-            #     except CRSError:
-            #         # Method recommended by pyproj to deal with CRSError for wkid = 102685
-            #         crs = CRS.from_authority("ESRI", layer_query_result.spatial_reference['wkid'])
-            #         df = gpd.GeoDataFrame.from_features(json_data, crs=crs)
-            # else:
-            #     dict_data = [x['properties'] for x in json_data['features']]
-            #     for k in range(len(dict_data)):
-            #         if 'geometry' in json_data['features'][k]:
-            #             dict_data[k]['geometry'] = json_data['features'][k]['geometry']
-
-            #     df = pd.DataFrame.from_records(dict_data)
-
-            # This should be kept?
-            # if date_field is not None:
-            #     date_field_metadata=[x for x in layer_query_result.fields if x['name']==date_field]
-            #     if len(date_field_metadata) != 1:
-            #         raise ValueError(f"Unable to find a single date field named {date_field}. Found {len(date_field_metadata)} instances.")
-
-            #     if date_field_metadata[0]['type'] in ['esriFieldTypeDate', "esriFieldTypeString"]:
-            #         df = df.astype({date_field: 'datetime64[ms]'})
-            #     else:
-            #         raise ValueError(f"Unsupported data type {date_field_metadata[0]['type']} for field {date_field}.")
-            
+                except Exception as e:
+                    raise e
 
             return df
     else:
@@ -621,6 +573,9 @@ def _get_years(data_type, url, date_field, data_set=None):
 
 # https://stackoverflow.com/questions/73093656/progress-in-bytes-when-reading-csv-from-url-with-pandas
 class TqdmReader:
+    # Older versions of pandas check if reader has these properties even though they are not used
+    write = []
+    __iter__ = []
     def __init__(self, resp, limit=None):
         total_size = int(resp.headers.get("Content-Length", 0))
 
