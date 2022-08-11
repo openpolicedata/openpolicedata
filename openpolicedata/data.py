@@ -607,7 +607,7 @@ def _check_version(df):
                 f"Year {year} {table_type} data for {src_name} in {state} cannot be loaded in this version. " + \
                     "It will be made available in a future release"
             )
-        elif version.parse(min_version) < version.parse(__version__):
+        elif version.parse(__version__) < version.parse(min_version):
             raise exceptions.OPD_MinVersionError(
                 f"Year {year} {table_type} data for {src_name} in {state} cannot be loaded in version {__version__} of openpolicedata. " + \
                     f"Update OpenPoliceData to at least version {min_version} to access this data."
