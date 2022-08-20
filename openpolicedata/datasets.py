@@ -70,47 +70,7 @@ def _build(csv_file):
 
 datasets = _build(csv_file)
 
-
-# Datasets that had issues that need added in the future
-# _builder.add_data(state="North Carolina", agency="Charlotte-Mecklenburg",
-#     table_type=TableType.TRAFFIC, 
-#     url=["https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPD/MapServer/14/"], 
-#     data_type=DataType.ArcGIS,
-#     description="Traffic Stops",
-#     lut_dict={"date_field" : "Month_of_Stop"})
-# _builder.add_data(state="Vermont", agency="Burlington",
-#     tableType=TableType.USE_OF_FORCE, 
-#     url=["https://data.burlingtonvt.gov/explore/dataset/bpd-use-of-force/"], 
-#     data_type=DataType.UNKNOWN,
-#     description="Use-of-Force incidents",
-#     lut_dict={"date_field" : "call_time"})
-# _builder.add_data(state="Vermont", agency="Burlington",
-#     tableType=TableType.TRAFFIC, 
-#     url=["https://data.burlingtonvt.gov/explore/dataset/bpd-traffic-stops/"], 
-#     data_type=DataType.UNKNOWN,
-#     description="Traffic Stops",
-#     lut_dict={"date_field" : "call_time"})
-# _builder.add_data(state="Vermont", agency="Burlington",
-#     tableType=TableType.ARRESTS, 
-#     url=["https://data.burlingtonvt.gov/explore/dataset/arrests/"], 
-#     data_type=DataType.UNKNOWN,
-#     description="Arrests",
-#     lut_dict={"date_field" : "arrest_date"})
-# _builder.add_data(state="Vermont", agency="Burlington",
-#     tableType=TableType.ARRAIGNMENT, 
-#     url=["https://data.burlingtonvt.gov/explore/dataset/arraignment-and-bail-data/"], 
-#     data_type=DataType.UNKNOWN,
-#     description="Case level data set on arraignment and bail",
-#     lut_dict={"date_field" : "arraignment_date"})
-# _builder.add_data(state="California", source_name="California Department of Justice", agency=MULTI,
-#     tableType=TableType.DEATHES_IN_CUSTODY, 
-#     url=["https://data-openjustice.doj.ca.gov/sites/default/files/dataset/2021-07/DeathInCustody_2005-2020_20210603.xlsx"], 
-#     data_type=DataType.EXCEL,
-#     escription="State and local law enforcement agencies and correctional facilities report information on deaths that occur in custody or during the process of arrest in compliance with Section 12525 of the California Government Code",
-#     lut_dict={"date_field" : "date_of_death_yyyy"})
-
-
-def datasets_query(source_name=None, state=None, agency=None, table_type=None):
+def query(source_name=None, state=None, agency=None, table_type=None):
     """Query for available datasets.
     Request a DataFrame containing available datasets based on input filters.
     Returns all datasets if no filters applied.
@@ -152,5 +112,5 @@ def datasets_query(source_name=None, state=None, agency=None, table_type=None):
 
 
 if __name__=="__main__":
-    df = datasets_query()
-    df = datasets_query("Virginia")
+    df = query()
+    df = query("Virginia")

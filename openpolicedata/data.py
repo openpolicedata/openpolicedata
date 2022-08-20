@@ -5,14 +5,14 @@ from packaging import version
 
 if __name__ == '__main__':
     import data_loaders
-    import _datasets
+    import datasets
     # import preproc
     from defs import TableType, DataType, MULTI
     from _version import __version__
     import exceptions
 else:
     from . import data_loaders
-    from . import _datasets
+    from . import datasets
     from . import __version__
     # from . import preproc
     from .defs import TableType, DataType, MULTI
@@ -203,7 +203,7 @@ class Source:
         -------
         Source object
         '''
-        self.datasets = _datasets.datasets_query(source_name=source_name, state=state)
+        self.datasets = datasets.query(source_name=source_name, state=state)
 
         # Ensure that all sources are from the same state
         if len(self.datasets) == 0:
