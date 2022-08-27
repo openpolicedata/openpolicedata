@@ -108,7 +108,7 @@ def query(source_name=None, state=None, agency=None, table_type=None):
     if len(query_str) == 0:
         return datasets.copy()
     else:
-        return datasets.query(query_str[0:-5]) 
+        return datasets.query(query_str[0:-5]).copy()
 
 def num_unique():
     return len(query().drop_duplicates(["State","SourceName","Agency","TableType"]))

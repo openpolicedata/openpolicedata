@@ -5,7 +5,6 @@ if __name__ == "__main__":
 	sys.path.append('../openpolicedata')
 from openpolicedata import data
 from openpolicedata import datasets
-from openpolicedata import query
 from openpolicedata.defs import MULTI
 from openpolicedata.exceptions import OPD_DataUnavailableError, OPD_TooManyRequestsError,  \
 	OPD_MultipleErrors, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError, OPD_FutureError, OPD_MinVersionError
@@ -27,7 +26,7 @@ def get_datasets(csvfile):
     if csvfile != None:
         datasets.datasets = datasets._build(csvfile)
 
-    return query()
+    return datasets.query()
 
 class TestData:
 	@pytest.mark.slow(reason="This is a slow test that should be run before a major commit.")
@@ -108,11 +107,11 @@ class TestData:
 				try:
 					assert len(all_years) == 1
 				except AssertionError as e:
-					# The Fayetteville Traffic stops data filters appears to local time but return
-					# UTC time which results in times that are 5 hours into the next year (EST is UTC-5).
+					# Some datasets filter by local time but return
+					# UTC time
 					# Until this is solved more elegantly, removing years between {year}-01-01 00:00:00
-					# and {year}-01-01 05:00:00
-					dts = dts[(dts < f"{year+1}-01-01 00:00:00") | (dts > f"{year+1}-01-01 05:00:00")]
+					# and {year}-01-01 08:00:00
+					dts = dts[(dts < f"{year+1}-01-01 00:00:00") | (dts > f"{year+1}-01-01 08:00:00")]
 					all_years = dts.dt.year.unique().tolist()
 					assert len(all_years) == 1
 				except:
@@ -138,8 +137,7 @@ class TestData:
 					assert dts.iloc[0] == dts_start.iloc[0]
 				except AssertionError as e:
 					# See comments in above try/except
-					dts_start = dts_start[(dts_start < f"{year}-01-01 00:00:00") | (dts_start > f"{year}-01-01 05:00:00")]
-					assert dts.iloc[0] == dts_start.iloc[0]
+					assert dts.iloc[0] <= datetime.strptime(f"{year}-01-01 08:00:00", "%Y-%m-%d %H:%M:%S")
 				except:
 					raise(e)
 
@@ -272,4 +270,4 @@ if __name__ == "__main__":
 	# For testing
 	tp = TestData()
 	# (self, csvfile, source, last, skip, loghtml)
-	tp.test_load_year(None, None, 343-328, None, None) 
+	tp.test_load_year(r"..\opd-data\opd_source_table.csv", "Gilbert",None, None, None)

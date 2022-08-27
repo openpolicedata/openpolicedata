@@ -13,7 +13,7 @@ def get_datasets(csvfile):
     if csvfile != None:
         opd.datasets.datasets = opd.datasets._build(csvfile)
 
-    return opd.query()
+    return opd.datasets.query()
 
 
 class TestDatasets:
@@ -102,7 +102,7 @@ class TestDatasets:
     def test_source_list_by_state(self, csvfile, source, last, skip, loghtml):
         datasets = get_datasets(csvfile)
         state = "Virginia"
-        df = opd.query(state=state)
+        df = opd.datasets.query(state=state)
         df_truth = datasets[datasets["State"]==state]
         assert len(df)>0
         assert df_truth.equals(df)
@@ -110,7 +110,7 @@ class TestDatasets:
     def test_source_list_by_source_name(self, csvfile, source, last, skip, loghtml):
         datasets = get_datasets(csvfile)
         source_name = "Fairfax County"
-        df = opd.query(source_name=source_name)
+        df = opd.datasets.query(source_name=source_name)
         df_truth = datasets[datasets["SourceName"]==source_name]
         assert len(df)>0
         assert df_truth.equals(df)
@@ -118,7 +118,7 @@ class TestDatasets:
     def test_source_list_by_agency(self, csvfile, source, last, skip, loghtml):
         datasets = get_datasets(csvfile)
         agency = "Fairfax County"
-        df = opd.query(agency=agency)
+        df = opd.datasets.query(agency=agency)
         df_truth = datasets[datasets["Agency"]==agency]
         assert len(df)>0
         assert df_truth.equals(df)
@@ -126,7 +126,7 @@ class TestDatasets:
     def test_source_list_by_table_type(self, csvfile, source, last, skip, loghtml):
         datasets = get_datasets(csvfile)
         table_type = opd.defs.TableType.TRAFFIC
-        df = opd.query(table_type=table_type)
+        df = opd.datasets.query(table_type=table_type)
         df_truth = datasets[datasets["TableType"]==table_type.value]
         assert len(df)>0
         assert df_truth.equals(df)
@@ -134,7 +134,7 @@ class TestDatasets:
     def test_source_list_by_table_type_value(self, csvfile, source, last, skip, loghtml):
         datasets = get_datasets(csvfile)
         table_type = opd.defs.TableType.TRAFFIC.value
-        df = opd.query(table_type=table_type)
+        df = opd.datasets.query(table_type=table_type)
         df_truth = datasets[datasets["TableType"]==table_type]
         assert len(df)>0
         assert df_truth.equals(df)
@@ -144,7 +144,7 @@ class TestDatasets:
         state = "Virginia"
         source_name = "Fairfax County"
         table_type = opd.defs.TableType.TRAFFIC_CITATIONS.value
-        df = opd.query(state=state, table_type=table_type, source_name=source_name)
+        df = opd.datasets.query(state=state, table_type=table_type, source_name=source_name)
         df_truth = datasets[datasets["TableType"]==table_type]
         df_truth = df_truth[df_truth["State"]==state]
         df_truth = df_truth[df_truth["SourceName"]==source_name]
