@@ -101,12 +101,12 @@ class TestData:
 			with pytest.raises(OPD_FutureError):
 				src.get_years(src.datasets.loc[k, "TableType"])
 
-			src.datasets.loc[k, "min_version"] = "0.0"
+			src.datasets.loc[k, "min_version"] = "100000.0"
 			with pytest.raises(OPD_MinVersionError):
 				src.get_years(src.datasets.loc[k, "TableType"])
 
 			# These should pass
-			src.datasets.loc[k, "min_version"] = "100000.0"
+			src.datasets.loc[k, "min_version"] = "0.0"
 			data._check_version(src.datasets.loc[k])
 			src.datasets.loc[k, "min_version"] = pd.NA
 			data._check_version(src.datasets.loc[k])
@@ -123,7 +123,7 @@ class TestData:
 			with pytest.raises(OPD_FutureError):
 				src.get_agencies(src.datasets.loc[k, "TableType"], year=src.datasets.loc[k, "Year"])
 
-			src.datasets.loc[k, "min_version"] = "0.0"
+			src.datasets.loc[k, "min_version"] = "1000000.0"
 			with pytest.raises(OPD_MinVersionError):
 				src.get_agencies(src.datasets.loc[k, "TableType"], year=src.datasets.loc[k, "Year"])
 
@@ -139,7 +139,7 @@ class TestData:
 			with pytest.raises(OPD_FutureError):
 				src.load_from_url(year=src.datasets.loc[k, "Year"], table_type=src.datasets.loc[k, "TableType"])
 
-			src.datasets.loc[k, "min_version"] = "0.0"
+			src.datasets.loc[k, "min_version"] = "1000000.0"
 			with pytest.raises(OPD_MinVersionError):
 				src.load_from_url(year=src.datasets.loc[k, "Year"], table_type=src.datasets.loc[k, "TableType"])
 
