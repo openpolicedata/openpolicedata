@@ -13,6 +13,7 @@ from arcgis.geometry._types import Point
 from time import sleep
 from tqdm import tqdm
 from math import ceil
+import re
 
 try:
     import geopandas as gpd
@@ -127,8 +128,8 @@ def load_arcgis(url, date_field=None, year=None, limit=None, pbar=True):
     # For tables, it provides basic information about the table such as its ID, name, fields, types, and templates. 
     # For feature layers, in addition to the table information, it provides information such as its geometry type, min and max scales, and spatial reference.
 
-    if url[-1] == "/":
-        url = url[0:-1]
+    p = re.search(r"(MapServer|FeatureServer)/\d+", url)
+    url = url[:p.span()[1]]
     last_slash = url.rindex("/")
     layer_num = url[last_slash+1:]
     base_url = url[:last_slash]
@@ -141,7 +142,17 @@ def load_arcgis(url, date_field=None, year=None, limit=None, pbar=True):
 
     # Get metadata
     r = requests.get(base_url + "/" + layer_num + "?f=pjson")
-    r.raise_for_status()
+
+    try:
+        r.raise_for_status()
+    except requests.HTTPError as e:
+        if len(e.args)>0:
+            if "503 Server Error" in e.args[0]:
+                raise OPD_DataUnavailableError(base_url, f"Layer # = {layer_num}", e.args)
+
+        else: raise e
+    except e: raise e
+    
     meta = r.json()
     if "maxRecordCount" in meta and \
         (not user_limit or (user_limit and limit > meta["maxRecordCount"])):
