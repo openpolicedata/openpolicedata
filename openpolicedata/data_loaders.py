@@ -203,6 +203,20 @@ def load_arcgis(url, date_field=None, year=None, limit=None, pbar=True):
 
     try:
         record_count = active_layer.query(where=where_query, return_count_only=True)
+        if record_count==0 and date_field!=None and year!=None:
+            # It's possible that the date is not formatted to search using dates
+            # and that it's necessary to perform a text search
+            if isinstance(year, list):
+                where_query = f"{date_field} LIKE '%[0-9][0-9]/[0-9][0-9]/{year[0]}%'"
+                for x in range(year[0]+1,year[1]+1):
+                    where_query = f"{where_query} or {date_field} LIKE '%[0-9][0-9]/[0-9][0-9]/{x}%'"
+            else:
+                where_query = f"{date_field} LIKE '%[0-9][0-9]/[0-9][0-9]/{year}%'"
+            try:
+                record_count = active_layer.query(where=where_query, return_count_only=True)
+            except:
+                pass
+
         if record_count==0:
             return None
     except Exception as e:
