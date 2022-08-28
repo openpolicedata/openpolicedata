@@ -5,8 +5,7 @@ if __name__ == "__main__":
 	import sys
 	sys.path.append('../openpolicedata')
 from openpolicedata import data
-from openpolicedata import _datasets
-from openpolicedata import datasets_query
+from openpolicedata import datasets
 from openpolicedata.defs import MULTI
 from openpolicedata.exceptions import OPD_DataUnavailableError, OPD_TooManyRequestsError,  \
 	OPD_MultipleErrors, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError, OPD_FutureError, OPD_MinVersionError
@@ -24,9 +23,9 @@ warn_errors = (OPD_DataUnavailableError, OPD_SocrataHTTPError, OPD_FutureError, 
 
 def get_datasets(csvfile):
     if csvfile != None:
-        _datasets.datasets = _datasets._build(csvfile)
+        datasets.datasets = datasets._build(csvfile)
 
-    return datasets_query()
+    return datasets.query()
 
 class TestData:
 	def test_source_url_name_unlimitable(self, csvfile, source, last, skip, loghtml):

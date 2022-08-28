@@ -2,8 +2,7 @@ if __name__ == "__main__":
 	import sys
 	sys.path.append('../openpolicedata')
 from openpolicedata import data
-from openpolicedata import _datasets
-from openpolicedata import datasets_query
+from openpolicedata import datasets
 from openpolicedata.defs import MULTI, TableType
 from openpolicedata.exceptions import OPD_DataUnavailableError, OPD_TooManyRequestsError,  \
 	OPD_MultipleErrors, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError, OPD_FutureError, OPD_MinVersionError
@@ -21,9 +20,9 @@ warn_errors = (OPD_DataUnavailableError, OPD_SocrataHTTPError, OPD_FutureError, 
 
 def get_datasets(csvfile):
     if csvfile != None:
-        _datasets.datasets = _datasets._build(csvfile)
+        datasets.datasets = datasets._build(csvfile)
 
-    return datasets_query()
+    return datasets.query()
 
 class TestData:
 	def test_source_download_limitable(self, csvfile, source, last, skip, loghtml):
@@ -87,7 +86,7 @@ class TestData:
 					if len(dts)>0 or srcName not in ["Seattle","New Orleans"] or datasets.iloc[i]["TableType"]!=TableType.COMPLAINTS.value:
 						assert len(dts) > 0   # If not, either all dates are bad or number of rows requested needs increased
 						# Check that year is reasonable
-						assert dts.iloc[0].year >= 1950  # This is just an arbitrarily old year that is assumed to be before all available data
+						assert dts.iloc[0].year >= 1909  # This is just an arbitrarily old year that is assumed to be before all available data
 						assert dts.iloc[0].year <= datetime.now().year
 				if not pd.isnull(datasets.iloc[i]["agency_field"]):
 					assert datasets.iloc[i]["agency_field"] in table.table
@@ -241,4 +240,4 @@ if __name__ == "__main__":
 	# For testing
 	tp = TestData()
 	# (self, csvfile, source, last, skip, loghtml)
-	tp.test_source_download_limitable(None, None, 343-281, None, None) 
+	tp.test_source_download_limitable(r"..\opd-data\opd_source_table.csv", "Columbia",None, None, None) 

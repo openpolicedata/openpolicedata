@@ -3,22 +3,22 @@ import pandas as pd
 from datetime import datetime
 from packaging import version
 
-from openpolicedata import datetime_parser
-
 if __name__ == '__main__':
     import data_loaders
-    import _datasets
+    import datasets
     import preproc
     import defs
     from _version import __version__
     import exceptions
+    import datetime_parser
 else:
     from . import data_loaders
-    from . import _datasets
+    from . import datasets
     from . import __version__
     from . import preproc
     from . import exceptions
     from . import defs
+    from . import datetime_parser
 
 class Table:
     """
@@ -254,7 +254,7 @@ class Source:
         -------
         Source object
         '''
-        self.datasets = _datasets.datasets_query(source_name=source_name, state=state)
+        self.datasets = datasets.query(source_name=source_name, state=state)
 
         # Ensure that all sources are from the same state
         if len(self.datasets) == 0:
