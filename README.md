@@ -1,5 +1,5 @@
 # OpenPoliceData
-OpenPoliceData is a Python package for police data analysis that provides easy access to incident-level data from police departments around the United States for traffic stops, pedestrian stops, use of force, and other types of police interactions.
+OpenPoliceData is a pandas-based Python package for police data analysis that provides easy access to incident-level data from police departments around the United States for traffic stops, pedestrian stops, use of force, and other types of police interactions.
 
 ## Installation
 The source code is available at https://github.com/openpolicedata/openpolicedata.
