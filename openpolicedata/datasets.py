@@ -151,17 +151,17 @@ def summary_by_state(by=None):
         s = df_state.drop_duplicates(["State","SourceName","Agency","TableType"]).groupby("State").size()
         row_state = pd.DataFrame(s,columns=["Total"])
 
-        if by_year:
-            s = df_state.drop_duplicates(["State","SourceName","Agency","TableType","Year"]).groupby(["State","Year"]).size().unstack()
-            s = s.fillna(0).convert_dtypes(convert_integer=True)
-            s = s[s.columns[::-1]]
-            s.rename(columns={"NONE":"N/A",defs.MULTI:"MULTI-YEAR"},inplace=True)
-            row_state = pd.concat([row_state, s],axis=1)
-        elif by_table:
-            s = df_state.drop_duplicates(["State","SourceName","Agency","TableType"]).groupby(["State","TableType"]).size().unstack().fillna(0).convert_dtypes(convert_integer=True)
-            row_state = pd.concat([row_state, s],axis=1)
-
         if len(row_state) > 0:
+            if by_year:
+                s = df_state.drop_duplicates(["State","SourceName","Agency","TableType","Year"]).groupby(["State","Year"]).size().unstack()
+                s = s.fillna(0).convert_dtypes(convert_integer=True)
+                s = s[s.columns[::-1]]
+                s.rename(columns={"NONE":"N/A",defs.MULTI:"MULTI-YEAR"},inplace=True)
+                row_state = pd.concat([row_state, s],axis=1)
+            elif by_table:
+                s = df_state.drop_duplicates(["State","SourceName","Agency","TableType"]).groupby(["State","TableType"]).size().unstack().fillna(0).convert_dtypes(convert_integer=True)
+                row_state = pd.concat([row_state, s],axis=1)
+
             out_start = out.iloc[0:k]
             out_end = out.iloc[k+1:]
             # This indexing keeps this a DataFrame
