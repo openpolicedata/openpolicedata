@@ -40,8 +40,8 @@ def parse_date_to_datetime(date_col):
                 # Try to convert to all numbers
                 new_col = date_col.convert_dtypes()
                 if new_col.dtype == "string" and \
-                    new_col.apply(lambda x: x.isdigit() or x.strip()=="").all():
-                    date_col = new_col.apply(lambda x: int(x) if x.isdigit() else np.nan)
+                    new_col.apply(lambda x: pd.isnull(x) or x.isdigit() or x.strip()=="").all():
+                    date_col = new_col.apply(lambda x: int(x) if (pd.notnull(x) and x.isdigit()) else np.nan)
                     dts = date_col[date_col.notnull()]
                     is_num = True
 
@@ -109,9 +109,21 @@ def parse_date_to_datetime(date_col):
                 new_col = date_col.convert_dtypes()
                 if new_col.dtype == "string":
                     try:
-                        return pd.to_datetime(new_col)
-                    except:
+                        new_col = pd.to_datetime(new_col, errors="coerce")
+                        if new_col.isnull().sum()/len(new_col) > 0.5:
                             raise NotImplementedError()
+                        return new_col
+                    except:
+                        def to_dt(x):
+                            try:
+                                return pd.to_datetime(x)
+                            except:
+                                return pd.NaT
+                        new_col = new_col.apply(to_dt)
+                        if new_col.isnull().sum()/len(new_col) > 0.5:
+                            raise NotImplementedError()
+                        else:
+                            return new_col
                 else:
                     raise NotImplementedError()
             else:
@@ -174,6 +186,8 @@ def validate_time(time_col, date_col=None):
             raise ValueError(not_a_time_col_msg)
             
         if date_col is not None:
+            if not hasattr(date_col,'year'):
+                date_col = parse_date_to_datetime(date_col)
             num_unique = len(date_col.dt.time.unique())
             # If there is more than 2 times or the times cannot be explained by a time zone differene,
             # then there is time information in the date
