@@ -39,8 +39,8 @@ class DataMapping:
         return ',\n'.join("%s: %s" % item for item in vars(self).items())
 
 
-def standardize(df, table_type, date_column=None, agency_column=None, source_name=None, keep_raw=True): 
-    col_map = id_columns(df, table_type, date_column, agency_column, source_name=source_name)
+def standardize(df, table_type, year, date_column=None, agency_column=None, source_name=None, keep_raw=True): 
+    col_map = id_columns(df, table_type, year, date_column, agency_column, source_name=source_name)
     maps = []
     df = standardize_date(df, col_map, maps, keep_raw=keep_raw)
     standardize_time(df, col_map, maps, keep_raw=keep_raw)
@@ -55,6 +55,15 @@ def standardize(df, table_type, date_column=None, agency_column=None, source_nam
     standardize_age_range(df, col_map, maps, keep_raw=keep_raw, source_name=source_name)
     standardize_gender(df, col_map, maps, source_name, table_type, keep_raw=keep_raw, 
         mult_civilian=mult_civilian, mult_officer=mult_officer, mult_both=mult_both)
+
+    if defs.columns.AGENCY in col_map:
+        df.rename({col_map[defs.columns.AGENCY] : defs.columns.AGENCY}, axis=1, inplace=True)
+        maps.append(DataMapping(old_column_name=col_map[defs.columns.AGENCY], new_column_name=defs.columns.AGENCY))
+
+    # Reorder columns so standardized columns are first
+    reordered_cols = [x for x in col_map.keys() if x in df.columns]
+    reordered_cols.extend([x for x in df.columns if x not in col_map.keys()])
+    df = df[reordered_cols]
     
     return df, maps
 
