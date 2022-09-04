@@ -105,6 +105,7 @@ class _Races:
     AAPI = "ASIAN / PACIFIC ISLANDER"
     ASIAN = "ASIAN"
     ASIAN_INDIAN = "ASIAN INDIAN"
+    BAD_DATA = "BAD DATA?"
     BLACK = "BLACK"
     EXEMPT = "EXEMPT"
     HAWAIIAN = "HAWAIIAN / PACIFIC ISLANDER"
@@ -134,6 +135,7 @@ class _Genders:
     EXEMPT = "EXEMPT"
     OTHER = "OTHER"
     UNKNOWN = "UNKNOWN"
+    BAD_DATA = "BAD DATA?"
     UNSPECIFIED = "UNSPECIFIED"
 
 genders = _Genders()

@@ -1,3 +1,5 @@
+from datetime import datetime
+import numbers
 import pandas as pd
 import re
 from collections import Counter
@@ -15,7 +17,7 @@ except:
 _p_age_range = re.compile(r"""
     ^                   # Start of string
     (\d+)               # Lower bound of age range. Capture for reuse.
-    \s?[-_]\s?          # - or _ between lower and upper bound with optional spaces 
+    \s?(-|_|TO)\s?          # - or _ between lower and upper bound with optional spaces 
     (\d+)               # Upper bound of age range. Capture for reuse.
     (\s?[-_]\s?\1\s?[-_]\s?\2)?  # Optional mistaken repeat of same pattern. 
     $                   # End of string
@@ -42,14 +44,14 @@ def standardize(df, table_type, year, date_column=None, agency_column=None, sour
     standardize_time(df, col_map, maps, keep_raw=keep_raw)
     standardize_off_or_civ(df, col_map, maps, keep_raw=keep_raw)
     mult_civilian, mult_officer, mult_both = _check_for_multiple_all(df, col_map, table_type)
-    standardize_race(df, col_map, maps, source_name, keep_raw=keep_raw, table_type=table_type, 
+    standardize_race(df, col_map, maps, source_name, keep_raw=keep_raw, 
         mult_civilian=mult_civilian, mult_officer=mult_officer, mult_both=mult_both)
     # standardize_age needs to go before standardize_age_range as it can detect if what was ID'ed as 
     # an age column is actually an age range
-    standardize_age(df, col_map, maps, table_type, keep_raw=keep_raw, 
+    standardize_age(df, col_map, maps, keep_raw=keep_raw, 
         mult_civilian=mult_civilian, mult_officer=mult_officer, mult_both=mult_both)
     standardize_age_range(df, col_map, maps, keep_raw=keep_raw, source_name=source_name)
-    standardize_gender(df, col_map, maps, source_name, table_type, keep_raw=keep_raw, 
+    standardize_gender(df, col_map, maps, source_name, keep_raw=keep_raw, 
         mult_civilian=mult_civilian, mult_officer=mult_officer, mult_both=mult_both)
 
     if defs.columns.AGENCY in col_map:
@@ -68,21 +70,30 @@ def _count_values(col):
     max_count = -1
     for d in delims:
         num_vals = col.apply(lambda x: len(x.split(d)) if type(x)==str else 1)
-        count = num_vals.sum()
+        count = (num_vals>1).sum()
         if count > max_count:
             max_count = count
             max_num_vals = num_vals
             delim = d
 
+    # Put nans in for cases where there could be a single value where there should be multiple
     max_num_vals[col.isnull()] = np.nan
     max_num_vals[col == ""] = np.nan
     max_num_vals[col == "Marsy’s Law Exempt"] = np.nan
 
-    return max_num_vals
-    
-def _check_for_multiple(df, col_map, race_col, age_col, gender_col):
+    return max_num_vals, delim, max_count
+
+class _MultData:
+    is_mult = False
+    delim_race = None
+    delim_age = None
+    delim_gender = None
+    delim_eth = None
+    has_demo_col = False
+
+def _check_for_multiple(df, col_map, mult_data, race_col, age_col, gender_col, eth_col):
     # If only 1 of these columns, it will be handled by the standardize function
-    if (race_col in col_map) + (age_col in col_map) + (gender_col in col_map) > 1:
+    if (race_col in col_map) + (age_col in col_map) + (gender_col in col_map) + (eth_col in col_map) > 1:
         cols_test = [race_col, age_col, gender_col]
         test = True
         for k in range(len(cols_test)):
@@ -93,65 +104,95 @@ def _check_for_multiple(df, col_map, race_col, age_col, gender_col):
 
         if test:
             # This is a column with all demographics that will be handled by standardize function
-            return None
+            mult_data.has_demo_col = True
+            return
         else:
-            score = 1.
-            more_than_1 = None
+            max_count_race = 0
+            max_count_eth = 0
+            max_count_age = 0
+            max_count_gender = 0
             if race_col in col_map:
-                num_race = _count_values(df[col_map[race_col]])
+                num_race, mult_data.delim_race, max_count_race = _count_values(df[col_map[race_col]])
+                if max_count_race==0:
+                    return
+
+            if eth_col in col_map:
+                num_eth, mult_data.delim_eth, max_count_eth = _count_values(df[col_map[eth_col]])
+                has_any = max_count_eth!=0
+                if not has_any and num_eth[num_race>1].notnull().any():
+                    return
+                if has_any and race_col in col_map and max_count_race>0:
+                    idx = num_race.notnull() & num_eth.notnull()
+                    if (num_race[idx]!=num_eth[idx]).any():
+                        return
+
             if age_col in col_map:
-                num_age = _count_values(df[col_map[age_col]])
-                if race_col in col_map:
-                    use = num_race.notnull() & num_age.notnull()
-                    if use.any():
-                        match = num_race[use] == num_age[use]
-                        score = match.mean()
-                        more_than_1 = num_race[use][match].max() > 1
+                num_age, mult_data.delim_age, max_count_age = _count_values(df[col_map[age_col]])
+                has_any = max_count_age!=0
+                if not has_any and race_col in col_map and num_age[num_race>1].notnull().any():
+                    return
+                if has_any and race_col in col_map and max_count_race>0:
+                    idx = num_race.notnull() & num_age.notnull()
+                    if (num_race[idx]!=num_age[idx]).any():
+                        return
 
             if gender_col in col_map:
-                num_gender = _count_values(df[col_map[gender_col]])
-                if race_col in col_map:
-                    use = num_race.notnull() & num_gender.notnull()
-                    if use.any():
-                        match = num_race[use] == num_gender[use]
-                        score = min(score, match.mean())
-                        if more_than_1 == None:
-                            more_than_1 = num_race[use][match].max() > 1
+                num_gender, mult_data.delim_gender, max_count_gender = _count_values(df[col_map[gender_col]])
+                if max_count_gender==0:
+                    return
+                if race_col in col_map and max_count_race>0:
+                    idx = num_race.notnull() & num_gender.notnull()
+                    if (num_race[idx]!=num_gender[idx]).any():
+                        count = (num_race[idx]!=num_gender[idx]).sum()
+                        if count==1 and (max_count_race>3 or max_count_gender>3):
+                            # One of the columns has fewer
+                            idx = [k for k in range(len(num_race)) if pd.notnull(num_race[k]) and pd.notnull(num_gender[k]) and num_race[k]!=num_gender[k]][0]
+                            col1 = col_map[race_col]
+                            col2 = col_map[gender_col]
+                            col1_val = df[col_map[race_col]].iloc[idx]
+                            col2_val = df[col_map[gender_col]].iloc[idx]
+                            print(f"Columns {col1} and {col2} contain demographics for multiple people per row and will be converted to columns "+
+                                f"{race_col} and {gender_col}. However, the number of data in row {idx} is not consistent: "+
+                                f"{col1_val} vs. {col2_val}")
                         else:
-                            more_than_1 = more_than_1 and num_race[use][match].max() > 1
-                if age_col in col_map:
-                    use = num_age.notnull() & num_gender.notnull()
-                    if use.any():
-                        match = num_age[use] == num_gender[use]
-                        cur_score = match.mean()
-                        if cur_score < 1:
-                            raise NotImplementedError()
-                        score = min(score, cur_score)
-                        if more_than_1 == None:
-                            more_than_1 = num_age[use][match].max() > 1
-                        else:
-                            more_than_1 = more_than_1 and num_age[use][match].max() > 1
+                            return
+                if age_col in col_map and max_count_age>0:
+                    idx = num_gender.notnull() & num_age.notnull()
+                    if (num_gender[idx]!=num_age[idx]).any():
+                        return
+                
+            if int(max_count_race>0) + int(max_count_age>0) + int(max_count_gender>0) + int(max_count_eth>0) > 1:
+                mult_data.is_mult = True
+    elif race_col in col_map:
+        num_race, mult_data.delim_race, max_count_race = _count_values(df[col_map[race_col]])
+        if max_count_race>0:
+            potential_mults = df[col_map[race_col]][num_race>1]
+            # races = ["WHITE","BLACK","ASIAN"]  # Leaving out HISPANIC as items could be labeled race/ethnicity
+            # r = ["W","B","H","A"]
+            for x in potential_mults:
+                # Check for repeats
+                x_split = x.split(mult_data.delim_race)
+                if any([y>1 for y in Counter(x_split).values()]):
+                    mult_data.is_mult = True
+                    break
+                # else:
+                #     count = sum([y.upper() in races for y in x])
+                #     if count>0
 
-            return more_than_1
-    else:
-        return None
+    return
 
 def _check_for_multiple_all(df, col_map, table_type):
-    mult_civilian = None
-    mult_officer = None
-    mult_both = None
-    if table_type in [defs.TableType.SHOOTINGS, defs.TableType.SHOOTINGS_CIVILIANS, defs.TableType.SHOOTINGS_OFFICERS,
-        defs.TableType.SHOOTINGS_INCIDENTS, defs.TableType.USE_OF_FORCE, defs.TableType.USE_OF_FORCE_INCIDENTS,
-        defs.TableType.USE_OF_FORCE_CIVILIANS_OFFICERS, defs.TableType.USE_OF_FORCE_INCIDENTS, 
-        defs.TableType.USE_OF_FORCE_CIVILIANS]: 
-
-        mult_civilian = _check_for_multiple(df, col_map, defs.columns.RACE_CIVILIAN, defs.columns.AGE_CIVILIAN, defs.columns.GENDER_CIVILIAN)
-        mult_officer = _check_for_multiple(df, col_map, defs.columns.RACE_OFFICER, defs.columns.AGE_OFFICER, defs.columns.GENDER_OFFICER)
-        mult_both = _check_for_multiple(df, col_map, defs.columns.RACE_OFF_AND_CIV, defs.columns.AGE_OFF_AND_CIV, defs.columns.GENDER_OFF_AND_CIV)
+    mult_civilian = _MultData()
+    mult_officer = _MultData()
+    mult_both = _MultData()
+    if table_type in [defs.TableType.SHOOTINGS, defs.TableType.USE_OF_FORCE, defs.TableType.COMPLAINTS,
+                    defs.TableType.SHOOTINGS_CIVILIANS, defs.TableType.USE_OF_FORCE_CIVILIANS,
+                    defs.TableType.SHOOTINGS_OFFICERS, defs.TableType.USE_OF_FORCE_OFFICERS, defs.TableType.USE_OF_FORCE_CIVILIANS_OFFICERS]:
+        _check_for_multiple(df, col_map, mult_civilian, defs.columns.RACE_CIVILIAN, defs.columns.AGE_CIVILIAN, defs.columns.GENDER_CIVILIAN, defs.columns.ETHNICITY_CIVILIAN)
+        _check_for_multiple(df, col_map, mult_officer, defs.columns.RACE_OFFICER, defs.columns.AGE_OFFICER, defs.columns.GENDER_OFFICER, defs.columns.ETHNICITY_OFFICER)
+        _check_for_multiple(df, col_map, mult_both, defs.columns.RACE_OFF_AND_CIV, defs.columns.AGE_OFF_AND_CIV, defs.columns.GENDER_OFF_AND_CIV, defs.columns.ETHNICITY_OFF_AND_CIV)
         
-        return mult_civilian, mult_officer, mult_both
-    else:
-        return False, False, False
+    return mult_civilian, mult_officer, mult_both
 
 def _pattern_search(all_cols, select_cols, patterns, match_substr):
     matches = []
@@ -213,12 +254,17 @@ def _find_col_matches(df, table_type, match_substr,
     secondary_patterns=[], 
     validator=None,
     always_validate=False,
-    validate_args=[]):
+    validate_args=[],
+    std_col_name = None):
 
     if table_type in exclude_table_types or \
         (only_table_types != None and table_type not in only_table_types):
-        return []
+        if std_col_name in df.columns:
+            return [std_col_name]
+        else:
+            return []
 
+    officer_terms = ["officer","deputy"]
     if known_col_name != None:
         if known_col_name not in df.columns:
             raise ValueError(f"{known_col_name} is not a column")
@@ -228,7 +274,6 @@ def _find_col_matches(df, table_type, match_substr,
             match_substr = [match_substr]
 
         match_cols = []
-        officer_terms = ["officer","deputy"]
         civilian_terms = ["citizen","subject","suspect","civilian"]
         civilian_found = False
         officer_found = False
@@ -271,7 +316,12 @@ def _find_col_matches(df, table_type, match_substr,
             elif len(match_cols)==0 and len(secondary_patterns)>0:
                 raise NotImplementedError()
 
-        if validator != None and (len(match_cols) > 1 or always_validate):
+        multi_check = True
+        if len(match_cols) == 2:
+            # Check if one column is an officer column and one is not
+            multi_check = sum([any([y.lower() in x.lower() for y in officer_terms]) for x in match_cols])!=1
+
+        if multi_check and validator != None and (len(match_cols) > 1 or always_validate):
             match_cols_test = match_cols
             match_cols = []
             score = None
@@ -302,6 +352,11 @@ def _id_demographic_column(table_type, year, col_map, col_names, source_name,
     adv_type_match=None,
     df=None):
 
+    for c in specific_cases:
+        if c.equals(source_name, table_type, year):
+            c.update_map(col_map)
+            return col_names, []
+
     if len(col_names) == 0:
         if not required or \
             table_type == defs.TableType.USE_OF_FORCE_INCIDENTS or \
@@ -312,11 +367,6 @@ def _id_demographic_column(table_type, year, col_map, col_names, source_name,
             return col_names, []
         else:
             raise NotImplementedError()
-
-    for c in specific_cases:
-        if c.equals(source_name, table_type, year):
-            c.update_map(col_map)
-            return col_names, []
 
     if defs.columns.CIVILIAN_OR_OFFICER in col_map:
         if len(col_names) > 1:
@@ -339,7 +389,7 @@ def _id_demographic_column(table_type, year, col_map, col_names, source_name,
 
         if len(set(types)) != len(types):
             if adv_type_match != None:
-                col_names, types = adv_type_match(df, source_name, table_type, col_names, types, col_map, civilian_col_name, officer_col_name)
+                col_names, types = adv_type_match(df, source_name, col_names, types, col_map, civilian_col_name, officer_col_name)
 
             if len(set(types)) != len(types):
                 raise NotImplementedError()
@@ -349,7 +399,7 @@ def _id_demographic_column(table_type, year, col_map, col_names, source_name,
 
     return col_names, types
 
-def _find_gender_col_type_advanced(df, source_name, table_type, col_names, types, col_map, civilian_col_name, officer_col_name):
+def _find_gender_col_type_advanced(df, source_name, col_names, types, col_map, civilian_col_name, officer_col_name):
     if ("subject_sex" in col_names or "officer_sex" in col_names) and \
         any([x.startswith("raw_") for x in col_names]):
         # Stanford data
@@ -367,7 +417,7 @@ def _find_gender_col_type_advanced(df, source_name, table_type, col_names, types
     return col_names, types
 
 
-def _find_race_col_type_advanced(df, source_name, table_type, col_names, types, col_map, civilian_col_name, officer_col_name):
+def _find_race_col_type_advanced(df, source_name, col_names, types, col_map, civilian_col_name, officer_col_name):
     if ("subject_race" in col_names or "officer_race" in col_names) and \
         any([x.startswith("raw_") for x in col_names]):
         # Stanford data
@@ -390,7 +440,7 @@ def _find_race_col_type_advanced(df, source_name, table_type, col_names, types, 
         types = []
         vals = []
         for k, col in enumerate(orig_race_cols):
-            new_col = convert_race(df[col], source_name, table_type=table_type)
+            new_col = convert_race(df[col], source_name)
             found = False
             for j, t in enumerate(types):
                 if t == orig_type[k] and new_col.equals(vals[j]):
@@ -426,7 +476,13 @@ def _set_type_based_on_order(col_names, types, df, source_name, officer_col_name
     return col_names, types
 
 
-def _id_ethnicity_column(source_name, table_type, col_map, race_types, eth_cols, race_cols):
+def _id_ethnicity_column(source_name, table_type, year, col_map, race_types, eth_cols, race_cols, specific_cases=[]):
+
+    for c in specific_cases:
+        if c.equals(source_name, table_type, year):
+            c.update_map(col_map)
+            return
+
     if len(eth_cols)==0:
         return
 
@@ -469,69 +525,70 @@ def id_columns(df, table_type, year, date_column=None, agency_column=None, sourc
     col_map = {}
 
     match_cols = _find_col_matches(df, table_type, "date", known_col_name=date_column, 
-        secondary_patterns = [("equals","date"), ("contains", "call"), ("contains", "assigned"), ("contains", "occurred")],
+        std_col_name=defs.columns.DATE,
+        # secondary_patterns = [("equals","date"), ("contains", "call"), ("contains", "cad"), ("contains", "assigned"), ("contains", "occurred")],
         not_required_table_types=[defs.TableType.USE_OF_FORCE_CIVILIANS_OFFICERS, defs.TableType.USE_OF_FORCE_CIVILIANS, 
             defs.TableType.USE_OF_FORCE_OFFICERS, defs.TableType.SHOOTINGS_CIVILIANS, defs.TableType.SHOOTINGS_OFFICERS,
             defs.TableType.TRAFFIC_ARRESTS],
-        exclude_table_types=[defs.TableType.EMPLOYEE], validator=datetime_parser.validate_date)
+        # Calls for services often has multiple date/times with descriptive names for what it corresponds to.
+        # Don't generalize by standardizing
+        exclude_table_types=[defs.TableType.EMPLOYEE, defs.TableType.CALLS_FOR_SERVICE], validator=datetime_parser.validate_date)
 
     if len(match_cols) > 1:
         raise NotImplementedError()
     elif len(match_cols) == 1:
         col_map[defs.columns.DATE] = match_cols[0]
     
-    check_for_time = True
-    if check_for_time:
-        secondary_patterns = []
-        if defs.columns.DATE in col_map:
-            # Create a pattern from the format of the date column name
-            # That might also be the pattern of the time column
-            success = False
-            if "date" in col_map[defs.columns.DATE].lower():
-                match = re.search('date', col_map[defs.columns.DATE], re.IGNORECASE)
-                if match != None:
-                    if match[0].islower():
-                        secondary_patterns = [("equals", col_map[defs.columns.DATE].replace(match[0], "time"))]
-                    elif match[0].isupper():
-                        secondary_patterns = [("equals", col_map[defs.columns.DATE].replace(match[0], "TIME"))]
-                    elif match[0].istitle():
-                        secondary_patterns = [("equals", col_map[defs.columns.DATE].replace(match[0], "Time"))]
-                    else:
-                        raise NotImplementedError()
-                    success = True
+    secondary_patterns = []
+    if defs.columns.DATE in col_map:
+        # Create a pattern from the format of the date column name
+        # That might also be the pattern of the time column
+        success = False
+        if "date" in col_map[defs.columns.DATE].lower():
+            match = re.search('date', col_map[defs.columns.DATE], re.IGNORECASE)
+            if match != None:
+                if match[0].islower():
+                    secondary_patterns = [("equals", col_map[defs.columns.DATE].replace(match[0], "time"))]
+                elif match[0].isupper():
+                    secondary_patterns = [("equals", col_map[defs.columns.DATE].replace(match[0], "TIME"))]
+                elif match[0].istitle():
+                    secondary_patterns = [("equals", col_map[defs.columns.DATE].replace(match[0], "Time"))]
+                else:
+                    raise NotImplementedError()
+                success = True
 
-            if not success:
-                segs = col_map[defs.columns.DATE].split("_")
-                if len(segs)>1:
-                    date_str = defs.columns.DATE.lower()
-                    pattern = ""
-                    date_found = False
-                    for k,seg in enumerate(segs):
-                        if not date_found and seg[0].lower() == date_str[0]:
-                            # Check if rest of seg consists of values in date_str
-                            found = True
-                            idx = 1
-                            for val in seg[1:].lower():
-                                while idx < len(date_str) and val != date_str[idx]:
-                                    idx+=1
+        if not success:
+            segs = col_map[defs.columns.DATE].split("_")
+            if len(segs)>1:
+                date_str = defs.columns.DATE.lower()
+                pattern = ""
+                date_found = False
+                for k,seg in enumerate(segs):
+                    if not date_found and seg[0].lower() == date_str[0]:
+                        # Check if rest of seg consists of values in date_str
+                        found = True
+                        idx = 1
+                        for val in seg[1:].lower():
+                            while idx < len(date_str) and val != date_str[idx]:
+                                idx+=1
 
-                                if idx==len(date_str):
-                                    found = False
-                                    break
-                                else:
-                                    idx+=1
-                            if found:
-                                pattern+="{}"
-                                date_found = True
+                            if idx==len(date_str):
+                                found = False
+                                break
                             else:
-                                pattern+=seg
+                                idx+=1
+                        if found:
+                            pattern+="{}"
+                            date_found = True
                         else:
                             pattern+=seg
+                    else:
+                        pattern+=seg
 
-                        if k < len(segs)-1:
-                            pattern+="_"
+                    if k < len(segs)-1:
+                        pattern+="_"
 
-                    secondary_patterns = [("format", pattern)]
+                secondary_patterns = [("format", pattern)]
 
         exclude_col_names = ["rankattimeofincident"]
         validator_args = []
@@ -540,9 +597,11 @@ def id_columns(df, table_type, year, date_column=None, agency_column=None, sourc
             validator_args.append(df[col_map[defs.columns.DATE]])
         
         match_cols = _find_col_matches(df, table_type, "time", 
+            std_col_name=defs.columns.TIME,
             secondary_patterns=secondary_patterns, validator=datetime_parser.validate_time,
             validate_args=validator_args,
             exclude_col_names=exclude_col_names,
+            exclude_table_types=[defs.TableType.CALLS_FOR_SERVICE],
             always_validate=True)
 
         if len(match_cols) > 1:
@@ -550,112 +609,127 @@ def id_columns(df, table_type, year, date_column=None, agency_column=None, sourc
         elif len(match_cols) == 1:
             col_map[defs.columns.TIME] = match_cols[0]
         
-    # California data, RAE = Race and Ethnicity
-    def race_validator(col):
-        convert_race(col, source_name, table_type=table_type)
-        return None
+    # Incidents tables shouldn't have demographics data
+    if table_type not in [defs.TableType.SHOOTINGS_INCIDENTS, defs.TableType.USE_OF_FORCE_INCIDENTS]:    
+        def race_validator(col):
+            convert_race(col, source_name)
+            return None
 
-    def role_validator(col):
-        new_col = convert_off_or_civ(col)
-        vals = new_col.unique()
+        def role_validator(col):
+            new_col = convert_off_or_civ(col)
+            vals = new_col.unique()
 
-        if defs.person_types.CIVILIAN not in vals or defs.person_types.OFFICER not in vals:
-            # Check if it's possible this does not indicate civilian vs officer
-            match_cols = _find_col_matches(df, table_type, ["race", "descent","rae_full","citizen_demographics","officer_demographics","ethnicity"],
-                validator=race_validator)
+            if defs.person_types.CIVILIAN not in vals or defs.person_types.OFFICER not in vals:
+                # California data, RAE = Race and Ethnicity
+                # Check if it's possible this does not indicate civilian vs officer
+                match_cols = _find_col_matches(df, table_type, ["race", "descent","rae_full","citizen_demographics","officer_demographics","ethnicity"],
+                    validator=race_validator)
 
-            off_type = False
-            civ_type = False
-            is_officer_table = table_type == defs.TableType.EMPLOYEE.value or \
-                ("- OFFICERS" in table_type and "CIVILIANS" not in table_type)
-            for k in range(len(match_cols)):
-                if "off" in match_cols[k].lower() or "deputy" in match_cols[k].lower() or \
-                    (is_officer_table and "suspect" not in match_cols[k].lower() and "supsect" not in match_cols[k].lower()):
-                    off_type = True
-                else:
-                    civ_type = True
-                
-            if civ_type and off_type:
-                raise ValueError("Column is likely not a civilian or officer column")
+                off_type = False
+                civ_type = False
+                is_officer_table = table_type == defs.TableType.EMPLOYEE.value or \
+                    ("- OFFICERS" in table_type and "CIVILIANS" not in table_type)
+                for k in range(len(match_cols)):
+                    if "off" in match_cols[k].lower() or "deputy" in match_cols[k].lower() or \
+                        (is_officer_table and "suspect" not in match_cols[k].lower() and "supsect" not in match_cols[k].lower()):
+                        off_type = True
+                    else:
+                        civ_type = True
+                    
+                if civ_type and off_type:
+                    raise ValueError("Column is likely not a civilian or officer column")
 
-        return None
+            return None
 
-    match_cols = _find_col_matches(df, table_type, ["Civilian_Officer","ROLE"], 
-        only_table_types = [defs.TableType.USE_OF_FORCE, defs.TableType.USE_OF_FORCE_CIVILIANS_OFFICERS, defs.TableType.SHOOTINGS],
-        validator=role_validator,
-        always_validate=True)
-    if len(match_cols) > 1:
-        raise NotImplementedError()
-    elif len(match_cols) == 1:
-        col_map[defs.columns.CIVILIAN_OR_OFFICER] = match_cols[0]
+        match_cols = _find_col_matches(df, table_type, ["Civilian_Officer","ROLE"], 
+            only_table_types = [defs.TableType.USE_OF_FORCE, defs.TableType.USE_OF_FORCE_CIVILIANS_OFFICERS, defs.TableType.SHOOTINGS],
+            validator=role_validator,
+            always_validate=True)
+        if len(match_cols) > 1:
+            raise NotImplementedError()
+        elif len(match_cols) == 1:
+            col_map[defs.columns.CIVILIAN_OR_OFFICER] = match_cols[0]
 
-    match_cols = _find_col_matches(df, table_type, ["race", "descent","rae_full","citizen_demographics","officer_demographics","ethnicity"],
-        validator=race_validator)  
-    race_cols, race_types = _id_demographic_column(table_type, year, col_map, match_cols, source_name,
-        defs.columns.RACE_CIVILIAN, defs.columns.RACE_OFFICER,
-        defs.columns.RACE_OFF_AND_CIV,
-        tables_to_exclude=[
-            ("Montgomery County", defs.TableType.COMPLAINTS),
-            ("Denver", defs.TableType.STOPS),
-            ("Lincoln", defs.TableType.VEHICLE_PURSUITS),
-            ("Los Angeles", defs.TableType.STOPS),
-            ("South Bend", defs.TableType.USE_OF_FORCE),
-            ("State Police", defs.TableType.SHOOTINGS),
-            ("Gilbert",defs.TableType.STOPS),
-            ("Anaheim",defs.TableType.TRAFFIC),
-            ("San Bernardino",defs.TableType.TRAFFIC),
-            ("Saint Petersburg", defs.TableType.TRAFFIC),
-            ("Idaho Falls",defs.TableType.STOPS),
-            ("Fort Wayne", defs.TableType.TRAFFIC),
-            ("Baltimore", defs.TableType.STOPS),
-            ("Lubbock", defs.TableType.STOPS),
-            ("Tacoma", defs.TableType.STOPS),
-            ("State Patrol", defs.TableType.TRAFFIC),
-            ],
-        specific_cases=[_case("California", defs.TableType.USE_OF_FORCE_CIVILIANS_OFFICERS, "Race_Ethnic_Group", defs.columns.RACE_OFF_AND_CIV),
-                        _case("Lansing", defs.TableType.SHOOTINGS, ["Race_Sex","Officer"], [defs.columns.RACE_CIVILIAN, defs.columns.RACE_OFFICER])
-            ],
-        adv_type_match=_find_race_col_type_advanced,
-        df=df)
+        match_cols = _find_col_matches(df, table_type, ["race", "descent","rae_full","citizen_demographics","officer_demographics","ethnicity"],
+            validator=race_validator)  
+        race_cols, race_types = _id_demographic_column(table_type, year, col_map, match_cols, source_name,
+            defs.columns.RACE_CIVILIAN, defs.columns.RACE_OFFICER,
+            defs.columns.RACE_OFF_AND_CIV,
+            tables_to_exclude=[
+                ("Montgomery County", defs.TableType.COMPLAINTS),
+                ("Albany", defs.TableType.COMPLAINTS),
+                ("Denver", defs.TableType.STOPS),
+                ("Lincoln", defs.TableType.VEHICLE_PURSUITS),
+                ("Los Angeles", defs.TableType.STOPS),
+                ("South Bend", defs.TableType.USE_OF_FORCE),
+                ("State Police", defs.TableType.SHOOTINGS),
+                ("Gilbert",defs.TableType.STOPS),
+                ("Anaheim",defs.TableType.TRAFFIC),
+                ("San Bernardino",defs.TableType.TRAFFIC),
+                ("Cambridge",defs.TableType.CITATIONS),
+                ("Saint Petersburg", defs.TableType.TRAFFIC),
+                ("Idaho Falls",defs.TableType.STOPS),
+                ("Fort Wayne", defs.TableType.TRAFFIC),
+                ("Baltimore", defs.TableType.STOPS),
+                ("Lubbock", defs.TableType.STOPS),
+                ("Tacoma", defs.TableType.STOPS),
+                ("State Patrol", defs.TableType.TRAFFIC),
+                ("Greensboro", defs.TableType.USE_OF_FORCE_OFFICERS),
+                ],
+            specific_cases=[_case("California", defs.TableType.USE_OF_FORCE_CIVILIANS_OFFICERS, "Race_Ethnic_Group", defs.columns.RACE_OFF_AND_CIV),
+                            _case("Minneapolis", defs.TableType.STOPS, "race", defs.columns.RACE_CIVILIAN),
+                            _case("Fairfax County", defs.TableType.ARRESTS, ["ArresteeRa","OfficerRac"], [defs.columns.RACE_CIVILIAN, defs.columns.RACE_OFFICER], year=range(2016,2021)),
+                            _case("Lansing", defs.TableType.SHOOTINGS, ["Race_Sex","Officer"], [defs.columns.RACE_CIVILIAN, defs.columns.RACE_OFFICER])
+                ],
+            adv_type_match=_find_race_col_type_advanced,
+            df=df)
 
-    # enthnicity is to deal with typo in Ferndale data. Consider using fuzzywuzzy in future for fuzzy matching
-    match_cols = _find_col_matches(df, table_type, ["ethnic", "enthnicity"], exclude_col_names=race_cols)
-    _id_ethnicity_column(source_name, table_type, col_map, race_types, match_cols, race_cols)
+        # enthnicity is to deal with typo in Ferndale data. Consider using fuzzywuzzy in future for fuzzy matching
+        match_cols = _find_col_matches(df, table_type, ["ethnic", "enthnicity"], exclude_col_names=race_cols)
+        _id_ethnicity_column(source_name, table_type, year, col_map, race_types, match_cols, race_cols,
+            specific_cases=[
+                 _case("Fairfax County", defs.TableType.ARRESTS, "ArresteeEt", defs.columns.ETHNICITY_CIVILIAN, year=range(2016,2021))
+            ])
 
-    # _id_agency_column(agency_column, col_map)
+        # Do not want the result to contain the word agency
+        match_cols = _find_col_matches(df, table_type, ["age","citizen_demographics","officer_demographics"], 
+            exclude_col_names=[("does not contain",["agenc","damage","group","range","at_hire","engagement"])])
+        _id_demographic_column(table_type, year, col_map, match_cols, source_name, 
+            defs.columns.AGE_CIVILIAN, defs.columns.AGE_OFFICER,
+            defs.columns.AGE_OFF_AND_CIV,
+            required=False,
+            specific_cases=[_case("Norman", defs.TableType.COMPLAINTS, "Age", defs.columns.AGE_OFFICER, year=[2016,2017,2018]),
+                            _case("Norman", defs.TableType.USE_OF_FORCE, "Age", defs.columns.AGE_OFFICER, year=[2016,2017]),
+                            _case("Fairfax County", defs.TableType.ARRESTS, "ArresteeAg", defs.columns.AGE_CIVILIAN, year=range(2016,2021))]
+            )
+
+        match_cols = _find_col_matches(df, table_type, ["agerange","age_range","agegroup","age_group"])
+        _id_demographic_column(table_type, year, col_map, match_cols, source_name,
+            defs.columns.AGE_RANGE_CIVILIAN, defs.columns.AGE_RANGE_OFFICER,
+            defs.columns.AGE_RANGE_OFF_AND_CIV,
+            required=False)
+
+        def gender_validator(col):
+            _convert_gender(col, source_name)
+            return None
+        match_cols = _find_col_matches(df, table_type, ["gend", "sex","citizen_demographics","officer_demographics"],
+            validator=gender_validator)        
+        _id_demographic_column(table_type, year, col_map, match_cols, source_name,
+            defs.columns.GENDER_CIVILIAN, defs.columns.GENDER_OFFICER, 
+            defs.columns.GENDER_OFF_AND_CIV,
+            required=False,
+            specific_cases=[_case("California", defs.TableType.STOPS, "G_FULL", defs.columns.GENDER_CIVILIAN),
+                            _case("Lansing", defs.TableType.SHOOTINGS, ["Race_Sex","Officer"], [defs.columns.GENDER_CIVILIAN, defs.columns.GENDER_OFFICER],
+                            _case("Fairfax County", defs.TableType.ARRESTS, ["ArresteeSe","OfficerSex"], [defs.columns.GENDER_CIVILIAN, defs.columns.GENDER_OFFICER], year=range(2016,2021)))
+                ],
+            adv_type_match=_find_gender_col_type_advanced,
+            df=df)
+
     match_cols = _find_col_matches(df, table_type, [], known_col_name=agency_column)
     if len(match_cols) > 1:
         raise NotImplementedError()
     elif len(match_cols) == 1:
         col_map[defs.columns.AGENCY] = match_cols[0]
-
-    # Do not want the result to contain the word agency
-    match_cols = _find_col_matches(df, table_type, ["age","citizen_demographics","officer_demographics"], 
-        exclude_col_names=[("does not contain",["agenc","damage","group","range","at_hire"])])
-    _id_demographic_column(table_type, year, col_map, match_cols, source_name, 
-        defs.columns.AGE_CIVILIAN, defs.columns.AGE_OFFICER,
-        defs.columns.AGE_OFF_AND_CIV,
-        required=False,
-        specific_cases=[_case("Norman", defs.TableType.COMPLAINTS, "Age", defs.columns.AGE_OFFICER, year=[2016,2017,2018]),
-                        _case("Norman", defs.TableType.USE_OF_FORCE, "Age", defs.columns.AGE_OFFICER, year=[2016,2017])]
-        )
-
-    match_cols = _find_col_matches(df, table_type, ["agerange","age_range","agegroup","age_group"])
-    _id_demographic_column(table_type, year, col_map, match_cols, source_name,
-        defs.columns.AGE_RANGE_CIVILIAN, defs.columns.AGE_RANGE_OFFICER,
-        defs.columns.AGE_RANGE_OFF_AND_CIV,
-        required=False)
-
-    match_cols = _find_col_matches(df, table_type, ["gend", "sex","citizen_demographics","officer_demographics"])
-    _id_demographic_column(table_type, year, col_map, match_cols, source_name,
-        defs.columns.GENDER_CIVILIAN, defs.columns.GENDER_OFFICER, 
-        defs.columns.GENDER_OFF_AND_CIV,
-        required=False,
-        specific_cases=[_case("California", defs.TableType.STOPS, "G_FULL", defs.columns.GENDER_CIVILIAN),
-                        _case("Lansing", defs.TableType.SHOOTINGS, ["Race_Sex","Officer"], [defs.columns.GENDER_CIVILIAN, defs.columns.GENDER_OFFICER])
-            ],
-        adv_type_match=_find_gender_col_type_advanced,
-        df=df)
 
     for key, value in col_map.items():
         if key == value:
@@ -675,10 +749,10 @@ class _case:
     def equals(self, src, table_type, year):
         tf = src==self.src and table_type==self.table_type
         if self.year!=None:
-            if type(self.year)==list:
-                tf = tf and (year in self.year)
-            else:
+            if isinstance(self.year, numbers.Number):
                 tf = tf and (year==self.year)
+            else:
+                tf = tf and (year in self.year)
 
         return tf
 
@@ -738,23 +812,26 @@ def standardize_time(df, col_map, maps, keep_raw=False):
     #         # Generate time column from date
     #         df[defs.columns.TIME] = tms
 
-def standardize_gender(df, col_map, maps, source_name, table_type, keep_raw=False, 
+def standardize_gender(df, col_map, maps, source_name, keep_raw=False, 
         mult_civilian=None, mult_officer=None, mult_both=None):
     if defs.columns.GENDER_CIVILIAN in col_map:
-        _standardize_gender(df, col_map, defs.columns.GENDER_CIVILIAN, maps, source_name, table_type, keep_raw, is_mult=mult_civilian)
+        _standardize_gender(df, col_map, defs.columns.GENDER_CIVILIAN, maps, source_name, keep_raw, mult_info=mult_civilian)
 
     if defs.columns.GENDER_OFFICER in col_map:
-        _standardize_gender(df, col_map, defs.columns.GENDER_OFFICER, maps, source_name, table_type, keep_raw, is_mult=mult_officer)
+        _standardize_gender(df, col_map, defs.columns.GENDER_OFFICER, maps, source_name, keep_raw, mult_info=mult_officer)
 
     if defs.columns.GENDER_OFF_AND_CIV in col_map:
-        _standardize_gender(df, col_map, defs.columns.GENDER_OFF_AND_CIV, maps, source_name, table_type, keep_raw, is_mult=mult_both)
+        _standardize_gender(df, col_map, defs.columns.GENDER_OFF_AND_CIV, maps, source_name, keep_raw, mult_info=mult_both)
 
-def _standardize_gender(df, col_map, col_name, maps, source_name, table_type, keep_raw, is_mult):
-    vals = df[col_map[col_name]].unique()
-
-    is_demo_list, delim, delims_count, repeat_count = _is_mult_value_column(vals, table_type)
+def _standardize_gender(df, col_map, col_name, maps, source_name, keep_raw, mult_info):
     std_map = {}
-    if not is_mult and is_demo_list:
+    df[col_name] = _convert_gender(df[col_map[col_name]], source_name, std_map=std_map, mult_info=mult_info)    
+    _cleanup_old_column(df, col_map[col_name], keep_raw)
+    maps.append(DataMapping(old_column_name=col_map[col_name], new_column_name=col_name, data_maps=std_map))
+
+def _convert_gender(col, source_name, std_map={}, mult_info=_MultData()):
+    vals = col.unique()
+    if mult_info.has_demo_col:
         map = {}
         delims = ["(", ","]
         for x in vals:
@@ -786,12 +863,12 @@ def _standardize_gender(df, col_map, col_name, maps, source_name, table_type, ke
                     _create_gender_lut(x, std_map, source_name)
                     map[x] = std_map[x]
 
-        df[col_name] = df[col_map[col_name]].map(map)
-    elif is_mult or (is_mult==None and (repeat_count > 0 or delims_count > 0.5*len(vals))):
+        new_col = col.map(map)
+    elif mult_info.is_mult:
         map = {}
         for x in vals:
             if type(x) == str:
-                items = x.split(delim)
+                items = x.split(mult_info.delim_gender)
                 for k, i in enumerate(items):
                     i = i.strip()
                     if i not in std_map:
@@ -804,15 +881,13 @@ def _standardize_gender(df, col_map, col_name, maps, source_name, table_type, ke
                     _create_gender_lut(x, std_map, source_name)
                     map[x] = std_map[x]
 
-        df[col_name] = df[col_map[col_name]].map(map)
+        new_col = col.apply(lambda x: map[x].copy() if x in map else x)
     else:
         for x in vals:
             _create_gender_lut(x, std_map, source_name)
-        df[col_name] = df[col_map[col_name]].map(std_map)
+        new_col = col.map(std_map)
 
-    _cleanup_old_column(df, col_map[col_name], keep_raw)
-
-    maps.append(DataMapping(old_column_name=col_map[col_name], new_column_name=col_name, data_maps=std_map))
+    return new_col
 
 def _create_gender_lut(x, std_map, source_name):
     bad_data = ["BLACK","WHITE"]
@@ -834,10 +909,8 @@ def _create_gender_lut(x, std_map, source_name):
             std_map[orig] = orig
         else:
             std_map[orig] = lincoln_stops_dict[int(x)]
-    elif pd.isnull(x) or x in ["MISSING", "UNSPECIFIED", "",",",'NOTSPECIFIED'] or "NODATA" in x or\
-        x in bad_data or \
-        (source_name=="New York City" and x=="Z") or \
-        (source_name=="Seattle" and x=="N"):
+    elif pd.isnull(x) or x in ["MISSING", "UNSPECIFIED", "",",",'NOTSPECIFIED',"NOTRECORDED","NONE"] or \
+        "NODATA" in x or "NOSEX" in x:
         std_map[orig] = defs.genders.UNSPECIFIED
     elif x in ["F", "FEMALE", "FEMAALE", "FFEMALE", "FEMAL"]:
         std_map[orig] = defs.genders.FEMALE
@@ -849,12 +922,15 @@ def _create_gender_lut(x, std_map, source_name):
         std_map[orig] = defs.genders.TRANSGENDER
     elif x in ["NONBINARY"]:
         std_map[orig] = defs.genders.GENDER_NONBINARY
-    elif x in ["Gender Diverse (gender non-conforming and/or transgender)".upper().replace("-","").replace("_","").replace(" ","")]:
+    elif x in ["Gender Diverse (gender non-conforming and/or transgender)".upper().replace("-","").replace("_","").replace(" ",""),
+        "GENDERNONCONFORMING"]:
         std_map[orig] = defs.genders.TRANSGENDER_OR_GENDER_NONCONFORMING
     elif x in ["TRANSGENDER MALE".replace(" ","")] or \
+        "TRANSGENDERMAN" in x or \
         (source_name=="Los Angeles" and x=="T"):
         std_map[orig] = defs.genders.TRANSGENDER_MAN
     elif x in ["TRANSGENDER FEMALE".replace(" ","")] or \
+        "TRANSGENDERWOMAN" in x or \
         (source_name=="Los Angeles" and x=="W"):
         std_map[orig] = defs.genders.TRANSGENDER_WOMAN
     elif (source_name=="Los Angeles" and x=="C"):
@@ -863,10 +939,16 @@ def _create_gender_lut(x, std_map, source_name):
         std_map[orig] = defs.genders.UNKNOWN
     elif "EXEMPT" in x:
         std_map[orig] = defs.genders.EXEMPT
-    elif x in ["DATAPENDING", "NOTAPPLICABLE"] or ("BUSINESS" in x and source_name=="Cincinnati") or \
-        (x=="W" and source_name=="Cincinnati") or \
-        (x == "N" and source_name == "New Orleans"):
+    elif x in ["DATAPENDING", "NOTAPPLICABLE","N/A"] or ("BUSINESS" in x and source_name=="Cincinnati"):
         std_map[orig] = orig
+    elif x in bad_data or \
+        (source_name=="New York City" and x=="Z") or \
+        (source_name=="Baltimore" and x=="Y") or \
+        (source_name in ["Seattle","New Orleans"] and x=="N") or \
+        (source_name=="Los Angeles County" and x=="0") or \
+        (x=="W" and source_name=="Cincinnati") or \
+        source_name == "Buffalo":
+        std_map[orig] = f"{defs.genders.BAD_DATA}: {orig}"
     else:
         raise ValueError(f"Unknown gender {orig}")
 
@@ -881,16 +963,16 @@ def standardize_age_range(df, col_map, maps, keep_raw=False, source_name=None):
     if defs.columns.AGE_RANGE_OFF_AND_CIV in col_map:
         _standardize_age_range(df, col_map, defs.columns.AGE_RANGE_OFF_AND_CIV, maps, keep_raw, source_name)
 
-def standardize_age(df, col_map, maps, table_type, keep_raw=False, 
+def standardize_age(df, col_map, maps, keep_raw=False, 
         mult_civilian=None, mult_officer=None, mult_both=None):
     if defs.columns.AGE_CIVILIAN in col_map:
-        _standardize_age(df, col_map, defs.columns.AGE_CIVILIAN, maps, table_type, keep_raw, is_mult=mult_civilian)
+        _standardize_age(df, col_map, defs.columns.AGE_CIVILIAN, maps, keep_raw, mult_info=mult_civilian)
 
     if defs.columns.AGE_OFFICER in col_map:
-        _standardize_age(df, col_map, defs.columns.AGE_OFFICER, maps, table_type, keep_raw, is_mult=mult_officer)
+        _standardize_age(df, col_map, defs.columns.AGE_OFFICER, maps, keep_raw, mult_info=mult_officer)
 
     if defs.columns.AGE_OFF_AND_CIV in col_map:
-        _standardize_age(df, col_map, defs.columns.AGE_OFF_AND_CIV, maps, table_type, keep_raw, is_mult=mult_both)
+        _standardize_age(df, col_map, defs.columns.AGE_OFF_AND_CIV, maps, keep_raw, mult_info=mult_both)
 
 def _standardize_age_range(df, col_map, col_name, maps, keep_raw, source_name):
     vals = df[col_map[col_name]].unique()
@@ -898,14 +980,14 @@ def _standardize_age_range(df, col_map, col_name, maps, keep_raw, source_name):
 
     p_plus = re.compile(r"(\d+)\+",re.IGNORECASE)
     p_over = re.compile(r"OVER (\d+)",re.IGNORECASE)
-    p_under = re.compile(r"UNDER (\d+)",re.IGNORECASE)
+    p_under = re.compile(r"(UNDER|<)\s?(\d+)",re.IGNORECASE)
     p_above = re.compile(r"(\d+) AND ABOVE",re.IGNORECASE)
     for orig in vals:
         v = orig
         if type(v)==str:
             v = v.upper()
         if type(v) == str and _p_age_range.search(v)!=None:
-            map[orig] = _p_age_range.sub(r"\1-\2", v)
+            map[orig] = _p_age_range.sub(r"\1-\3", v)
         elif type(v) == str and p_over.search(v)!=None:
             map[orig] = p_over.sub(r"\1-120", v)
         elif type(v) == str and p_plus.search(v)!=None:
@@ -913,8 +995,8 @@ def _standardize_age_range(df, col_map, col_name, maps, keep_raw, source_name):
         elif type(v) == str and p_above.search(v)!=None:
             map[orig] = p_above.sub(r"\1-120", v)
         elif type(v) == str and p_under.search(v)!=None:
-            map[orig] = p_under.sub(r"0-\1", v)
-        elif pd.isnull(v) or v in ["","NR","UNKNOWN","-"] or "NO DATA" in v or v.replace(" ","")=="":
+            map[orig] = p_under.sub(r"0-\2", v)
+        elif pd.isnull(v) or v in ["","NR","UNKNOWN","-","N/A"] or "NO DATA" in v or v.replace(" ","")=="":
             map[orig] = ""
         elif source_name=="Cincinnati" and v=="ADULT":
             map[orig] = "18-120"
@@ -923,7 +1005,12 @@ def _standardize_age_range(df, col_map, col_name, maps, keep_raw, source_name):
         elif v.isdigit():
             map[orig] = orig
         else:
-            raise TypeError(f"Unknown val {v} for age range")
+            # At least 1 case was found where age range was auto-corrected to a month/year like
+            # 10-17 to 17-Oct. Check for this before giving up.
+            try:
+                map[orig] = datetime.strftime(datetime.strptime(v, "%d-%b"),"%m-%d")
+            except:
+                raise TypeError(f"Unknown val {v} for age range")
 
     df[col_name] = df[col_map[col_name]].map(map)
 
@@ -931,12 +1018,11 @@ def _standardize_age_range(df, col_map, col_name, maps, keep_raw, source_name):
 
     maps.append(DataMapping(old_column_name=col_map[col_name], new_column_name=col_name))
 
-def _standardize_age(df, col_map, col_name, maps, table_type, keep_raw, is_mult):
+def _standardize_age(df, col_map, col_name, maps, keep_raw, mult_info):
     max_age = 120  # Somewhat conservative max age of a human
     vals = df[col_map[col_name]].unique()
     vals = [x for x in vals if type(x)==str]
-    is_demo_list, delim, delims_count, repeat_count = _is_mult_value_column(vals, table_type)
-    if not is_mult and is_demo_list:
+    if mult_info.has_demo_col:
         def extract_ages(x):
             if type(x) == str:
                 items = x.split("(")
@@ -953,7 +1039,7 @@ def _standardize_age(df, col_map, col_name, maps, table_type, keep_raw, is_mult)
                 return np.nan
 
         df[col_name] = df[col_map[col_name]].apply(extract_ages)
-    elif is_mult or (is_mult==None and (repeat_count > 0 or delims_count > 0.5*len(vals))):
+    elif mult_info.is_mult:
         # This column contains multiple ages in each cell
         def convert_to_age_list(x, delim):
             if pd.isnull(x):
@@ -961,12 +1047,14 @@ def _standardize_age(df, col_map, col_name, maps, table_type, keep_raw, is_mult)
             else:
                 return [int(y) if (pd.notnull(y) and y.isdigit() and 0<int(y)<=max_age) else np.nan for y in x.split(delim)]
 
-        df[col_name] = df[col_map[col_name]].apply(convert_to_age_list, delim=delim)
+        df[col_name] = df[col_map[col_name]].apply(convert_to_age_list, delim=mult_info.delim_age)
     else:
         try:
             col = pd.to_numeric(df[col_map[col_name]], errors="raise", downcast="integer")
         except Exception as e:
-            if all([_p_age_range.search(x)!=None for x in vals]) or \
+            # Not forcing all vals to have a match for _p_age_range because low ranges converted
+            # to Month/Year at some point for at least 1 case (i.e. 10-17 to 17-Oct)
+            if sum([_p_age_range.search(x)!=None for x in vals]) / len(vals) > 0.9 or  \
                 all([x in ["UNKNOWN","ADULT","JUVENILE"] for x in vals]):
                 if "AGE" in col_name:
                     new_col_name = col_name.replace("AGE","AGE_RANGE")
@@ -984,7 +1072,7 @@ def _standardize_age(df, col_map, col_name, maps, table_type, keep_raw, is_mult)
                 test = [int(x)==y if (type(x)==str and x.isdigit()) else False for x,y in zip(df[col_map[col_name]],col)]
                 sum_test = sum(test)
                 if sum_test / len(test) < 0.2:
-                    warnings.warn(f"Not converting {col_map[col_name]} to an age. If this is an age column only {sum(test) / len(test)*100}% of the data has a valid value")
+                    warnings.warn(f"Not converting {col_map[col_name]} to an age. If this is an age column only {sum(test) / len(test)*100:.1f}% of the data has a valid value")
                     col_map.pop(col_name)
                     return
                 elif sum_test / len(test) < 0.85 and not (sum_test>1 and len(test)-sum_test==1):
@@ -1040,28 +1128,27 @@ def standardize_off_or_civ(df, col_map, maps, keep_raw):
 
         maps.append(DataMapping(old_column_name=col_map[col_name], new_column_name=col_name))
 
-def standardize_race(df, col_map, maps, source_name=None, keep_raw=False, table_type=None, 
+def standardize_race(df, col_map, maps, source_name=None, keep_raw=False,
         mult_civilian=None, mult_officer=None, mult_both=None):
     if defs.columns.RACE_CIVILIAN in col_map:
-        _standardize_race(df, col_map, maps, source_name=source_name, keep_raw=keep_raw, table_type=table_type,
+        _standardize_race(df, col_map, maps, source_name=source_name, keep_raw=keep_raw,
             new_race_column=defs.columns.RACE_CIVILIAN,
             new_ethnicity_column=defs.columns.ETHNICITY_CIVILIAN,
-            is_mult=mult_civilian)
+            mult_info=mult_civilian)
 
     if defs.columns.RACE_OFFICER in col_map:
-        _standardize_race(df, col_map,  maps, source_name=source_name, keep_raw=keep_raw, table_type=table_type,
+        _standardize_race(df, col_map,  maps, source_name=source_name, keep_raw=keep_raw,
             new_race_column=defs.columns.RACE_OFFICER,
             new_ethnicity_column=defs.columns.ETHNICITY_OFFICER,
-            is_mult=mult_officer)
+            mult_info=mult_officer)
 
     if defs.columns.RACE_OFF_AND_CIV in col_map:
-        _standardize_race(df, col_map,  maps, source_name=source_name, keep_raw=keep_raw, table_type=table_type,
+        _standardize_race(df, col_map,  maps, source_name=source_name, keep_raw=keep_raw,
             new_race_column=defs.columns.RACE_OFF_AND_CIV,
             new_ethnicity_column=defs.columns.ETHNICITY_OFF_AND_CIV,
-            is_mult=mult_both)
+            mult_info=mult_both)
 
-def _standardize_race(df, col_map, maps, source_name, keep_raw, table_type, new_race_column, new_ethnicity_column,
-    is_mult):
+def _standardize_race(df, col_map, maps, source_name, keep_raw, new_race_column, new_ethnicity_column, mult_info):
     race_column = col_map[new_race_column]
     if new_ethnicity_column in col_map and new_race_column in col_map and \
         col_map[new_ethnicity_column] != col_map[new_race_column]:
@@ -1070,8 +1157,7 @@ def _standardize_race(df, col_map, maps, source_name, keep_raw, table_type, new_
         ethnicity_column = None
 
     race_map_dict = {}
-    df[new_race_column] = convert_race(df[race_column], source_name, race_map_dict=race_map_dict, table_type=table_type, is_mult=is_mult)
-    is_mult = df[new_race_column].apply(lambda x: type(x)==list).any()
+    df[new_race_column] = convert_race(df[race_column], source_name, race_map_dict=race_map_dict, mult_info=mult_info)
 
     maps.append(
         DataMapping(old_column_name=race_column, new_column_name=new_race_column,
@@ -1085,13 +1171,12 @@ def _standardize_race(df, col_map, maps, source_name, keep_raw, table_type, new_
         vals = [x if type(x)==str else x for x in df[ethnicity_column].unique()]
 
         eth_map_dict = {}
-        if is_mult:
-            _, delim, _, _ = _is_mult_value_column(vals, table_type)
+        if mult_info.is_mult:
             for k in range(len(df)):
                 x = df[ethnicity_column][k]
                 y = df[new_race_column][k]
                 if type(x) == str:
-                    items = x.split(delim)
+                    items = x.split(mult_info.delim_eth)
                     if len(y) == len(items):
                         for m in range(len(y)):
                             i = items[m].strip()
@@ -1120,7 +1205,7 @@ def _create_ethnicity_lut(x, eth_map_dict, source_name):
     # The below values is used in the Ferndale demographics data. Just use the data from the race column in that
     # case which includes if officer is Hispanic
     ferndale_eth_vals = ['NR', 'FRENCH/GERMAN', 'MEXICAN', 'HUNGARIAN', 'LEBANESE', 'POLISH/SCOTTISH', 'IRISH', 'SYRIAN', 'POLISH']
-    bad_data = ["W","A"]
+    bad_data = ["R"]
     orig = x
     if type(x) == str:
         x = x.upper().replace("-","").replace(" ", "")
@@ -1128,7 +1213,7 @@ def _create_ethnicity_lut(x, eth_map_dict, source_name):
     if pd.isnull(x):
         pass
     elif x == "N" or x == 'NONHISPANIC' or x == "NH" or "NOTHISP" in x or \
-        "EXEMPT" in x or x in bad_data or \
+        "EXEMPT" in x or x in ["W","A"] or \
         x in ferndale_eth_vals:
         pass  # Just use race value
     elif x == "H" or "HISPANIC" in x or "LATINO" in x:
@@ -1138,65 +1223,23 @@ def _create_ethnicity_lut(x, eth_map_dict, source_name):
     elif x in ["U", "UNKNOWN"]:
         eth_map_dict[orig] = defs.races.UNKNOWN
     elif "NODATA" in x.replace(" ","") or \
-        x in ["MISSING", ""]:
+        x in ["MISSING", "", "NOTREPORTED",'NOTAPPICABLE(NONINDIVIDUAL)']:
         eth_map_dict[orig] = defs.races.UNSPECIFIED
     elif x in ["M"] and source_name == "Connecticut":
         eth_map_dict[orig] = defs.races.MIDDLE_EASTERN
+    elif x in bad_data:
+        eth_map_dict[orig] = f"{defs.races.BAD_DATA}: {orig}"
     else:
-            raise ValueError(f"Unknown value {x}")
+        raise ValueError(f"Unknown value {x}")
 
-
-def _is_mult_value_column(vals, table_type):
-    delims = [",", "|", ";", "/"]
-    max_idx = -1
-    delims_count = 0
-    repeat_count = -1
-    is_demo_list = False
-    if table_type in [defs.TableType.SHOOTINGS, defs.TableType.SHOOTINGS_CIVILIANS, defs.TableType.SHOOTINGS_OFFICERS,
-        defs.TableType.SHOOTINGS_INCIDENTS, defs.TableType.USE_OF_FORCE, defs.TableType.USE_OF_FORCE_INCIDENTS,
-        defs.TableType.USE_OF_FORCE_CIVILIANS_OFFICERS, defs.TableType.USE_OF_FORCE_INCIDENTS, 
-        defs.TableType.USE_OF_FORCE_CIVILIANS, defs.TableType.COMPLAINTS]: 
-        # Evaluate to see if values are for a single person or multiple
-        def count_delims(x, d):
-            return sum([1 for y in x if y==d])
-        def count_repeats(x, d):
-            ind_vals = x.split(d)
-            ind_vals = [y.strip() for y in ind_vals if type(y) == str]
-            counts = Counter(ind_vals)
-            return sum([c for c in counts.values() if c>1])
-        def _is_demo_list(vals):
-            check_gender = ['male' in x.lower() for x in vals if type(x)==str]
-            check_race = ['black' in x.lower() for x in vals if type(x)==str]
-            check_both = False
-            for x in vals:
-                if type(x)==str and any([y in x.lower() for y in ['b/m','w/m','b/f','w/f',"a/m","a/f","h/m","h/f","i/m","i/f"]]):
-                    check_both = True
-                    break
-            return check_both or (sum(check_gender) > 1 and sum(check_race) > 1)
-
-        # Check if vals are lists of tuples
-        is_demo_list = _is_demo_list(vals)
-        if not is_demo_list:
-            for k,d in enumerate(delims):
-                total_delims = sum([count_delims(x,d) for x in vals if type(x) == str])
-                if total_delims > delims_count:
-                    max_idx = k
-                    delims_count = total_delims
-                    repeat_count = sum([count_repeats(x, d) for x in vals if type(x) == str])
-
-    return is_demo_list, delims[max_idx], delims_count, repeat_count
-
-def convert_race(col, source_name, race_map_dict=None, table_type=None, is_mult=None):
+def convert_race(col, source_name, race_map_dict=None, mult_info=_MultData()):
 
     if race_map_dict == None:
         race_map_dict = {}
     # Decode the race column
     val_counts = col.value_counts()
     vals = [x if type(x)==str else x  for x in val_counts.index]
-
-    is_demo_list, delim, delims_count, repeat_count = _is_mult_value_column(vals, table_type)
-
-    if not is_mult and is_demo_list:
+    if mult_info.has_demo_col:
         map = {}
         delims = ["(", ","]
         for x in vals:
@@ -1228,11 +1271,11 @@ def convert_race(col, source_name, race_map_dict=None, table_type=None, is_mult=
                     map[x] = race_map_dict[x]
 
         return col.map(map)
-    elif is_mult or (is_mult==None and (repeat_count > 0 or delims_count > 0.75*len(vals))):
+    elif mult_info.is_mult:
         map = {}
         for x in vals:
             if type(x) == str:
-                items = x.split(delim)
+                items = x.split(mult_info.delim_race)
                 for k, i in enumerate(items):
                     if i == "ISL":  # LA County code for AAPI is ASIAN-PACIFIC,ISL
                         continue
@@ -1247,7 +1290,8 @@ def convert_race(col, source_name, race_map_dict=None, table_type=None, is_mult=
                     _create_race_lut(x, race_map_dict, source_name)
                     map[x] = race_map_dict[x]
 
-        return col.map(map)
+        # Use apply instead of map to allow copying. Otherwise, values are references.
+        return col.apply(lambda x: map[x].copy() if x in map else x)
     else:
         for x in vals:
             _create_race_lut(x, race_map_dict, source_name, val_counts=val_counts)
@@ -1297,8 +1341,8 @@ def _create_race_lut(x, race_map_dict, source_name, val_counts=None):
         x = x.upper().replace("_", " ").replace("*","").replace("-"," ").replace(".","")
         x = x.strip()
         
-    if pd.isnull(x) or x in ["MISSING","NOT SPECIFIED","NULL VALUE", "", ""] or \
-        (type(x)==str and ("NO DATA" in x or "NOT APPLICABLE" in x)) or x in bad_data:
+    if pd.isnull(x) or x in ["MISSING","NOT SPECIFIED","NULL VALUE", "", "NOT RECORDED","N/A", "NOT REPORTED", "NONE"] or \
+        (type(x)==str and ("NO DATA" in x or "NOT APP" in x or "NO RACE" in x)):
         race_map_dict[orig] = defs.races.UNSPECIFIED
     elif (type(x) != str or x.isdigit()) and source_name == "California":
         race_map_dict[orig] = ca_stops_dict[int(x)]
@@ -1308,7 +1352,7 @@ def _create_race_lut(x, race_map_dict, source_name, val_counts=None):
     elif x in ["W", "CAUCASIAN", "WN", "WHITE"]:
         # WN = White-Non-Hispanic
         race_map_dict[orig] = defs.races.WHITE
-    elif x in ["B", "AFRICAN AMERICAN"] or "BLAC" in x:
+    elif x in ["B", "AFRICAN AMERICAN", "EAST AFRICAN"] or "BLAC" in x:
         if x.count("BLACK") > 1:
             raise ValueError(f"The value of {x} likely contains the races for multiple people")
         race_map_dict[orig] = defs.races.BLACK
@@ -1319,7 +1363,7 @@ def _create_race_lut(x, race_map_dict, source_name, val_counts=None):
     elif x in ["A", "CAMBODIAN",'VIETNAMESE'] or "ASIAN" in x:
         if "INDIAN" in x:
             raise ValueError("INDIAN should be picked up by ASIAN INDIAN condition")
-        elif "PACIFIC" in x:
+        elif "PACIFIC" in x or "HAWAII" in x:
             race_map_dict[orig] = defs.races.AAPI
         else:
             race_map_dict[orig] = defs.races.ASIAN
@@ -1350,19 +1394,20 @@ def _create_race_lut(x, race_map_dict, source_name, val_counts=None):
         race_map_dict[orig] = defs.races.OTHER_UNKNOWN
     elif "UNK" in x or x in ["U", "UK"]:
         race_map_dict[orig] = defs.races.UNKNOWN
-    elif x in ["O","OTHER"] or "OTHER UNCLASS" in x or \
+    elif x in ["O","OTHER", "OTHER RACE"] or "OTHER UNCLASS" in x or \
         (source_name == "New York City" and x=="Z"):
         race_map_dict[orig] = defs.races.OTHER
-    elif (source_name in ["Chapel Hill","Lansing"] and x == "M") or \
-        (source_name == "San Diego" and x == "F") or \
-        (source_name == "Detroit" and x in ["N","SELECT"]) or \
-        (source_name == "Cincinnati" and x == "F"):
-        race_map_dict[orig] = orig
+    elif x in bad_data or \
+        (source_name in ["Chapel Hill","Lansing"] and x == "M") or \
+        (source_name in ["Cincinnati","San Diego"] and x == "F") or \
+        (source_name in ["Columbia"] and x == "P") or \
+        (source_name == "Detroit" and x in ["N","SELECT"]):
+        race_map_dict[orig] = f"{defs.races.BAD_DATA}: {orig}"
     elif "EXEMPT" in x:
         race_map_dict[orig] = defs.races.EXEMPT
     else:
-        if source_name=="Fairfax County" and val_counts is not None and \
-            val_counts.loc[orig]/val_counts.sum()*100 < 0.1:
+        if source_name in ["Fairfax County","Minneapolis"] and val_counts is not None and \
+            val_counts.loc[orig]/val_counts.sum()*100 < 7:
             warnings.warn(f"Value of {orig} in civilian or officer race column is unknown and cannot be standardized. " +
                 f"Cases where value is {orig} will be left unchanged. Value of {orig} occurs in {val_counts.loc[orig]} out of {val_counts.sum()} rows.")
         else:

@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import datetime as dt
+import re
 
 def parse_date_to_datetime(date_col):
     if len(date_col.shape)==2:
@@ -108,11 +109,31 @@ def parse_date_to_datetime(date_col):
             elif date_col.dtype == "O":
                 new_col = date_col.convert_dtypes()
                 if new_col.dtype == "string":
+                    p = re.compile(r"\d{1,2}[/-]\d{1,2}[/-]\d{4}")
+                    p2 = re.compile(r"\d{4}[/-]\d{1,2}[/-]\d{1,2}")
+                    p3 = re.compile(r"\d{2}-[A-Z][a-z][a-z]-\d{2}")
+                    p_not_match = re.compile(r"\d{1,2}[:\.]?\d\d[:\.]?\d?\d?")
+                    num_match = 0
+                    num_not_match = 0
+                    k = 0
+                    num_check = 5
+                    for m in range(len(new_col)):
+                        if pd.notnull(new_col[m]) and len(new_col[m].strip())!=0:
+                            if p.search(new_col[m])!=None or p2.search(new_col[m])!=None or p3.search(new_col[m])!=None:
+                                num_match+=1
+                            elif p_not_match.match(new_col[m])==None:
+                                a = 1
+                            else:
+                                num_not_match+=1
+                            k+=1
+
+                        if k==num_check:
+                            break
+
+                    if num_match<num_check-1:
+                        raise ValueError("Column is not a date column")
                     try:
-                        new_col = pd.to_datetime(new_col, errors="coerce")
-                        if new_col.isnull().sum()/len(new_col) > 0.5:
-                            raise NotImplementedError()
-                        return new_col
+                        return pd.to_datetime(new_col, errors="coerce")
                     except:
                         def to_dt(x):
                             try:
@@ -184,18 +205,36 @@ def validate_time(time_col, date_col=None):
         # then the supposed time contains date information
         if num_unique > 2 or (num_unique==2 and  abs(test_date_col[0]-test_date_col[1]) > pd.Timedelta(days=1)):
             raise ValueError(not_a_time_col_msg)
-            
-        if date_col is not None:
-            if not hasattr(date_col,'year'):
-                date_col = parse_date_to_datetime(date_col)
-            num_unique = len(date_col.dt.time.unique())
-            # If there is more than 2 times or the times cannot be explained by a time zone differene,
-            # then there is time information in the date
-            if num_unique > 2 or (num_unique==2 and  abs(date_col[1]-date_col[0]) > pd.Timedelta(hours=1)):
-                raise ValueError(date_has_time_msg)
     except ValueError as e:
         if len(e.args)>0 and e.args[0] in [not_a_time_col_msg, date_has_time_msg]:
             raise e
+    except Exception:
+        pass
+
+    try: 
+        if date_col is not None:
+            new_date_col = date_col[date_col.notnull()]
+            if not hasattr(new_date_col.iloc[0],'year'):
+                new_date_col = parse_date_to_datetime(new_date_col)
+
+            unique_times = pd.Series(new_date_col.apply(lambda x: x.replace(year=1970,month=1,day=1)).unique())
+            # If there is more than 2 times or the times cannot be explained by a time zone differene,
+            # then there is time information in the date
+            if len(unique_times) > 2 or (len(unique_times)==2 and \
+                unique_times.notnull().all() and abs(unique_times[1]-unique_times[0]) > pd.Timedelta(hours=1)):
+                if len(unique_times)==2 and len(new_date_col)>100:
+                    # There are enough dates that they shouldn't all mostly be the same
+                    # See if one could be a UTC time and one could be no time
+                    diffs = unique_times - unique_times.apply(lambda x: x.replace(hour=0,minute=0,second=0))
+                    if not (diffs==pd.Timedelta(0)).any():
+                        raise ValueError(date_has_time_msg)
+                else:
+                    raise ValueError(date_has_time_msg)
+    except ValueError as e:
+        if len(e.args)>0 and e.args[0] in [not_a_time_col_msg, date_has_time_msg]:
+            raise e
+    except Exception:
+        pass
 
     col = parse_time(time_col)
     col = col[col.notnull()]
