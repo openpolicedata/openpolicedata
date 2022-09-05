@@ -1,3 +1,4 @@
+import numbers
 import os.path as path
 import pandas as pd
 from datetime import datetime
@@ -538,12 +539,7 @@ def _check_date(table, date_field):
             one_date = dts.iloc[0]            
             if type(one_date) == str:
                 table = table.astype({date_field: 'datetime64[ns]'})
-            elif date_field.lower() == "year":
-                try:
-                    float(one_date)
-                except:
-                    raise
-                
+            elif (date_field.lower() == "year" or date_field.lower() == "yr") and isinstance(one_date, numbers.Number):
                 table[date_field] = table[date_field].apply(lambda x: datetime(x,1,1))
                 
             # Replace bad dates with NaT

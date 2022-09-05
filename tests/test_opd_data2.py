@@ -240,4 +240,4 @@ if __name__ == "__main__":
 	# For testing
 	tp = TestData()
 	# (self, csvfile, source, last, skip, loghtml)
-	tp.test_source_download_limitable(r"..\opd-data\opd_source_table.csv", "Columbia",None, None, None) 
+	tp.test_source_download_limitable(r"..\opd-data\opd_source_table.csv", None, 1, None, None) 

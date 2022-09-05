@@ -1,3 +1,4 @@
+import numbers
 import os
 from datetime import date
 import pandas as pd
@@ -34,6 +35,9 @@ _use_gpd_force = None
 _default_limit = 100000
 _url_error_msg = "There is likely an issue with the website. Open the URL {} with a web browser to confirm. " + \
                     "See a list of known site outages at https://github.com/openpolicedata/opd-data/blob/main/outages.csv"
+
+_last_arcgis_url = None
+_last_arcgis_date_format = None
 
 # This is for use if import data sets using Socrata. It is not required.
 # Requests made without an app_token will be subject to strict throttling limits
@@ -130,6 +134,12 @@ def load_arcgis(url, date_field=None, year=None, limit=None, pbar=True):
 
     p = re.search(r"(MapServer|FeatureServer)/\d+", url)
     url = url[:p.span()[1]]
+
+    global _last_arcgis_url, _last_arcgis_date_format
+    if url != _last_arcgis_url:
+        _last_arcgis_date_format = None
+        _last_arcgis_url = url
+
     last_slash = url.rindex("/")
     layer_num = url[last_slash+1:]
     base_url = url[:last_slash]
@@ -195,46 +205,22 @@ def load_arcgis(url, date_field=None, year=None, limit=None, pbar=True):
     
     where_query = ""
     if date_field!=None and year!=None:
-        start_date, stop_date = _process_date(year)
-        
-        where_query = f"{date_field} >= '{start_date}' AND  {date_field} < '{stop_date}'"
+        where_query, record_count = _build_arcgis_where_query(base_url, layer_num, active_layer, date_field, year, _last_arcgis_date_format)
     else:
         where_query = '1=1'
-
-    try:
-        record_count = active_layer.query(where=where_query, return_count_only=True)
-        if record_count==0 and date_field!=None and year!=None:
-            # It's possible that the date is not formatted to search using dates
-            # and that it's necessary to perform a text search
-            if isinstance(year, list):
-                where_query = f"{date_field} LIKE '%[0-9][0-9]/[0-9][0-9]/{year[0]}%'"
-                for x in year[1:]:
-                    where_query = f"{where_query} or {date_field} LIKE '%[0-9][0-9]/[0-9][0-9]/{x}%'"
+        try:
+            record_count = active_layer.query(where=where_query, return_count_only=True)
+        except Exception as e:
+            if len(e.args)>0 and "Error Code: 429" in e.args[0]:
+                raise OPD_TooManyRequestsError(base_url, f"Layer # = {layer_num}", *e.args, _url_error_msg.format(url))
             else:
-                where_query = f"{date_field} LIKE '%[0-9][0-9]/[0-9][0-9]/{year}%'"
-            try:
-                record_count = active_layer.query(where=where_query, return_count_only=True)
-                if record_count==0:  # Try year/month pattern
-                    if isinstance(year, list):
-                        where_query = f"{date_field} LIKE '{year[0]}/[0-9][0-9]'"
-                        for x in year[1:]:
-                            where_query = f"{where_query} or {date_field} LIKE '{x}/[0-9][0-9]'"
-                    else:
-                        where_query = f"{date_field} LIKE '{year}/[0-9][0-9]'"
-                    record_count = active_layer.query(where=where_query, return_count_only=True)
-            except:
-                pass
-
-        if record_count==0:
-            return None
-    except Exception as e:
-        if len(e.args)>0 and "Error Code: 429" in e.args[0]:
-            raise OPD_TooManyRequestsError(base_url, f"Layer # = {layer_num}", *e.args, _url_error_msg.format(url))
-        else:
+                raise
+        except:
             raise
-    except:
-        raise
 
+    if record_count==0:
+        return None
+   
     if user_limit:
         num_batches = ceil(total / limit)
     else:
@@ -646,12 +632,73 @@ class TqdmReader:
             self.bar.update(self.bar.total - self.bar.n)
             return ""
 
+def _build_arcgis_where_query(base_url, layer_num, active_layer, date_field, year, date_format):
+    global _last_arcgis_date_format
+    record_count = 0
+    where_query = ""
+    if date_format==0 or date_format==None:
+        start_date, stop_date = _process_date(year)
+        
+        where_query = f"{date_field} >= '{start_date}' AND  {date_field} < '{stop_date}'"
+    
+        try:
+            record_count = active_layer.query(where=where_query, return_count_only=True)
+        except Exception as e:
+            if len(e.args)>0 and "Error Code: 429" in e.args[0]:
+                raise OPD_TooManyRequestsError(base_url, f"Layer # = {layer_num}", *e.args, _url_error_msg.format(url))
+            elif len(e.args)>0 and "Unable to complete operation.\n(Error Code: 400)" in e.args[0]:
+                # This query throws an error for this dataset. Try another one below
+                pass
+            else:
+                raise
+        except:
+            raise
+
+        if record_count>0 or date_format==0:
+            _last_arcgis_date_format = 0
+            return where_query, record_count
+
+    where_formats = [
+        "{} LIKE '%[0-9][0-9]/[0-9][0-9]/{}%'",   # mm/dd/yyyy
+        "{} LIKE '{}/[0-9][0-9]'",                # yyyy/mm
+        "{} = {}",                # yyyy/mm
+    ]
+    # Make year iterable
+    year = [year] if isinstance(year, numbers.Number) else year
+
+    for format in where_formats:
+        if date_format==format or date_format==None:
+            where_query = format.format(date_field, year[0])
+            for x in year[1:]:
+                where_query = f"{where_query} or " + format.format(date_field, x)
+
+            try:
+                record_count = active_layer.query(where=where_query, return_count_only=True)
+            except Exception as e:
+                if len(e.args)>0 and "Error Code: 429" in e.args[0]:
+                    raise OPD_TooManyRequestsError(base_url, f"Layer # = {layer_num}", *e.args, _url_error_msg.format(url))
+                elif len(e.args)>0 and "Unable to complete operation.\n(Error Code: 400)" in e.args[0]:
+                    # This query throws an error for this dataset. Try another one below
+                    pass
+                else:
+                    raise
+            except:
+                pass
+
+            if record_count>0 or date_format==format:
+                _last_arcgis_date_format = format
+                return where_query, record_count
+
+    return where_query, record_count
+
+        
 if __name__ == "__main__":
     import time
     _default_limit = 10000
     start_time = time.time()
-    url = "https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPD/MapServer/16/"
-    url = 'https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_CRIME_STOPS_P/FeatureServer/32'
-    date_field = 'TIME_PHONEPICKUP'
-    load_arcgis(url,date_field=date_field, year=2020)
+    url = "https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPD/MapServer/13/"
+    # url = 'https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_CRIME_STOPS_P/FeatureServer/32'
+    date_field = 'YR'
+    years = _get_years("ArcGIS", url, date_field)
+    load_arcgis(url, date_field, [2020,2021])
     print(f"Completed in {time.time()-start_time} seconds")
