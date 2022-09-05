@@ -74,7 +74,7 @@ def load_csv(url, date_field=None, year_filter=None, agency_field=None, agency=N
         DataFrame containing table imported from CSV
     '''
     
-    if ".zip" in url or not pbar:
+    if ".zip" in url:
         with warnings.catch_warnings():
             # Perhaps use requests iter_content/iter_lines as below to read large CSVs so progress can be shown
             warnings.simplefilter("ignore", category=pd.errors.DtypeWarning)
@@ -94,7 +94,9 @@ def load_csv(url, date_field=None, year_filter=None, agency_field=None, agency=N
             raise e
         with requests.get(url, params=None, stream=True) as resp:
             try:
-                table = pd.read_csv(TqdmReader(resp), nrows=limit, encoding_errors='surrogateescape')
+                table = pd.read_csv(TqdmReader(resp, pbar=pbar), nrows=limit, encoding_errors='surrogateescape')
+            except (urllib.error.HTTPError, pd.errors.ParserError) as e:
+                raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(url))
             except Exception as e:
                 raise e
 
@@ -222,6 +224,8 @@ def load_arcgis(url, date_field=None, year=None, limit=None, pbar=True):
         return None
    
     if user_limit:
+        if record_count < total:
+            total = record_count
         num_batches = ceil(total / limit)
     else:
         num_batches = ceil(record_count / limit)
@@ -595,7 +599,7 @@ class TqdmReader:
     # Older versions of pandas check if reader has these properties even though they are not used
     write = []
     __iter__ = []
-    def __init__(self, resp, limit=None):
+    def __init__(self, resp, pbar=True, limit=None):
         total_size = int(resp.headers.get("Content-Length", 0))
 
         self.rows_read = 0
@@ -604,21 +608,24 @@ class TqdmReader:
         else:
             self.limit = float("inf")
         self.resp = resp
-        self.bar = tqdm(
-            desc=resp.url,
-            total=total_size,
-            unit="iB",
-            unit_scale=True,
-            unit_divisor=1024,
-            leave=False
-        )
+        self.pbar = pbar
+        if self.pbar:
+            self.bar = tqdm(
+                desc=resp.url,
+                total=total_size,
+                unit="iB",
+                unit_scale=True,
+                unit_divisor=1024,
+                leave=False
+            )
 
         self.reader = self.read_from_stream()
 
     def read_from_stream(self):
         for line in self.resp.iter_lines():
             line += b"\n"
-            self.bar.update(len(line))
+            if self.pbar:
+                self.bar.update(len(line))
             yield line
 
     def read(self, n=0):
@@ -629,7 +636,8 @@ class TqdmReader:
             self.rows_read += 1
             return next(self.reader)
         except StopIteration:
-            self.bar.update(self.bar.total - self.bar.n)
+            if self.pbar:
+                self.bar.update(self.bar.total - self.bar.n)
             return ""
 
 def _build_arcgis_where_query(base_url, layer_num, active_layer, date_field, year, date_format):
@@ -661,7 +669,7 @@ def _build_arcgis_where_query(base_url, layer_num, active_layer, date_field, yea
     where_formats = [
         "{} LIKE '%[0-9][0-9]/[0-9][0-9]/{}%'",   # mm/dd/yyyy
         "{} LIKE '{}/[0-9][0-9]'",                # yyyy/mm
-        "{} = {}",                # yyyy/mm
+        "{} = {}",                # yyyy
     ]
     # Make year iterable
     year = [year] if isinstance(year, numbers.Number) else year
@@ -677,13 +685,13 @@ def _build_arcgis_where_query(base_url, layer_num, active_layer, date_field, yea
             except Exception as e:
                 if len(e.args)>0 and "Error Code: 429" in e.args[0]:
                     raise OPD_TooManyRequestsError(base_url, f"Layer # = {layer_num}", *e.args, _url_error_msg.format(url))
-                elif len(e.args)>0 and "Unable to complete operation.\n(Error Code: 400)" in e.args[0]:
+                elif len(e.args)>0 and ("Error Code: 400" in e.args[0] or "Failed to execute query" in e.args[0]):
                     # This query throws an error for this dataset. Try another one below
                     pass
                 else:
                     raise
             except:
-                pass
+                raise
 
             if record_count>0 or date_format==format:
                 _last_arcgis_date_format = format
