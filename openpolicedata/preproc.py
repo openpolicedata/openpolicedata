@@ -19,7 +19,7 @@ _p_age_range = re.compile(r"""
     (\d+)               # Lower bound of age range. Capture for reuse.
     \s?(-|_|TO)\s?          # - or _ between lower and upper bound with optional spaces 
     (\d+)               # Upper bound of age range. Capture for reuse.
-    (\s?[-_]\s?\1\s?[-_]\s?\2)?  # Optional mistaken repeat of same pattern. 
+    (\s?[-_]\s?\1\s?[-_]\s?\3)?  # Optional mistaken repeat of same pattern. 
     $                   # End of string
     """, re.VERBOSE)
 
@@ -41,17 +41,17 @@ def standardize(df, table_type, year, date_column=None, agency_column=None, sour
     col_map = id_columns(df, table_type, year, date_column, agency_column, source_name=source_name)
     maps = []
     df = standardize_date(df, col_map, maps, keep_raw=keep_raw)
-    standardize_time(df, col_map, maps, keep_raw=keep_raw)
-    standardize_off_or_civ(df, col_map, maps, keep_raw=keep_raw)
+    df = standardize_time(df, col_map, maps, keep_raw=keep_raw)
+    df = standardize_off_or_civ(df, col_map, maps, keep_raw=keep_raw)
     mult_civilian, mult_officer, mult_both = _check_for_multiple_all(df, col_map, table_type)
-    standardize_race(df, col_map, maps, source_name, keep_raw=keep_raw, 
+    df = standardize_race(df, col_map, maps, source_name, keep_raw=keep_raw, 
         mult_civilian=mult_civilian, mult_officer=mult_officer, mult_both=mult_both)
     # standardize_age needs to go before standardize_age_range as it can detect if what was ID'ed as 
     # an age column is actually an age range
-    standardize_age(df, col_map, maps, keep_raw=keep_raw, 
+    df = standardize_age(df, col_map, maps, keep_raw=keep_raw, 
         mult_civilian=mult_civilian, mult_officer=mult_officer, mult_both=mult_both)
-    standardize_age_range(df, col_map, maps, keep_raw=keep_raw, source_name=source_name)
-    standardize_gender(df, col_map, maps, source_name, keep_raw=keep_raw, 
+    df = standardize_age_range(df, col_map, maps, keep_raw=keep_raw, source_name=source_name)
+    df = standardize_gender(df, col_map, maps, source_name, keep_raw=keep_raw, 
         mult_civilian=mult_civilian, mult_officer=mult_officer, mult_both=mult_both)
 
     if defs.columns.AGENCY in col_map:
@@ -526,7 +526,8 @@ def id_columns(df, table_type, year, date_column=None, agency_column=None, sourc
 
     match_cols = _find_col_matches(df, table_type, "date", known_col_name=date_column, 
         std_col_name=defs.columns.DATE,
-        # secondary_patterns = [("equals","date"), ("contains", "call"), ("contains", "cad"), ("contains", "assigned"), ("contains", "occurred")],
+        secondary_patterns = [("equals","date"), ("contains", "cad"),  ("contains", "assigned"), ("contains", "occurred")],
+        # secondary_patterns = [("contains", "call"), ],
         not_required_table_types=[defs.TableType.USE_OF_FORCE_CIVILIANS_OFFICERS, defs.TableType.USE_OF_FORCE_CIVILIANS, 
             defs.TableType.USE_OF_FORCE_OFFICERS, defs.TableType.SHOOTINGS_CIVILIANS, defs.TableType.SHOOTINGS_OFFICERS,
             defs.TableType.TRAFFIC_ARRESTS],
@@ -797,37 +798,43 @@ def standardize_date(df, col_map, maps, keep_raw=True):
 
 def standardize_time(df, col_map, maps, keep_raw=False):
     if defs.columns.TIME in col_map:
-        df[defs.columns.TIME] = datetime_parser.parse_time(df[col_map[defs.columns.TIME]])
+        col = datetime_parser.parse_time(df[col_map[defs.columns.TIME]])
+        col.name = defs.columns.TIME
+        if defs.columns.TIME in df.columns:
+            df.drop(columns=defs.columns.TIME, inplace=True)
+        # Concatentate to avoid fragmentation performance warnings
+        df = pd.concat([df, col], axis=1)
         _cleanup_old_column(df, col_map[defs.columns.TIME], keep_raw)
 
         maps.append(DataMapping(old_column_name=col_map[defs.columns.TIME], new_column_name=defs.columns.TIME))
-    # Commenting this out. Trying to keep time column as local time to enable day vs. night analysis.
-    # Date column is often in UTC but it's not easy to tell when that is the case nor what the local timezone is 
-    # if UTC needs converted
-    # We are assuming that the time column is already local
-    # elif defs.columns.DATE in col_map:
-    #     tms = df[defs.columns.DATE].dt.time
-    #     # Check if time information is just a UTC offset which can have 2 values due to daylight savings time
-    #     if len(tms.unique()) > 3: 
-    #         # Generate time column from date
-    #         df[defs.columns.TIME] = tms
+
+    return df
 
 def standardize_gender(df, col_map, maps, source_name, keep_raw=False, 
         mult_civilian=None, mult_officer=None, mult_both=None):
     if defs.columns.GENDER_CIVILIAN in col_map:
-        _standardize_gender(df, col_map, defs.columns.GENDER_CIVILIAN, maps, source_name, keep_raw, mult_info=mult_civilian)
+        df = _standardize_gender(df, col_map, defs.columns.GENDER_CIVILIAN, maps, source_name, keep_raw, mult_info=mult_civilian)
 
     if defs.columns.GENDER_OFFICER in col_map:
-        _standardize_gender(df, col_map, defs.columns.GENDER_OFFICER, maps, source_name, keep_raw, mult_info=mult_officer)
+        df = _standardize_gender(df, col_map, defs.columns.GENDER_OFFICER, maps, source_name, keep_raw, mult_info=mult_officer)
 
     if defs.columns.GENDER_OFF_AND_CIV in col_map:
-        _standardize_gender(df, col_map, defs.columns.GENDER_OFF_AND_CIV, maps, source_name, keep_raw, mult_info=mult_both)
+        df = _standardize_gender(df, col_map, defs.columns.GENDER_OFF_AND_CIV, maps, source_name, keep_raw, mult_info=mult_both)
+
+    return df
 
 def _standardize_gender(df, col_map, col_name, maps, source_name, keep_raw, mult_info):
     std_map = {}
-    df[col_name] = _convert_gender(df[col_map[col_name]], source_name, std_map=std_map, mult_info=mult_info)    
+    col = _convert_gender(df[col_map[col_name]], source_name, std_map=std_map, mult_info=mult_info)
+    col.name = col_name
+    if col_name in df.columns:
+        df.drop(columns=col_name, inplace=True)
+    # Concatentate to avoid fragmentation performance warnings
+    df = pd.concat([df, col], axis=1)
     _cleanup_old_column(df, col_map[col_name], keep_raw)
     maps.append(DataMapping(old_column_name=col_map[col_name], new_column_name=col_name, data_maps=std_map))
+
+    return df
 
 def _convert_gender(col, source_name, std_map={}, mult_info=_MultData()):
     vals = col.unique()
@@ -903,7 +910,7 @@ def _create_gender_lut(x, std_map, source_name):
         x = x.upper().replace("-","").replace("_","").replace(" ","").replace("'","")
 
     if pd.notnull(x) and (type(x) != str or x.isdigit()) and source_name == "California":
-        std_map[orig] = ca_stops_dict[x]
+        std_map[orig] = ca_stops_dict[int(x)]
     elif pd.notnull(x) and (type(x) != str or x.isdigit()) and source_name == "Lincoln":
         if int(x) not in lincoln_stops_dict:
             std_map[orig] = orig
@@ -955,24 +962,28 @@ def _create_gender_lut(x, std_map, source_name):
 
 def standardize_age_range(df, col_map, maps, keep_raw=False, source_name=None):
     if defs.columns.AGE_RANGE_CIVILIAN in col_map:
-        _standardize_age_range(df, col_map, defs.columns.AGE_RANGE_CIVILIAN, maps, keep_raw, source_name)
+        df = _standardize_age_range(df, col_map, defs.columns.AGE_RANGE_CIVILIAN, maps, keep_raw, source_name)
 
     if defs.columns.AGE_RANGE_OFFICER in col_map:
-        _standardize_age_range(df, col_map, defs.columns.AGE_RANGE_OFFICER, maps, keep_raw, source_name)
+        df = _standardize_age_range(df, col_map, defs.columns.AGE_RANGE_OFFICER, maps, keep_raw, source_name)
 
     if defs.columns.AGE_RANGE_OFF_AND_CIV in col_map:
-        _standardize_age_range(df, col_map, defs.columns.AGE_RANGE_OFF_AND_CIV, maps, keep_raw, source_name)
+        df = _standardize_age_range(df, col_map, defs.columns.AGE_RANGE_OFF_AND_CIV, maps, keep_raw, source_name)
+
+    return df
 
 def standardize_age(df, col_map, maps, keep_raw=False, 
         mult_civilian=None, mult_officer=None, mult_both=None):
     if defs.columns.AGE_CIVILIAN in col_map:
-        _standardize_age(df, col_map, defs.columns.AGE_CIVILIAN, maps, keep_raw, mult_info=mult_civilian)
+        df = _standardize_age(df, col_map, defs.columns.AGE_CIVILIAN, maps, keep_raw, mult_info=mult_civilian)
 
     if defs.columns.AGE_OFFICER in col_map:
-        _standardize_age(df, col_map, defs.columns.AGE_OFFICER, maps, keep_raw, mult_info=mult_officer)
+       df =  _standardize_age(df, col_map, defs.columns.AGE_OFFICER, maps, keep_raw, mult_info=mult_officer)
 
     if defs.columns.AGE_OFF_AND_CIV in col_map:
-        _standardize_age(df, col_map, defs.columns.AGE_OFF_AND_CIV, maps, keep_raw, mult_info=mult_both)
+        df = _standardize_age(df, col_map, defs.columns.AGE_OFF_AND_CIV, maps, keep_raw, mult_info=mult_both)
+
+    return df
 
 def _standardize_age_range(df, col_map, col_name, maps, keep_raw, source_name):
     vals = df[col_map[col_name]].unique()
@@ -1012,11 +1023,18 @@ def _standardize_age_range(df, col_map, col_name, maps, keep_raw, source_name):
             except:
                 raise TypeError(f"Unknown val {v} for age range")
 
-    df[col_name] = df[col_map[col_name]].map(map)
+    col = df[col_map[col_name]].map(map)
+    col.name = col_name
+    if col_name in df.columns:
+        df.drop(columns=col_name, inplace=True)
+    # Concatentate to avoid fragmentation performance warnings
+    df = pd.concat([df, col], axis=1)
 
     _cleanup_old_column(df, col_map[col_name], keep_raw)
 
     maps.append(DataMapping(old_column_name=col_map[col_name], new_column_name=col_name))
+
+    return df
 
 def _standardize_age(df, col_map, col_name, maps, keep_raw, mult_info):
     max_age = 120  # Somewhat conservative max age of a human
@@ -1060,21 +1078,21 @@ def _standardize_age(df, col_map, col_name, maps, keep_raw, mult_info):
                     new_col_name = col_name.replace("AGE","AGE_RANGE")
                     if hasattr(defs.columns, new_col_name):
                         col_map[new_col_name] = col_map.pop(col_name)
-                        return
+                        return df
             else:            
                 # Attempt to convert most values to numbers
                 col = pd.to_numeric(df[col_map[col_name]], errors="coerce", downcast="integer")
                 if pd.isnull(col).all():
                     warnings.warn(f"Unable to convert column {col_map[col_name]} to an age")
                     col_map.pop(col_name)
-                    return
+                    return df
 
                 test = [int(x)==y if (type(x)==str and x.isdigit()) else False for x,y in zip(df[col_map[col_name]],col)]
                 sum_test = sum(test)
                 if sum_test / len(test) < 0.2:
                     warnings.warn(f"Not converting {col_map[col_name]} to an age. If this is an age column only {sum(test) / len(test)*100:.1f}% of the data has a valid value")
                     col_map.pop(col_name)
-                    return
+                    return df
                 elif sum_test / len(test) < 0.85 and not (sum_test>1 and len(test)-sum_test==1):
                     raise e
 
@@ -1089,13 +1107,20 @@ def _standardize_age(df, col_map, col_name, maps, keep_raw, mult_info):
                 col.loc[col > max_age] = np.nan
                 col.loc[col < 0] = np.nan
 
-        df[col_name] = col.round()
-        df.loc[df[col_name] == 0, col_name] = np.nan
+        col = col.round()
+        col[col == 0] = np.nan
+        col.name = col_name
+        if col_name in df.columns:
+            df.drop(columns=col_name, inplace=True)
+        # Concatentate to avoid fragmentation performance warnings
+        df = pd.concat([df, col], axis=1)
 
     if col_map[col_name] not in ["citizen_demographics","officer_demographics"]:  # These contain additional information that still needs to be used
         _cleanup_old_column(df, col_map[col_name], keep_raw)
 
     maps.append(DataMapping(old_column_name=col_map[col_name], new_column_name=col_name))
+
+    return df
 
 def convert_off_or_civ(col, std_map=None):
     vals = col.unique()
@@ -1128,25 +1153,29 @@ def standardize_off_or_civ(df, col_map, maps, keep_raw):
 
         maps.append(DataMapping(old_column_name=col_map[col_name], new_column_name=col_name))
 
+    return df
+
 def standardize_race(df, col_map, maps, source_name=None, keep_raw=False,
         mult_civilian=None, mult_officer=None, mult_both=None):
     if defs.columns.RACE_CIVILIAN in col_map:
-        _standardize_race(df, col_map, maps, source_name=source_name, keep_raw=keep_raw,
+        df = _standardize_race(df, col_map, maps, source_name=source_name, keep_raw=keep_raw,
             new_race_column=defs.columns.RACE_CIVILIAN,
             new_ethnicity_column=defs.columns.ETHNICITY_CIVILIAN,
             mult_info=mult_civilian)
 
     if defs.columns.RACE_OFFICER in col_map:
-        _standardize_race(df, col_map,  maps, source_name=source_name, keep_raw=keep_raw,
+        df = _standardize_race(df, col_map,  maps, source_name=source_name, keep_raw=keep_raw,
             new_race_column=defs.columns.RACE_OFFICER,
             new_ethnicity_column=defs.columns.ETHNICITY_OFFICER,
             mult_info=mult_officer)
 
     if defs.columns.RACE_OFF_AND_CIV in col_map:
-        _standardize_race(df, col_map,  maps, source_name=source_name, keep_raw=keep_raw,
+        df = _standardize_race(df, col_map,  maps, source_name=source_name, keep_raw=keep_raw,
             new_race_column=defs.columns.RACE_OFF_AND_CIV,
             new_ethnicity_column=defs.columns.ETHNICITY_OFF_AND_CIV,
             mult_info=mult_both)
+
+    return df
 
 def _standardize_race(df, col_map, maps, source_name, keep_raw, new_race_column, new_ethnicity_column, mult_info):
     race_column = col_map[new_race_column]
@@ -1157,7 +1186,12 @@ def _standardize_race(df, col_map, maps, source_name, keep_raw, new_race_column,
         ethnicity_column = None
 
     race_map_dict = {}
-    df[new_race_column] = convert_race(df[race_column], source_name, race_map_dict=race_map_dict, mult_info=mult_info)
+    col = convert_race(df[race_column], source_name, race_map_dict=race_map_dict, mult_info=mult_info)
+    col.name = new_race_column
+    if new_race_column in df.columns:
+        df.drop(columns=new_race_column, inplace=True)
+    # Concatentate to avoid fragmentation performance warnings
+    df = pd.concat([df, col], axis=1)
 
     maps.append(
         DataMapping(old_column_name=race_column, new_column_name=new_race_column,
@@ -1200,6 +1234,8 @@ def _standardize_race(df, col_map, maps, source_name, keep_raw, new_race_column,
         maps[-1].data_maps = [maps[-1].data_maps, eth_map_dict]
 
         _cleanup_old_column(df, ethnicity_column, keep_raw)
+
+    return df
 
 def _create_ethnicity_lut(x, eth_map_dict, source_name):
     # The below values is used in the Ferndale demographics data. Just use the data from the race column in that
