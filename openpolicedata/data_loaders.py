@@ -195,7 +195,7 @@ def load_arcgis(url, date_field=None, year=None, limit=None, pbar=True):
     
     where_query = ""
     if date_field!=None and year!=None:
-        start_date, stop_date = _process_date(year, inclusive=False)
+        start_date, stop_date = _process_date(year)
         
         where_query = f"{date_field} >= '{start_date}' AND  {date_field} < '{stop_date}'"
     else:
@@ -208,12 +208,20 @@ def load_arcgis(url, date_field=None, year=None, limit=None, pbar=True):
             # and that it's necessary to perform a text search
             if isinstance(year, list):
                 where_query = f"{date_field} LIKE '%[0-9][0-9]/[0-9][0-9]/{year[0]}%'"
-                for x in range(year[0]+1,year[1]+1):
+                for x in year[1:]:
                     where_query = f"{where_query} or {date_field} LIKE '%[0-9][0-9]/[0-9][0-9]/{x}%'"
             else:
                 where_query = f"{date_field} LIKE '%[0-9][0-9]/[0-9][0-9]/{year}%'"
             try:
                 record_count = active_layer.query(where=where_query, return_count_only=True)
+                if record_count==0:  # Try year/month pattern
+                    if isinstance(year, list):
+                        where_query = f"{date_field} LIKE '{year[0]}/[0-9][0-9]'"
+                        for x in year[1:]:
+                            where_query = f"{where_query} or {date_field} LIKE '{x}/[0-9][0-9]'"
+                    else:
+                        where_query = f"{date_field} LIKE '{year}/[0-9][0-9]'"
+                    record_count = active_layer.query(where=where_query, return_count_only=True)
             except:
                 pass
 
@@ -345,7 +353,7 @@ def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, sel
 
     where = ""
     if date_field!=None and year!=None:
-        start_date, stop_date = _process_date(year,inclusive=True, date_field=date_field)
+        start_date, stop_date = _process_date(year, date_field=date_field)
         where = date_field + " between '" + start_date + "' and '" + stop_date +"'"
 
     if opt_filter is not None:
@@ -471,7 +479,7 @@ def load_socrata(url, data_set, date_field=None, year=None, opt_filter=None, sel
     return df
 
 
-def _process_date(date, inclusive, date_field=None):
+def _process_date(date, date_field=None):
     if not isinstance(date, list):
         date = [date, date]
 
