@@ -167,7 +167,7 @@ class TestData:
 
 				table_print = datasets.iloc[i]["TableType"]
 				now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
-				print(f"{now} Testing {i} of {len(datasets)}: {srcName} {table_print} table")
+				print(f"{now} Testing {i+1} of {len(datasets)}: {srcName} {table_print} table")
 
 				try:
 					years = src.get_years(datasets.iloc[i]["TableType"])
@@ -256,4 +256,4 @@ if __name__ == "__main__":
 	# For testing
 	tp = TestData()
 	# (self, csvfile, source, last, skip, loghtml)
-	tp.test_source_download_limitable(r"..\opd-data\opd_source_table.csv", "Louisville", None, None, None) 
+	tp.test_get_years(r"..\opd-data\opd_source_table.csv", None, 80, None, None) 

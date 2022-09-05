@@ -58,7 +58,7 @@ class TestData:
 
 				table_print = datasets.iloc[i]["TableType"]
 				now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
-				print(f"{now} Testing {i} of {len(datasets)}: {srcName} {table_print} table")
+				print(f"{now} Testing {i+1} of {len(datasets)}: {srcName} {table_print} table")
 
 				try:
 					table = src.load_from_url(datasets.iloc[i]["Year"], datasets.iloc[i]["TableType"], pbar=False)
@@ -132,7 +132,7 @@ class TestData:
 
 				table_print = datasets.iloc[i]["TableType"]
 				now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
-				print(f"{now} Testing {i} of {len(datasets)}: {srcName} {table_print} table")
+				print(f"{now} Testing {i+1} of {len(datasets)}: {srcName} {table_print} table")
 
 				agencies = src.get_agencies(datasets.iloc[i]["TableType"], year=datasets.iloc[i]["Year"])
 
@@ -240,4 +240,6 @@ if __name__ == "__main__":
 	# For testing
 	tp = TestData()
 	# (self, csvfile, source, last, skip, loghtml)
-	tp.test_source_download_limitable(r"..\opd-data\opd_source_table.csv", None, 1, None, None) 
+	tp.test_get_agencies_name_match(r"..\opd-data\opd_source_table.csv", None, None, None, None)
+	tp.test_agency_filter(r"..\opd-data\opd_source_table.csv", None, None, None, None)
+	tp.test_to_csv(r"..\opd-data\opd_source_table.csv", None, None, None, None)

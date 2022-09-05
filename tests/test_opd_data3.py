@@ -61,7 +61,7 @@ class TestData:
 
 				table_print = datasets.iloc[i]["TableType"]
 				now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
-				print(f"{now} Testing {i} of {len(datasets)}: {srcName} {table_print} table")
+				print(f"{now} Testing {i+1} of {len(datasets)}: {srcName} {table_print} table")
 
 				src = data.Source(srcName, state=state)
 
@@ -206,7 +206,7 @@ class TestData:
 				table_type = datasets.iloc[i]["TableType"]
 
 				now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
-				print(f"{now} Testing {i} of {len(datasets)}: {srcName}, {state} {table_type} table for {year}")
+				print(f"{now} Testing {i+1} of {len(datasets)}: {srcName}, {state} {table_type} table for {year}")
 				table = src.load_from_url(year, table_type, pbar=False)
 
 				sleep(sleep_time)
@@ -270,4 +270,4 @@ if __name__ == "__main__":
 	# For testing
 	tp = TestData()
 	# (self, csvfile, source, last, skip, loghtml)
-	tp.test_load_year(r"..\opd-data\opd_source_table.csv", "Gilbert",None, None, None)
+	tp.test_source_download_not_limitable(r"..\opd-data\opd_source_table.csv", None, None, None, None)
