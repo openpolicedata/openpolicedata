@@ -18,11 +18,11 @@ Additionally, [geopandas](https://geopandas.org/en/stable/getting_started/instal
 If you're interesting in helping out, see our [Contributing Guide](https://github.com/openpolicedata/openpolicedata/blob/main/CONTRIBUTING.MD)
 
 ## Documentation
-### datasets_query(source_name=None, state=None, agency=None, table_type=None)
+### query(source_name=None, state=None, agency=None, table_type=None)
 Query the available datasets to see what is available. Various filters can be applied. By default, all datasets are returned.
 ```
 > import openpolicedata as opd
-> datasets = opd.datasets_query(state="California")
+> datasets = opd.datasets.query(state="California")
 > datasets.head()
 ```
 | **State**  | **SourceName** | **Agency** | **TableType** | **Year** |

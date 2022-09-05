@@ -145,7 +145,7 @@ Push to your fork and [submit a pull request](https://github.com/openpolicedata/
 
 OpenPoliceData's source code is located in the `openpolicedata/` directory in the root of the repository. There are currently 3 main components to OpenPoliceData:
 
-* `_datasets.py`: Constructs the table of available datasets and provides query capabilities on those datasets.
+* `datasets.py`: Constructs the table of available datasets and provides query capabilities on those datasets.
 * `data.py`: Contains the classes for loading and saving datasets.
 * `data_loaders.py`: Contains functions for downloading data from URLs.
 
