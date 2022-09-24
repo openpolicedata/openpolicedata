@@ -85,8 +85,6 @@ class TestData:
 					# "Seattle starts with bad date data"
 					if len(dts)>0 or srcName not in ["Seattle","New Orleans"] or datasets.iloc[i]["TableType"]!=TableType.COMPLAINTS.value:
 						assert len(dts) > 0   # If not, either all dates are bad or number of rows requested needs increased
-						# Check that year is reasonable
-						assert dts.iloc[0].year >= 1909  # This is just an arbitrarily old year that is assumed to be before all available data
 						assert dts.iloc[0].year <= datetime.now().year
 				if not pd.isnull(datasets.iloc[i]["agency_field"]):
 					assert datasets.iloc[i]["agency_field"] in table.table
@@ -240,6 +238,10 @@ if __name__ == "__main__":
 	# For testing
 	tp = TestData()
 	# (self, csvfile, source, last, skip, loghtml)
+	csvfile = r"..\opd-data\opd_source_table.csv"
+	last = 4
+	# tp.test_source_download_limitable(csvfile, None, last, None, None)
+	tp.test_get_agencies(r"..\opd-data\opd_source_table.csv", None, None, None, None)
 	tp.test_get_agencies_name_match(r"..\opd-data\opd_source_table.csv", None, None, None, None)
 	tp.test_agency_filter(r"..\opd-data\opd_source_table.csv", None, None, None, None)
 	tp.test_to_csv(r"..\opd-data\opd_source_table.csv", None, None, None, None)

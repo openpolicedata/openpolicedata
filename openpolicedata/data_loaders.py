@@ -266,7 +266,6 @@ def load_arcgis(url, date_field=None, year=None, limit=None, pbar=True):
         if is_table:
             if "SHAPE" in df:
                 raise ValueError("Tables are not expected to include geographic data")
-            return df
         else:
             if _use_gpd_force is not None:
                 if not _has_gpd and _use_gpd_force:
@@ -292,7 +291,7 @@ def load_arcgis(url, date_field=None, year=None, limit=None, pbar=True):
                 except Exception as e:
                     raise e
 
-            return df
+        return df
     else:
         return None
 
@@ -495,7 +494,7 @@ def _process_date(date, date_field=None):
         # Assuming this as actually a string or numeric field for the year rather than a datestamp
         stop_date = str(date[1])
     else:
-            stop_date  = str(date[1]) + "-12-31T23:59:59.999"
+        stop_date  = str(date[1]) + "-12-31T23:59:59.999"
 
     return start_date, stop_date
 

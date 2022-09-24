@@ -14,26 +14,19 @@ import warnings
 warnings.filterwarnings(action='ignore', module='arcgis')
 
 class TestProduct:
-    def test_arcgis_year_input_empty(self, csvfile, source, last, skip, loghtml):
-        url = 'https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_CRIME_STOPS_P/FeatureServer/32'
-        date_field = 'TIME_PHONEPICKUP'
-        year = []
+    def test_process_date_input_empty(self, csvfile, source, last, skip, loghtml):
         with pytest.raises(ValueError):
-            df=data_loaders.load_arcgis(url, date_field=date_field, year=year)
+            data_loaders._process_date([])
         
-    def test_arcgis_year_input_too_many(self, csvfile, source, last, skip, loghtml):
-        url = 'https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_CRIME_STOPS_P/FeatureServer/32'
-        date_field = 'TIME_PHONEPICKUP'
+    def test_process_date_too_many(self, csvfile, source, last, skip, loghtml):
         year = [2021, 2022, 2023]
         with pytest.raises(ValueError):
-            df=data_loaders.load_arcgis(url, date_field=date_field, year=year) 
+            data_loaders._process_date(year)
 
-    def test_arcgis_year_input_wrong_order(self, csvfile, source, last, skip, loghtml):
-        url = 'https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_CRIME_STOPS_P/FeatureServer/32'
-        date_field = 'TIME_PHONEPICKUP'
+    def test_process_dates_year_input_wrong_order(self, csvfile, source, last, skip, loghtml):
         year = [2023, 2021]
         with pytest.raises(ValueError):
-            df=data_loaders.load_arcgis(url, date_field=date_field, year=year) 
+            data_loaders._process_date(year)
 
     def test_arcgis(self, csvfile, source, last, skip, loghtml):
         lim = data_loaders._default_limit

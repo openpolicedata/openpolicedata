@@ -15,7 +15,6 @@ from time import sleep
 import warnings
 import os
 
-sleep_time = 0.1
 log_filename = f"pytest_url_errors_{datetime.now().strftime('%Y%m%d_%H')}.txt"
 log_folder = os.path.join(".","data/test_logs")
 
@@ -28,25 +27,6 @@ def get_datasets(csvfile):
     return datasets.query()
 
 class TestData:
-	def test_source_url_name_unlimitable(self, csvfile, source, last, skip, loghtml):
-		if last == None:
-			last = float('inf')
-		datasets = get_datasets(csvfile)
-		for i in range(len(datasets)):			
-			if i < len(datasets) - last:
-				continue
-			
-			if source != None and datasets.iloc[i]["SourceName"] != source:
-				continue
-			if not can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]):
-				ext = "." + datasets.iloc[i]["DataType"].lower()
-				if ext == ".csv":
-					# -csv.zip in NYC data
-					assert ext in datasets.iloc[i]["URL"] or "-csv.zip" in datasets.iloc[i]["URL"]
-				else:
-					assert ext in datasets.iloc[i]["URL"]
-
-
 	def test_source_urls(self, csvfile, source, last, skip, loghtml):
 		if last == None:
 			last = float('inf')
@@ -55,6 +35,7 @@ class TestData:
 			skip = skip.split(",")
 			skip = [x.strip() for x in skip]
 
+		pause_time = 5
 		for i in range(len(datasets)):
 			if skip != None and datasets.iloc[i]["SourceName"] in skip:
 				continue
@@ -63,84 +44,71 @@ class TestData:
 			if source != None and datasets.iloc[i]["SourceName"] != source:
 				continue
 
+			srcName = datasets.iloc[i]["SourceName"]
+			table_print = datasets.iloc[i]["TableType"]
+			now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
 			url = datasets.iloc[i]["URL"]
-			try:
-				r = requests.head(url)
-			except requests.exceptions.MissingSchema:
-				if url[0:4] != "http":
-					https = "https://"
-					url = https + url
+			print(f"{now} Testing {i+1} of {len(datasets)}: {srcName} {table_print} table with url {url}")
+
+			for k in range(2):  # Attempting twice in case, sites reject due to too many requests in a row
+				url = datasets.iloc[i]["URL"]
+				try:
 					r = requests.head(url)
-				else:
-					raise
-			except:
-				raise
+				except requests.exceptions.MissingSchema:
+					if url[0:4] != "http":
+						https = "https://"
+						url = https + url
+						try:
+							r = requests.head(url)
+						except:
+							if k==0:
+								sleep(pause_time)
+								continue
+							else:
+								raise
+					else:
+						if k==0:
+							sleep(pause_time)
+							continue
+						else:
+							raise
+				except:
+					if k==0:
+						sleep(pause_time)
+						continue
+					else:
+						raise
 
-			# 200 is success
-			# 301 is moved permanently. This is most likely NYC. In this case, the main site has moved but the datasets have not
-			if r.status_code != 200 and r.status_code != 301:
-				r = requests.get(url)
+				# 200 is success
+				# 301 is moved permanently. This is most likely NYC. In this case, the main site has moved but the datasets have not
 				if r.status_code != 200 and r.status_code != 301:
-					raise ValueError(f"Status code for {url} is {r.status_code}")
+					r = requests.get(url)
+					if r.status_code != 200 and r.status_code != 301:
+						if k==0:
+							sleep(pause_time)
+							continue
+						else:
+							raise ValueError(f"Status code for {url} is {r.status_code}")
 
-			# Adding a pause here to prevent issues with requesting from site too frequently
-			sleep(sleep_time)
+				break
+
 
 	def test_check_version(self, csvfile, source, last, skip, loghtml):
-		datasets = get_datasets(csvfile)
-		ds = datasets[(datasets["Year"]==MULTI)]
-		if len(ds)>0:
-			ds = ds.iloc[0]
-			src = data.Source(ds["SourceName"], state=ds["State"])
-			for k, year in enumerate(src.datasets["Year"]):
-				if year == MULTI:
-					break
-			# Set min_version to create error
-			src.datasets.loc[k, "min_version"] = "-1"
-			with pytest.raises(OPD_FutureError):
-				src.get_years(src.datasets.loc[k, "TableType"])
+		ds = get_datasets(csvfile).iloc[0]
+		# Set min_version to create error
+		ds["min_version"] = "-1"
+		with pytest.raises(OPD_FutureError):
+			data._check_version(ds)
 
-			src.datasets.loc[k, "min_version"] = "100000.0"
-			with pytest.raises(OPD_MinVersionError):
-				src.get_years(src.datasets.loc[k, "TableType"])
+		ds["min_version"] = "100000.0"
+		with pytest.raises(OPD_MinVersionError):
+			data._check_version(ds)
 
-			# These should pass
-			src.datasets.loc[k, "min_version"] = "0.0"
-			data._check_version(src.datasets.loc[k])
-			src.datasets.loc[k, "min_version"] = pd.NA
-			data._check_version(src.datasets.loc[k])
-
-		ds = datasets[(datasets["Agency"]==MULTI)]
-		if len(ds)>0:
-			ds = ds.iloc[0]
-			src = data.Source(ds["SourceName"], state=ds["State"])
-			for k, year in enumerate(src.datasets["Year"]):
-				if year == MULTI:
-					break
-			# Set min_version to create error
-			src.datasets.loc[k, "min_version"] = "-1"
-			with pytest.raises(OPD_FutureError):
-				src.get_agencies(src.datasets.loc[k, "TableType"], year=src.datasets.loc[k, "Year"])
-
-			src.datasets.loc[k, "min_version"] = "1000000.0"
-			with pytest.raises(OPD_MinVersionError):
-				src.get_agencies(src.datasets.loc[k, "TableType"], year=src.datasets.loc[k, "Year"])
-
-		ds = datasets
-		if len(ds)>0:
-			ds = ds.iloc[0]
-			src = data.Source(ds["SourceName"], state=ds["State"])
-			for k, year in enumerate(src.datasets["Year"]):
-				if year == MULTI:
-					break
-			# Set min_version to create error
-			src.datasets.loc[k, "min_version"] = "-1"
-			with pytest.raises(OPD_FutureError):
-				src.load_from_url(year=src.datasets.loc[k, "Year"], table_type=src.datasets.loc[k, "TableType"])
-
-			src.datasets.loc[k, "min_version"] = "1000000.0"
-			with pytest.raises(OPD_MinVersionError):
-				src.load_from_url(year=src.datasets.loc[k, "Year"], table_type=src.datasets.loc[k, "TableType"])
+		# These should pass
+		ds["min_version"] = "0.0"
+		data._check_version(ds)
+		ds["min_version"] = pd.NA
+		data._check_version(ds)
 
 
 	def test_get_years(self, csvfile, source, last, skip, loghtml):
@@ -189,7 +157,7 @@ class TestData:
 					assert len(years) > 0
 
 				# Adding a pause here to prevent issues with requesting from site too frequently
-				sleep(sleep_time)
+				sleep(0.1)
 
 		if loghtml:
 			log_errors_to_file(caught_exceptions, caught_exceptions_warn)
@@ -256,4 +224,7 @@ if __name__ == "__main__":
 	# For testing
 	tp = TestData()
 	# (self, csvfile, source, last, skip, loghtml)
-	tp.test_get_years(r"..\opd-data\opd_source_table.csv", None, 80, None, None) 
+	csvfile = r"..\opd-data\opd_source_table.csv"
+	# csvfile = None
+	last = 489-410+1
+	tp.test_source_urls(csvfile, None, last, None, None) 
