@@ -226,5 +226,6 @@ if __name__ == "__main__":
 	# (self, csvfile, source, last, skip, loghtml)
 	csvfile = r"..\opd-data\opd_source_table.csv"
 	# csvfile = None
-	last = 489-410+1
-	tp.test_source_urls(csvfile, None, last, None, None) 
+	last = 490-352+1
+	# tp.test_source_urls(csvfile, None, last, None, None) 
+	tp.test_get_years(csvfile, None, last, None, None) 

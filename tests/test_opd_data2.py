@@ -239,9 +239,9 @@ if __name__ == "__main__":
 	tp = TestData()
 	# (self, csvfile, source, last, skip, loghtml)
 	csvfile = r"..\opd-data\opd_source_table.csv"
-	last = 4
-	# tp.test_source_download_limitable(csvfile, None, last, None, None)
-	tp.test_get_agencies(r"..\opd-data\opd_source_table.csv", None, None, None, None)
-	tp.test_get_agencies_name_match(r"..\opd-data\opd_source_table.csv", None, None, None, None)
-	tp.test_agency_filter(r"..\opd-data\opd_source_table.csv", None, None, None, None)
-	tp.test_to_csv(r"..\opd-data\opd_source_table.csv", None, None, None, None)
+	last = 489-288+1
+	tp.test_source_download_limitable(csvfile, None, last, None, None)
+	tp.test_get_agencies(csvfile, None, None, None, None)
+	tp.test_get_agencies_name_match(csvfile, None, None, None, None)
+	tp.test_agency_filter(csvfile, None, None, None, None)
+	tp.test_to_csv(csvfile, None, None, None, None)
