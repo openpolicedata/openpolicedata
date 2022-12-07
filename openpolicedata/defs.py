@@ -28,12 +28,12 @@ class TableType(str, Enum):
         return obj
 
     # Below tuples are (value, description)
-    ACCIDENTS = ("ACCIDENTS", "Traffic accidents")
     ARRESTS = ("ARRESTS", "Seizures or forcible restraints by police")
     CALLS_FOR_SERVICE = ("CALLS FOR SERVICE", "Includes dispatched calls (911 or non-emergency #) and officer-initiated calls")
     CITATIONS = ("CITATIONS","Commonly referred to as tickets, citations indicate a violation of the law and may be given for "+
         "violations such as traffic and civil violations")
     COMPLAINTS = ("COMPLAINTS","Complaints of police misconduct made internally or by the community")
+    CRASHES = ("CRASHES", "Traffic crashes")
     EMPLOYEE = ("EMPLOYEE","Demographic data of the police workforce")
     FIELD_CONTACTS = ("FIELD CONTACTS", "Consensual contacts between officers and the community.")
     PEDESTRIAN = ("PEDESTRIAN STOPS","Stops of pedestrians based on 'reasonable suspicion'. May lead to a frisk.")
