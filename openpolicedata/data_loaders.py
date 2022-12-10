@@ -104,49 +104,45 @@ def load_csv(url, date_field=None, year_filter=None, agency_field=None, agency=N
         agency_field=agency_field, agency=agency)
 
     return table
-def load_excel(url, date_field=None, year_filter=None, jurisdiction_field=None, jurisdiction_filter=None, limit=None):
-    '''Download CSV file to pandas DataFrame
+def load_excel(url, date_field=None, year_filter=None, agency_field=None, agency=None, limit=None, pbar=True):
+    '''Download XLS file to pandas DataFrame
     
     Parameters
     ----------
     url : str
-        Download URL for CSV
+        Download URL for Excel
     date_field : str
         (Optional) Name of the column that contains the date
     year_filter : int, list
         (Optional) Either the year or the year range [first_year, last_year] for the data that is being requested. None value returns data for all years.
-    jurisdiction_field : str
-        (Optional) Name of the column that contains the jurisidiction name (i.e. name of the police departments)
-    jurisdiction_filter : str
-        (Optional) Name of the jurisdiction to filter for. None value returns data for all jurisdictions.
+    agency_field : str
+        (Optional) Name of the column that contains the agency name (i.e. name of the police departments)
+    agency : str
+        (Optional) Name of the agency to filter for. None value returns data for all agencies.
     limit : int
         (Optional) Only returns the first limit rows of the CSV
+    pbar : bool
+        (Optional) If true (default), a progress bar will be displayed
         
     Returns
     -------
     pandas DataFrame
-        DataFrame containing table imported from CSV
+        DataFrame containing table imported from Excel spreadsheet
     '''
     
-    if limit==None or ".zip" in url:
-        with warnings.catch_warnings():
-            # Perhaps use requests iter_content/iter_lines as below to read large CSVs so progress can be shown
-            warnings.simplefilter("ignore", category=pd.errors.DtypeWarning)
-            table = pd.read_excel(url)
-    else:
-        table = pd.DataFrame()
-        with contextlib.closing(urllib.request.urlopen(url=url)) as rd:
-            for df in pd.read_excel(rd, chunksize=1024):
-                table = pd.concat([table, df], ignore_index=True)
-                if len(table) > limit:
-                    break
+    with warnings.catch_warnings():
+        # Perhaps use requests iter_content/iter_lines as below to read large CSVs so progress can be shown
+        warnings.simplefilter("ignore", category=pd.errors.DtypeWarning)
+        table = pd.read_excel(url)
 
     if limit!=None and len(table) > limit:
         table = table.head(limit)
+        
+    return table        
 
-
+def filter_dataframe(df, date_field=None, year_filter=None, agency_field=None, agency=None):
     table = filter_dataframe(table, date_field=date_field, year_filter=year_filter, 
-        jurisdiction_field=jurisdiction_field, jurisdiction_filter=jurisdiction_filter)
+                             agency_field=agency_field, agency=agency)
 
     return table
 
