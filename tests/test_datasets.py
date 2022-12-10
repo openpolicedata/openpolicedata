@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import re
+from packaging import version
 
 if __name__ == "__main__":
 	import sys
@@ -10,9 +11,9 @@ import openpolicedata as opd
 
 def get_datasets(csvfile):
     if csvfile != None:
-        opd._datasets.datasets = opd._datasets._build(csvfile)
+        opd.datasets.datasets = opd.datasets._build(csvfile)
 
-    return opd.datasets_query()
+    return opd.datasets.query()
 
 
 class TestDatasets:
@@ -41,7 +42,7 @@ class TestDatasets:
             assert key in datasets
 
     def test_table_for_nulls(self, csvfile, source, last, skip, loghtml):
-        can_have_nulls = ["Description", "date_field", "dataset_id", "agency_field", "Year"]
+        can_have_nulls = ["Description", "date_field", "dataset_id", "agency_field", "Year","readme","min_version"]
         datasets = get_datasets(csvfile)
         for col in datasets.columns:
             if not col in can_have_nulls:
@@ -101,7 +102,7 @@ class TestDatasets:
     def test_source_list_by_state(self, csvfile, source, last, skip, loghtml):
         datasets = get_datasets(csvfile)
         state = "Virginia"
-        df = opd.datasets_query(state=state)
+        df = opd.datasets.query(state=state)
         df_truth = datasets[datasets["State"]==state]
         assert len(df)>0
         assert df_truth.equals(df)
@@ -109,7 +110,7 @@ class TestDatasets:
     def test_source_list_by_source_name(self, csvfile, source, last, skip, loghtml):
         datasets = get_datasets(csvfile)
         source_name = "Fairfax County"
-        df = opd.datasets_query(source_name=source_name)
+        df = opd.datasets.query(source_name=source_name)
         df_truth = datasets[datasets["SourceName"]==source_name]
         assert len(df)>0
         assert df_truth.equals(df)
@@ -117,7 +118,7 @@ class TestDatasets:
     def test_source_list_by_agency(self, csvfile, source, last, skip, loghtml):
         datasets = get_datasets(csvfile)
         agency = "Fairfax County"
-        df = opd.datasets_query(agency=agency)
+        df = opd.datasets.query(agency=agency)
         df_truth = datasets[datasets["Agency"]==agency]
         assert len(df)>0
         assert df_truth.equals(df)
@@ -125,7 +126,7 @@ class TestDatasets:
     def test_source_list_by_table_type(self, csvfile, source, last, skip, loghtml):
         datasets = get_datasets(csvfile)
         table_type = opd.defs.TableType.TRAFFIC
-        df = opd.datasets_query(table_type=table_type)
+        df = opd.datasets.query(table_type=table_type)
         df_truth = datasets[datasets["TableType"]==table_type.value]
         assert len(df)>0
         assert df_truth.equals(df)
@@ -133,7 +134,7 @@ class TestDatasets:
     def test_source_list_by_table_type_value(self, csvfile, source, last, skip, loghtml):
         datasets = get_datasets(csvfile)
         table_type = opd.defs.TableType.TRAFFIC.value
-        df = opd.datasets_query(table_type=table_type)
+        df = opd.datasets.query(table_type=table_type)
         df_truth = datasets[datasets["TableType"]==table_type]
         assert len(df)>0
         assert df_truth.equals(df)
@@ -143,7 +144,7 @@ class TestDatasets:
         state = "Virginia"
         source_name = "Fairfax County"
         table_type = opd.defs.TableType.TRAFFIC_CITATIONS.value
-        df = opd.datasets_query(state=state, table_type=table_type, source_name=source_name)
+        df = opd.datasets.query(state=state, table_type=table_type, source_name=source_name)
         df_truth = datasets[datasets["TableType"]==table_type]
         df_truth = df_truth[df_truth["State"]==state]
         df_truth = df_truth[df_truth["SourceName"]==source_name]
@@ -161,7 +162,13 @@ class TestDatasets:
         for t in datasets["DataType"]:
             # Try to convert to an enum
             opd.defs.DataType(t)
+
+    def test_min_versions(self, csvfile, source, last, skip, loghtml):
+        datasets = get_datasets(csvfile)
+        for ver in datasets["min_version"][datasets["min_version"].notnull()]:
+            if not (ver == "-1" or type(version.parse(ver)) == version.Version):
+                raise ValueError(f"{ver} is an invalid value for min_version")
         
 
 if __name__ == "__main__":
-    TestDatasets().test_agency_names("C:\\Users\\matth\\repos\\sowd-opd-data\\opd_source_table.csv",None,None)
+    TestDatasets().test_table_for_nulls("C:\\Users\\matth\\repos\\opd-data\\opd_source_table.csv",None,None,None,None)

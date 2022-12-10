@@ -1,5 +1,20 @@
+[![PyPI version](https://badge.fury.io/py/openpolicedata.svg)](https://badge.fury.io/py/openpolicedata)
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/openpolicedata/opd-examples/HEAD)
+
 # OpenPoliceData
-OpenPoliceData is a Python package for police data analysis that provides easy access to incident-level data from police departments around the United States for traffic stops, pedestrian stops, use of force, and other types of police interactions.
+OpenPoliceData is a pandas-based Python package for police data analysis that provides easy access to incident-level data from police departments around the United States for traffic stops, pedestrian stops, use of force, and other types of police interactions.
+
+![alt text](https://github.com/openpolicedata/opd-data/blob/main/OPD_Datasets_Map.png?raw=true)
+
+**[Installation](#installation)**
+
+**[Examples](#examples)**
+
+**[Contributing](#contributing)**
+
+**[Querying Available Data](#querying-available-data)**
+
+**[Loading and Working with Datasets](#loading-and-working-with-datasets)**
 
 ## Installation
 The source code is available at https://github.com/openpolicedata/openpolicedata.
@@ -12,17 +27,23 @@ pip install openpolicedata
 Additionally, [geopandas](https://geopandas.org/en/stable/getting_started/install.html) can be installed to enable downloaded data tables to be returned as geopandas DataFrames instead of pandas DataFrames when there is geographic data. It is recommended to use [conda](https://docs.conda.io/en/latest/) to install geopandas.
 
 ## Examples
-[Jupyter notebooks](https://jupyter.org/) demonstrating example usage of OpenPoliceData can be found in the [notebooks](https://github.com/openpolicedata/openpolicedata/tree/main/notebooks) folder.
+[Jupyter notebooks](https://jupyter.org/) demonstrating example usage of OpenPoliceData can be found in the [opd-examples](https://github.com/openpolicedata/opd-examples) repo. 
+
+**[Try OpenPoliceData online on Binder](https://github.com/openpolicedata/opd-examples).**
 
 ## Contributing
 If you're interesting in helping out, see our [Contributing Guide](https://github.com/openpolicedata/openpolicedata/blob/main/CONTRIBUTING.MD)
 
-## Documentation
-### datasets_query(source_name=None, state=None, agency=None, table_type=None)
-Query the available datasets to see what is available. Various filters can be applied. By default, all datasets are returned.
+## Import
 ```
 > import openpolicedata as opd
-> datasets = opd.datasets_query(state="California")
+```
+
+## Querying Available Data
+### opd.datasets.query(source_name=None, state=None, agency=None, table_type=None)
+Query the available datasets to see what is available. Various filters can be applied. By default, all datasets are returned.
+```
+> datasets = opd.datasets.query(state="California")
 > datasets.head()
 ```
 | **State**  | **SourceName** | **Agency** | **TableType** | **Year** |
@@ -37,7 +58,20 @@ Query the available datasets to see what is available. Various filters can be ap
 
 datasets is a [pandas DataFrame](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.html). The first 5 datasets available from California include traffic stops data from multiples years from Anaheim and Bakersfield and data from every agency in California for all types of police stops for years 2018, 2019, and 2020.
 
-### Source(source_name, state=None)
+### opd.datasets.num_unique()
+Returns the number of unique datasets in OpenPoliceData. This counts the number of datasets from distinct sources AND table types (stops, use of force, etc.).
+
+### opd.datasets.num_sources(full_states_only=False)
+Returns the number of sources (police departments and states) that provide the data available in OpenPoliceData. Setting `full_states_only` to True returns only the number of states that share data for all agencies in the state.
+
+### opd.datasets.summary_by_state(by=None)
+Returns a pandas DataFrame with the number of datasets available for each state. The optional input `by` can be used to further breakdown by "year" or "table".
+
+### opd.datasets.summary_by_table_type(by_year=False)
+Returns a pandas DataFrame with the number of datasets available for each type of table (stops, use of force, etc.). Setting `by_year` to True also returns a breakdown of table types by year.
+
+## Loading and Working with Datasets
+### opd.Source(source_name, state=None)
 Create a data source. A data source allows the user to easily import or export police data. It provides access to all datasets available from a source. `source_name` should match a value of SourceName for an available dataset. An optional `state` parameter is used to resolve ambiguities when the same source name is used in multiple states (such as multiple states have State Police).
 ```
 > src = opd.Source(source_name="Virginia")
@@ -72,8 +106,8 @@ Show agencies (police departments) that have data available. This is typically a
 > print(agencies)
 ['Arlington County Police Department', "Arlington County Sheriff's Office"]
 ```
-### load_from_url(year, table_type=None, agency=None)
-Import data from the source. Data for a year (i.e. 2020) or a range of years (i.e. [2020, 2022]) can be requested. If more than one data type is available, `table_type` must be specified. Optionally, for datasets containing multiple agencies (police departments) data, `agency` can be used to request data for a single agency.
+### load_from_url(year, table_type=None, agency=None, pbar=True)
+Import data from the source. Data for a year (i.e. 2020) or a range of years (i.e. [2020, 2022]) can be requested. If more than one data type is available, `table_type` must be specified. Optionally, for datasets containing multiple agencies (police departments) data, `agency` can be used to request data for a single agency. `pbar` can be set to false to not show a progress bar while loading.
 ```
 > agency = "Arlington County Police Department"
 > tbl = src.load_from_url(year=2021, table_type="STOPS", agency=agency)
@@ -100,6 +134,8 @@ Import table from previously exported CSV. The directory to look in defaults to 
 ```
 > new_src = opd.Source(source_name="Virginia")
 new_t = new_src.load_from_csv(year=2021, agency=agency)
+
+
 > tbl.table.head(n=3)
 ```
 
@@ -110,3 +146,6 @@ new_t = new_src.load_from_csv(year=2021, agency=agency)
 | 2021-01-01 | Arlington County Police Department    | ARLINGTON CO      | TRAFFIC VIOLATION | BLACK OR AFRICAN AMERICAN    | NON-HISPANIC    |
 
 (only 1st 6 columns shown above)
+
+
+## See the [OpenPoliceData wiki](https://github.com/openpolicedata/openpolicedata/wiki) for further documentation

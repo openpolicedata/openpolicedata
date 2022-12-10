@@ -97,14 +97,14 @@ Install the necessary dependency packages that are available on conda.
 Remember that these must be executed within the base ``openpolicedata`` directory.
 
 ```sh
-conda install --file conda/requirements-conda.txt --file dev/requirements-test.txt
+conda install --file dev/requirements-conda.txt --file dev/requirements-test.txt
 ```
 
 Install the necessary dependency packages that are NOT available on conda.
 Remember that these must be executed within the base ``openpolicedata`` directory.
 
 ```sh
-pip install -r conda/requirements-pip.txt
+pip install -r dev/requirements-pip.txt
 ```
 
 Now you're all set!
@@ -145,7 +145,7 @@ Push to your fork and [submit a pull request](https://github.com/openpolicedata/
 
 OpenPoliceData's source code is located in the `openpolicedata/` directory in the root of the repository. There are currently 3 main components to OpenPoliceData:
 
-* `_datasets.py`: Constructs the table of available datasets and provides query capabilities on those datasets.
+* `datasets.py`: Constructs the table of available datasets and provides query capabilities on those datasets.
 * `data.py`: Contains the classes for loading and saving datasets.
 * `data_loaders.py`: Contains functions for downloading data from URLs.
 

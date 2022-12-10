@@ -14,26 +14,60 @@ import warnings
 warnings.filterwarnings(action='ignore', module='arcgis')
 
 class TestProduct:
-    def test_arcgis_year_input_empty(self, csvfile, source, last, skip, loghtml):
-        url = 'https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_CRIME_STOPS_P/FeatureServer/32'
-        date_field = 'TIME_PHONEPICKUP'
-        year = []
-        with pytest.raises(ValueError) as e_info:
-                df=data_loaders.load_arcgis(url, date_field=date_field, year=year)
+    def test_process_date_input_empty(self, csvfile, source, last, skip, loghtml):
+        with pytest.raises(ValueError):
+            data_loaders._process_date([])
         
-    def test_arcgis_year_input_too_many(self, csvfile, source, last, skip, loghtml):
-        url = 'https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_CRIME_STOPS_P/FeatureServer/32'
-        date_field = 'TIME_PHONEPICKUP'
+    def test_process_date_too_many(self, csvfile, source, last, skip, loghtml):
         year = [2021, 2022, 2023]
-        with pytest.raises(ValueError) as e_info:
-                df=data_loaders.load_arcgis(url, date_field=date_field, year=year) 
+        with pytest.raises(ValueError):
+            data_loaders._process_date(year)
 
-    def test_arcgis_year_input_wrong_order(self, csvfile, source, last, skip, loghtml):
-        url = 'https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_CRIME_STOPS_P/FeatureServer/32'
-        date_field = 'TIME_PHONEPICKUP'
+    def test_process_dates_year_input_wrong_order(self, csvfile, source, last, skip, loghtml):
         year = [2023, 2021]
-        with pytest.raises(ValueError) as e_info:
-                df=data_loaders.load_arcgis(url, date_field=date_field, year=year) 
+        with pytest.raises(ValueError):
+            data_loaders._process_date(year)
+
+    def test_arcgis(self, csvfile, source, last, skip, loghtml):
+        lim = data_loaders._default_limit
+        data_loaders._default_limit = 500
+        url = "https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPD/MapServer/16/"
+        df = data_loaders.load_arcgis(url)
+        
+        data_loaders._default_limit = lim
+
+        if url[-1] == "/":
+            url = url[0:-1]
+        last_slash = url.rindex("/")
+        layer_num = url[last_slash+1:]
+        base_url = url[:last_slash]
+        layer_collection = data_loaders.FeatureLayerCollection(base_url)
+
+        is_table = True
+        active_layer = None
+        for layer in layer_collection.layers:
+            layer_url = layer.url
+            if layer_url[-1] == "/":
+                layer_url = layer_url[:-1]
+            if layer_num == layer_url[last_slash+1:]:
+                active_layer = layer
+                is_table = False
+                break
+
+        if is_table:
+            for layer in layer_collection.tables:
+                layer_url = layer.url
+                if layer_url[-1] == "/":
+                    layer_url = layer_url[:-1]
+                if layer_num == layer_url[last_slash+1:]:
+                    active_layer = layer
+                    break
+
+        layer_query_result = active_layer.query(as_df=True)
+        assert set(df.columns) == set(layer_query_result.columns)
+        df = df[layer_query_result.columns]
+
+        assert layer_query_result.equals(df)
 
     def test_arcgis_geopandas(self, csvfile, source, last, skip, loghtml):
         if _has_gpd:
@@ -87,7 +121,34 @@ class TestProduct:
 
         assert type(df) == pd.DataFrame
 
+    def test_socrata(self, csvfile, source, last, skip, loghtml):
+        lim = data_loaders._default_limit
+        data_loaders._default_limit = 500
+        url = "data.austintexas.gov"
+        data_set = "sc8s-w4ka"
+        df = data_loaders.load_socrata(url, data_set)
+        
+        data_loaders._default_limit = lim
+
+        client = data_loaders.Socrata(url, data_loaders.default_sodapy_key, timeout=60)
+        results = client.get(data_set, order=":id", limit=100000)
+        rows = pd.DataFrame.from_records(results)
+
+        assert rows.equals(df)
+
+    def test_csv(self, csvfile, source, last, skip, loghtml):
+        url = "https://www.denvergov.org/media/gis/DataCatalog/denver_police_officer_involved_shootings/csv/denver_police_officer_involved_shootings.csv"
+        df = data_loaders.load_csv(url)
+        df_comp = pd.read_csv(url)
+        assert df_comp.equals(df)
+
+        nrows = 7
+        df = data_loaders.load_csv(url, limit=nrows)
+        df_comp = pd.read_csv(url, nrows=nrows)
+
+        assert df_comp.equals(df)
+
 
 if __name__ == "__main__":
     tp = TestProduct()
-    tp.test_arcgis_pandas(None,None,None)
+    tp.test_arcgis(None,None,None,None,None)

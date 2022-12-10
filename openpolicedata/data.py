@@ -1,17 +1,23 @@
+import numbers
 import os.path as path
 import pandas as pd
 from datetime import datetime
+from packaging import version
 
 if __name__ == '__main__':
     import data_loaders
-    import _datasets
+    import datasets
     # import preproc
     from defs import TableType, DataType, MULTI
+    from _version import __version__
+    import exceptions
 else:
     from . import data_loaders
-    from . import _datasets
+    from . import datasets
+    from . import __version__
     # from . import preproc
     from .defs import TableType, DataType, MULTI
+    from . import exceptions
 
 class Table:
     """
@@ -140,7 +146,7 @@ class Table:
         if not isinstance(self.table, pd.core.frame.DataFrame):
             raise ValueError("There is no table to save to CSV")
 
-        self.table.to_csv(filename, index=False)
+        self.table.to_csv(filename, index=False, errors="surrogateescape")
 
         return filename
 
@@ -198,7 +204,7 @@ class Source:
         -------
         Source object
         '''
-        self.datasets = _datasets.datasets_query(source_name=source_name, state=state)
+        self.datasets = datasets.query(source_name=source_name, state=state)
 
         # Ensure that all sources are from the same state
         if len(self.datasets) == 0:
@@ -228,7 +234,7 @@ class Source:
         Parameters
         ----------
         table_type - str or TableType enum
-            (Optional) If set, only returns years for requested table type
+            Only returns years for requested table type
 
         Returns
         -------
@@ -249,7 +255,7 @@ class Source:
                 years.add(all_years[k])
             else:
                 df = dfs.iloc[k]
-
+                _check_version(df)
                 data_type =DataType(df["DataType"])
                 url = df["URL"]
                 if not pd.isnull(df["date_field"]):
@@ -321,6 +327,7 @@ class Source:
         # If year is multi, need to use self._agencyField to query URL
         # Otherwise return self.agency
         if src["Agency"] == MULTI:
+            _check_version(src)
             data_type =DataType(src["DataType"])
             if data_type ==DataType.CSV:
                 raise NotImplementedError(f"Unable to get agencies for {data_type}")
@@ -328,7 +335,7 @@ class Source:
                 raise NotImplementedError(f"Unable to get agencies for {data_type}")
             elif data_type ==DataType.SOCRATA:
                 if partial_name is not None:
-                    opt_filter = "agency_name LIKE '%" + partial_name + "%'"
+                    opt_filter = src["agency_field"] + " LIKE '%" + partial_name + "%'"
                 else:
                     opt_filter = None
 
@@ -344,7 +351,7 @@ class Source:
             return [src["Agency"]]
         
 
-    def load_from_url(self, year, table_type=None, agency=None):
+    def load_from_url(self, year, table_type=None, agency=None, pbar=True):
         '''Load data from URL
 
         Parameters
@@ -359,6 +366,8 @@ class Source:
         agency - str
             (Optional) If set, for datasets containing multiple agencies, data will
             only be returned for this agency
+        pbar - bool
+            (Optional) Whether to show progress bar when loading data. Default True
 
         Returns
         -------
@@ -366,9 +375,9 @@ class Source:
             Table object containing the requested data
         '''
 
-        return self.__load(year, table_type, agency, True)
+        return self.__load(year, table_type, agency, True, pbar)
 
-    def __load(self, year, table_type, agency, load_table):
+    def __load(self, year, table_type, agency, load_table, pbar=True):
         if isinstance(table_type, TableType):
             table_type = table_type.value
 
@@ -430,11 +439,12 @@ class Source:
         
         #It is assumed that each data loader method will return data with the proper data type so date type etc...
         if load_table:
+            _check_version(src)
             if data_type ==DataType.CSV:
                 table = data_loaders.load_csv(url, date_field=date_field, year_filter=year_filter, 
-                    agency_field=agency_field, agency=agency, limit=self.__limit)
+                    agency_field=agency_field, agency=agency, limit=self.__limit, pbar=pbar)
             elif data_type ==DataType.ArcGIS:
-                table = data_loaders.load_arcgis(url, date_field, year_filter, limit=self.__limit)
+                table = data_loaders.load_arcgis(url, date_field, year_filter, limit=self.__limit, pbar=pbar)
             elif data_type ==DataType.SOCRATA:
                 opt_filter = None
                 if agency != None and agency_field != None:
@@ -443,7 +453,7 @@ class Source:
                     opt_filter = agency_field + " = '" + agency + "'"
 
                 table = data_loaders.load_socrata(url, dataset_id, date_field=date_field, year=year_filter, opt_filter=opt_filter, 
-                    limit=self.__limit)
+                    limit=self.__limit, pbar=pbar)
             else:
                 raise ValueError(f"Unknown data type: {data_type}")
 
@@ -529,12 +539,7 @@ def _check_date(table, date_field):
             one_date = dts.iloc[0]            
             if type(one_date) == str:
                 table = table.astype({date_field: 'datetime64[ns]'})
-            elif date_field.lower() == "year":
-                try:
-                    float(one_date)
-                except:
-                    raise
-                
+            elif (date_field.lower() == "year" or date_field.lower() == "yr") and isinstance(one_date, numbers.Number):
                 table[date_field] = table[date_field].apply(lambda x: datetime(x,1,1))
                 
             # Replace bad dates with NaT
@@ -585,6 +590,24 @@ def get_csv_filename(state, source_name, agency, table_type, year):
     filename += ".csv"
 
     return filename
+
+def _check_version(df):
+    min_version = df["min_version"] 
+    if pd.notnull(min_version):
+        src_name = df["SourceName"]
+        state = df["State"]
+        table_type = df["TableType"]
+        year = df["Year"]
+        if min_version == "-1":
+            raise exceptions.OPD_FutureError(
+                f"Year {year} {table_type} data for {src_name} in {state} cannot be loaded in this version. " + \
+                    "It will be made available in a future release"
+            )
+        elif version.parse(__version__) < version.parse(min_version):
+            raise exceptions.OPD_MinVersionError(
+                f"Year {year} {table_type} data for {src_name} in {state} cannot be loaded in version {__version__} of openpolicedata. " + \
+                    f"Update OpenPoliceData to at least version {min_version} to access this data."
+            )
 
 if __name__ == '__main__':
     istart = 182
