@@ -122,21 +122,35 @@ def load_excel(url, date_field=None, year_filter=None, agency_field=None, agency
     limit : int
         (Optional) Only returns the first limit rows of the CSV
     pbar : bool
-        (Optional) If true (default), a progress bar will be displayed
+        (Optional) This progress bar argument is currently ignored. 
         
     Returns
     -------
     pandas DataFrame
         DataFrame containing table imported from Excel spreadsheet
     '''
-    
-    with warnings.catch_warnings():
-        # Perhaps use requests iter_content/iter_lines as below to read large CSVs so progress can be shown
-        warnings.simplefilter("ignore", category=pd.errors.DtypeWarning)
-        table = pd.read_excel(url)
+    if ".zip" in url:
+        with warnings.catch_warnings():
+            # Perhaps use requests iter_content/iter_lines as below to read large CSVs so progress can be shown
+            warnings.simplefilter("ignore", category=pd.errors.DtypeWarning)
+            try:
+                table = pd.read_excel(url, engine='openpyxl')
+            except urllib.error.HTTPError as e:
+                raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(url))
+            except Exception as e:
+                raise e
+    else:
+        with warnings.catch_warnings():
+            # Perhaps use requests iter_content/iter_lines as below to read large CSVs so progress can be shown
+            # Progress bar is not used because TqdmReader object has no attribute 'seek' and would need to be modified to not have a newline operator
+            warnings.simplefilter("ignore", category=pd.errors.DtypeWarning)
+            table = pd.read_excel(url, nrows=limit, engine='openpyxl')                
 
     if limit!=None and len(table) > limit:
         table = table.head(limit)
+    
+    table = filter_dataframe(table, date_field=date_field, year_filter=year_filter, 
+        agency_field=agency_field, agency=agency)
         
     return table        
 
