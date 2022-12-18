@@ -105,8 +105,8 @@ def load_csv(url, date_field=None, year_filter=None, agency_field=None, agency=N
 
     return table
 def load_excel(url, date_field=None, year_filter=None, agency_field=None, agency=None, limit=None, pbar=True):
-    '''Download XLS file to pandas DataFrame
-    
+    '''Download an Excel file (xlsx/xlsm/xltx/xltm) to pandas DataFrame.
+           
     Parameters
     ----------
     url : str
@@ -120,7 +120,7 @@ def load_excel(url, date_field=None, year_filter=None, agency_field=None, agency
     agency : str
         (Optional) Name of the agency to filter for. None value returns data for all agencies.
     limit : int
-        (Optional) Only returns the first limit rows of the CSV
+        (Optional) Only returns the first limit rows of the Excel file
     pbar : bool
         (Optional) This progress bar argument is currently ignored. 
         
@@ -128,23 +128,13 @@ def load_excel(url, date_field=None, year_filter=None, agency_field=None, agency
     -------
     pandas DataFrame
         DataFrame containing table imported from Excel spreadsheet
+        
+    Note: Older Excel files (.xls) and OpenDocument file formats (.odf, .ods, .odt) are not supported. Please submit an issue if this is needed.
     '''
-    if ".zip" in url:
-        with warnings.catch_warnings():
-            # Perhaps use requests iter_content/iter_lines as below to read large CSVs so progress can be shown
-            warnings.simplefilter("ignore", category=pd.errors.DtypeWarning)
-            try:
-                table = pd.read_excel(url, engine='openpyxl')
-            except urllib.error.HTTPError as e:
-                raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(url))
-            except Exception as e:
-                raise e
-    else:
-        with warnings.catch_warnings():
-            # Perhaps use requests iter_content/iter_lines as below to read large CSVs so progress can be shown
-            # Progress bar is not used because TqdmReader object has no attribute 'seek' and would need to be modified to not have a newline operator
-            warnings.simplefilter("ignore", category=pd.errors.DtypeWarning)
-            table = pd.read_excel(url, nrows=limit, engine='openpyxl')                
+    with warnings.catch_warnings():        
+        # Progress bar is not used because TqdmReader object has no attribute 'seek' and would need to be modified to not have a newline operator
+        warnings.simplefilter("ignore", category=pd.errors.DtypeWarning)
+        table = pd.read_excel(url, nrows=limit, engine='openpyxl')                
 
     if limit!=None and len(table) > limit:
         table = table.head(limit)
@@ -153,13 +143,6 @@ def load_excel(url, date_field=None, year_filter=None, agency_field=None, agency
         agency_field=agency_field, agency=agency)
         
     return table        
-
-def filter_dataframe(df, date_field=None, year_filter=None, agency_field=None, agency=None):
-    table = filter_dataframe(table, date_field=date_field, year_filter=year_filter, 
-                             agency_field=agency_field, agency=agency)
-
-    return table
-
 
 def load_arcgis(url, date_field=None, year=None, limit=None, pbar=True):
     '''Download table from ArcGIS to pandas or geopandas DataFrame
