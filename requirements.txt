@@ -5,6 +5,7 @@ pandas
 numpy
 requests
 pyproj
+openpyxl
 # Must be installed with pip
 sodapy
 arcgis

@@ -148,6 +148,17 @@ class TestProduct:
 
         assert df_comp.equals(df)
 
+    def test_excel(self, csvfile, source, last, skip, loghtml):
+        url = "https://data-openjustice.doj.ca.gov/sites/default/files/dataset/2022-08/DeathInCustody_2005-2021.xlsx"
+        df = data_loaders.load_excel(url)
+        df_comp = pd.read_excel(url)
+        assert df_comp.equals(df)
+
+        nrows = 7
+        df = data_loaders.load_excel(url, limit=nrows)        
+        df_comp = pd.read_excel(url, nrows=nrows)
+        assert df_comp.equals(df)
+
 
 if __name__ == "__main__":
     tp = TestProduct()
