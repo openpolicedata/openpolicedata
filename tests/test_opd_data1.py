@@ -4,8 +4,7 @@ import requests
 if __name__ == "__main__":
 	import sys
 	sys.path.append('../openpolicedata')
-from openpolicedata import data
-from openpolicedata import datasets
+from openpolicedata import data, datasets, data_loaders
 from openpolicedata.defs import MULTI
 from openpolicedata.exceptions import OPD_DataUnavailableError, OPD_TooManyRequestsError,  \
 	OPD_MultipleErrors, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError, OPD_FutureError, OPD_MinVersionError
@@ -109,6 +108,42 @@ class TestData:
 		data._check_version(ds)
 		ds["min_version"] = pd.NA
 		data._check_version(ds)
+
+
+	def test_get_count(self, csvfile, source, last, skip, loghtml):
+
+		print("Testing Socrata source")
+		src = data.Source("Virginia")
+		loader = data_loaders.Socrata(src.datasets.iloc[0]["URL"], src.datasets.iloc[0]["dataset_id"], date_field=src.datasets.iloc[0]["date_field"])  
+		year = 2021
+		assert loader.get_count(year=year) == src.get_count(year)
+		count = src.get_count([2020,2022])
+		year = [2020,2022]
+		assert loader.get_count(year=year) == src.get_count(year)
+
+		agency = "Arlington County Police Department"
+		opt_filter = src.datasets.iloc[0]["agency_field"] + " LIKE '%" + agency + "%'"
+		year = 2021
+		assert src.get_count(year, agency=agency) == loader.get_count(year=year, opt_filter=opt_filter)
+
+		print("Testing ArcGIS source")
+		src = data.Source("Charlotte-Mecklenburg")
+		count = src.get_count(table_type="EMPLOYEE")
+
+		url = "https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPD/MapServer/16/"
+		gis = data_loaders.Arcgis(url)
+		assert count == gis.get_count()
+
+		print("Testing CSV source")
+		src = data.Source("San Diego")
+
+		url = "https://seshat.datasd.org/crb/crb_cases_fy2020_datasd.csv"
+		loader = data_loaders.Csv(url, date_field="INCIDENT_DATE")
+
+		year = 2020
+		count = src.get_count(year, table_type="COMPLAINTS", force=True)
+			
+		assert loader.get_count() == count
 
 
 	def test_get_years(self, csvfile, source, last, skip, loghtml):
@@ -226,6 +261,9 @@ if __name__ == "__main__":
 	# (self, csvfile, source, last, skip, loghtml)
 	csvfile = r"..\opd-data\opd_source_table.csv"
 	# csvfile = None
-	last = 490-352+1
+	last = None
+	# last = 493-363+1
 	# tp.test_source_urls(csvfile, None, last, None, None) 
+	# tp.test_check_version(csvfile, None, last, None, None) 
+	tp.test_get_count(csvfile, None, last, None, None)
 	tp.test_get_years(csvfile, None, last, None, None) 

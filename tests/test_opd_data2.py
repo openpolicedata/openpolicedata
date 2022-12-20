@@ -238,8 +238,9 @@ if __name__ == "__main__":
 	# For testing
 	tp = TestData()
 	# (self, csvfile, source, last, skip, loghtml)
+	last = None
 	csvfile = r"..\opd-data\opd_source_table.csv"
-	last = 489-288+1
+	# last = 492-405+1
 	tp.test_source_download_limitable(csvfile, None, last, None, None)
 	tp.test_get_agencies(csvfile, None, None, None, None)
 	tp.test_get_agencies_name_match(csvfile, None, None, None, None)

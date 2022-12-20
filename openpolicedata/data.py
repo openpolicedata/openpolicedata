@@ -8,7 +8,7 @@ if __name__ == '__main__':
     import data_loaders
     import datasets
     # import preproc
-    from defs import TableType, DataType, MULTI
+    from defs import TableType, DataType, MULTI, NA
     from _version import __version__
     import exceptions
 else:
@@ -16,7 +16,7 @@ else:
     from . import datasets
     from . import __version__
     # from . import preproc
-    from .defs import TableType, DataType, MULTI
+    from .defs import TableType, DataType, MULTI, NA
     from . import exceptions
 
 class Table:
@@ -177,7 +177,7 @@ class Source:
     -------
     get_tables_types()
         Get types of data availble from the source
-    get_years()
+    get_years(table_type, force)
         Get years available for 1 or more datasets
     get_agencies()
         Get agencies available for 1 or more datasets
@@ -208,7 +208,7 @@ class Source:
 
         # Ensure that all sources are from the same state
         if len(self.datasets) == 0:
-            raise ValueError("No Sources Found")
+            raise ValueError(f"No Sources Found for {source_name}")
         elif self.datasets["State"].nunique() > 1:
             raise ValueError("Not all sources are from the same state")
 
@@ -228,25 +228,22 @@ class Source:
         return list(self.datasets["TableType"].unique())
 
 
-    def get_years(self, table_type):
+    def get_years(self, table_type, force=False):
         '''Get years available for 1 or more datasets
 
         Parameters
         ----------
         table_type - str or TableType enum
             Only returns years for requested table type
+        force - bool
+            (Optional) Some data types such as CSV files require reading the whole file to filter for years. By default, an error will be thrown that indicates running load_from_url may be more efficient. For these cases, set force=True to run get_years without error.
 
         Returns
         -------
         list
             List of years available for 1 or more datasets
         '''
-        if isinstance(table_type, TableType):
-            table_type = table_type.value
-
-        dfs = self.datasets
-        if table_type != None:
-            dfs = self.datasets[self.datasets["TableType"]==table_type]
+        dfs = self.__find_datasets(table_type)
 
         all_years = list(dfs["Year"])
         years = set()
@@ -263,22 +260,8 @@ class Source:
                 else:
                     raise ValueError("No date_field is provided to identify the years")
                 
-                if data_type ==DataType.CSV:
-                    raise NotImplementedError("This needs to be tested before use")
-                    if force_read:                    
-                        table = pd.read_csv(url, parse_dates=True)
-                        new_years = table[date_field].dt.year
-                        new_years = new_years.unique()
-                    else:
-                        raise ValueError("Getting the year of a CSV files requires reading in the whole file. " +
-                                        "Loading in the table may be a better option. If getYears is still desired " +
-                                        " for this case, use forceRead=True")    
-                elif data_type ==DataType.ArcGIS:
-                        new_years = data_loaders.get_years_argis(url, date_field)
-                elif data_type ==DataType.SOCRATA:
-                        new_years = data_loaders.get_years_socrata(url, df["dataset_id"], date_field)
-                else:
-                    raise ValueError(f"Unknown data type: {data_type}")
+                loader = get_loader(data_type, url, dataset_id=df["dataset_id"], date_field=date_field)
+                new_years = loader.get_years(force=force)
 
                 years.update(new_years)
             
@@ -309,12 +292,7 @@ class Source:
             List of agencies available for 1 or more datasets
         '''
 
-        if isinstance(table_type, TableType):
-            table_type = table_type.value
-
-        src = self.datasets
-        if table_type != None:
-            src = self.datasets[self.datasets["TableType"]==table_type]
+        src = self.__find_datasets(table_type)
 
         if year != None:
             src = src[src["Year"] == year]
@@ -329,6 +307,7 @@ class Source:
         if src["Agency"] == MULTI:
             _check_version(src)
             data_type =DataType(src["DataType"])
+            loader = get_loader(data_type, src["URL"], dataset_id=src["dataset_id"], date_field=src["date_field"], agency_field=src["agency_field"])
             if data_type ==DataType.CSV:
                 raise NotImplementedError(f"Unable to get agencies for {data_type}")
             elif data_type ==DataType.ArcGIS:
@@ -342,13 +321,42 @@ class Source:
                 select = "DISTINCT " + src["agency_field"]
                 if year == MULTI:
                     year = None
-                agencySet = data_loaders.load_socrata(src["URL"], src["dataset_id"], 
-                    date_field=src["date_field"], year=year, opt_filter=opt_filter, select=select, output_type="set")
-                return list(agencySet)
+
+                agency_set = loader.load(year, opt_filter=opt_filter, select=select, output_type="set")
+                return list(agency_set)
             else:
                 raise ValueError(f"Unknown data type: {data_type}")
         else:
             return [src["Agency"]]
+
+
+    def get_count(self, year=None, table_type=None, agency=None, force=False):
+        '''Get number of records for a data request
+
+        Parameters
+        ----------
+        year - int or length 2 list or the string "MULTI" or "N/A"
+            Used to identify the requested dataset if equal to its year value
+            Otherwise, for datasets containing multiple years, this filters 
+            the return data for a specific year (int input) or a range of years
+            [X,Y] to return data for years X to Y
+        table_type - str or TableType enum
+            (Optional) If set, requested dataset will be of this type
+        agency - str
+            (Optional) If set, for datasets containing multiple agencies, data will
+            only be returned for this agency
+        force - bool
+            (Optional) For file-based data, an exception will be thrown unless force 
+            is true. It may be more efficient to load the data and extract the years
+            manually
+
+        Returns
+        -------
+        Table
+            Table object containing the requested data
+        '''
+
+        return self.__load(year, table_type, agency, True, pbar=False, return_count=True, force=force)
         
 
     def load_from_url(self, year, table_type=None, agency=None, pbar=True):
@@ -377,13 +385,20 @@ class Source:
 
         return self.__load(year, table_type, agency, True, pbar)
 
-    def __load(self, year, table_type, agency, load_table, pbar=True):
+    def __find_datasets(self, table_type):
         if isinstance(table_type, TableType):
             table_type = table_type.value
 
-        src = self.datasets
+        src = self.datasets.copy()
         if table_type != None:
             src = src[self.datasets["TableType"] == table_type]
+
+        return src
+
+
+    def __load(self, year, table_type, agency, load_table, pbar=True, return_count=False, force=False):
+        
+        src = self.__find_datasets(table_type)
 
         if isinstance(year, list):
             matchingYears = src["Year"] == year[0]
@@ -399,7 +414,11 @@ class Source:
         else:
             # If there are not any years corresponding to this year, check for a table
             # containing multiple years
-            src = src.query("Year == '" + MULTI + "'")
+            matchingYears = src["Year"]==MULTI
+            if matchingYears.any():
+                src = src[matchingYears]
+            else:
+                src = src[src["Year"] == NA]
 
         if isinstance(src, pd.core.frame.DataFrame):
             if len(src) == 0:
@@ -420,6 +439,8 @@ class Source:
 
         if not pd.isnull(src["dataset_id"]):
             dataset_id = src["dataset_id"]
+        else:
+            dataset_id = None
 
         table_year = None
         if not pd.isnull(src["date_field"]):
@@ -440,24 +461,19 @@ class Source:
         #It is assumed that each data loader method will return data with the proper data type so date type etc...
         if load_table:
             _check_version(src)
-            if data_type ==DataType.CSV:
-                table = data_loaders.load_csv(url, date_field=date_field, year_filter=year_filter, 
-                    agency_field=agency_field, agency=agency, limit=self.__limit, pbar=pbar)
-            elif data_type ==DataType.ArcGIS:
-                table = data_loaders.load_arcgis(url, date_field, year_filter, limit=self.__limit, pbar=pbar)
-            elif data_type ==DataType.SOCRATA:
-                opt_filter = None
-                if agency != None and agency_field != None:
-                    # Double up any apostrophes for SQL query
-                    agency = agency.replace("'","''")
-                    opt_filter = agency_field + " = '" + agency + "'"
+            loader = get_loader(data_type, url, dataset_id=dataset_id, date_field=date_field, agency_field=agency_field)
 
-                table = data_loaders.load_socrata(url, dataset_id, date_field=date_field, year=year_filter, opt_filter=opt_filter, 
-                    limit=self.__limit, pbar=pbar)
+            opt_filter = None
+            if agency != None and agency_field != None:
+                # Double up any apostrophes for SQL query
+                agency = agency.replace("'","''")
+                opt_filter = agency_field + " = '" + agency + "'"
+            
+            if return_count:
+                return loader.get_count(year=year_filter, agency=agency, opt_filter=opt_filter, force=force)
             else:
-                raise ValueError(f"Unknown data type: {data_type}")
-
-            table = _check_date(table, date_field)                        
+                table = loader.load(year=year_filter, agency=agency, opt_filter=opt_filter, limit=self.__limit, pbar=pbar)
+                table = _check_date(table, date_field)                        
         else:
             table = None
 
@@ -608,6 +624,18 @@ def _check_version(df):
                 f"Year {year} {table_type} data for {src_name} in {state} cannot be loaded in version {__version__} of openpolicedata. " + \
                     f"Update OpenPoliceData to at least version {min_version} to access this data."
             )
+
+def get_loader(data_type, url, dataset_id=None, date_field=None, agency_field=None):
+    if data_type ==DataType.CSV:
+        loader = data_loaders.Csv(url, date_field=date_field, agency_field=agency_field)  
+    elif data_type ==DataType.ArcGIS:
+        loader = data_loaders.Arcgis(url, date_field=date_field)
+    elif data_type ==DataType.SOCRATA:
+        loader = data_loaders.Socrata(url, dataset_id, date_field=date_field)
+    else:
+        raise ValueError(f"Unknown data type: {data_type}")
+
+    return loader
 
 if __name__ == '__main__':
     istart = 182
