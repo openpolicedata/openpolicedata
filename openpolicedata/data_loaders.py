@@ -264,6 +264,47 @@ class Csv(Data_Loader):
             return super().get_years(limit=None)
 
 
+def load_excel(url, date_field=None, year_filter=None, agency_field=None, agency=None, limit=None, pbar=True):
+    '''Download an Excel file (xlsx/xlsm/xltx/xltm) to pandas DataFrame.
+           
+    Parameters
+    ----------
+    url : str
+        Download URL for Excel
+    date_field : str
+        (Optional) Name of the column that contains the date
+    year_filter : int, list
+        (Optional) Either the year or the year range [first_year, last_year] for the data that is being requested. None value returns data for all years.
+    agency_field : str
+        (Optional) Name of the column that contains the agency name (i.e. name of the police departments)
+    agency : str
+        (Optional) Name of the agency to filter for. None value returns data for all agencies.
+    limit : int
+        (Optional) Only returns the first limit rows of the Excel file
+    pbar : bool
+        (Optional) This progress bar argument is currently ignored. 
+        
+    Returns
+    -------
+    pandas DataFrame
+        DataFrame containing table imported from Excel spreadsheet
+        
+    Note: Older Excel files (.xls) and OpenDocument file formats (.odf, .ods, .odt) are not supported. Please submit an issue if this is needed.
+    '''
+    with warnings.catch_warnings():        
+        # Progress bar is not used because TqdmReader object has no attribute 'seek' and would need to be modified to not have a newline operator
+        warnings.simplefilter("ignore", category=pd.errors.DtypeWarning)
+        table = pd.read_excel(url, nrows=limit, engine='openpyxl')                
+
+    if limit!=None and len(table) > limit:
+        table = table.head(limit)
+
+    table = filter_dataframe(table, date_field=date_field, year_filter=year_filter, 
+        agency_field=agency_field, agency=agency)
+
+    return table
+
+
 class Arcgis(Data_Loader):
     """
     A class for accessing data from Socrata clients
