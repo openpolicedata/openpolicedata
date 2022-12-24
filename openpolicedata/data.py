@@ -627,7 +627,9 @@ def _check_version(df):
 
 def get_loader(data_type, url, dataset_id=None, date_field=None, agency_field=None):
     if data_type ==DataType.CSV:
-        loader = data_loaders.Csv(url, date_field=date_field, agency_field=agency_field)  
+        loader = data_loaders.Csv(url, date_field=date_field, agency_field=agency_field)
+    elif data_type ==DataType.EXCEL:
+        loader = data_loaders.Excel(url, date_field=date_field, agency_field=agency_field) 
     elif data_type ==DataType.ArcGIS:
         loader = data_loaders.Arcgis(url, date_field=date_field)
     elif data_type ==DataType.SOCRATA:

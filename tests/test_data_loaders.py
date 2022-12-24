@@ -148,9 +148,11 @@ class TestProduct:
 
     def test_csv(self, csvfile, source, last, skip, loghtml):
         url = "https://www.denvergov.org/media/gis/DataCatalog/denver_police_officer_involved_shootings/csv/denver_police_officer_involved_shootings.csv"
-        loader = data_loaders.Csv(url)
+        date_field = "INCIDENT_DATE"
+        loader = data_loaders.Csv(url, date_field=date_field)
         df = loader.load()
         df_comp = pd.read_csv(url)
+        df_comp = df_comp.astype({date_field: 'datetime64[ns]'})
 
         count = loader.get_count()
         assert len(df_comp) == count
@@ -158,17 +160,12 @@ class TestProduct:
         assert df_comp.equals(df)
 
         with pytest.raises(ValueError):
-            years = loader.get_years(force=True)
-
-        date_field = "INCIDENT_DATE"
-        loader = data_loaders.Csv(url, date_field=date_field)
-        with pytest.raises(ValueError):
             loader.get_years()
 
         years = loader.get_years(force=True)
 
         df = df.astype({date_field: 'datetime64[ns]'})
-        assert list(df[date_field].dt.year.sort_values(ascending=False).unique()) == years
+        assert list(df[date_field].dt.year.sort_values(ascending=True).dropna().unique()) == years
 
         nrows = 7
         df = data_loaders.Csv(url).load(limit=nrows)
@@ -177,14 +174,99 @@ class TestProduct:
         assert df_comp.equals(df)
 
     def test_excel(self, csvfile, source, last, skip, loghtml):
-        url = "https://data-openjustice.doj.ca.gov/sites/default/files/dataset/2022-08/DeathInCustody_2005-2021.xlsx"
-        df = data_loaders.load_excel(url)
+        url = "https://www.norristown.org/DocumentCenter/View/1789/2017-2018-Use-of-Force"
+        date_field = "Date"
+        loader = data_loaders.Excel(url, date_field=date_field)
+        df = loader.load()
         df_comp = pd.read_excel(url)
+        df_comp = df_comp.convert_dtypes()
+
+        with pytest.raises(ValueError):
+            count = loader.get_count()
+        count = loader.get_count(force=True)
+        assert len(df_comp) == count
+
         assert df_comp.equals(df)
 
+        with pytest.raises(ValueError):
+            loader.get_years()
+
+        years = loader.get_years(force=True)
+
+        df = df.astype({date_field: 'datetime64[ns]'})
+        assert list(df[date_field].dt.year.sort_values(ascending=True).dropna().unique()) == years
+
         nrows = 7
-        df = data_loaders.load_excel(url, limit=nrows)        
+        df = loader.load(limit=nrows)        
         df_comp = pd.read_excel(url, nrows=nrows)
+        df_comp = df_comp.convert_dtypes()
+        assert df_comp.equals(df)
+
+
+    def test_excel_year_sheets(self, csvfile, source, last, skip, loghtml):
+        url = "https://northamptonpd.com/images/ODP%20Spreadsheets/2014-2020_MV_Pursuits_incident_level_data.xlsx"
+        loader = data_loaders.Excel(url, date_field="Date")
+
+        years = loader.get_years()
+        assert years == [x for x in range(2014,2021)]
+
+        df_comp = pd.read_excel(url, sheet_name="2014")
+        df_comp.columns= [x for x in df_comp.iloc[0]]
+        df_comp.drop(index=df_comp.index[0], inplace=True)
+        df_comp.reset_index(drop=True, inplace=True)
+        df_comp = df_comp.convert_dtypes()
+        df_comp = df_comp.iloc[:, 1:]
+
+        # Load all years
+        df_2014 = loader.load(year=2014)
+
+        assert df_comp.equals(df_2014)
+
+        df_comp = pd.read_excel(url, sheet_name="2015")
+        df_comp.columns= [x for x in df_comp.iloc[0]]
+        df_comp.drop(index=df_comp.index[0], inplace=True)
+        df_comp.reset_index(drop=True, inplace=True)
+        df_comp = df_comp.convert_dtypes()
+        df_comp = df_comp.iloc[:, 1:]
+
+        # Load all years
+        df_2015 = loader.load(year=2015)
+
+        assert df_comp.equals(df_2015)
+
+        # Note: There is no 2013 data
+        df_multi = loader.load(year=[2013,2015])
+
+        assert df_multi.equals(pd.concat([df_2014, df_2015], ignore_index=True))
+
+        df = loader.load()
+        df_last = loader.load(year=years[-1])
+
+        assert df.head(len(df_multi)).equals(df_multi)
+        assert df.tail(len(df_last)).reset_index(drop=True).equals(df_last.reset_index(drop=True))
+
+    def test_excel_header(self, csvfile, source, last, skip, loghtml):
+        url = "https://cms7files1.revize.com/sparksnv/Document_Center/Sparks%20Police/Officer%20Involved%20Shooting/2000-2021-SPD-OIS-Incidents.xlsx"
+
+        loader = data_loaders.Excel(url)
+        df = loader.load()
+
+        df_comp = pd.read_excel(url)
+        df_comp.columns= [x for x in df_comp.iloc[3]]
+        df_comp.drop(index=df_comp.index[0:4], inplace=True)
+        df_comp.reset_index(drop=True, inplace=True)
+        df_comp = df_comp.convert_dtypes()
+
+        assert(df_comp.equals(df))
+
+
+    def test_excel_xls(self, csvfile, source, last, skip, loghtml):
+        url = "http://gouda.beloitwi.gov/WebLink/0/edoc/66423/3Use%20of%20Force%202017%20-%20last%20updated%201-12-18.xls"
+
+        df_comp = pd.read_excel(url)
+        df_comp = df_comp.convert_dtypes()
+        df = data_loaders.Excel(url).load()
+
         assert df_comp.equals(df)
 
 
@@ -202,6 +284,7 @@ class TestProduct:
 
 if __name__ == "__main__":
     tp = TestProduct()
+
     tp.test_arcgis(None,None,None,None,None)
     tp.test_arcgis_geopandas(None,None,None,None,None)
     tp.test_arcgis_pandas(None,None,None,None,None)
@@ -213,3 +296,7 @@ if __name__ == "__main__":
     tp.test_socrata(None,None,None,None,None)
     tp.test_socrata_geopandas(None,None,None,None,None)
     tp.test_socrata_pandas(None,None,None,None,None)
+    tp.test_excel(None,None,None,None,None)
+    tp.test_excel_year_sheets(None,None,None,None,None)
+    tp.test_excel_header(None,None,None,None,None)
+    tp.test_excel_xls(None,None,None,None,None)

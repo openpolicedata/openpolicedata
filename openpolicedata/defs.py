@@ -7,6 +7,7 @@ from collections import namedtuple
 # They all have corresponding data loaders in data_loaders.py
 # When new data loaders are added, this list should be updated.
 class DataType(Enum):
+    EXCEL = "Excel"
     CSV = "CSV"
     ArcGIS = "ArcGIS"
     SOCRATA = "Socrata"

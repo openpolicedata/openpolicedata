@@ -4,3 +4,5 @@ numpy
 requests
 pyproj
 tqdm
+openpyxl
+xlrd

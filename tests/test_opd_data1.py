@@ -5,7 +5,7 @@ if __name__ == "__main__":
 	import sys
 	sys.path.append('../openpolicedata')
 from openpolicedata import data, datasets, data_loaders
-from openpolicedata.defs import MULTI
+from openpolicedata.defs import MULTI, DataType
 from openpolicedata.exceptions import OPD_DataUnavailableError, OPD_TooManyRequestsError,  \
 	OPD_MultipleErrors, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError, OPD_FutureError, OPD_MinVersionError
 from datetime import datetime
@@ -209,19 +209,21 @@ class TestData:
 				warnings.warn(str(e))
 
 
-def can_be_limited(table_type, url):
-	if (table_type == "CSV" and ".zip" in url):
+def can_be_limited(data_type, url):
+	data_type = DataType(data_type)
+	if (data_type == DataType.CSV and ".zip" in url):
 		return False
-	elif (table_type == "ArcGIS" or table_type == "Socrata" or table_type == "CSV"):
+	elif data_type in [DataType.ArcGIS, DataType.SOCRATA, DataType.CSV, DataType.EXCEL]:
 		return True
 	else:
 		raise ValueError("Unknown table type")
 
 
-def is_filterable(table_type):
-	if table_type == "CSV":
+def is_filterable(data_type):
+	data_type = DataType(data_type)
+	if data_type in [DataType.CSV, DataType.EXCEL]:
 		return False
-	elif (table_type == "ArcGIS" or table_type == "Socrata" ):
+	elif data_type in [DataType.ArcGIS, DataType.SOCRATA]:
 		return True
 	else:
 		raise ValueError("Unknown table type")
@@ -262,8 +264,10 @@ if __name__ == "__main__":
 	csvfile = r"..\opd-data\opd_source_table.csv"
 	# csvfile = None
 	last = None
-	# last = 493-363+1
-	# tp.test_source_urls(csvfile, None, last, None, None) 
-	# tp.test_check_version(csvfile, None, last, None, None) 
-	tp.test_get_count(csvfile, None, last, None, None)
-	tp.test_get_years(csvfile, None, last, None, None) 
+	last = 603-506+1
+	skip = None
+	skip = "San Diego,Northhampton"
+	tp.test_source_urls(csvfile, None, last, skip, None) 
+	# tp.test_check_version(csvfile, None, last, skip, None) 
+	# tp.test_get_count(csvfile, None, last, skip, None)
+	# tp.test_get_years(csvfile, None, last, skip, None) 
