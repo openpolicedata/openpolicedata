@@ -2,6 +2,7 @@
 # Availble from conda
 geopandas
 pandas
+thefuzz
 numpy
 requests
 pyproj

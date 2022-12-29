@@ -2,7 +2,9 @@ import numbers
 import os.path as path
 import pandas as pd
 from datetime import datetime
+from dateutil.parser._parser import ParserError
 from packaging import version
+import re
 
 if __name__ == '__main__':
     import data_loaders
@@ -255,10 +257,7 @@ class Source:
                 _check_version(df)
                 data_type =DataType(df["DataType"])
                 url = df["URL"]
-                if not pd.isnull(df["date_field"]):
-                    date_field = df["date_field"]
-                else:
-                    raise ValueError("No date_field is provided to identify the years")
+                date_field = df["date_field"] if pd.notnull(df["date_field"]) else None
                 
                 loader = get_loader(data_type, url, dataset_id=df["dataset_id"], date_field=date_field)
                 new_years = loader.get_years(force=force)
@@ -335,7 +334,7 @@ class Source:
 
         Parameters
         ----------
-        year - int or length 2 list or the string "MULTI" or "N/A"
+        year (Optional) - int or length 2 list or the string "MULTI" or "N/A"
             Used to identify the requested dataset if equal to its year value
             Otherwise, for datasets containing multiple years, this filters 
             the return data for a specific year (int input) or a range of years
@@ -554,7 +553,20 @@ def _check_date(table, date_field):
         if len(dts) > 0:
             one_date = dts.iloc[0]            
             if type(one_date) == str:
-                table = table.astype({date_field: 'datetime64[ns]'})
+                p = re.compile(r'^Unknown string format: \d{4}-(\d{2}|__)-(\d{2}|__) present at position \d+$')
+                def to_datetime(x):
+                    try:
+                        return pd.to_datetime(x)
+                    except ParserError as e:
+                        if len(e.args)>0 and p.match(e.args[0]) != None:
+                            return pd.NaT
+                        else:
+                            raise
+                    except:
+                        raise
+                
+                table[date_field] = table[date_field].apply(to_datetime)
+                # table = table.astype({date_field: 'datetime64[ns]'})
             elif (date_field.lower() == "year" or date_field.lower() == "yr") and isinstance(one_date, numbers.Number):
                 table[date_field] = table[date_field].apply(lambda x: datetime(x,1,1))
                 

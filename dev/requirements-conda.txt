@@ -1,8 +1,1 @@
 geopandas
-pandas
-numpy
-requests
-pyproj
-tqdm
-openpyxl
-xlrd

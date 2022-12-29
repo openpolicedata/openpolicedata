@@ -1,4 +1,5 @@
 import pytest
+import requests
 if __name__ == "__main__":
 	import sys
 	sys.path.append('../openpolicedata')
@@ -173,6 +174,19 @@ class TestProduct:
 
         assert df_comp.equals(df)
 
+
+    def test_csv_year_filter(self, csvfile, source, last, skip, loghtml):
+        url = "https://www.denvergov.org/media/gis/DataCatalog/denver_police_officer_involved_shootings/csv/denver_police_officer_involved_shootings.csv"
+        loader = data_loaders.Csv(url, date_field="INCIDENT_DATE")
+        year = 2020
+        df = loader.load(year=year)
+        with pytest.raises(ValueError):
+            count = loader.get_count(year=year)
+
+        count = loader.get_count(year=year, force=True)
+        assert len(df) == count
+
+
     def test_excel(self, csvfile, source, last, skip, loghtml):
         url = "https://www.norristown.org/DocumentCenter/View/1789/2017-2018-Use-of-Force"
         date_field = "Date"
@@ -180,6 +194,7 @@ class TestProduct:
         df = loader.load()
         df_comp = pd.read_excel(url)
         df_comp = df_comp.convert_dtypes()
+        df_comp.columns = [x.strip() if isinstance(x, str) else x for x in df_comp.columns]
 
         with pytest.raises(ValueError):
             count = loader.get_count()
@@ -200,6 +215,7 @@ class TestProduct:
         df = loader.load(limit=nrows)        
         df_comp = pd.read_excel(url, nrows=nrows)
         df_comp = df_comp.convert_dtypes()
+        df_comp.columns = [x.strip() if isinstance(x, str) else x for x in df_comp.columns]
         assert df_comp.equals(df)
 
 
@@ -215,6 +231,7 @@ class TestProduct:
         df_comp.drop(index=df_comp.index[0], inplace=True)
         df_comp.reset_index(drop=True, inplace=True)
         df_comp = df_comp.convert_dtypes()
+        df_comp.columns = [x.strip() if isinstance(x, str) else x for x in df_comp.columns]
         df_comp = df_comp.iloc[:, 1:]
 
         # Load all years
@@ -227,6 +244,7 @@ class TestProduct:
         df_comp.drop(index=df_comp.index[0], inplace=True)
         df_comp.reset_index(drop=True, inplace=True)
         df_comp = df_comp.convert_dtypes()
+        df_comp.columns = [x.strip() if isinstance(x, str) else x for x in df_comp.columns]
         df_comp = df_comp.iloc[:, 1:]
 
         # Load all years
@@ -245,6 +263,9 @@ class TestProduct:
         assert df.head(len(df_multi)).equals(df_multi)
         assert df.tail(len(df_last)).reset_index(drop=True).equals(df_last.reset_index(drop=True))
 
+        # Test loading to ensure that channel name changes are handled
+        data_loaders.Excel("https://northamptonpd.com/images/ODP%20Spreadsheets/NPD_Use_of_Force_2014-2020_incident_level_data.xlsx").load()
+
     def test_excel_header(self, csvfile, source, last, skip, loghtml):
         url = "https://cms7files1.revize.com/sparksnv/Document_Center/Sparks%20Police/Officer%20Involved%20Shooting/2000-2021-SPD-OIS-Incidents.xlsx"
 
@@ -256,6 +277,7 @@ class TestProduct:
         df_comp.drop(index=df_comp.index[0:4], inplace=True)
         df_comp.reset_index(drop=True, inplace=True)
         df_comp = df_comp.convert_dtypes()
+        df_comp.columns = [x.strip() if isinstance(x, str) else x for x in df_comp.columns]
 
         assert(df_comp.equals(df))
 
@@ -265,22 +287,53 @@ class TestProduct:
 
         df_comp = pd.read_excel(url)
         df_comp = df_comp.convert_dtypes()
+        df_comp.columns = [x.strip() if isinstance(x, str) else x for x in df_comp.columns]
         df = data_loaders.Excel(url).load()
 
         assert df_comp.equals(df)
 
 
-    def test_csv_year_filter(self, csvfile, source, last, skip, loghtml):
-        url = "https://www.denvergov.org/media/gis/DataCatalog/denver_police_officer_involved_shootings/csv/denver_police_officer_involved_shootings.csv"
-        loader = data_loaders.Csv(url, date_field="INCIDENT_DATE")
-        year = 2020
-        df = loader.load(year=year)
-        with pytest.raises(ValueError):
-            count = loader.get_count(year=year)
+    def test_excel_xls_protected(self, csvfile, source, last, skip, loghtml):
+        url = "http://www.rutlandcitypolice.com/app/download/5136813/ResponseToResistance+2015-2017.xls"
 
-        count = loader.get_count(year=year, force=True)
-        assert len(df) == count
+        r = requests.get(url)
+        r.raise_for_status()
 
+        import os
+        import msoffcrypto
+        import tempfile
+        # Create a file path by joining the directory name with the desired file name
+        output_directory = tempfile.gettempdir()
+        file_path = os.path.join(output_directory, 'temp1.xls')
+
+        # Write the file
+        with open(file_path, 'wb') as output:
+            output.write(r.content)
+
+        file_path_decrypted = os.path.join(output_directory, 'temp2.xls')
+        # Try and unencrypt workbook with magic password
+        fp = open(file_path, 'rb')
+        wb_msoffcrypto_file = msoffcrypto.OfficeFile(fp)
+
+        # https://stackoverflow.com/questions/22789951/xlrd-error-workbook-is-encrypted-python-3-2-3
+        # https://nakedsecurity.sophos.com/2013/04/11/password-excel-velvet-sweatshop/
+        wb_msoffcrypto_file.load_key(password='VelvetSweatshop')
+        with open(file_path_decrypted, 'wb') as output:
+            wb_msoffcrypto_file.decrypt(output)
+
+        fp.close()
+
+        df_comp = pd.read_excel(open(file_path_decrypted, 'rb'))
+
+        os.remove(file_path)
+        os.remove(file_path_decrypted)
+
+        loader = data_loaders.Excel(url)
+        df = loader.load()
+
+        df_comp = df_comp.convert_dtypes()
+        df_comp.columns = [x.strip() if isinstance(x, str) else x for x in df_comp.columns]
+        assert df_comp.equals(df)
 
 if __name__ == "__main__":
     tp = TestProduct()
@@ -300,3 +353,4 @@ if __name__ == "__main__":
     tp.test_excel_year_sheets(None,None,None,None,None)
     tp.test_excel_header(None,None,None,None,None)
     tp.test_excel_xls(None,None,None,None,None)
+    tp.test_excel_xls_protected(None,None,None,None,None)

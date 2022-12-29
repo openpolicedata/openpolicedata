@@ -92,8 +92,8 @@ Show all types of data available from a source.
 ['STOPS']
 ```
 
-### get_years(table_type=None)
-Show years available for one or more datasets. Results can be filtered to only show years for a specific type of data.
+### get_years(table_type=None, force=False)
+Show years available for one or more datasets. Results can be filtered to only show years for a specific table type. For CSV and Excel data types, get_years will not run unless force is set to True due to the necessity of reading in the entire file. It may be more efficient to run load_from_url and manually get the years.
 ```
 > src.get_years(table_type="STOPS")
 [2020, 2021, 2022]
@@ -106,6 +106,10 @@ Show agencies (police departments) that have data available. This is typically a
 > print(agencies)
 ['Arlington County Police Department', "Arlington County Sheriff's Office"]
 ```
+
+### get_count( year=None, table_type=None, agency=None, force=False)
+Get the number of records that would be returned for a table. `table_type` and `year` can be used to filter for a specific table. For datasets that allow for filtering by agency, the number of records can be requested for a specific agency by setting `agency`. For the Excel data type, get_count will not run unless force is set to True due to the necessity of reading in the entire file. It may be more efficient to run load_from_url and then to find the number of rows of the returned table.
+
 ### load_from_url(year, table_type=None, agency=None, pbar=True)
 Import data from the source. Data for a year (i.e. 2020) or a range of years (i.e. [2020, 2022]) can be requested. If more than one data type is available, `table_type` must be specified. Optionally, for datasets containing multiple agencies (police departments) data, `agency` can be used to request data for a single agency. `pbar` can be set to false to not show a progress bar while loading.
 ```

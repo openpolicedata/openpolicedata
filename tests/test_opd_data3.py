@@ -223,14 +223,14 @@ class TestData:
 def can_be_limited(table_type, url):
 	if (table_type == "CSV" and ".zip" in url):
 		return False
-	elif (table_type == "ArcGIS" or table_type == "Socrata" or table_type == "CSV"):
+	elif (table_type == "ArcGIS" or table_type == "Socrata" or table_type == "CSV" or table_type == "Excel"):
 		return True
 	else:
 		raise ValueError("Unknown table type")
 
 
 def is_filterable(table_type):
-	if table_type == "CSV":
+	if table_type == "CSV"  or table_type == "Excel":
 		return False
 	elif (table_type == "ArcGIS" or table_type == "Socrata" ):
 		return True

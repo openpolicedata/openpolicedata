@@ -1,5 +1,7 @@
+from io import BytesIO
 import numbers
 import os
+import tempfile
 from datetime import date
 import pandas as pd
 from numpy import nan
@@ -16,6 +18,11 @@ from time import sleep
 from tqdm import tqdm
 from math import ceil
 import re
+from xlrd.biffh import XLRDError
+
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore", category=UserWarning)
+    from thefuzz import fuzz
 
 try:
     import geopandas as gpd
@@ -46,6 +53,20 @@ _url_error_msg = "There is likely an issue with the website. Open the URL {} wit
 # Setting environment variable in Linux: https://phoenixnap.com/kb/linux-set-environment-variable
 # Windows: https://www.wikihow.com/Create-an-Environment-Variable-in-Windows-10
 default_sodapy_key = os.environ.get("SODAPY_API_KEY")
+
+class double_format(object):
+    def __init__(self, string):
+        self.string = string
+
+    def __eq__(self, other) -> bool:
+        return isinstance(other, double_format) and self.string == other.string
+        # if isinstance(other, double_format):
+        #     return other.string == self.string
+        # else:
+        #     return False
+
+    def format(self, date_field, year):
+        return self.string.format(date_field, year, date_field, year)
 
 
 class Data_Loader(ABC):
@@ -223,6 +244,9 @@ class Csv(Data_Loader):
                     raise e
         else:
             r = requests.head(self.url)
+            if r.status_code==404:
+                # Try get instead
+                r = requests.get(self.url)
             try:
                 r.raise_for_status()
             except requests.exceptions.HTTPError as e:
@@ -310,7 +334,50 @@ class Excel(Data_Loader):
         self.url = url
         self.date_field = date_field
         self.agency_field = agency_field
-        self.excel_file = pd.ExcelFile(url)
+        
+        try:
+            self.excel_file = pd.ExcelFile(url)
+        except urllib.error.HTTPError as e:
+            if str(e) == "HTTP Error 406: Not Acceptable":
+                # 406 error: https://stackoverflow.com/questions/34832970/http-error-406-not-acceptable-python-urllib2
+                # File-like input for URL: https://stackoverflow.com/questions/57815780/how-can-i-directly-handle-excel-file-link-python/57815864#57815864
+                headers = {'User-agent' : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_3) AppleWebKit/537.75.14 (KHTML, like Gecko) Version/7.0.3 Safari/7046A194A'}
+                r = requests.get(url, stream=True, headers=headers)
+                r.raise_for_status()
+                file_like = BytesIO(r.content)
+                self.excel_file = pd.ExcelFile(file_like)
+            else:
+                raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(self.url))
+        except XLRDError as e:
+            if len(e.args)>0 and e.args[0] == "Workbook is encrypted" and \
+                any([url.startswith(x) for x in ["http://www.rutlandcitypolice.com"]]):  # Only perform on known datasets to prevent security issues
+                try:
+                    import msoffcrypto
+                except:
+                    raise ImportError(f"{url} is encrypted. OpenPoliceData may be able to open it if msoffcrypto-tool " + 
+                        "(https://pypi.org/project/msoffcrypto-tool/) is installed (pip install msoffcrypto-tool)")
+                # Download file to temporary file
+                r = requests.get(url)
+                r.raise_for_status()
+                # https://stackoverflow.com/questions/22789951/xlrd-error-workbook-is-encrypted-python-3-2-3
+                fp_decrypt = tempfile.TemporaryFile(suffix=".xls")
+                with tempfile.TemporaryFile() as fp:
+                    fp.write(r.content)
+                    fp.seek(0)
+
+                    # Try and unencrypt workbook with magic password
+                    wb_msoffcrypto_file = msoffcrypto.OfficeFile(fp)
+
+                    # https://nakedsecurity.sophos.com/2013/04/11/password-excel-velvet-sweatshop/
+                    wb_msoffcrypto_file.load_key(password='VelvetSweatshop')
+                    wb_msoffcrypto_file.decrypt(fp_decrypt)
+
+                fp_decrypt.seek(0)
+                self.excel_file = pd.ExcelFile(fp_decrypt)
+            else:
+                raise
+        except:
+            raise
 
 
     def get_count(self, year=None, *,  agency=None, force=False, **kwargs):
@@ -427,6 +494,7 @@ class Excel(Data_Loader):
                     year = [year, year]
 
                 table = None
+                cols_added = 0
                 for y in range(year[0], year[1]+1):
                     if y in year_dict:
                         df = pd.read_excel(self.excel_file, nrows=limit, sheet_name=year_dict[y])
@@ -435,9 +503,31 @@ class Excel(Data_Loader):
 
                         if isinstance(table, type(None)):
                             table = df
+                            col_matches = [[k] for k in range(len(df.columns))]
                         else:
                             if not df.columns.equals(table.columns):
-                                raise ValueError("Columns don't match")
+                                # Conditional for preventing column names from being too different
+                                if len(df.columns)+cols_added == len(table.columns) and \
+                                    (df.columns == table.columns[:len(df.columns)]).sum()>=len(df.columns)-3-cols_added:
+                                    # Try to find a typo
+                                    for m in [j for j in range(len(df.columns)) if table.columns[j]!=df.columns[j]]:
+                                        for k in col_matches[m]:
+                                            if table.columns[k]==df.columns[m]:
+                                                break
+                                            if fuzz.ratio(table.columns[k], df.columns[m]) > 80:
+                                                print(f"Identified difference in column names when combining sheets {year_dict[y-1]} and {year_dict[y]}. " + 
+                                                    f"Column names are '{table.columns[k]}' and '{df.columns[m]}'. This appears to be a typo. " + 
+                                                    f"These columns are assumed to be the same and will be combined as column '{table.columns[k]}'")
+                                                df.columns = [table.columns[k] if j==m else df.columns[j] for j in range(len(df.columns))]
+                                                break
+                                        else:
+                                            print(f"Column '{table.columns[m]}' in current DataFrame does not match '{df.columns[m]}' in new DataFrame. "+ 
+                                                "When they are concatenated, both columns will be included.")
+                                            col_matches[m].append(len(table.columns))
+                                            cols_added+=1
+                                            # raise ValueError(f"Column {table.columns[k]} in table does not match {df.columns[k]} in df")
+                                else:
+                                    raise ValueError("Columns don't match")
                             table = pd.concat([table, df], ignore_index=True)
 
                         if limit!=None and len(table)>=limit:
@@ -451,6 +541,9 @@ class Excel(Data_Loader):
 
         if limit!=None and len(table) > limit:
             table = table.head(limit)
+
+        # Clean up column names
+        table.columns = [x.strip() if isinstance(x, str) else x for x in table.columns]
 
         table = filter_dataframe(table, date_field=self.date_field, year_filter=year, 
             agency_field=self.agency_field, agency=agency)
@@ -581,7 +674,7 @@ class Arcgis(Data_Loader):
                     raise OPD_DataUnavailableError(self.base_url, f"Layer # = {self.layer_num}", e.args)
 
             else: raise e
-        except e: raise e
+        except: raise
         
         meta = r.json()
 
@@ -599,8 +692,8 @@ class Arcgis(Data_Loader):
                     raise OPD_DataUnavailableError(self.base_url, f"Layer # = {self.layer_num}", e.args)
                 elif "A general error occurred: 'authInfo'" in e.args[0]:
                     raise OPD_arcgisAuthInfoError(self.base_url, f"Layer # = {self.layer_num}", e.args)
-            else: raise e
-        except e: raise e
+            raise e
+        except: raise
 
         self.is_table = True
         self.active_layer = None
@@ -707,8 +800,10 @@ class Arcgis(Data_Loader):
 
         where_formats = [
             "{} LIKE '%[0-9][0-9]/[0-9][0-9]/{}%'",   # mm/dd/yyyy
-            "{} LIKE '{}/[0-9][0-9]'",                # yyyy/mm
+            double_format("{} LIKE '{}/[0-9][0-9]' OR {} LIKE '{}/[0-9]'"),                # yyyy/mm
+            "{} LIKE '{}/[0-9][0-9]'",
             "{} = {}",                # yyyy
+            double_format("{} LIKE '[0-9][0-9]-{}' OR {} LIKE '[0-9]-{}'")   # mm-yyyy or m-yyyy
         ]
         # Make year iterable
         year = [year] if isinstance(year, numbers.Number) else year
@@ -1146,7 +1241,12 @@ def filter_dataframe(df, date_field=None, year_filter=None, agency_field=None, a
     '''
 
     if date_field != None and not hasattr(df[date_field], "dt"):
-        df = df.astype({date_field: 'datetime64[ns]'})
+        with warnings.catch_warnings():
+            # Ignore future warning about how this operation will be attempted to be done inplace:
+            # In a future version, `df.iloc[:, i] = newvals` will attempt to set the values inplace instead of always setting a new array. 
+            # To retain the old behavior, use either `df[df.columns[i]] = newvals` or, if columns are non-unique, `df.isetitem(i, newvals)`
+            warnings.simplefilter("ignore", category=FutureWarning)
+            df.loc[:, date_field] = pd.to_datetime(df[date_field])
     
     if year_filter != None and date_field != None:
         if isinstance(year_filter, list):
