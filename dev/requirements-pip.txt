@@ -1,2 +1,10 @@
 sodapy
 arcgis<2.0.1  # An error occurs when loading in 1 of our datasets with the latest ver. Bug report submitted.
+pandas
+thefuzz
+numpy
+requests
+pyproj
+tqdm
+openpyxl
+xlrd

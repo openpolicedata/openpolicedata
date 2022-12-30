@@ -61,8 +61,8 @@ def _build(csv_file):
 
     df["URL"] = urls
 
-    keyVals = ['State', 'SourceName', 'Agency', 'TableType','Year']
-    df.drop_duplicates(subset=keyVals, inplace=True)
+    key_vals = ['State', 'SourceName', 'Agency', 'TableType','Year']
+    df.drop_duplicates(subset=key_vals, inplace=True)
     # df.sort_values(by=keyVals, inplace=True, ignore_index=True)
 
     return df

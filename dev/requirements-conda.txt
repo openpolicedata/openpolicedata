@@ -1,6 +1,1 @@
 geopandas
-pandas
-numpy
-requests
-pyproj
-tqdm

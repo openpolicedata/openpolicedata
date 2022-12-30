@@ -81,8 +81,17 @@ class TestDatasets:
 
     def test_years_multi(self, csvfile, source, last, skip, loghtml):
         datasets = get_datasets(csvfile)
-        rem = datasets["date_field"][datasets["Year"] == opd.defs.MULTI]
-        assert pd.isnull(rem).sum() == 0
+        # Multi-year datasets should typically have a value in date_field
+        datasets = datasets[datasets["Year"] == opd.defs.MULTI]
+        df_null = datasets[pd.isnull(datasets["date_field"])]
+        
+        # This can only be allowed for certain Excel cases
+        assert (df_null["DataType"] == opd.defs.DataType.EXCEL.value).all()
+
+        for url in df_null["URL"]:
+            loader = opd.data_loaders.Excel(url)
+            has_year_sheets = loader._Excel__get_sheets()[1]
+            assert has_year_sheets
 
     def test_agencies_multi(self, csvfile, source, last, skip, loghtml):
         datasets = get_datasets(csvfile)
@@ -171,4 +180,6 @@ class TestDatasets:
         
 
 if __name__ == "__main__":
-    TestDatasets().test_table_for_nulls("C:\\Users\\matth\\repos\\opd-data\\opd_source_table.csv",None,None,None,None)
+    csvfile = None
+    # csvfile = "C:\\Users\\matth\\repos\\opd-data\\opd_source_table.csv"
+    TestDatasets().test_years_multi(csvfile,None,None,None,None)

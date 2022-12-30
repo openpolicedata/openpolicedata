@@ -3,11 +3,11 @@ if __name__ == "__main__":
 	sys.path.append('../openpolicedata')
 from openpolicedata import data
 from openpolicedata import datasets
-from openpolicedata.defs import MULTI, TableType
+from openpolicedata.defs import MULTI, DataType
+import openpolicedata as opd
 from openpolicedata.exceptions import OPD_DataUnavailableError, OPD_TooManyRequestsError,  \
 	OPD_MultipleErrors, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError, OPD_FutureError, OPD_MinVersionError
 from datetime import datetime
-import pandas as pd
 from time import sleep
 import warnings
 import os
@@ -25,72 +25,61 @@ def get_datasets(csvfile):
     return datasets.query()
 
 class TestData:
-	def test_source_download_limitable(self, csvfile, source, last, skip, loghtml):
+	def test_get_years(self, csvfile, source, last, skip, loghtml):
 		if last == None:
 			last = float('inf')
 		datasets = get_datasets(csvfile)
-		num_stanford = 0
-		max_num_stanford = 1  # This data is standardized. Probably no need to test more than 1
 		caught_exceptions = []
 		caught_exceptions_warn = []
 		if skip != None:
 			skip = skip.split(",")
 			skip = [x.strip() for x in skip]
-			
+
 		for i in range(len(datasets)):
+			if source != None and datasets.iloc[i]["SourceName"] != source:
+				continue
 			if skip != None and datasets.iloc[i]["SourceName"] in skip:
 				continue
 			if i < len(datasets) - last:
 				continue
-			if source != None and datasets.iloc[i]["SourceName"] != source:
-				continue
-			has_date_field = not pd.isnull(datasets.iloc[i]["date_field"])
-			if can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]) or has_date_field:
-				if is_stanford(datasets.iloc[i]["URL"]):
-					num_stanford += 1
-					if num_stanford > max_num_stanford:
-						continue
+			if is_filterable(datasets.iloc[i]["DataType"]) or datasets.iloc[i]["Year"] != MULTI or \
+				datasets.iloc[i]["DataType"] == DataType.EXCEL.value:  # If Excel, we can possibly check
 				srcName = datasets.iloc[i]["SourceName"]
 				state = datasets.iloc[i]["State"]
 				src = data.Source(srcName, state=state)
-				# For speed, set private limit parameter so that only a single entry is requested
-				src._Source__limit = 20
+
+				if datasets.iloc[i]["DataType"] == DataType.EXCEL.value:
+					loader = opd.data_loaders.Excel(datasets.iloc[i]["URL"])
+					has_year_sheets = loader._Excel__get_sheets()[1]
+					if not has_year_sheets:
+						continue
+
 
 				table_print = datasets.iloc[i]["TableType"]
 				now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
 				print(f"{now} Testing {i+1} of {len(datasets)}: {srcName} {table_print} table")
 
 				try:
-					table = src.load_from_url(datasets.iloc[i]["Year"], datasets.iloc[i]["TableType"], pbar=False)
+					years = src.get_years(datasets.iloc[i]["TableType"], force=True)
 				except warn_errors as e:
-					e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"])
+					e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"])
 					caught_exceptions_warn.append(e)
 					continue
 				except (OPD_TooManyRequestsError, OPD_arcgisAuthInfoError) as e:
 					# Catch exceptions related to URLs not functioning
-					e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"])
+					e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"])
 					caught_exceptions.append(e)
 					continue
 				except:
 					raise
 
-				assert len(table.table)>0
-				if not pd.isnull(datasets.iloc[i]["date_field"]):
-					assert datasets.iloc[i]["date_field"] in table.table
-					#assuming a Pandas string dtype('O').name = object is okay too
-					assert (table.table[datasets.iloc[i]["date_field"]].dtype.name in ['datetime64[ns]', 'datetime64[ms]'])
-					dts = table.table[datasets.iloc[i]["date_field"]]
-					dts = dts[dts.notnull()]
-					# New Orleans complaints dataset has many empty dates
-					# "Seattle starts with bad date data"
-					if len(dts)>0 or srcName not in ["Seattle","New Orleans"] or datasets.iloc[i]["TableType"]!=TableType.COMPLAINTS.value:
-						assert len(dts) > 0   # If not, either all dates are bad or number of rows requested needs increased
-						assert dts.iloc[0].year <= datetime.now().year
-				if not pd.isnull(datasets.iloc[i]["agency_field"]):
-					assert datasets.iloc[i]["agency_field"] in table.table
+				if datasets.iloc[i]["Year"] != MULTI:
+					assert datasets.iloc[i]["Year"] in years
+				else:
+					assert len(years) > 0
 
 				# Adding a pause here to prevent issues with requesting from site too frequently
-				sleep(sleep_time)
+				sleep(0.1)
 
 		if loghtml:
 			log_errors_to_file(caught_exceptions, caught_exceptions_warn)
@@ -106,7 +95,7 @@ class TestData:
 			for e in caught_exceptions_warn:
 				warnings.warn(str(e))
 
-	
+
 	def test_get_agencies(self, csvfile, source, last, skip, loghtml):
 		if last == None:
 			last = float('inf')
@@ -198,7 +187,7 @@ def can_be_limited(table_type, url):
 
 
 def is_filterable(table_type):
-	if table_type == "CSV":
+	if table_type == "CSV" or table_type == "Excel":
 		return False
 	elif (table_type == "ArcGIS" or table_type == "Socrata" ):
 		return True
@@ -239,9 +228,13 @@ if __name__ == "__main__":
 	tp = TestData()
 	# (self, csvfile, source, last, skip, loghtml)
 	csvfile = r"..\opd-data\opd_source_table.csv"
-	last = 489-288+1
-	tp.test_source_download_limitable(csvfile, None, last, None, None)
-	tp.test_get_agencies(csvfile, None, None, None, None)
-	tp.test_get_agencies_name_match(csvfile, None, None, None, None)
-	tp.test_agency_filter(csvfile, None, None, None, None)
-	tp.test_to_csv(csvfile, None, None, None, None)
+	last = None
+	# last = 606-560+1
+	source = None
+	# source = "Northhampton"
+	skip = "Fayetteville,San Diego,Seattle"
+	tp.test_get_years(csvfile, source, last, skip, None)
+	tp.test_get_agencies(csvfile, None, None, skip, None)
+	tp.test_get_agencies_name_match(csvfile, None, None, skip, None)
+	tp.test_agency_filter(csvfile, None, None, skip, None)
+	tp.test_to_csv(csvfile, None, None, skip, None)

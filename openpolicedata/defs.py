@@ -7,6 +7,7 @@ from collections import namedtuple
 # They all have corresponding data loaders in data_loaders.py
 # When new data loaders are added, this list should be updated.
 class DataType(Enum):
+    EXCEL = "Excel"
     CSV = "CSV"
     ArcGIS = "ArcGIS"
     SOCRATA = "Socrata"
@@ -33,7 +34,24 @@ class TableType(str, Enum):
     CITATIONS = ("CITATIONS","Commonly referred to as tickets, citations indicate a violation of the law and may be given for "+
         "violations such as traffic and civil violations")
     COMPLAINTS = ("COMPLAINTS","Complaints of police misconduct made internally or by the community")
+    COMPLAINTS_ALLEGATIONS = ("COMPLAINTS - ALLEGATIONS",
+        "Complaint data may be split into several tables. This table contains specific data on the allegations.")
+    COMPLAINTS_BACKGROUND = ("COMPLAINTS - BACKGROUND",
+        "Complaint data may be split into several tables. This table contains data on the general background of the complaints.")
+    COMPLAINTS_OFFICERS = ("COMPLAINTS - OFFICERS",
+        "Complaint data may be split into several tables. This table contains specific data on the involved officers.")
+    COMPLAINTS_PENALTIES = ("COMPLAINTS - PENALTIES",
+        "Complaint data may be split into several tables. This table contains specific data on any resulting penalties.")
     CRASHES = ("CRASHES", "Traffic crashes")
+    CRASHES_CIVILIANS = ("CRASHES - CIVILIANS",
+        "Crash data may be split into several tables due to the possibility that multiple "+
+        "civilians and vehicles may be involved in an incident. This table contains data on civilians.")
+    CRASHES_INCIDENTS = ("CRASHES - INCIDENTS",
+        "Crash data may be split into several tables due to the possibility that multiple "+
+        "civilians and vehicles may be involved in an incident. This table contains data on the incident.")
+    CRASHES_VEHICLES = ("CRASHES - VEHICLES",
+        "Crash data may be split into several tables due to the possibility that multiple "+
+        "civilians and vehicles may be involved in an incident. This table contains data on vehicles    .")
     EMPLOYEE = ("EMPLOYEE","Demographic data of the police workforce")
     FIELD_CONTACTS = ("FIELD CONTACTS", "Consensual contacts between officers and the community.")
     PEDESTRIAN = ("PEDESTRIAN STOPS","Stops of pedestrians based on 'reasonable suspicion'. May lead to a frisk.")

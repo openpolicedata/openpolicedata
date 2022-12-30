@@ -2,10 +2,12 @@
 # Availble from conda
 geopandas
 pandas
+thefuzz
 numpy
 requests
 pyproj
 openpyxl
+xlrd
 # Must be installed with pip
 sodapy
 arcgis
