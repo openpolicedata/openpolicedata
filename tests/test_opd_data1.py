@@ -15,6 +15,9 @@ import os
 
 sleep_time = 0.1
 
+# Set Arcgis data loader to validate queries with arcgis package if installed
+data_loaders._verify_arcgis = True
+
 log_filename = f"pytest_url_errors_{datetime.now().strftime('%Y%m%d_%H')}.txt"
 log_folder = os.path.join(".","data/test_logs")
 
@@ -228,12 +231,12 @@ if __name__ == "__main__":
 	csvfile = r"..\opd-data\opd_source_table.csv"
 	# csvfile = None
 	last = None
-	# last = 606-547+1
+	last = 607-411+1
 	skip = None
 	skip = "Fayetteville,San Diego,Seattle"
 	source = None
-	source = "Beloit"
+	# source = "Beloit"
 	tp.test_source_download_limitable(csvfile, source, last, skip, None) 
 	# tp.test_check_version(csvfile, None, last, skip, None) 
-	# tp.test_get_count(csvfile, None, last, skip, None)
+	tp.test_get_count(csvfile, None, last, skip, None)
 	

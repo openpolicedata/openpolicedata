@@ -16,6 +16,9 @@ sleep_time = 0.1
 log_filename = f"pytest_url_errors_{datetime.now().strftime('%Y%m%d_%H')}.txt"
 log_folder = os.path.join(".","data/test_logs")
 
+# Set Arcgis data loader to validate queries with arcgis package if installed
+opd.data_loaders._verify_arcgis = True
+
 warn_errors = (OPD_DataUnavailableError, OPD_SocrataHTTPError, OPD_FutureError, OPD_MinVersionError)
 
 def get_datasets(csvfile):
@@ -229,9 +232,10 @@ if __name__ == "__main__":
 	# (self, csvfile, source, last, skip, loghtml)
 	csvfile = r"..\opd-data\opd_source_table.csv"
 	last = None
-	# last = 606-560+1
+	last = 607-493+1
 	source = None
-	# source = "Northhampton"
+	# source = "Lincoln"
+	skip = None
 	skip = "Fayetteville,San Diego,Seattle"
 	tp.test_get_years(csvfile, source, last, skip, None)
 	tp.test_get_agencies(csvfile, None, None, skip, None)

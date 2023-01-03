@@ -32,41 +32,78 @@ class TestProduct:
     def test_arcgis(self, csvfile, source, last, skip, loghtml):
         lim = data_loaders._default_limit
         data_loaders._default_limit = 500
-        url = "https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPD/MapServer/16/"
+        data_loaders._verify_arcgis = True
+        url = "https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPD/MapServer/16"
         gis = data_loaders.Arcgis(url)
+        try:
+            # Check if arcgis is installed
+            from arcgis.features import FeatureLayerCollection
+            # Verify that verify is True by getting active layer 
+            _ = gis._Arcgis__active_layer
+            # Load with verification
+            gis.load()
+            gis.get_count()
+        except:
+            pass
+
+        data_loaders._verify_arcgis = False
+
+        # Now load without verification as user would
+        gis = data_loaders.Arcgis(url)
+        # Confirm that verfication is not set
+        with pytest.raises(AttributeError):
+            gis._Arcgis__active_layer
         df = gis.load()
         count = gis.get_count()
         
         data_loaders._default_limit = lim
 
-        if url[-1] == "/":
-            url = url[0:-1]
-        last_slash = url.rindex("/")
-        layer_num = url[last_slash+1:]
-        base_url = url[:last_slash]
-        layer_collection = data_loaders.FeatureLayerCollection(base_url)
+        try:
+            from arcgis.features import FeatureLayerCollection
+            last_slash = url.rindex("/")
+            layer_num = url[last_slash+1:]
+            base_url = url[:last_slash]
+            layer_collection = FeatureLayerCollection(base_url)
 
-        is_table = True
-        active_layer = None
-        for layer in layer_collection.layers:
-            layer_url = layer.url
-            if layer_url[-1] == "/":
-                layer_url = layer_url[:-1]
-            if layer_num == layer_url[last_slash+1:]:
-                active_layer = layer
-                is_table = False
-                break
-
-        if is_table:
-            for layer in layer_collection.tables:
+            is_table = True
+            active_layer = None
+            for layer in layer_collection.layers:
                 layer_url = layer.url
                 if layer_url[-1] == "/":
                     layer_url = layer_url[:-1]
                 if layer_num == layer_url[last_slash+1:]:
                     active_layer = layer
+                    is_table = False
                     break
 
-        layer_query_result = active_layer.query(as_df=True)
+            if is_table:
+                for layer in layer_collection.tables:
+                    layer_url = layer.url
+                    if layer_url[-1] == "/":
+                        layer_url = layer_url[:-1]
+                    if layer_num == layer_url[last_slash+1:]:
+                        active_layer = layer
+                        break
+
+            layer_query_result = active_layer.query(as_df=True)
+        except:
+            url += "/query"
+            params = {}
+            params["where"] = "1=1"
+            params["outFields"] = "*"
+            params["f"] = "json"
+
+            r = requests.get(url, params=params)
+            r.raise_for_status()
+
+            features = r.json()["features"]
+            params["resultOffset"] = len(features)
+            r = requests.get(url, params=params)
+            r.raise_for_status()
+
+            features.extend(r.json()["features"])
+            
+            layer_query_result = pd.DataFrame.from_records([x["attributes"] for x in features])
 
         assert set(df.columns) == set(layer_query_result.columns)
         assert len(layer_query_result) == count

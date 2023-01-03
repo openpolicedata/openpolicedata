@@ -191,6 +191,7 @@ class Source:
 
     datasets = None
     __limit = None
+    __loader = None
 
     def __init__(self, source_name, state=None):
         '''Constructor for Source class
@@ -259,7 +260,7 @@ class Source:
                 url = df["URL"]
                 date_field = df["date_field"] if pd.notnull(df["date_field"]) else None
                 
-                loader = get_loader(data_type, url, dataset_id=df["dataset_id"], date_field=date_field)
+                loader = self.__get_loader(data_type, url, dataset_id=df["dataset_id"], date_field=date_field)
                 new_years = loader.get_years(force=force)
 
                 years.update(new_years)
@@ -306,7 +307,7 @@ class Source:
         if src["Agency"] == MULTI:
             _check_version(src)
             data_type =DataType(src["DataType"])
-            loader = get_loader(data_type, src["URL"], dataset_id=src["dataset_id"], date_field=src["date_field"], agency_field=src["agency_field"])
+            loader = self.__get_loader(data_type, src["URL"], dataset_id=src["dataset_id"], date_field=src["date_field"], agency_field=src["agency_field"])
             if data_type ==DataType.CSV:
                 raise NotImplementedError(f"Unable to get agencies for {data_type}")
             elif data_type ==DataType.ArcGIS:
@@ -460,7 +461,7 @@ class Source:
         #It is assumed that each data loader method will return data with the proper data type so date type etc...
         if load_table:
             _check_version(src)
-            loader = get_loader(data_type, url, dataset_id=dataset_id, date_field=date_field, agency_field=agency_field)
+            loader = self.__get_loader(data_type, url, dataset_id=dataset_id, date_field=date_field, agency_field=agency_field)
 
             opt_filter = None
             if agency != None and agency_field != None:
@@ -546,8 +547,30 @@ class Source:
 
         return filename
 
+    def __get_loader(self, data_type, url, dataset_id=None, date_field=None, agency_field=None):
+        if pd.isnull(dataset_id):
+            dataset_id = None
+        params = (data_type, url, dataset_id, date_field, agency_field)
+        if self.__loader is not None and self.__loader[0]==params:
+            return self.__loader[1]
+
+        if data_type ==DataType.CSV:
+            loader = data_loaders.Csv(url, date_field=date_field, agency_field=agency_field)
+        elif data_type ==DataType.EXCEL:
+            loader = data_loaders.Excel(url, date_field=date_field, agency_field=agency_field) 
+        elif data_type ==DataType.ArcGIS:
+            loader = data_loaders.Arcgis(url, date_field=date_field)
+        elif data_type ==DataType.SOCRATA:
+            loader = data_loaders.Socrata(url, dataset_id, date_field=date_field)
+        else:
+            raise ValueError(f"Unknown data type: {data_type}")
+
+        self.__loader = (params, loader)
+
+        return loader
+
 def _check_date(table, date_field):
-    if date_field != None and len(table)>0:
+    if date_field != None and table is not None and len(table)>0:
         dts = table[date_field]
         dts = dts[dts.notnull()]
         if len(dts) > 0:
@@ -637,19 +660,6 @@ def _check_version(df):
                     f"Update OpenPoliceData to at least version {min_version} to access this data."
             )
 
-def get_loader(data_type, url, dataset_id=None, date_field=None, agency_field=None):
-    if data_type ==DataType.CSV:
-        loader = data_loaders.Csv(url, date_field=date_field, agency_field=agency_field)
-    elif data_type ==DataType.EXCEL:
-        loader = data_loaders.Excel(url, date_field=date_field, agency_field=agency_field) 
-    elif data_type ==DataType.ArcGIS:
-        loader = data_loaders.Arcgis(url, date_field=date_field)
-    elif data_type ==DataType.SOCRATA:
-        loader = data_loaders.Socrata(url, dataset_id, date_field=date_field)
-    else:
-        raise ValueError(f"Unknown data type: {data_type}")
-
-    return loader
 
 if __name__ == '__main__':
     istart = 182

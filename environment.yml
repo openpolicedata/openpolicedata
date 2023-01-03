@@ -4,13 +4,15 @@ channels:
   - esri
   - pypi
 dependencies:
-  - arcgis
   - geopandas
   - numpy
+  - openpyxl
   - pandas
   - pyproj
   - requests
-  - pip
+  - thefuzz
+  - tqdm
+  - xlrd
   - pip:
     # regular pip packages
     -  sodapy

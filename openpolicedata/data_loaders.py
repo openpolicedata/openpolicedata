@@ -12,8 +12,6 @@ from sodapy import Socrata as SocrataClient
 from pyproj.exceptions import CRSError
 from pyproj import CRS
 import warnings
-from arcgis.features import FeatureLayerCollection
-from arcgis.geometry._types import Point
 from time import sleep
 from tqdm import tqdm
 from math import ceil
@@ -26,6 +24,7 @@ with warnings.catch_warnings():
 
 try:
     import geopandas as gpd
+    from shapely.geometry import Point
     _has_gpd = True
 except:
     _has_gpd = False
@@ -43,6 +42,9 @@ _use_gpd_force = None
 _default_limit = 100000
 _url_error_msg = "There is likely an issue with the website. Open the URL {} with a web browser to confirm. " + \
                     "See a list of known site outages at https://github.com/openpolicedata/opd-data/blob/main/outages.csv"
+
+# Flag to indicate if ArcGIS queries should be verified against the arcgis package. Used in testing
+_verify_arcgis = False
 
 
 # This is for use if import data sets using Socrata. It is not required.
@@ -617,10 +619,6 @@ class Arcgis(Data_Loader):
         URL
     date_field : str
         Name of the column that contains the date
-    layer_num : str
-        Layer number
-    base_url : str
-        URL for accessing list of available layers
     max_record_count : int
         Maximum number of records that can be returned per request
     is_table : bool
@@ -649,6 +647,7 @@ class Arcgis(Data_Loader):
 
         self._date_format = None
         self.date_field = date_field
+        self.verify = False
 
         # Table vs. Layer: https://developers.arcgis.com/rest/services-reference/enterprise/layer-feature-service-.htm
         # The layer resource represents a single feature layer or a nonspatial table in a feature service. 
@@ -659,64 +658,77 @@ class Arcgis(Data_Loader):
         p = re.search(r"(MapServer|FeatureServer)/\d+", url)
         self.url = url[:p.span()[1]]
 
-        last_slash =self.url.rindex("/")
-        self.layer_num = self.url[last_slash+1:]
-        self.base_url = self.url[:last_slash]
-
-            # Get metadata
-        r = requests.get(self.base_url + "/" + self.layer_num + "?f=pjson")
-
-        try:
-            r.raise_for_status()
-        except requests.HTTPError as e:
-            if len(e.args)>0:
-                if "503 Server Error" in e.args[0]:
-                    raise OPD_DataUnavailableError(self.base_url, f"Layer # = {self.layer_num}", e.args)
-
-            else: raise e
-        except: raise
-        
-        meta = r.json()
+        # Get metadata
+        meta = self.__request()
 
         if "maxRecordCount" in meta:
             self.max_record_count = meta["maxRecordCount"]
         else:
             self.max_record_count = None
 
-        # https://developers.arcgis.com/python/
-        try:
-            layer_collection = FeatureLayerCollection(self.base_url)
-        except Exception as e:
-            if len(e.args)>0:
-                if "Error Code: 500" in e.args[0]:
-                    raise OPD_DataUnavailableError(self.base_url, f"Layer # = {self.layer_num}", e.args)
-                elif "A general error occurred: 'authInfo'" in e.args[0]:
-                    raise OPD_arcgisAuthInfoError(self.base_url, f"Layer # = {self.layer_num}", e.args)
-            raise e
-        except: raise
+        if meta["type"]=="Feature Layer":
+            self.is_table = False
+        elif meta["type"]=="Table":
+            self.is_table = True
+        else:
+            raise ValueError("Unexpected ArcGIS layer type: {}".format(meta["type"]))
 
-        self.is_table = True
-        self.active_layer = None
-        for layer in layer_collection.layers:
-            layer_url = layer.url
-            if layer_url[-1] == "/":
-                layer_url = layer_url[:-1]
-            if self.layer_num == layer_url[last_slash+1:]:
-                self.active_layer = layer
-                self.is_table = False
-                break
+        self.__set_verify(_verify_arcgis)
 
-        if self.is_table:
-            for layer in layer_collection.tables:
+
+    def __set_verify(self, verify):
+        # Sets whether to validate OPD queries against ones using arcgis package
+        if not verify:
+            self.verify = verify
+        else:
+            # https://developers.arcgis.com/python/
+            try:
+                from arcgis.features import FeatureLayerCollection
+                self.verify =verify
+            except:
+                print("WARNING: Unable to load ")
+                self.verify = False
+                return
+
+            last_slash =self.url.rindex("/")
+            layer_num = self.url[last_slash+1:]
+            base_url = self.url[:last_slash]
+            try:
+                layer_collection = FeatureLayerCollection(base_url)
+            except Exception as e:
+                if len(e.args)>0:
+                    if "Error Code: 500" in e.args[0]:
+                        raise OPD_DataUnavailableError(self.url, e.args)
+                    elif "A general error occurred: 'authInfo'" in e.args[0]:
+                        raise OPD_arcgisAuthInfoError(self.url, e.args)
+                raise e
+            except: raise
+
+            is_table = True
+            self.__active_layer = None
+            for layer in layer_collection.layers:
                 layer_url = layer.url
                 if layer_url[-1] == "/":
                     layer_url = layer_url[:-1]
-                if self.layer_num == layer_url[last_slash+1:]:
-                    self.active_layer = layer
+                if layer_num == layer_url[last_slash+1:]:
+                    self.__active_layer = layer
+                    is_table = False
                     break
 
-        if self.active_layer == None:
-            raise ValueError("Unable to find layer")
+            if is_table != self.is_table:
+                raise ValueError("is_table is not read in properly")
+
+            if self.is_table:
+                for layer in layer_collection.tables:
+                    layer_url = layer.url
+                    if layer_url[-1] == "/":
+                        layer_url = layer_url[:-1]
+                    if layer_num == layer_url[last_slash+1:]:
+                        self.__active_layer = layer
+                        break
+
+            if self.__active_layer == None:
+                raise ValueError("Unable to find layer")
 
 
     def get_count(self, year=None, *,  where=None, **kwargs):
@@ -739,10 +751,14 @@ class Arcgis(Data_Loader):
             where, record_count = self.__construct_where(year)
         else:
             try:
-                record_count = self.active_layer.query(where=where, return_count_only=True)
+                record_count = self.__request(where=where, return_count=True)["count"]
+                if self.verify:
+                    record_count_orig = self.__active_layer.query(where=where, return_count_only=True)
+                    if record_count_orig!=record_count:
+                        raise ValueError(f"Record count of {record_count} does not equal count from arcgis package of {record_count_orig}")
             except Exception as e:
                 if len(e.args)>0 and "Error Code: 429" in e.args[0]:
-                    raise OPD_TooManyRequestsError(self.base_url, f"Layer # = {self.layer_num}", *e.args, _url_error_msg.format(self.url))
+                    raise OPD_TooManyRequestsError(self.url, *e.args, _url_error_msg.format(self.url))
                 else:
                     raise
             except:
@@ -751,17 +767,59 @@ class Arcgis(Data_Loader):
         return record_count
 
 
-    def __construct_where(self, year):
+    def __request(self, where=None, return_count=False, out_fields="*", out_type="json", offset=0, count=None, sp_ref=None):
+        # f': 'json', 'where': '1=1', 'returnDistinctValues': 'false', 'returnCountOnly': 'true', 'returnIdsOnly': 'false', 'outFields': '*'
+        # Running with no inputs or just an out_type will return metadata only
+        url = self.url + "/"
+        params = {}
+        if where != None:
+            url+="query"
+            params["where"] = where
+            params["outFields"] = out_fields
+            if return_count:
+                params["returnCountOnly"] = True
+            else:
+                # Don't add offset for returning record count. The maximum value returned appears to be the maxRecordCount not the total count of records.
+                # If it's ever desired to get the record with an offset, recommend getting the record count without the offset and then subtracting the offset.
+                params["resultOffset"] = offset
+                if sp_ref!=None:
+                    params["outSR"] = sp_ref
+                
+            if count!=None:
+                params["resultRecordCount"] = count
+
+        params["f"] = out_type
+
+        r = requests.get(url, params=params)
+
+        try:
+            r.raise_for_status()
+        except requests.HTTPError as e:
+            if len(e.args)>0:
+                if "503 Server Error" in e.args[0]:
+                    raise OPD_DataUnavailableError(self.url, e.args)
+
+            else: raise e
+        except: raise
+        
+        return r.json()
+
+
+    def __construct_where(self, year=None):
         where_query = ""
         if self.date_field!=None and year!=None:
-            where_query, record_count = self._build_arcgis_where_query(year)
+            where_query, record_count = self._build_date_query(year)
         else:
             where_query = '1=1'
             try:
-                record_count = self.active_layer.query(where=where_query, return_count_only=True)
+                record_count = self.__request(where=where_query, return_count=True)["count"]
+                if self.verify:
+                    record_count_orig = self.__active_layer.query(where=where_query, return_count_only=True)
+                    if record_count_orig!=record_count:
+                        raise ValueError(f"Record count of {record_count} does not equal count from arcgis package of {record_count_orig}")
             except Exception as e:
                 if len(e.args)>0 and "Error Code: 429" in e.args[0]:
-                    raise OPD_TooManyRequestsError(self.base_url, f"Layer # = {self.layer_num}", *e.args, _url_error_msg.format(self.url))
+                    raise OPD_TooManyRequestsError(self.url, *e.args, _url_error_msg.format(self.url))
                 else:
                     raise
             except:
@@ -770,7 +828,10 @@ class Arcgis(Data_Loader):
         return where_query, record_count
 
     
-    def _build_arcgis_where_query(self, year):
+    def _build_date_query(self, year):
+
+        # List of error messages that can occur for bad queries as we search for the right query format
+        query_err_msg = ["Unable to complete operation", "Failed to execute query", "Unable to perform query", "Database error has occurred"]
         
         where_query = ""
         zero_found = False
@@ -780,7 +841,20 @@ class Arcgis(Data_Loader):
             where_query = f"{self.date_field} >= '{start_date}' AND  {self.date_field} < '{stop_date}'"
         
             try:
-                record_count = self.active_layer.query(where=where_query, return_count_only=True)
+                record_count = self.__request(where=where_query, return_count=True)
+                if "count" not in record_count:
+                    err = "Error Code {}: ".format(record_count["error"]["code"])
+                    if len(record_count["error"]["message"])!=0:
+                        err+=record_count["error"]["message"]
+                        err+=" "
+                    if len(record_count["error"]["details"])>0 and len(record_count["error"]["details"][0])>0:
+                        err+=record_count["error"]["details"][0]
+                    raise KeyError(err)
+                record_count = record_count["count"]
+                if self.verify:
+                    record_count_orig = self.__active_layer.query(where=where_query, return_count_only=True)
+                    if record_count_orig!=record_count:
+                        raise ValueError(f"Record count of {record_count} does not equal count from arcgis package of {record_count_orig}")
                 if self._date_format!=None or record_count>0:
                     self._date_format = 0
                     return where_query, record_count
@@ -788,8 +862,8 @@ class Arcgis(Data_Loader):
                     zero_found = True
             except Exception as e:
                 if len(e.args)>0 and "Error Code: 429" in e.args[0]:
-                    raise OPD_TooManyRequestsError(self.base_url, f"Layer # = {self.layer_num}", *e.args, _url_error_msg.format(self.url))
-                elif len(e.args)>0 and "Unable to complete operation.\n(Error Code: 400)" in e.args[0]:
+                    raise OPD_TooManyRequestsError(self.url, *e.args, _url_error_msg.format(self.url))
+                elif len(e.args)>0 and any([x in e.args[0] for x in query_err_msg]):
                     # This query throws an error for this dataset. Try another one below
                     pass
                 else:
@@ -801,12 +875,15 @@ class Arcgis(Data_Loader):
         where_formats = [
             "{} LIKE '%[0-9][0-9]/[0-9][0-9]/{}%'",   # mm/dd/yyyy
             double_format("{} LIKE '{}/[0-9][0-9]' OR {} LIKE '{}/[0-9]'"),                # yyyy/mm
-            "{} LIKE '{}/[0-9][0-9]'",
             "{} = {}",                # yyyy
             double_format("{} LIKE '[0-9][0-9]-{}' OR {} LIKE '[0-9]-{}'")   # mm-yyyy or m-yyyy
         ]
         # Make year iterable
         year = [year] if isinstance(year, numbers.Number) else year
+
+        if self._date_format not in [None, 0] and any([isinstance(x,str) and len(x)!=4 for x in year]):
+            # Currently can only handle years
+            raise ValueError("Currently unable to handle non-year inputs")
 
         for format in where_formats:
             if self._date_format==format or self._date_format==None:
@@ -815,7 +892,20 @@ class Arcgis(Data_Loader):
                     where_query = f"{where_query} or " + format.format(self.date_field, x)
 
                 try:
-                    record_count = self.active_layer.query(where=where_query, return_count_only=True)
+                    record_count = self.__request(where=where_query, return_count=True)
+                    if "count" not in record_count:
+                        err = "Error Code {}: ".format(record_count["error"]["code"])
+                        if len(record_count["error"]["message"])!=0:
+                            err+=record_count["error"]["message"]
+                            err+=" "
+                        if len(record_count["error"]["details"])>0 and len(record_count["error"]["details"][0])>0:
+                            err+=record_count["error"]["details"][0]
+                        raise KeyError(err)
+                    record_count = record_count["count"]
+                    if self.verify:
+                        record_count_orig = self.__active_layer.query(where=where_query, return_count_only=True)
+                        if record_count_orig!=record_count:
+                            raise ValueError(f"Record count of {record_count} does not equal count from arcgis package of {record_count_orig}")
                     if self._date_format!=None or record_count>0:
                         self._date_format = format
                         return where_query, record_count
@@ -823,8 +913,8 @@ class Arcgis(Data_Loader):
                         zero_found = True
                 except Exception as e:
                     if len(e.args)>0 and "Error Code: 429" in e.args[0]:
-                        raise OPD_TooManyRequestsError(self.base_url, f"Layer # = {self.layer_num}", *e.args, _url_error_msg.format(self.url))
-                    elif len(e.args)>0 and ("Error Code: 400" in e.args[0] or "Failed to execute query" in e.args[0]):
+                        raise OPD_TooManyRequestsError(self.url, *e.args, _url_error_msg.format(self.url))
+                    elif len(e.args)>0 and any([x in e.args[0] for x in query_err_msg]):
                         # This query throws an error for this dataset. Try another one below
                         pass
                     else:
@@ -837,7 +927,7 @@ class Arcgis(Data_Loader):
 
         return "", 0
 
-
+    
     def load(self, year=None, limit=None, *, pbar=True, **kwargs):
         '''Download table from ArcGIS to pandas or geopandas DataFrame
         
@@ -862,20 +952,7 @@ class Arcgis(Data_Loader):
         else:
             total = limit if (self.max_record_count==None or limit<self.max_record_count) else self.max_record_count
         
-        where_query = ""
-        if self.date_field!=None and year!=None:
-            where_query, record_count = self._build_arcgis_where_query(year)
-        else:
-            where_query = '1=1'
-            try:
-                record_count = self.active_layer.query(where=where_query, return_count_only=True)
-            except Exception as e:
-                if len(e.args)>0 and "Error Code: 429" in e.args[0]:
-                    raise OPD_TooManyRequestsError(self.base_url, f"Layer # = {self.layer_num}", *e.args, _url_error_msg.format(self.url))
-                else:
-                    raise
-            except:
-                raise
+        where_query, record_count = self.__construct_where(year)
 
         if record_count==0:
             return None
@@ -888,42 +965,80 @@ class Arcgis(Data_Loader):
             num_batches = ceil(record_count / limit)
             total = record_count
             
-        df = []
         pbar = pbar and num_batches>1
         if pbar:
             bar = tqdm(desc=self.url, total=total, leave=False) 
             
+        features = []
         for batch in range(num_batches):
             try:
+                data = self.__request(where=where_query, offset=batch*limit, count=limit)
+                features.extend(data["features"])
+                if self.verify:
+                    layer_query_result_old = self.__active_layer.query(where=where_query, result_offset=batch*limit, 
+                        result_record_count=limit, return_all_records=False)
+                    sdf = layer_query_result_old.sdf
+
+                    attributes = pd.DataFrame.from_records([x["attributes"] for x in data["features"]])
+                    for col in [x["name"] for x in data["fields"] if x["type"]=='esriFieldTypeDate']:
+                        attributes[col] = pd.to_datetime(attributes[col], unit="ms")
+                    
+                    if not self.is_table:
+                        geom_old = sdf.pop("SHAPE")
+                        has_point_geometry = any("geometry" in x and "x" in x["geometry"] for x in data["features"])
+                        if not has_point_geometry and geom_old.apply(lambda x: x is not None).any():
+                            raise KeyError("Geometry not found")
+                        if _has_gpd and has_point_geometry:
+                            x = [x["geometry"]["x"] if "geometry" in x else None for x in data["features"]]
+                            y = [x["geometry"]["y"] if "geometry" in x else None for x in data["features"]]
+                            x_old = [x["x"] if x!=None else None for x in geom_old]
+                            y_old = [x["y"] if x!=None else None for x in geom_old]
+                            if x!=x_old and any([x!=None for x in x_old]):
+                                raise ValueError(f"X coordinates do not match for {self.url}")
+                            if y!=y_old and any([x!=None for x in y_old]):
+                                raise ValueError(f"Y coordinates do not match for {self.url}")
+
+                    if not sdf.columns.equals(attributes.columns):
+                        # A case was found where data from arcgis package had extra OBJECT_ID column (OBJECT_ID1 and OBJECT_ID)
+                        # These columns are not used anyway so just remove them
+                        missing_cols = [x for x in sdf.columns if x not in attributes.columns]
+                        for col in missing_cols:
+                            if col in ["OBJECTID"]:
+                                sdf.pop(col)
+                            else:
+                                raise ValueError(f"Column '{col}' exists in arcgis query but not opd query")
+
+                    if not sdf.equals(attributes):
+                        raise ValueError(f"DataFrames do not match for {self.url}")
+
                 if batch==0:
-                    layer_query_result = self.active_layer.query(where=where_query, result_offset=batch*limit, result_record_count=limit, return_all_records=False)
-                    df.append(layer_query_result.sdf)
-                    if len(df[0]) not in [limit, total]:
-                        num_rows = len(df[0])
+                    date_cols = [x["name"] for x in data["fields"] if x["type"]=='esriFieldTypeDate']
+                    if not self.is_table:
+                        wkid = data["spatialReference"]["wkid"]
+                    if len(data["features"]) not in [limit, total]:
+                        num_rows = len(data["features"])
                         raise ValueError(f"Number of rows is {num_rows} but is expected to be max rows to read {limit} or total number of rows {total}")
-                else:
-                    df.append(self.active_layer.query(where=where_query, result_offset=batch*limit, result_record_count=limit, return_all_records=False, as_df=True))
             except Exception as e:
                 if len(e.args)>0 and "Error Code: 429" in e.args[0]:
-                    raise OPD_TooManyRequestsError(self.base_url, f"Layer # = {self.layer_num}", *e.args, _url_error_msg.format(self.url))
+                    raise OPD_TooManyRequestsError(self.url, *e.args, _url_error_msg.format(self.url))
                 else:
                     raise
             except:
                 raise
 
             if pbar:
-                bar.update(len(df[-1]))
+                bar.update(len(data["features"]))
 
         if pbar:
             bar.close()
 
-        df = pd.concat(df, ignore_index=True)
+        df = pd.DataFrame.from_records([x["attributes"] for x in features])
+        for col in date_cols:
+            df[col] = pd.to_datetime(df[col], unit="ms")
 
         if len(df) > 0:
-            if self.is_table:
-                if "SHAPE" in df:
-                    raise ValueError("Tables are not expected to include geographic data")
-            else:
+            has_point_geometry = any("geometry" in x and "x" in x["geometry"] for x in features)
+            if not self.is_table and has_point_geometry:
                 if _use_gpd_force is not None:
                     if not _has_gpd and _use_gpd_force:
                         raise ValueError("User cannot force GeoPandas usage when it is not installed")
@@ -932,18 +1047,20 @@ class Arcgis(Data_Loader):
                     use_gpd = _has_gpd
 
                 if use_gpd:
-                    def fix_nans(pt):
-                        if type(pt) == Point and pt.x=="NaN":
-                            pt.x = nan
-                            pt.y = nan
+                    geometry = []
+                    for feat in features:
+                        if "geometry" not in feat:
+                            geometry.append(None)
+                        elif feat["geometry"]["x"]=="NaN":
+                            geometry.append(Point(nan, nan))
+                        else:
+                            geometry.append(Point(feat["geometry"]["x"], feat["geometry"]["y"]))
 
-                        return pt
-                    geometry = df.pop("SHAPE").apply(fix_nans)
                     try:
-                        df = gpd.GeoDataFrame(df, crs=layer_query_result.spatial_reference['wkid'], geometry=geometry)
+                        df = gpd.GeoDataFrame(df, crs=wkid, geometry=geometry)
                     except CRSError:
-                        # Method recommended by pyproj to deal with CRSError for wkid = 102685
-                        crs = CRS.from_authority("ESRI", layer_query_result.spatial_reference['wkid'])
+                        # CRS input method recommended by pyproj team to deal with CRSError for wkid = 102685
+                        crs = CRS.from_authority("ESRI", wkid)
                         df = gpd.GeoDataFrame(df, crs=crs, geometry=geometry)
                     except Exception as e:
                         raise e
@@ -1114,7 +1231,8 @@ class Socrata(Data_Loader):
             except requests.HTTPError as e:
                 raise OPD_SocrataHTTPError(self.url, self.data_set, *e.args, _url_error_msg.format(self.url))
             except Exception as e: 
-                if len(e.args)>0 and e.args[0]=='Unknown response format: text/html':
+                if len(e.args)>0 and (e.args[0]=='Unknown response format: text/html' or \
+                    "Read timed out" in e.args[0]):
                     raise OPD_SocrataHTTPError(self.url, self.data_set, *e.args, _url_error_msg.format(self.url))
                 else:
                     raise e
