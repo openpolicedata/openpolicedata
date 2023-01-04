@@ -2,7 +2,9 @@
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/openpolicedata/opd-examples/HEAD)
 
 # OpenPoliceData
-OpenPoliceData is a pandas-based Python package for police data analysis that provides easy access to incident-level data from police departments around the United States for traffic stops, pedestrian stops, use of force, and other types of police interactions.
+OpenPoliceData is a Python package that provides easy access to 276 (and growing) incident-level open datasets from police departments around the United States. Datasets include traffic stops, use of force, officer-involved shootings, complaints, and other types of police interactions. 
+
+Users request data by department name and type of data, and the data is returned as a pandas DataFrame. There is no need to manually find the data online or to know how to work with open data APIs (ArcGIS, Socrata, etc.).
 
 ![alt text](https://github.com/openpolicedata/opd-data/blob/main/OPD_Datasets_Map.png?raw=true)
 
@@ -29,7 +31,7 @@ Additionally, [geopandas](https://geopandas.org/en/stable/getting_started/instal
 ## Examples
 [Jupyter notebooks](https://jupyter.org/) demonstrating example usage of OpenPoliceData can be found in the [opd-examples](https://github.com/openpolicedata/opd-examples) repo. 
 
-**[Try OpenPoliceData online on Binder](https://github.com/openpolicedata/opd-examples).**
+**[You can try out OpenPoliceData and run examples online on Binder.](https://mybinder.org/v2/gh/openpolicedata/opd-examples/HEAD)**
 
 ## Contributing
 If you're interesting in helping out, see our [Contributing Guide](https://github.com/openpolicedata/openpolicedata/blob/main/CONTRIBUTING.MD)
