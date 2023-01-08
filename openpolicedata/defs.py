@@ -10,6 +10,7 @@ class DataType(Enum):
     CSV = "CSV"
     ArcGIS = "ArcGIS"
     SOCRATA = "Socrata"
+    CARTO = "Carto"
 
 # These are the types of tables currently available in opd.
 # Add to this list when datasets do not correspond to the below data types
@@ -37,6 +38,8 @@ class TableType(str, Enum):
         "Complaint data may be split into several tables. This table contains specific data on the allegations.")
     COMPLAINTS_BACKGROUND = ("COMPLAINTS - BACKGROUND",
         "Complaint data may be split into several tables. This table contains data on the general background of the complaints.")
+    COMPLAINTS_CIVILIANS = ("COMPLAINTS - CIVILIANS",
+        "Complaint data may be split into several tables. This table contains specific data on the involved civilians.")
     COMPLAINTS_OFFICERS = ("COMPLAINTS - OFFICERS",
         "Complaint data may be split into several tables. This table contains specific data on the involved officers.")
     COMPLAINTS_PENALTIES = ("COMPLAINTS - PENALTIES",
@@ -53,6 +56,7 @@ class TableType(str, Enum):
         "civilians and vehicles may be involved in an incident. This table contains data on vehicles    .")
     EMPLOYEE = ("EMPLOYEE","Demographic data of the police workforce")
     FIELD_CONTACTS = ("FIELD CONTACTS", "Consensual contacts between officers and the community.")
+    INCIDENTS = ("INCIDENTS", "Crime incident reports")
     PEDESTRIAN = ("PEDESTRIAN STOPS","Stops of pedestrians based on 'reasonable suspicion'. May lead to a frisk.")
     PEDESTRIAN_ARRESTS = ("PEDESTRIAN ARRESTS","Pedestrian stops leading to an arrest")
     PEDESTRIAN_CITATIONS = ("PEDESTRIAN CITATIONS","Pedestrian stops leading to a citation")

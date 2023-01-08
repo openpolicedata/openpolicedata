@@ -180,19 +180,21 @@ class TestData:
 		os.remove(filename)
 
 	
-def can_be_limited(table_type, url):
-	if (table_type == "CSV" and ".zip" in url):
+def can_be_limited(data_type, url):
+	data_type = DataType(data_type)
+	if (data_type == DataType.CSV and ".zip" in url):
 		return False
-	elif (table_type == "ArcGIS" or table_type == "Socrata" or table_type == "CSV"):
+	elif data_type in [DataType.ArcGIS, DataType.SOCRATA, DataType.CSV, DataType.EXCEL, DataType.CARTO]:
 		return True
 	else:
 		raise ValueError("Unknown table type")
 
 
-def is_filterable(table_type):
-	if table_type == "CSV" or table_type == "Excel":
+def is_filterable(data_type):
+	data_type = DataType(data_type)
+	if data_type in [DataType.CSV, DataType.EXCEL]:
 		return False
-	elif (table_type == "ArcGIS" or table_type == "Socrata" ):
+	elif data_type in [DataType.ArcGIS, DataType.SOCRATA, DataType.CARTO]:
 		return True
 	else:
 		raise ValueError("Unknown table type")
@@ -232,11 +234,11 @@ if __name__ == "__main__":
 	# (self, csvfile, source, last, skip, loghtml)
 	csvfile = r"..\opd-data\opd_source_table.csv"
 	last = None
-	last = 607-493+1
+	# last = 607-493+1
 	source = None
-	# source = "Lincoln"
+	source = "Philadelphia"
 	skip = None
-	skip = "Fayetteville,San Diego,Seattle"
+	# skip = "Fayetteville,San Diego,Seattle"
 	tp.test_get_years(csvfile, source, last, skip, None)
 	tp.test_get_agencies(csvfile, None, None, skip, None)
 	tp.test_get_agencies_name_match(csvfile, None, None, skip, None)

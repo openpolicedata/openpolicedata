@@ -472,7 +472,7 @@ class Source:
             if return_count:
                 return loader.get_count(year=year_filter, agency=agency, opt_filter=opt_filter, force=force)
             else:
-                table = loader.load(year=year_filter, agency=agency, opt_filter=opt_filter, limit=self.__limit, pbar=pbar)
+                table = loader.load(year=year_filter, agency=agency, opt_filter=opt_filter, nrows=self.__limit, pbar=pbar)
                 table = _check_date(table, date_field)                        
         else:
             table = None
@@ -562,6 +562,8 @@ class Source:
             loader = data_loaders.Arcgis(url, date_field=date_field)
         elif data_type ==DataType.SOCRATA:
             loader = data_loaders.Socrata(url, dataset_id, date_field=date_field)
+        elif data_type ==DataType.CARTO:
+            loader = data_loaders.Carto(url, dataset_id, date_field=date_field)
         else:
             raise ValueError(f"Unknown data type: {data_type}")
 
@@ -590,7 +592,7 @@ def _check_date(table, date_field):
                 
                 table[date_field] = table[date_field].apply(to_datetime)
                 # table = table.astype({date_field: 'datetime64[ns]'})
-            elif (date_field.lower() == "year" or date_field.lower() == "yr") and isinstance(one_date, numbers.Number):
+            elif ("year" in date_field.lower() or date_field.lower() == "yr") and isinstance(one_date, numbers.Number):
                 table[date_field] = table[date_field].apply(lambda x: datetime(x,1,1))
                 
             # Replace bad dates with NaT

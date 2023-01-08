@@ -175,12 +175,23 @@ class TestData:
 			
 		assert loader.get_count(force=True) == count
 
+		print("Testing Carto source")
+		src = data.Source("Philadelphia")
+		url = "phl"
+		dataset = "car_ped_stops"
+		date_field = "datetimeoccur"
+		loader = data_loaders.Carto(url, dataset, date_field)  
+		year = 2021
+		assert loader.get_count(year=year) == src.get_count(year=year, table_type=TableType.STOPS)
+		year = [2020,2022]
+		assert loader.get_count(year=year) == src.get_count(year=year, table_type=TableType.STOPS)
+
 
 def can_be_limited(data_type, url):
 	data_type = DataType(data_type)
 	if (data_type == DataType.CSV and ".zip" in url):
 		return False
-	elif data_type in [DataType.ArcGIS, DataType.SOCRATA, DataType.CSV, DataType.EXCEL]:
+	elif data_type in [DataType.ArcGIS, DataType.SOCRATA, DataType.CSV, DataType.EXCEL, DataType.CARTO]:
 		return True
 	else:
 		raise ValueError("Unknown table type")
@@ -190,7 +201,7 @@ def is_filterable(data_type):
 	data_type = DataType(data_type)
 	if data_type in [DataType.CSV, DataType.EXCEL]:
 		return False
-	elif data_type in [DataType.ArcGIS, DataType.SOCRATA]:
+	elif data_type in [DataType.ArcGIS, DataType.SOCRATA, DataType.CARTO]:
 		return True
 	else:
 		raise ValueError("Unknown table type")
@@ -228,15 +239,15 @@ if __name__ == "__main__":
 	# For testing
 	tp = TestData()
 	# (self, csvfile, source, last, skip, loghtml)
+	csvfile = None
 	csvfile = r"..\opd-data\opd_source_table.csv"
-	# csvfile = None
 	last = None
-	last = 607-411+1
+	# last = 306
 	skip = None
-	skip = "Fayetteville,San Diego,Seattle"
+	skip = "Fayetteville,San Diego,Seattle,Indianapolis"
 	source = None
-	# source = "Beloit"
-	tp.test_source_download_limitable(csvfile, source, last, skip, None) 
+	source = "Philadelphia"
+	# tp.test_source_download_limitable(csvfile, source, last, skip, None) 
 	# tp.test_check_version(csvfile, None, last, skip, None) 
 	tp.test_get_count(csvfile, None, last, skip, None)
 	
