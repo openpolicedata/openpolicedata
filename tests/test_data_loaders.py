@@ -29,6 +29,64 @@ class TestProduct:
         with pytest.raises(ValueError):
             data_loaders._process_date(year)
 
+    def test_carto(self, csvfile, source, last, skip, loghtml):
+        lim = data_loaders._default_limit
+        data_loaders._default_limit = 500
+        url = "phl"
+        dataset = "car_ped_stops"
+        date_field = "datetimeoccur"
+        loader = data_loaders.Carto(url, dataset, date_field)
+
+        count = loader.get_count()
+
+        r = requests.get("https://phl.carto.com/api/v2/sql?q=SELECT count(*) FROM car_ped_stops")
+        r.raise_for_status()
+        assert count==r.json()["rows"][0]["count"]
+
+        year = 2019
+        count = loader.get_count(year=year)
+
+        r = requests.get(f"https://phl.carto.com/api/v2/sql?q=SELECT count(*) FROM car_ped_stops WHERE datetimeoccur >= '{year}-01-01' AND datetimeoccur < '{year+1}-01-01'")
+        r.raise_for_status()
+        assert count==r.json()["rows"][0]["count"]
+
+        nrows = data_loaders._default_limit*2
+        df = loader.load(year=year, nrows=nrows)
+
+        r = requests.get(f"https://phl.carto.com/api/v2/sql?format=GeoJSON&q=SELECT * FROM car_ped_stops WHERE datetimeoccur >= '{year}-01-01' AND datetimeoccur < '{year+1}-01-01' LIMIT {nrows}")
+        features = r.json()["features"]
+        df_comp= pd.DataFrame.from_records([x["properties"] for x in features])
+        df_comp[date_field] = pd.to_datetime(df_comp[date_field])
+        
+        try:
+            import geopandas as gpd
+            from shapely.geometry import Point
+            geometry = []
+            for feat in features:
+                if "geometry" not in feat or feat["geometry"]==None:
+                    geometry.append(None)
+                else:
+                    geometry.append(Point(feat["geometry"]["coordinates"][0], feat["geometry"]["coordinates"][1]))
+
+            df_comp = gpd.GeoDataFrame(df_comp, crs=4326, geometry=geometry)
+        except:
+            pass
+
+        assert df.equals(df_comp)
+
+        data_loaders._default_limit = lim
+
+        if data_loaders._has_gpd:
+            assert type(df) == gpd.GeoDataFrame
+            data_loaders._has_gpd = False
+            df = loader.load(year=year, nrows=nrows)
+            data_loaders._has_gpd = True
+            assert isinstance(df, pd.DataFrame)
+
+        url2 = "https://phl.carto.com/api/v2/sql?"
+        loader2 = data_loaders.Carto(url2, dataset, date_field)
+        assert loader.url==loader2.url
+
     def test_arcgis(self, csvfile, source, last, skip, loghtml):
         lim = data_loaders._default_limit
         data_loaders._default_limit = 500
@@ -116,8 +174,8 @@ class TestProduct:
             url = "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_CRIME_STOPS_P/FeatureServer/32/"
             date_field = "TIME_PHONEPICKUP"
             year_filter = 2020
-            limit = 1000
-            df = data_loaders.Arcgis(url, date_field=date_field).load(year=year_filter, limit=limit)
+            nrows = 1000
+            df = data_loaders.Arcgis(url, date_field=date_field).load(year=year_filter, nrows=nrows)
 
             assert type(df) == gpd.GeoDataFrame
         else:
@@ -143,8 +201,8 @@ class TestProduct:
             data_set = "4mse-ku6q"
             date_field = "date_of_stop"
             year = 2020
-            limit = 1000
-            df = data_loaders.Socrata(url=url, data_set=data_set, date_field=date_field).load(year=year, limit=limit)
+            nrows = 1000
+            df = data_loaders.Socrata(url=url, data_set=data_set, date_field=date_field).load(year=year, nrows=nrows)
 
             assert type(df) == gpd.GeoDataFrame
         else:
@@ -206,7 +264,7 @@ class TestProduct:
         assert list(df[date_field].dt.year.sort_values(ascending=True).dropna().unique()) == years
 
         nrows = 7
-        df = data_loaders.Csv(url).load(limit=nrows)
+        df = data_loaders.Csv(url).load(nrows=nrows)
         df_comp = pd.read_csv(url, nrows=nrows)
 
         assert df_comp.equals(df)
@@ -249,7 +307,7 @@ class TestProduct:
         assert list(df[date_field].dt.year.sort_values(ascending=True).dropna().unique()) == years
 
         nrows = 7
-        df = loader.load(limit=nrows)        
+        df = loader.load(nrows=nrows)        
         df_comp = pd.read_excel(url, nrows=nrows)
         df_comp = df_comp.convert_dtypes()
         df_comp.columns = [x.strip() if isinstance(x, str) else x for x in df_comp.columns]
@@ -375,6 +433,7 @@ class TestProduct:
 if __name__ == "__main__":
     tp = TestProduct()
 
+    tp.test_carto(None,None,None,None,None)
     tp.test_arcgis(None,None,None,None,None)
     tp.test_arcgis_geopandas(None,None,None,None,None)
     tp.test_arcgis_pandas(None,None,None,None,None)

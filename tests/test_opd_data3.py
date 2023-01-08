@@ -138,7 +138,8 @@ class TestData:
 
 				sleep(sleep_time)
 
-				if table._date_field == None or datasets.iloc[i]["DataType"]==DataType.EXCEL.value:
+				if table._date_field == None or datasets.iloc[i]["DataType"]==DataType.EXCEL.value or \
+					table._date_field.lower()=="year":
 					continue
 
 				dts = table.table[table._date_field]
@@ -279,19 +280,21 @@ class TestData:
 					assert datasets.iloc[i]["agency_field"] in table.table
 
 
-def can_be_limited(table_type, url):
-	if (table_type == "CSV" and ".zip" in url):
+def can_be_limited(data_type, url):
+	data_type = DataType(data_type)
+	if (data_type == DataType.CSV and ".zip" in url):
 		return False
-	elif (table_type == "ArcGIS" or table_type == "Socrata" or table_type == "CSV" or table_type == "Excel"):
+	elif data_type in [DataType.ArcGIS, DataType.SOCRATA, DataType.CSV, DataType.EXCEL, DataType.CARTO]:
 		return True
 	else:
 		raise ValueError("Unknown table type")
 
 
-def is_filterable(table_type):
-	if table_type == "CSV"  or table_type == "Excel":
+def is_filterable(data_type):
+	data_type = DataType(data_type)
+	if data_type in [DataType.CSV, DataType.EXCEL]:
 		return False
-	elif (table_type == "ArcGIS" or table_type == "Socrata" ):
+	elif data_type in [DataType.ArcGIS, DataType.SOCRATA, DataType.CARTO]:
 		return True
 	else:
 		raise ValueError("Unknown table type")
@@ -332,7 +335,10 @@ if __name__ == "__main__":
 	csvfile = None
 	csvfile = r"..\opd-data\opd_source_table.csv"
 	last = None
-	last = 607-510+1
+	# last = 607-93
 	skip = None
-	skip = "Bloomington"
-	tp.test_load_year(csvfile, None, last, skip, None)
+	# skip = "Bloomington"
+	source = None
+	source = "Philadelphia"
+	tp.test_load_year(csvfile, source, last, skip, None)
+	tp.test_source_download_not_limitable(csvfile, source, last, skip, None)
