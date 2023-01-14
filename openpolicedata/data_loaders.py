@@ -687,7 +687,6 @@ class Arcgis(Data_Loader):
                 from arcgis.features import FeatureLayerCollection
                 self.verify =verify
             except:
-                print("WARNING: Unable to load ")
                 self.verify = False
                 return
 
@@ -953,7 +952,7 @@ class Arcgis(Data_Loader):
             return None
 
         batch_size = self.max_record_count or _default_limit
-        nrows = nrows or record_count
+        nrows = nrows if nrows!=None and record_count>=nrows else record_count
         batch_size = nrows if nrows < batch_size else batch_size
         num_batches = ceil(nrows / batch_size)
             
@@ -1056,6 +1055,13 @@ class Arcgis(Data_Loader):
                         df = gpd.GeoDataFrame(df, crs=crs, geometry=geometry)
                     except Exception as e:
                         raise e
+                else:
+                    geometry = [feat["geometry"] if "geometry" in feat else None for feat in features]
+
+                    if "geolocation" not in df:
+                        df["geolocation"] = geometry
+                    else:
+                        raise KeyError("geolocation already exists in DataFrame")
 
             return df
         else:
@@ -1209,7 +1215,7 @@ class Carto(Data_Loader):
             return None
 
         batch_size = _default_limit
-        nrows = nrows or record_count
+        nrows = nrows if nrows!=None and record_count>=nrows else record_count
         batch_size = nrows if nrows < batch_size else batch_size
         num_batches = ceil(nrows / batch_size)
             
@@ -1268,6 +1274,13 @@ class Carto(Data_Loader):
                             geometry.append(Point(feat["geometry"]["coordinates"][0], feat["geometry"]["coordinates"][1]))
 
                     df = gpd.GeoDataFrame(df, crs=4326, geometry=geometry)
+                else:
+                    geometry = [feat["geometry"] if "geometry" in feat else None for feat in features]
+
+                    if "geolocation" not in df:
+                        df["geolocation"] = geometry
+                    else:
+                        raise KeyError("geolocation already exists in DataFrame")
 
             return df
         else:
@@ -1409,7 +1422,7 @@ class Socrata(Data_Loader):
 
         record_count = int(self.get_count(where=where))
         batch_size =  _default_limit
-        nrows = nrows or record_count
+        nrows = nrows if nrows!=None and record_count>=nrows else record_count
         batch_size = nrows if nrows < batch_size else batch_size
         num_batches = ceil(nrows / batch_size)
             

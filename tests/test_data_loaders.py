@@ -70,7 +70,8 @@ class TestProduct:
 
             df_comp = gpd.GeoDataFrame(df_comp, crs=4326, geometry=geometry)
         except:
-            pass
+            geometry = [feat["geometry"] if "geometry" in feat else None for feat in features]
+            df_comp["geolocation"] = geometry
 
         assert df.equals(df_comp)
 
