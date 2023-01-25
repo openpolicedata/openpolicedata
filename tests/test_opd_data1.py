@@ -76,15 +76,13 @@ class TestData:
 				srcName = datasets.iloc[i]["SourceName"]
 				state = datasets.iloc[i]["State"]
 				src = data.Source(srcName, state=state)
-				# For speed, set private limit parameter so that only a limted number of data is requested
-				src._Source__limit = 20
 
 				table_print = datasets.iloc[i]["TableType"]
 				now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
 				print(f"{now} Testing {i+1} of {len(datasets)}: {srcName} {table_print} table")
 
 				try:
-					table = src.load_from_url(datasets.iloc[i]["Year"], datasets.iloc[i]["TableType"], pbar=False)
+					table = src.load_from_url(datasets.iloc[i]["Year"], datasets.iloc[i]["TableType"], pbar=False, nrows=20)
 				except warn_errors as e:
 					e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"])
 					caught_exceptions_warn.append(e)
@@ -240,14 +238,14 @@ if __name__ == "__main__":
 	tp = TestData()
 	# (self, csvfile, source, last, skip, loghtml)
 	csvfile = None
-	csvfile = r"..\opd-data\opd_source_table.csv"
+	# csvfile = r"..\opd-data\opd_source_table.csv"
 	last = None
-	# last = 306
+	last = 613-369
 	skip = None
-	skip = "Fayetteville,San Diego,Seattle,Indianapolis"
+	skip = "Fayetteville,Seattle,Indianapolis,Baltimore"
 	source = None
-	source = "Philadelphia"
-	# tp.test_source_download_limitable(csvfile, source, last, skip, None) 
-	# tp.test_check_version(csvfile, None, last, skip, None) 
+	# source = "Philadelphia"
+	tp.test_source_download_limitable(csvfile, source, last, skip, None) 
+	tp.test_check_version(csvfile, None, last, skip, None) 
 	tp.test_get_count(csvfile, None, last, skip, None)
 	
