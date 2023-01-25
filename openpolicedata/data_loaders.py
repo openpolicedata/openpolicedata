@@ -806,6 +806,8 @@ class Arcgis(Data_Loader):
                 params["resultOffset"] = offset
                 if sp_ref!=None:
                     params["outSR"] = sp_ref
+                if self.date_field!=None:
+                    params["orderByFields"] = self.date_field
                 
             if count!=None:
                 params["resultRecordCount"] = count
