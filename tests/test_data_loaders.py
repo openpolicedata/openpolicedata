@@ -170,6 +170,18 @@ class TestProduct:
 
         assert layer_query_result.equals(df)
 
+
+    def test_arcgis_legacy_server(self, csvfile, source, last, skip, loghtml):
+        url = "https://opendata.baltimorecity.gov/egis/rest/services/Hosted/911_Calls_For_Service_2017_csv/FeatureServer/0" 
+
+        gis = data_loaders.Arcgis(url)
+        gis.load(nrows=1)
+
+        url = "https://xmaps.indy.gov/arcgis/rest/services/OpenData/OpenData_NonSpatial/MapServer/5/" 
+        gis = data_loaders.Arcgis(url)
+        gis.load(nrows=1)
+
+
     def test_arcgis_geopandas(self, csvfile, source, last, skip, loghtml):
         if _has_gpd:
             url = "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_CRIME_STOPS_P/FeatureServer/32/"
@@ -434,6 +446,7 @@ class TestProduct:
 if __name__ == "__main__":
     tp = TestProduct()
 
+    tp.test_arcgis_legacy_server(None,None,None,None,None)
     tp.test_carto(None,None,None,None,None)
     tp.test_arcgis(None,None,None,None,None)
     tp.test_arcgis_geopandas(None,None,None,None,None)

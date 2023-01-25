@@ -154,8 +154,7 @@ class TestData:
 		src = data.Source("Virginia")
 		agency="Fairfax County Police Department"
 		# For speed, set private limit parameter so that only a single entry is requested
-		src._Source__limit = 100
-		table = src.load_from_url(2021, agency=agency, pbar=False)
+		table = src.load_from_url(2021, agency=agency, pbar=False, nrows=100)
 		
 		assert len(table.table)==100
 		assert table.table[table._agency_field].nunique()==1
@@ -165,9 +164,8 @@ class TestData:
 		src = data.Source("Virginia")
 		get_datasets(csvfile)
 		agency="Fairfax County Police Department"
-		src._Source__limit = 100
 		year = 2021
-		table = src.load_from_url(2021, agency=agency, pbar=False)
+		table = src.load_from_url(2021, agency=agency, pbar=False, nrows=100)
 
 		table.to_csv()
 
@@ -232,13 +230,14 @@ if __name__ == "__main__":
 	# For testing
 	tp = TestData()
 	# (self, csvfile, source, last, skip, loghtml)
-	csvfile = r"..\opd-data\opd_source_table.csv"
+	csvfile = None
+	# csvfile = r"..\opd-data\opd_source_table.csv"
 	last = None
 	# last = 607-493+1
 	source = None
-	source = "Philadelphia"
+	source = "Detroit"
 	skip = None
-	# skip = "Fayetteville,San Diego,Seattle"
+	skip = "Fayetteville,Seattle"
 	tp.test_get_years(csvfile, source, last, skip, None)
 	tp.test_get_agencies(csvfile, None, None, skip, None)
 	tp.test_get_agencies_name_match(csvfile, None, None, skip, None)

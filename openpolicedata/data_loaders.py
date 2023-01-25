@@ -7,6 +7,8 @@ import pandas as pd
 from numpy import nan
 import requests
 import urllib
+import urllib3
+import ssl
 from abc import ABC, abstractmethod
 from sodapy import Socrata as SocrataClient
 from pyproj.exceptions import CRSError
@@ -70,6 +72,26 @@ class double_format(object):
 
     def format(self, date_field, year):
         return self.string.format(date_field, year, date_field, year)
+    
+# Based on https://stackoverflow.com/a/73519818/9922439
+class CustomHttpAdapter (requests.adapters.HTTPAdapter):
+    # "Transport adapter" that allows us to use custom ssl_context.
+
+    def __init__(self, ssl_context=None, **kwargs):
+        self.ssl_context = ssl_context
+        super().__init__(**kwargs)
+
+    def init_poolmanager(self, connections, maxsize, block=False):
+        self.poolmanager = urllib3.poolmanager.PoolManager(
+            num_pools=connections, maxsize=maxsize,
+            block=block, ssl_context=self.ssl_context)
+        
+def get_legacy_session():
+    ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+    ctx.options |= 0x4  # OP_LEGACY_SERVER_CONNECT
+    session = requests.session()
+    session.mount('https://', CustomHttpAdapter(ctx))
+    return session
 
 
 class Data_Loader(ABC):
@@ -162,7 +184,7 @@ class Csv(Data_Loader):
         Parameters
         ----------
         url : str
-            URL for ArcGIS data
+            URL for CSV data
         date_field : str
             (Optional) Name of the column that contains the date
         agency_field : str
@@ -327,7 +349,7 @@ class Excel(Data_Loader):
         Parameters
         ----------
         url : str
-            URL for ArcGIS data
+            URL for Excel data
         date_field : str
             (Optional) Name of the column that contains the date
         agency_field : str
@@ -784,16 +806,25 @@ class Arcgis(Data_Loader):
                 params["resultOffset"] = offset
                 if sp_ref!=None:
                     params["outSR"] = sp_ref
+                if self.date_field!=None:
+                    params["orderByFields"] = self.date_field
                 
             if count!=None:
                 params["resultRecordCount"] = count
 
         params["f"] = out_type
 
-        r = requests.get(url, params=params)
-
         try:
+            r = requests.get(url, params=params)
             r.raise_for_status()
+        except requests.exceptions.SSLError as e:
+            if "[SSL: UNSAFE_LEGACY_RENEGOTIATION_DISABLED] unsafe legacy renegotiation disabled" in str(e.args[0]):
+                with get_legacy_session() as session:
+                    r = session.get(url, params=params)
+                    
+                r.raise_for_status()
+            else:
+                raise e
         except requests.HTTPError as e:
             if len(e.args)>0:
                 if "503 Server Error" in e.args[0]:
@@ -1172,6 +1203,8 @@ class Carto(Data_Loader):
             if len(e.args)>0:
                 if "503 Server Error" in e.args[0]:
                     raise OPD_DataUnavailableError(self.url, e.args)
+                else:
+                    raise
 
             else: raise e
         except: raise
@@ -1421,6 +1454,8 @@ class Socrata(Data_Loader):
             use_gpd = _has_gpd
 
         record_count = int(self.get_count(where=where))
+        if record_count==0:
+            return None
         batch_size =  _default_limit
         nrows = nrows if nrows!=None and record_count>=nrows else record_count
         batch_size = nrows if nrows < batch_size else batch_size

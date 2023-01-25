@@ -190,7 +190,6 @@ class Source:
     """
 
     datasets = None
-    __limit = None
     __loader = None
 
     def __init__(self, source_name, state=None):
@@ -359,7 +358,7 @@ class Source:
         return self.__load(year, table_type, agency, True, pbar=False, return_count=True, force=force)
         
 
-    def load_from_url(self, year, table_type=None, agency=None, pbar=True):
+    def load_from_url(self, year, table_type=None, agency=None, pbar=True, nrows=None):
         '''Load data from URL
 
         Parameters
@@ -376,6 +375,8 @@ class Source:
             only be returned for this agency
         pbar - bool
             (Optional) Whether to show progress bar when loading data. Default True
+        nrows - int or None
+            (Optional) Number of records to read. Default is None for all records.
 
         Returns
         -------
@@ -383,7 +384,7 @@ class Source:
             Table object containing the requested data
         '''
 
-        return self.__load(year, table_type, agency, True, pbar)
+        return self.__load(year, table_type, agency, True, pbar, nrows=nrows)
 
     def __find_datasets(self, table_type):
         if isinstance(table_type, TableType):
@@ -396,7 +397,7 @@ class Source:
         return src
 
 
-    def __load(self, year, table_type, agency, load_table, pbar=True, return_count=False, force=False):
+    def __load(self, year, table_type, agency, load_table, pbar=True, return_count=False, force=False, nrows=None):
         
         src = self.__find_datasets(table_type)
 
@@ -472,7 +473,7 @@ class Source:
             if return_count:
                 return loader.get_count(year=year_filter, agency=agency, opt_filter=opt_filter, force=force)
             else:
-                table = loader.load(year=year_filter, agency=agency, opt_filter=opt_filter, nrows=self.__limit, pbar=pbar)
+                table = loader.load(year=year_filter, agency=agency, opt_filter=opt_filter, nrows=nrows, pbar=pbar)
                 table = _check_date(table, date_field)                        
         else:
             table = None
