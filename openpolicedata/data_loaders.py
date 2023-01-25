@@ -812,12 +812,11 @@ class Arcgis(Data_Loader):
 
         params["f"] = out_type
 
-        r = requests.get(url, params=params)
-
         try:
+            r = requests.get(url, params=params)
             r.raise_for_status()
         except requests.exceptions.SSLError as e:
-            if "[SSL: UNSAFE_LEGACY_RENEGOTIATION_DISABLED] unsafe legacy renegotiation disabled" in e.args[0]:
+            if "[SSL: UNSAFE_LEGACY_RENEGOTIATION_DISABLED] unsafe legacy renegotiation disabled" in str(e.args[0]):
                 with get_legacy_session() as session:
                     r = session.get(url, params=params)
                     
@@ -1202,6 +1201,8 @@ class Carto(Data_Loader):
             if len(e.args)>0:
                 if "503 Server Error" in e.args[0]:
                     raise OPD_DataUnavailableError(self.url, e.args)
+                else:
+                    raise
 
             else: raise e
         except: raise
@@ -1451,6 +1452,8 @@ class Socrata(Data_Loader):
             use_gpd = _has_gpd
 
         record_count = int(self.get_count(where=where))
+        if record_count==0:
+            return None
         batch_size =  _default_limit
         nrows = nrows if nrows!=None and record_count>=nrows else record_count
         batch_size = nrows if nrows < batch_size else batch_size

@@ -61,6 +61,12 @@ def _build(csv_file):
 
     df["URL"] = urls
 
+    # Ensure that all states are correctly spelled
+    not_state = df["State"].apply(lambda x: x not in defs.states)
+    if not_state.any():
+        misspelled = df["State"][not_state]
+        raise ValueError(f"{len(misspelled)} states are misspelled in the data sources table including {misspelled.iloc[0]} at index {misspelled.index[0]}")
+
     key_vals = ['State', 'SourceName', 'Agency', 'TableType','Year']
     df.drop_duplicates(subset=key_vals, inplace=True)
     # df.sort_values(by=keyVals, inplace=True, ignore_index=True)
