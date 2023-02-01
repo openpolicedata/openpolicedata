@@ -1,9 +1,0 @@
-sodapy
-pandas
-thefuzz
-numpy
-requests
-pyproj
-tqdm
-openpyxl
-xlrd

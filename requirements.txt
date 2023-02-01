@@ -1,13 +1,9 @@
-###### These can be the latest version ######
-# Availble from conda
-geopandas
+sodapy
 pandas
 thefuzz
 numpy
 requests
 pyproj
+tqdm
 openpyxl
 xlrd
-# Must be installed with pip
-sodapy
-arcgis
