@@ -869,7 +869,7 @@ class Arcgis(Data_Loader):
         if self._date_format==0 or self._date_format==None:
             start_date, stop_date = _process_date(year)
             
-            where_query = f"{self.date_field} >= '{start_date}' AND  {self.date_field} < '{stop_date}'"
+            where_query = f"{self.date_field} >= TIMESTAMP '{start_date}' AND  {self.date_field} < TIMESTAMP '{stop_date}'"
         
             try:
                 record_count = self.__request(where=where_query, return_count=True)
