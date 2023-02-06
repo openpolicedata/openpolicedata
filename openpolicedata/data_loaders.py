@@ -139,9 +139,9 @@ class Data_Loader(ABC):
         misses = 0
         years = []
         while misses < max_misses:
-            df = self.load(year=year, nrows=nrows)
+            count = self.get_count(year=year)
 
-            if not hasattr(df, '__len__') or len(df)==0:  # If doesn't have len attribute, it is None
+            if count==0:  # If doesn't have len attribute, it is None
                 misses+=1
             else:
                 misses = 0
@@ -862,45 +862,55 @@ class Arcgis(Data_Loader):
     def _build_date_query(self, year):
 
         # List of error messages that can occur for bad queries as we search for the right query format
-        query_err_msg = ["Unable to complete operation", "Failed to execute query", "Unable to perform query", "Database error has occurred"]
+        query_err_msg = ["Unable to complete operation", "Failed to execute query", "Unable to perform query", "Database error has occurred", 
+                         "'where' parameter is invalid", "Parsing error"]
         
         where_query = ""
         zero_found = False
-        if self._date_format==0 or self._date_format==None:
+        if self._date_format in [0,1] or self._date_format==None:
             start_date, stop_date = _process_date(year)
             
-            where_query = f"{self.date_field} >= TIMESTAMP '{start_date}' AND  {self.date_field} < TIMESTAMP '{stop_date}'"
-        
-            try:
-                record_count = self.__request(where=where_query, return_count=True)
-                if "count" not in record_count:
-                    err = "Error Code {}: ".format(record_count["error"]["code"])
-                    if len(record_count["error"]["message"])!=0:
-                        err+=record_count["error"]["message"]
-                        err+=" "
-                    if len(record_count["error"]["details"])>0 and len(record_count["error"]["details"][0])>0:
-                        err+=record_count["error"]["details"][0]
-                    raise KeyError(err)
-                record_count = record_count["count"]
-                if self.verify:
-                    record_count_orig = self.__active_layer.query(where=where_query, return_count_only=True)
-                    if record_count_orig!=record_count:
-                        raise ValueError(f"Record count of {record_count} does not equal count from arcgis package of {record_count_orig}")
-                if self._date_format!=None or record_count>0:
-                    self._date_format = 0
-                    return where_query, record_count
+            for k in range(0,2):
+                if k==0:
+                    where_query = f"{self.date_field} >= '{start_date}' AND  {self.date_field} < '{stop_date}'"
                 else:
-                    zero_found = True
-            except Exception as e:
-                if len(e.args)>0 and "Error Code: 429" in e.args[0]:
-                    raise OPD_TooManyRequestsError(self.url, *e.args, _url_error_msg.format(self.url))
-                elif len(e.args)>0 and any([x in e.args[0] for x in query_err_msg]):
-                    # This query throws an error for this dataset. Try another one below
-                    pass
-                else:
+                    break
+                    # Dataset (San Jose crash data) that required this does not function well so removing its functionality for now to speed up this function.
+                    # This is the recommended way but it has been found to not work sometimes. One dataset was found that requires this.
+                    # https://gis.stackexchange.com/questions/451107/arcgis-rest-api-unable-to-complete-operation-on-esrifieldtypedate-in-query
+                    stop_date_tmp = stop_date.replace("T"," ")
+                    where_query = f"{self.date_field} >= TIMESTAMP '{start_date}' AND  {self.date_field} < TIMESTAMP '{stop_date_tmp}'"
+            
+                try:
+                    record_count = self.__request(where=where_query, return_count=True)
+                    if "count" not in record_count:
+                        err = "Error Code {}: ".format(record_count["error"]["code"])
+                        if len(record_count["error"]["message"])!=0:
+                            err+=record_count["error"]["message"]
+                            err+=" "
+                        if len(record_count["error"]["details"])>0 and len(record_count["error"]["details"][0])>0:
+                            err+=record_count["error"]["details"][0]
+                        raise KeyError(err)
+                    record_count = record_count["count"]
+                    if self.verify:
+                        record_count_orig = self.__active_layer.query(where=where_query, return_count_only=True)
+                        if record_count_orig!=record_count:
+                            raise ValueError(f"Record count of {record_count} does not equal count from arcgis package of {record_count_orig}")
+                    if self._date_format!=None or record_count>0:
+                        self._date_format = k
+                        return where_query, record_count
+                    else:
+                        zero_found = True
+                except Exception as e:
+                    if len(e.args)>0 and "Error Code: 429" in e.args[0]:
+                        raise OPD_TooManyRequestsError(self.url, *e.args, _url_error_msg.format(self.url))
+                    elif len(e.args)>0 and any([x in e.args[0] for x in query_err_msg]):
+                        # This query throws an error for this dataset. Try another one below
+                        pass
+                    else:
+                        raise
+                except:
                     raise
-            except:
-                raise
 
 
         where_formats = [
@@ -912,7 +922,7 @@ class Arcgis(Data_Loader):
         # Make year iterable
         year = [year] if isinstance(year, numbers.Number) else year
 
-        if self._date_format not in [None, 0] and any([isinstance(x,str) and len(x)!=4 for x in year]):
+        if self._date_format not in [None, 0, 1] and any([isinstance(x,str) and len(x)!=4 for x in year]):
             # Currently can only handle years
             raise ValueError("Currently unable to handle non-year inputs")
 
