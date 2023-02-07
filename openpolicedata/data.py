@@ -395,7 +395,7 @@ class Source:
 
         src = self.datasets.copy()
         if table_type != None:
-            src = src[self.datasets["TableType"] == table_type]
+            src = src[self.datasets["TableType"].str.upper() == table_type.upper()]
 
         return src
 

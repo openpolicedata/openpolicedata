@@ -269,11 +269,6 @@ class Csv(Data_Loader):
                     raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(self.url))
                 except Exception as e:
                     raise e
-                    
-                if offset>0:
-                    table = table.tail(len(table)-offset)
-                if nrows!=None and nrows<len(table):
-                    table = table.head(nrows)
         else:
             r = requests.head(self.url)
             if r.status_code==404:
@@ -287,14 +282,17 @@ class Csv(Data_Loader):
                 raise e
             with requests.get(self.url, params=None, stream=True) as resp:
                 try:
-                    table = pd.read_csv(TqdmReader(resp, pbar=pbar), nrows=offset+nrows, encoding_errors='surrogateescape')
+                    table = pd.read_csv(TqdmReader(resp, pbar=pbar), nrows=offset+nrows if nrows is not None else None, encoding_errors='surrogateescape')
                 except (urllib.error.HTTPError, pd.errors.ParserError) as e:
                     raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(self.url))
                 except Exception as e:
                     raise e
-                    
-            if offset>0:
-                table = table.tail(len(table)-offset)
+
+        if offset>0:
+            rows_limit = offset+nrows if nrows is not None and offset+nrows<len(table) else len(table)
+            table = table.iloc[offset:rows_limit].reset_index(drop=True)
+        if nrows is not None and len(table)>nrows:
+            table = table.head(nrows)
 
         table = filter_dataframe(table, date_field=self.date_field, year_filter=year, 
             agency_field=self.agency_field, agency=agency)
@@ -495,7 +493,7 @@ class Excel(Data_Loader):
         return names, False
 
 
-    def load(self, year=None, nrows=None offset=0, *, agency=None, **kwargs):
+    def load(self, year=None, nrows=None, offset=0, *, agency=None, **kwargs):
         '''Download Excel file to pandas DataFrame
         
         Parameters
@@ -517,6 +515,7 @@ class Excel(Data_Loader):
         Note: Older Excel files (.xls) and OpenDocument file formats (.odf, .ods, .odt) are not supported. Please submit an issue if this is needed.
         '''
 
+        nrows_read = offset+nrows if nrows is not None else None
         year_dict, has_year_sheets = self.__get_sheets()
 
         with warnings.catch_warnings():        
@@ -534,7 +533,7 @@ class Excel(Data_Loader):
                 cols_added = 0
                 for y in range(year[0], year[1]+1):
                     if y in year_dict:
-                        df = pd.read_excel(self.excel_file, nrows=nrows, sheet_name=year_dict[y])
+                        df = pd.read_excel(self.excel_file, nrows=nrows_read, sheet_name=year_dict[y])
 
                         df = self.__clean(df)
 
@@ -567,18 +566,19 @@ class Excel(Data_Loader):
                                     raise ValueError("Columns don't match")
                             table = pd.concat([table, df], ignore_index=True)
 
-                        if nrows!=None and len(table)>=nrows:
+                        if nrows_read!=None and len(table)>=nrows_read:
                             break
 
                 if isinstance(table, type(None)):
                     return table
             else:
-                table = pd.read_excel(self.excel_file, nrows=nrows)
+                table = pd.read_excel(self.excel_file, nrows=nrows_read)
                 table = self.__clean(table)               
 
         if offset>0:
-            table = table.tail(len(table)-offset)
-        if nrows!=None and len(table) > nrows:
+            rows_limit = nrows_read if nrows_read is not None and nrows_read<len(table) else len(table)
+            table = table.iloc[offset:rows_limit].reset_index(drop=True)
+        if nrows is not None and len(table)>nrows:
             table = table.head(nrows)
 
         # Clean up column names
@@ -1021,8 +1021,9 @@ class Arcgis(Data_Loader):
             
         features = []
         for batch in range(num_batches):
+            bs = batch_size if batch<num_batches-1 else nrows-batch*batch_size
             try:
-                data = self.__request(where=where_query, offset=offset+batch*batch_size, count=batch_size)
+                data = self.__request(where=where_query, offset=offset+batch*batch_size, count=bs)
                 features.extend(data["features"])
                 if self.verify:
                     layer_query_result_old = self.__active_layer.query(where=where_query, result_offset=batch*batch_size, 
@@ -1292,8 +1293,10 @@ class Carto(Data_Loader):
             
         features = []
         for batch in range(num_batches):
+            bs = batch_size if batch<num_batches-1 else nrows-batch*batch_size
+
             try:
-                data = self.__request(where=where_query, offset=offset+batch*batch_size, count=batch_size)
+                data = self.__request(where=where_query, offset=offset+batch*batch_size, count=bs)
                 features.extend(data["features"])
 
                 if batch==0 and len(features)>0:
@@ -1590,6 +1593,9 @@ class Socrata(Data_Loader):
 
         if show_pbar:
             bar.close()
+
+        if isinstance(df, pd.DataFrame) and nrows is not None and len(df)>nrows:
+            df = df.head(nrows)
         return df
 
 
