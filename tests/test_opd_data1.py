@@ -48,6 +48,14 @@ class TestData:
 		data._check_version(ds)
 
 
+	def test_offsets_and_nrows(self, csvfile, source, last, skip, loghtml):
+		src = data.Source("Philadelphia")
+		df = src.load_from_url(year=2019, table_type="Officer-Involved Shootings").table
+		offset = 1
+		nrows = len(df)-2
+		df_offset = src.load_from_url(year=2019, table_type="Officer-Involved Shootings", offset=offset, nrows=nrows).table
+		assert df_offset.equals(df.iloc[offset:offset+nrows].reset_index(drop=True))
+		
 	def test_source_download_limitable(self, csvfile, source, last, skip, loghtml):
 		if last == None:
 			last = float('inf')
@@ -242,9 +250,10 @@ if __name__ == "__main__":
 	last = None
 	last = 613-369
 	skip = None
-	skip = "Fayetteville,Seattle,Indianapolis,Baltimore"
+	skip = "Fayetteville,Seattle"
 	source = None
 	# source = "Philadelphia"
+	tp.test_offsets_and_nrows(csvfile, source, last, skip, None) 
 	tp.test_source_download_limitable(csvfile, source, last, skip, None) 
 	tp.test_check_version(csvfile, None, last, skip, None) 
 	tp.test_get_count(csvfile, None, last, skip, None)

@@ -33,27 +33,35 @@ class TestProduct:
         lim = data_loaders._default_limit
         data_loaders._default_limit = 500
         url = "phl"
-        dataset = "car_ped_stops"
-        date_field = "datetimeoccur"
+        dataset = "shootings"
+        date_field = "date_"
         loader = data_loaders.Carto(url, dataset, date_field)
 
         count = loader.get_count()
 
-        r = requests.get("https://phl.carto.com/api/v2/sql?q=SELECT count(*) FROM car_ped_stops")
+        r = requests.get(f"https://phl.carto.com/api/v2/sql?q=SELECT count(*) FROM {dataset}")
         r.raise_for_status()
         assert count==r.json()["rows"][0]["count"]
 
         year = 2019
         count = loader.get_count(year=year)
 
-        r = requests.get(f"https://phl.carto.com/api/v2/sql?q=SELECT count(*) FROM car_ped_stops WHERE datetimeoccur >= '{year}-01-01' AND datetimeoccur < '{year+1}-01-01'")
+        r = requests.get(f"https://phl.carto.com/api/v2/sql?q=SELECT count(*) FROM {dataset} WHERE {date_field} >= '{year}-01-01' AND {date_field} < '{year+1}-01-01'")
         r.raise_for_status()
         assert count==r.json()["rows"][0]["count"]
 
-        nrows = data_loaders._default_limit*2
-        df = loader.load(year=year, nrows=nrows)
+        df = loader.load(year=year)
 
-        r = requests.get(f"https://phl.carto.com/api/v2/sql?format=GeoJSON&q=SELECT * FROM car_ped_stops WHERE datetimeoccur >= '{year}-01-01' AND datetimeoccur < '{year+1}-01-01' LIMIT {nrows}")
+        offset = 1
+        nrows = count - 2
+        df_offset = loader.load(year=year, nrows=nrows, offset=1)
+
+        assert df_offset.equals(df.iloc[offset:offset+nrows].reset_index(drop=True))
+
+        df_offset = loader.load(year=year, offset=1)
+        assert df_offset.equals(df.iloc[offset:].reset_index(drop=True))
+
+        r = requests.get(f"https://phl.carto.com/api/v2/sql?format=GeoJSON&q=SELECT * FROM {dataset} WHERE {date_field} >= '{year}-01-01' AND {date_field} < '{year+1}-01-01'")
         features = r.json()["features"]
         df_comp= pd.DataFrame.from_records([x["properties"] for x in features])
         df_comp[date_field] = pd.to_datetime(df_comp[date_field])
@@ -114,6 +122,14 @@ class TestProduct:
             gis._Arcgis__active_layer
         df = gis.load()
         count = gis.get_count()
+
+        offset = 1
+        nrows = count-offset
+        df_offset = gis.load(nrows=nrows, offset=offset)
+        assert df_offset.equals(df.iloc[offset:offset+nrows].reset_index(drop=True))
+
+        df_offset = gis.load(offset=offset)
+        assert df_offset.equals(df.iloc[offset:].reset_index(drop=True))
         
         data_loaders._default_limit = lim
 
@@ -245,6 +261,18 @@ class TestProduct:
         loader = data_loaders.Socrata(url, data_set)
         df =loader.load()
         count = loader.get_count()
+
+        offset = 1
+        nrows = len(df)-offset-1
+        df_offset = loader.load(offset=offset,nrows=nrows)
+        assert set(df.columns)==set(df_offset.columns)
+        df_offset = df_offset[df.columns]
+        assert df_offset.equals(df.iloc[offset:nrows+offset].reset_index(drop=True))
+
+        df_offset = loader.load(offset=offset)
+        assert set(df.columns)==set(df_offset.columns)
+        df_offset = df_offset[df.columns]
+        assert df_offset.equals(df.iloc[offset:].reset_index(drop=True))
         
         data_loaders._default_limit = lim
 
@@ -260,6 +288,15 @@ class TestProduct:
         date_field = "INCIDENT_DATE"
         loader = data_loaders.Csv(url, date_field=date_field)
         df = loader.load()
+
+        offset = 1
+        nrows = len(df)-offset-1
+        df_offset = loader.load(offset=offset,nrows=nrows)
+        assert df_offset.equals(df.iloc[offset:nrows+offset].reset_index(drop=True))
+        
+        df_offset = loader.load(offset=offset)
+        assert df_offset.equals(df.iloc[offset:].reset_index(drop=True))
+
         df_comp = pd.read_csv(url)
         df_comp = df_comp.astype({date_field: 'datetime64[ns]'})
 
@@ -300,6 +337,15 @@ class TestProduct:
         date_field = "Date"
         loader = data_loaders.Excel(url, date_field=date_field)
         df = loader.load()
+
+        offset = 1
+        nrows = len(df)-offset-1
+        df_offset = loader.load(offset=offset,nrows=nrows)
+        assert df_offset.equals(df.iloc[offset:nrows+offset].reset_index(drop=True))
+
+        df_offset = loader.load(offset=offset)
+        assert df_offset.equals(df.iloc[offset:].reset_index(drop=True))
+
         df_comp = pd.read_excel(url)
         df_comp = df_comp.convert_dtypes()
         df_comp.columns = [x.strip() if isinstance(x, str) else x for x in df_comp.columns]
@@ -375,7 +421,7 @@ class TestProduct:
         data_loaders.Excel("https://northamptonpd.com/images/ODP%20Spreadsheets/NPD_Use_of_Force_2014-2020_incident_level_data.xlsx").load()
 
     def test_excel_header(self, csvfile, source, last, skip, loghtml):
-        url = "https://cms7files1.revize.com/sparksnv/Document_Center/Sparks%20Police/Officer%20Involved%20Shooting/2000-2021-SPD-OIS-Incidents.xlsx"
+        url = "https://cms7files1.revize.com/sparksnv/Document_Center/Sparks%20Police/IA%20Data/2000-2022-SPD-OIS-Incidents%20(3).xlsx"
 
         loader = data_loaders.Excel(url)
         df = loader.load()

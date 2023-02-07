@@ -358,7 +358,7 @@ class Source:
         return self.__load(year, table_type, agency, True, pbar=False, return_count=True, force=force)
         
 
-    def load_from_url(self, year, table_type=None, agency=None, pbar=True, nrows=None):
+    def load_from_url(self, year, table_type=None, agency=None, pbar=True, nrows=None, offset=0):
         '''Load data from URL
 
         Parameters
@@ -377,6 +377,9 @@ class Source:
             (Optional) Whether to show progress bar when loading data. Default True
         nrows - int or None
             (Optional) Number of records to read. Default is None for all records.
+        offset - int
+            (Optional) Number of records to offset from first record. Default is 0 
+            to return records starting from the first.
 
         Returns
         -------
@@ -384,7 +387,7 @@ class Source:
             Table object containing the requested data
         '''
 
-        return self.__load(year, table_type, agency, True, pbar, nrows=nrows)
+        return self.__load(year, table_type, agency, True, pbar, nrows=nrows, offset=offset)
 
     def __find_datasets(self, table_type):
         if isinstance(table_type, TableType):
@@ -392,12 +395,12 @@ class Source:
 
         src = self.datasets.copy()
         if table_type != None:
-            src = src[self.datasets["TableType"] == table_type]
+            src = src[self.datasets["TableType"].str.upper() == table_type.upper()]
 
         return src
 
 
-    def __load(self, year, table_type, agency, load_table, pbar=True, return_count=False, force=False, nrows=None):
+    def __load(self, year, table_type, agency, load_table, pbar=True, return_count=False, force=False, nrows=None, offset=0):
         
         src = self.__find_datasets(table_type)
 
@@ -473,7 +476,7 @@ class Source:
             if return_count:
                 return loader.get_count(year=year_filter, agency=agency, opt_filter=opt_filter, force=force)
             else:
-                table = loader.load(year=year_filter, agency=agency, opt_filter=opt_filter, nrows=nrows, pbar=pbar)
+                table = loader.load(year=year_filter, agency=agency, opt_filter=opt_filter, nrows=nrows, pbar=pbar, offset=offset)
                 table = _check_date(table, date_field)                        
         else:
             table = None
