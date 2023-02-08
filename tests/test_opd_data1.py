@@ -30,6 +30,12 @@ def get_datasets(csvfile):
     return datasets.query()
 
 class TestData:
+	def check_table_type_warning(self, csvfile, source, last, skip, loghtml):
+		sources = datasets.query().copy().iloc[0]
+		sources["TableType"] = "TEST"
+		with pytest.warns(UserWarning):
+			data.Table(sources)
+
 	def test_check_version(self, csvfile, source, last, skip, loghtml):
 		ds = get_datasets(csvfile).iloc[0]
 		# Set min_version to create error
@@ -253,8 +259,9 @@ if __name__ == "__main__":
 	skip = "Fayetteville,Seattle"
 	source = None
 	# source = "Philadelphia"
-	tp.test_offsets_and_nrows(csvfile, source, last, skip, None) 
+	tp.check_table_type_warning(csvfile, source, last, skip, None) 
 	tp.test_source_download_limitable(csvfile, source, last, skip, None) 
 	tp.test_check_version(csvfile, None, last, skip, None) 
 	tp.test_get_count(csvfile, None, last, skip, None)
+	tp.test_offsets_and_nrows(csvfile, source, last, skip, None) 
 	

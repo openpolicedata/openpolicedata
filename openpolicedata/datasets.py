@@ -203,7 +203,15 @@ def summary_by_table_type(by_year=False):
         out = pd.concat([out, s],axis=1)
 
     out.sort_values(by="Total",inplace=True, ascending=False)
-    out["Definition"] = [defs.TableType(x).description for x in out.index]
+    definitions = []
+    for x in out.index:
+        try:
+            definitions.append(defs.TableType(x).description)
+        except:
+            warnings.warn(f"{x} is not a known table type in defs.TableType")
+            definitions.append("")
+
+    out["Definition"] = definitions
 
     # Group related tables
     groups = ["STOPS", "CITATIONS","ARRESTS","WARNINGS","OFFICER-INVOLVED SHOOTINGS","USE OF FORCE"]
