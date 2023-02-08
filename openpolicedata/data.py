@@ -5,6 +5,7 @@ from datetime import datetime
 from dateutil.parser._parser import ParserError
 from packaging import version
 import re
+import warnings
 
 if __name__ == '__main__':
     import data_loaders
@@ -105,7 +106,11 @@ class Table:
         else:
             self.agency = source["Agency"]
 
-        self.table_type = TableType(source["TableType"])  # Convert to Enum
+        try:
+            self.table_type = TableType(source["TableType"])  # Convert to Enum
+        except:
+            warnings.warn("{} is not a known table type in defs.TableType".format(source["TableType"]))
+            self.table_type = source["TableType"]
 
         if year_filter != None:
             self.year = year_filter

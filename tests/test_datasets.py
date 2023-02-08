@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import re
 from packaging import version
+import pytest
 
 if __name__ == "__main__":
 	import sys
@@ -177,9 +178,24 @@ class TestDatasets:
         for ver in datasets["min_version"][datasets["min_version"].notnull()]:
             if not (ver == "-1" or type(version.parse(ver)) == version.Version):
                 raise ValueError(f"{ver} is an invalid value for min_version")
+            
+    def test_summary_functions(self, csvfile, source, last, skip, loghtml):
+        opd.datasets.num_unique()
+        opd.datasets.num_sources()
+        opd.datasets.num_sources(full_states_only=True)
+        opd.datasets.summary_by_state()
+        opd.datasets.summary_by_state(by="YEAR")
+        opd.datasets.summary_by_state(by="TABLE")
+        opd.datasets.summary_by_table_type()
+        opd.datasets.summary_by_table_type(by_year=True)
+
+        opd.datasets.datasets.loc[0,"TableType"] = "TEST"
+        with pytest.warns(UserWarning):
+            opd.datasets.summary_by_table_type()
+        
         
 
 if __name__ == "__main__":
     csvfile = None
     # csvfile = "C:\\Users\\matth\\repos\\opd-data\\opd_source_table.csv"
-    TestDatasets().test_years_multi(csvfile,None,None,None,None)
+    TestDatasets().test_summary_functions(csvfile,None,None,None,None)
