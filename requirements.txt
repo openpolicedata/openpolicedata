@@ -1,6 +1,6 @@
 sodapy
 pandas
-thefuzz
+rapidfuzz
 numpy
 requests
 pyproj

@@ -7,7 +7,7 @@ python -m build
 python -m pip install --upgrade twine
 Create and activate a new environment
 python -m pip install .\dist\openpolicedata-{version}-py3-none-any.whl
-python -m pip install pytest
+python -m pip install dev/requirements-test.txt
 Copy tests into a new folder outside openpolicedata folder
 cd to that folder
 Run tests: python -m pytest

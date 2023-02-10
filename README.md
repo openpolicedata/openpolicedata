@@ -2,7 +2,7 @@
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/openpolicedata/opd-examples/HEAD)
 
 # OpenPoliceData
-OpenPoliceData is a Python package that provides easy access to 282 (and growing) incident-level open datasets from police departments around the United States. Datasets include traffic stops, use of force, officer-involved shootings, complaints, and other types of police interactions. 
+OpenPoliceData is a Python package that provides easy access to 288 (and growing) incident-level open datasets from police departments around the United States. Datasets include traffic stops, use of force, officer-involved shootings, complaints, and other types of police interactions. 
 
 Users request data by department name and type of data, and the data is returned as a pandas DataFrame. There is no need to manually find the data online or to know how to work with open data APIs (ArcGIS, Socrata, etc.).
 
@@ -112,8 +112,13 @@ Show agencies (police departments) that have data available. This is typically a
 ### get_count( year=None, table_type=None, agency=None, force=False)
 Get the number of records that would be returned for a table. `table_type` and `year` can be used to filter for a specific table. For datasets that allow for filtering by agency, the number of records can be requested for a specific agency by setting `agency`. For the Excel data type, get_count will not run unless force is set to True due to the necessity of reading in the entire file. It may be more efficient to run load_from_url and then to find the number of rows of the returned table.
 
-### load_from_url(year, table_type=None, agency=None, pbar=True)
-Import data from the source. Data for a year (i.e. 2020) or a range of years (i.e. [2020, 2022]) can be requested. If more than one data type is available, `table_type` must be specified. Optionally, for datasets containing multiple agencies (police departments) data, `agency` can be used to request data for a single agency. `pbar` can be set to false to not show a progress bar while loading.
+### load_from_url(year, table_type=None, agency=None, pbar=True, nrows=None, offset=0)
+### load_from_url_gen(year, table_type=None, agency=None, pbar=False, nbatch=10000, offset=0, force=False)
+Load data from the source. 
+* load_from_url returns the entire data request at once as a DataFrame
+* load_from_url_gen returns a generator for batch processing
+
+Data for a year (i.e. 2020) or a range of years (i.e. [2020, 2022]) can be requested. If more than one data type is available, `table_type` must be specified. Optionally, for datasets containing multiple agencies (police departments) data, `agency` can be used to request data for a single agency. `pbar` can be set to false to not show a progress bar while loading. `offset` indicates the starting record in the data request. `nrows` is the total number rows to request. For example, to request records 10 to 30, `offset` would be 10 and `nrow` would be 20. `offset` and `nrows` allow requesting of data in batches. For load_from_url_gen, `nbatch` is the size of the batch read returned each iteration.
 ```
 > agency = "Arlington County Police Department"
 > tbl = src.load_from_url(year=2021, table_type="STOPS", agency=agency)
@@ -127,6 +132,12 @@ Import data from the source. Data for a year (i.e. 2020) or a range of years (i.
 | 2021-01-01 | Arlington County Police Department    | ARLINGTON CO      | TRAFFIC VIOLATION | BLACK OR AFRICAN AMERICAN    | NON-HISPANIC    |
 
 (only 1st 6 columns shown above)
+
+```
+> for tbl in src.load_from_url_gen(year=2021, table_type="STOPS", agency=agency, nbatch=1000):
+      df = tbl.table.copy()
+      # Do something with the 1000 row DataFrame that was loaded
+```
 
 The result of load_from_url is a Table object. The table contained in the Table object is either a [geopandas](https://geopandas.org/en/stable/docs/reference/api/geopandas.GeoDataFrame.html) or [pandas](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.html) DataFrame depending on whether the returned data contains geographic data or not.
 
