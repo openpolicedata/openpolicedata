@@ -43,7 +43,7 @@ class TestDatasets:
             assert key in datasets
 
     def test_table_for_nulls(self, csvfile, source, last, skip, loghtml):
-        can_have_nulls = ["Description", "date_field", "dataset_id", "agency_field", "Year","readme","min_version"]
+        can_have_nulls = ["Description", "date_field", "dataset_id", "agency_field", "Year","readme","min_version","AgencyFull"]
         datasets = get_datasets(csvfile)
         for col in datasets.columns:
             if not col in can_have_nulls:

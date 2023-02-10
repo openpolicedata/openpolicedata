@@ -20,9 +20,7 @@ from math import ceil
 import re
 from xlrd.biffh import XLRDError
 
-with warnings.catch_warnings():
-    warnings.simplefilter("ignore", category=UserWarning)
-    from thefuzz import fuzz
+from rapidfuzz import fuzz
 
 try:
     import geopandas as gpd
@@ -827,6 +825,7 @@ class Arcgis(Data_Loader):
                 params["resultRecordCount"] = count
 
         params["f"] = out_type
+        params["cacheHint"] = False
 
         try:
             r = requests.get(url, params=params)
@@ -1448,7 +1447,7 @@ class Socrata(Data_Loader):
         except:
             num_rows = float(results[0]["count_1"]) # Value used in VT Shootings data
 
-        return num_rows
+        return int(num_rows)
 
 
     def load(self, year=None, nrows=None, offset=0, *, pbar=True, opt_filter=None, select=None, output_type=None, **kwargs):

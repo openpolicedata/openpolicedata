@@ -231,11 +231,11 @@ if __name__ == "__main__":
 	tp = TestData()
 	# (self, csvfile, source, last, skip, loghtml)
 	csvfile = None
-	# csvfile = r"..\opd-data\opd_source_table.csv"
+	csvfile = r"..\opd-data\opd_source_table.csv"
 	last = None
-	# last = 607-493+1
+	last = 633-501+1
 	source = None
-	source = "Detroit"
+	# source = "Detroit"
 	skip = None
 	skip = "Fayetteville,Seattle"
 	tp.test_get_years(csvfile, source, last, skip, None)

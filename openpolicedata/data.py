@@ -361,6 +361,44 @@ class Source:
         '''
 
         return self.__load(year, table_type, agency, True, pbar=False, return_count=True, force=force)
+    
+    
+    def load_from_url_gen(self, year, table_type=None, agency=None, pbar=False, nbatch=10000, offset=0, force=False):
+        '''Get generator to load data from URL in batches
+
+        Parameters
+        ----------
+        year - int or length 2 list or the string "MULTI" or "N/A"
+            Used to identify the requested dataset if equal to its year value
+            Otherwise, for datasets containing multiple years, this filters 
+            the return data for a specific year (int input) or a range of years
+            [X,Y] to return data for years X to Y
+        table_type - str or TableType enum
+            (Optional) If set, requested dataset will be of this type
+        agency - str
+            (Optional) If set, for datasets containing multiple agencies, data will
+            only be returned for this agency
+        pbar - bool
+            (Optional) Whether to show progress bar when loading data. Default False
+        nbatch - int
+            (Optional) Number of records to load in each batch. Default is 10000.
+        offset - int
+            (Optional) Number of records to offset from first record. Default is 0 
+            to return records starting from the first.
+        force - bool
+            (Optional) For file-based data, an exception will be thrown unless force 
+            is true. It will be more efficient to read the entire dataset all at once
+
+        Returns
+        -------
+        Table generator
+            generates Table objects containing the requested data
+        '''
+
+        count = self.get_count(year, table_type, agency, force)
+        for k in range(offset, count, nbatch):
+            yield self.__load(year, table_type, agency, True, pbar, nrows=min(nbatch, count-k), offset=k)
+    
         
 
     def load_from_url(self, year, table_type=None, agency=None, pbar=True, nrows=None, offset=0):

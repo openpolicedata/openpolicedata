@@ -198,6 +198,37 @@ class TestData:
 		year = [2020,2022]
 		assert loader.get_count(year=year) == src.get_count(year=year, table_type=TableType.STOPS)
 
+	def test_load_gen(self, csvfile, source, last, skip, loghtml):
+		datasets = [("Norristown",2016,"USE OF FORCE", 100),
+	      ("Denver", "MULTI", "OFFICER-INVOLVED SHOOTINGS",50),
+	      ("Philadelphia", 2019, "OFFICER-INVOLVED SHOOTINGS", 500),
+	      ("Charlotte-Mecklenburg", "NONE", "Employee", 1000),
+		  ("Austin", 2012, "USE OF FORCE", 1000)]
+
+		for ds in datasets:
+			src = data.Source(ds[0])
+			df = src.load_from_url(ds[1], ds[2]).table
+			offset = 0
+			for t in src.load_from_url_gen(ds[1], ds[2], nbatch=ds[3], force=True):
+				df_cur = df.iloc[offset:offset+len(t.table)].reset_index(drop=True)
+				df2 = t.table.copy()
+				if set(df.columns)!=set(df2.columns):
+					# Expecting that a column was not returned because it is empty in the subset requested in this iteration
+					assert len(df2.columns)<len(df.columns)
+					missing_columns = list(set(df.columns).difference(set(df2.columns)))
+					for col in missing_columns:
+						assert df_cur[col].isnull().all()
+						df_cur.drop(columns=col, inplace=True)
+				# Assure columns are in proper order
+				assert set(df_cur.columns)==set(df2.columns)
+				df2 = df2[df_cur.columns]
+				# Ensure that dtypes match
+				df2 = df2.astype(df_cur.dtypes.to_dict())
+				assert df2.equals(df_cur)
+				offset+=len(t.table)
+
+			# Ensure that all data was read in
+			assert offset==len(df)
 
 def can_be_limited(data_type, url):
 	data_type = DataType(data_type)
@@ -254,11 +285,12 @@ if __name__ == "__main__":
 	csvfile = None
 	# csvfile = r"..\opd-data\opd_source_table.csv"
 	last = None
-	last = 613-369
+	# last = 631-618+1
 	skip = None
 	skip = "Fayetteville,Seattle"
 	source = None
 	# source = "Philadelphia"
+	tp.test_load_gen(csvfile, source, last, skip, None) 
 	tp.check_table_type_warning(csvfile, source, last, skip, None) 
 	tp.test_source_download_limitable(csvfile, source, last, skip, None) 
 	tp.test_check_version(csvfile, None, last, skip, None) 
