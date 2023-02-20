@@ -10,16 +10,16 @@ import warnings
 if __name__ == '__main__':
     import data_loaders
     import datasets
-    # import preproc
-    from defs import TableType, DataType, MULTI, NA
+    import preproc
+    import defs
     from _version import __version__
     import exceptions
 else:
     from . import data_loaders
     from . import datasets
     from . import __version__
-    # from . import preproc
-    from .defs import TableType, DataType, MULTI, NA
+    from . import preproc
+    from . import defs
     from . import exceptions
 
 class Table:
@@ -70,8 +70,9 @@ class Table:
     # From source
     _data_type = None
     _dataset_id = None
-    _date_field = None
-    _agency_field = None
+    date_field = None
+    agency_field = None
+    __transforms = None
 
     def __init__(self, source, table=None, year_filter=None, agency=None):
         '''Construct Table object
@@ -107,7 +108,7 @@ class Table:
             self.agency = source["Agency"]
 
         try:
-            self.table_type = TableType(source["TableType"])  # Convert to Enum
+            self.table_type = defs.TableType(source["TableType"])  # Convert to Enum
         except:
             warnings.warn("{} is not a known table type in defs.TableType".format(source["TableType"]))
             self.table_type = source["TableType"]
@@ -119,16 +120,16 @@ class Table:
 
         self.description = source["Description"]
         self.url = source["URL"]
-        self._data_type = DataType(source["DataType"])  # Convert to Enum
+        self._data_type = defs.DataType(source["DataType"])  # Convert to Enum
 
         if not pd.isnull(source["dataset_id"]):
             self._dataset_id = source["dataset_id"]
 
         if not pd.isnull(source["date_field"]):
-            self._date_field = source["date_field"]
+            self.date_field = source["date_field"]
         
         if not pd.isnull(source["agency_field"]):
-            self._agency_field = source["agency_field"]
+            self.agency_field = source["agency_field"]
 
 
     def __repr__(self) -> str:
@@ -167,6 +168,48 @@ class Table:
             Filename
         '''
         return get_csv_filename(self.state, self.source_name, self.agency, self.table_type, self.year)
+    
+
+    def get_transform_map(self):
+        return self.__transforms
+    
+
+    def standardize(self, 
+        race_cats="basic",
+        agg_race_cat=False,
+        eth_cats=None,
+        gender_cats=None,
+        keep_raw=True,        
+        known_cols=None,
+        verbose=False,
+        no_id="keep",
+        race_eth_combo="merge",
+        merge_date_time=True,
+        empty_time="NaT"
+    ):
+        if self.__transforms==None:
+            if known_cols is None:
+                known_cols = {defs.columns.DATE:self.date_field, defs.columns.AGENCY:self.agency_field}
+
+            race_cats = defs.get_race_cats() if race_cats=="basic" else race_cats
+            race_cats = defs.get_race_cats(expand=True) if race_cats=="expand" else race_cats
+            eth_cats = eth_cats if eth_cats is not None else defs.get_eth_cats()
+            gender_cats = gender_cats if gender_cats is not None else defs.get_gender_cats()
+            self.table, self.__transforms = preproc.standardize(self.table, self.table_type, self.year,
+                known_cols=known_cols, 
+                source_name=self.source_name,
+                keep_raw=keep_raw,
+                verbose=verbose,
+                agg_race_cat=agg_race_cat,
+                race_cats=race_cats,
+                eth_cats=eth_cats,
+                gender_cats=gender_cats,
+                no_id=no_id,
+                race_eth_combo=race_eth_combo,
+                merge_date_time=merge_date_time,
+                empty_time=empty_time)
+        else:
+            raise ValueError("Dataset has already been cleaned. Aborting cleaning.")
 
 
 class Source:
@@ -255,12 +298,12 @@ class Source:
         all_years = list(dfs["Year"])
         years = set()
         for k in range(len(all_years)):
-            if all_years[k] != MULTI:
+            if all_years[k] != defs.MULTI:
                 years.add(all_years[k])
             else:
                 df = dfs.iloc[k]
                 _check_version(df)
-                data_type =DataType(df["DataType"])
+                data_type =defs.DataType(df["DataType"])
                 url = df["URL"]
                 date_field = df["date_field"] if pd.notnull(df["date_field"]) else None
                 
@@ -308,22 +351,22 @@ class Source:
 
         # If year is multi, need to use self._agencyField to query URL
         # Otherwise return self.agency
-        if src["Agency"] == MULTI:
+        if src["Agency"] == defs.MULTI:
             _check_version(src)
-            data_type =DataType(src["DataType"])
+            data_type =defs.DataType(src["DataType"])
             loader = self.__get_loader(data_type, src["URL"], dataset_id=src["dataset_id"], date_field=src["date_field"], agency_field=src["agency_field"])
-            if data_type ==DataType.CSV:
+            if data_type ==defs.DataType.CSV:
                 raise NotImplementedError(f"Unable to get agencies for {data_type}")
-            elif data_type ==DataType.ArcGIS:
+            elif data_type ==defs.DataType.ArcGIS:
                 raise NotImplementedError(f"Unable to get agencies for {data_type}")
-            elif data_type ==DataType.SOCRATA:
+            elif data_type ==defs.DataType.SOCRATA:
                 if partial_name is not None:
                     opt_filter = src["agency_field"] + " LIKE '%" + partial_name + "%'"
                 else:
                     opt_filter = None
 
                 select = "DISTINCT " + src["agency_field"]
-                if year == MULTI:
+                if year == defs.MULTI:
                     year = None
 
                 agency_set = loader.load(year, opt_filter=opt_filter, select=select, output_type="set")
@@ -433,7 +476,7 @@ class Source:
         return self.__load(year, table_type, agency, True, pbar, nrows=nrows, offset=offset)
 
     def __find_datasets(self, table_type):
-        if isinstance(table_type, TableType):
+        if isinstance(table_type, defs.TableType):
             table_type = table_type.value
 
         src = self.datasets.copy()
@@ -461,11 +504,11 @@ class Source:
         else:
             # If there are not any years corresponding to this year, check for a table
             # containing multiple years
-            matchingYears = src["Year"]==MULTI
+            matchingYears = src["Year"]==defs.MULTI
             if matchingYears.any():
                 src = src[matchingYears]
             else:
-                src = src[src["Year"] == NA]
+                src = src[src["Year"] == defs.MULTI]
 
         if isinstance(src, pd.core.frame.DataFrame):
             if len(src) == 0:
@@ -476,7 +519,7 @@ class Source:
                 src = src.iloc[0]
 
         # Load data from URL. For year or agency equal to multi, filtering can be done
-        data_type =DataType(src["DataType"])
+        data_type =defs.DataType(src["DataType"])
         url = src["URL"]
 
         if filter_by_year:
@@ -500,7 +543,7 @@ class Source:
         table_agency = None
         if not pd.isnull(src["agency_field"]):
             agency_field = src["agency_field"]
-            if agency != None and data_type !=DataType.ArcGIS:
+            if agency != None and data_type !=defs.DataType.ArcGIS:
                 table_agency = agency
         else:
             agency_field = None
@@ -527,7 +570,7 @@ class Source:
         return Table(src, table, year_filter=table_year, agency=table_agency)
 
 
-    def load_from_csv(self, year, output_dir=None, table_type=None, agency=None):
+    def load_from_csv(self, year, output_dir=None, table_type=None, agency=None, zip=True):
         '''Load data from previously saved CSV file
         
         Parameters
@@ -544,6 +587,8 @@ class Source:
         agency - str
             (Optional) If set, for datasets containing multiple agencies, data will
             only be returned for this agency
+        zip - bool
+            (Optional) Set to true if CSV is in a zip file with the same filename. Default: False
 
         Returns
         -------
@@ -555,10 +600,13 @@ class Source:
 
         filename = table.get_csv_filename()
         if output_dir != None:
-            filename = path.join(output_dir, filename)            
+            filename = path.join(output_dir, filename)   
+
+        if zip:
+            filename = filename.replace(".csv",'.zip')         
 
         table.table = pd.read_csv(filename, parse_dates=True)
-        table.table = _check_date(table.table, table._date_field)  
+        table.table = _check_date(table.table, table.date_field)  
 
         return table
 
@@ -601,15 +649,15 @@ class Source:
         if self.__loader is not None and self.__loader[0]==params:
             return self.__loader[1]
 
-        if data_type ==DataType.CSV:
+        if data_type ==defs.DataType.CSV:
             loader = data_loaders.Csv(url, date_field=date_field, agency_field=agency_field)
-        elif data_type ==DataType.EXCEL:
+        elif data_type ==defs.DataType.EXCEL:
             loader = data_loaders.Excel(url, date_field=date_field, agency_field=agency_field) 
-        elif data_type ==DataType.ArcGIS:
+        elif data_type ==defs.DataType.ArcGIS:
             loader = data_loaders.Arcgis(url, date_field=date_field)
-        elif data_type ==DataType.SOCRATA:
+        elif data_type ==defs.DataType.SOCRATA:
             loader = data_loaders.Socrata(url, dataset_id, date_field=date_field)
-        elif data_type ==DataType.CARTO:
+        elif data_type ==defs.DataType.CARTO:
             loader = data_loaders.Carto(url, dataset_id, date_field=date_field)
         else:
             raise ValueError(f"Unknown data type: {data_type}")
@@ -672,7 +720,7 @@ def get_csv_filename(state, source_name, agency, table_type, year):
     str
         Default CSV filename
     '''
-    if isinstance(table_type, TableType):
+    if isinstance(table_type, defs.TableType):
         table_type = table_type.value
         
     filename = f"{state}_{source_name}"
@@ -734,7 +782,7 @@ if __name__ == '__main__':
         srcName = datasets.iloc[i]["SourceName"]
         state = datasets.iloc[i]["State"]
 
-        if datasets.iloc[i]["Agency"] == MULTI and srcName == "Virginia":
+        if datasets.iloc[i]["Agency"] == defs.MULTI and srcName == "Virginia":
             # Reduce size of data load by filtering by agency
             agency = "Fairfax County Police Department"
         else:
@@ -758,7 +806,7 @@ if __name__ == '__main__':
         src = Source(srcName, state=state)
 
         if action == "standardize":
-            if datasets.iloc[i]["DataType"] ==DataType.CSV.value:
+            if datasets.iloc[i]["DataType"] ==defs.DataType.CSV.value:
                 table = src.load_from_csv(datasets.iloc[i]["Year"], table_type=datasets.iloc[i]["TableType"])
             else:
                 year = date.today().year
@@ -782,7 +830,7 @@ if __name__ == '__main__':
 
             table.standardize()
         else:
-            if datasets.iloc[i]["DataType"] ==DataType.CSV.value:
+            if datasets.iloc[i]["DataType"] ==defs.DataType.CSV.value:
                 csv_filename = src.get_csv_filename(datasets.iloc[i]["Year"], output_dir, datasets.iloc[i]["TableType"])
                 if path.exists(csv_filename):
                     continue
