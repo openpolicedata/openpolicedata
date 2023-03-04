@@ -40,9 +40,9 @@ def parse_date_to_datetime(date_col):
             if not is_num:
                 # Try to convert to all numbers
                 new_col = date_col.convert_dtypes()
-                if new_col.dtype == "string" and \
-                    new_col.apply(lambda x: pd.isnull(x) or x.isdigit() or x.strip()=="").all():
-                    date_col = new_col.apply(lambda x: int(x) if (pd.notnull(x) and x.isdigit()) else np.nan)
+                if new_col.dtype in ["object", "string"] and \
+                    new_col.apply(lambda x: pd.isnull(x) or isinstance(x,int) or x.isdigit() or x.strip()=="").all():
+                    date_col = new_col.apply(lambda x: int(x) if (pd.notnull(x) and (isinstance(x,int) or x.isdigit())) else np.nan)
                     dts = date_col[date_col.notnull()]
                     is_num = True
 
@@ -163,100 +163,135 @@ def merge_date_and_time(date_col, time_col):
     # but not for now to catch unexpected values
     return pd.Series([d.replace(hour=t.hour, minute=t.minute, second=t.second) if (pd.notnull(d) and pd.notnull(t)) else pd.NaT for d,t in zip(date_col, time_col)])
 
-def validate_date(date_col):
-    # Fails if date column is not valid. Otherwise, returns a 
-    # numerical value that is higher for more complete datetimes (i.e. date-only lower than date and time)
-    date_col = parse_date_to_datetime(date_col)
+def validate_date(df, match_cols_test):
+    score = None
+    match_cols = []
+    for col_name in match_cols_test:
+        try:
+            # Fails if date column is not valid. Otherwise, returns a 
+            # numerical value that is higher for more complete datetimes (i.e. date-only lower than date and time)
+            date_col = parse_date_to_datetime(df[col_name])
 
-    dts = date_col[date_col.notnull()]
+            dts = date_col[date_col.notnull()]
 
-    if len(dts) > 0:
-        one_date = dts.iloc[0]
-        max_val = 6
-        same_sec = (dts.dt.second == one_date.second).all()
-        if not same_sec: 
-            return max_val
-        same_min = (dts.dt.minute == one_date.minute).all()
-        if not same_min: 
-            return max_val-1
-        same_hour = (dts.dt.hour == one_date.hour).all()
-        if not same_hour: 
-            return max_val-2
-        same_day = (dts.dt.day == one_date.day).all()
-        if not same_day: 
-            return max_val-3
-        same_month = (dts.dt.month == one_date.month).all()
-        if not same_month: 
-            return max_val-4
-        else:
-            return max_val-5
+            if len(dts) > 0:
+                one_date = dts.iloc[0]
+                max_val = 6
+                same_sec = (dts.dt.second == one_date.second).all()
+                new_score = None
+                if not same_sec: 
+                    new_score = max_val
+                same_min = (dts.dt.minute == one_date.minute).all()
+                if new_score is None and not same_min: 
+                    new_score = max_val-1
+                same_hour = (dts.dt.hour == one_date.hour).all()
+                if new_score is None and not same_hour: 
+                    new_score = max_val-2
+                same_day = (dts.dt.day == one_date.day).all()
+                if new_score is None and not same_day: 
+                    new_score = max_val-3
+                same_month = (dts.dt.month == one_date.month).all()
+                if new_score is None:
+                    if not same_month: 
+                        new_score = max_val-4
+                    else:
+                        new_score = max_val-5
 
-    return None
+            if score == new_score:
+                match_cols.append(col_name)
+            elif new_score != None and (score == None or new_score > score):
+                # Higher scoring item found. This now takes priority
+                score = new_score
+                match_cols = [col_name]
+        except Exception as e:
+            pass
 
-def validate_time(time_col, date_col=None):
-    not_a_time_col_msg = "This column contains date information, and therefore, is not a time column"
-    date_has_time_msg = "The date column has a time in it. There is no need for a time column."
-    try:
-        # Try to convert to datetime. If successful, see if there is a date value that varies.
-        # If so, this is not a time column
-        test_date_col = parse_date_to_datetime(time_col)
-        num_unique = len(test_date_col.dt.date.unique())
-        # If there are more than 2 dates or 2 dates are only 1 day apart (could be due to time zone change),
-        # then the supposed time contains date information
-        if num_unique > 2 or (num_unique==2 and  abs(test_date_col[0]-test_date_col[1]) > pd.Timedelta(days=1)):
-            raise ValueError(not_a_time_col_msg)
-    except ValueError as e:
-        if len(e.args)>0 and e.args[0] in [not_a_time_col_msg, date_has_time_msg]:
-            raise e
-    except Exception:
-        pass
+    return match_cols
 
-    try: 
-        if date_col is not None:
-            new_date_col = date_col[date_col.notnull()]
-            if not hasattr(new_date_col.iloc[0],'year'):
-                new_date_col = parse_date_to_datetime(new_date_col)
-
-            unique_times = pd.Series(new_date_col.apply(lambda x: x.replace(year=1970,month=1,day=1)).unique())
-            # If there is more than 2 times or the times cannot be explained by a time zone differene,
-            # then there is time information in the date
-            if len(unique_times) > 2 or (len(unique_times)==2 and \
-                unique_times.notnull().all() and abs(unique_times[1]-unique_times[0]) > pd.Timedelta(hours=1)):
-                if len(unique_times)==2 and len(new_date_col)>100:
-                    # There are enough dates that they shouldn't all mostly be the same
-                    # See if one could be a UTC time and one could be no time
-                    diffs = unique_times - unique_times.apply(lambda x: x.replace(hour=0,minute=0,second=0))
-                    if not (diffs==pd.Timedelta(0)).any():
-                        raise ValueError(date_has_time_msg)
-                else:
-                    raise ValueError(date_has_time_msg)
-    except ValueError as e:
-        if len(e.args)>0 and e.args[0] in [not_a_time_col_msg, date_has_time_msg]:
-            raise e
-    except Exception:
-        pass
-
-    col = parse_time(time_col)
-    col = col[col.notnull()]
     
-    if len(col) > 0:
-        hours = pd.Series([t.hour if pd.notnull(t) else np.nan for t in col])
-        mins = pd.Series([t.minute if pd.notnull(t) else np.nan for t in col])
-        # secs = time_sec - hours*3600 - mins*60
-        max_val = 3
-        # same_sec = (secs == secs.iloc[0]).all()
-        # if not same_sec: 
-        #     return max_val
-        same_min = (mins == mins.iloc[0]).all()
-        if not same_min: 
-            return max_val-1
-        same_hour = (hours == hours.iloc[0]).all()
-        if not same_hour: 
-            return max_val-2
-        else:
-            return max_val-3
+def validate_time(df, match_cols_test, date_col=None):
+    score = None
+    match_cols = []
+    for col_name in match_cols_test:
+        try:
+            time_col = df[col_name]
+            not_a_time_col_msg = "This column contains date information, and therefore, is not a time column"
+            date_has_time_msg = "The date column has a time in it. There is no need for a time column."
+            try:
+                # Try to convert to datetime. If successful, see if there is a date value that varies.
+                # If so, this is not a time column
+                test_date_col = parse_date_to_datetime(time_col)
+                num_unique = len(test_date_col.dt.date.unique())
+                # If there are more than 2 dates or 2 dates are only 1 day apart (could be due to time zone change),
+                # then the supposed time contains date information
+                if num_unique > 2 or (num_unique==2 and  abs(test_date_col[0]-test_date_col[1]) > pd.Timedelta(days=1)):
+                    raise ValueError(not_a_time_col_msg)
+            except ValueError as e:
+                if len(e.args)>0 and e.args[0] in [not_a_time_col_msg, date_has_time_msg]:
+                    continue
+            except Exception:
+                pass
 
-    return None
+            try: 
+                if date_col is not None:
+                    new_date_col = date_col[date_col.notnull()]
+                    if not hasattr(new_date_col.iloc[0],'year'):
+                        new_date_col = parse_date_to_datetime(new_date_col)
+
+                    unique_times = pd.Series(new_date_col.apply(lambda x: x.replace(year=1970,month=1,day=1)).unique())
+                    # If there is more than 2 times or the times cannot be explained by a time zone differene,
+                    # then there is time information in the date
+                    if (len(unique_times) > 2 and len(unique_times)/len(new_date_col)>0.01) or (len(unique_times)==2 and \
+                        unique_times.notnull().all() and abs(unique_times[1]-unique_times[0]) > pd.Timedelta(hours=1)):
+                        if len(unique_times)==2 and len(new_date_col)>100:
+                            # There are enough dates that they shouldn't all mostly be the same
+                            # See if one could be a UTC time and one could be no time
+                            diffs = unique_times - unique_times.apply(lambda x: x.replace(hour=0,minute=0,second=0))
+                            if not (diffs==pd.Timedelta(0)).any():
+                                raise ValueError(date_has_time_msg)
+                        else:
+                            raise ValueError(date_has_time_msg)
+            except ValueError as e:
+                if len(e.args)>0 and e.args[0] in [not_a_time_col_msg, date_has_time_msg]:
+                    continue
+            except Exception:
+                pass
+
+            col = parse_time(time_col)
+            col = col[col.notnull()]
+            
+            new_score = None
+            if len(col) == 0:
+                continue
+
+            hours = pd.Series([t.hour if pd.notnull(t) else np.nan for t in col])
+            mins = pd.Series([t.minute if pd.notnull(t) else np.nan for t in col])
+            # secs = time_sec - hours*3600 - mins*60
+            max_val = 3
+            # same_sec = (secs == secs.iloc[0]).all()
+            # if not same_sec: 
+            #     return max_val
+            same_min = (mins == mins.iloc[0]).all()
+            if not same_min: 
+                new_score = max_val-1
+            same_hour = (hours == hours.iloc[0]).all()
+            if new_score is None:
+                if not same_hour: 
+                    new_score = max_val-2
+                else:
+                    new_score = max_val-3
+                
+            if score == new_score:
+                match_cols.append(col_name)
+            elif new_score != None and (score == None or new_score > score):
+                # Higher scoring item found. This now takes priority
+                score = new_score
+                match_cols = [col_name]
+
+        except Exception as e:
+            pass
+
+    return match_cols
 
 
 def parse_time(time_col):
@@ -284,10 +319,19 @@ def parse_time(time_col):
         return pd.Series([dt.time(hour=int(x),minute=int(y)) if (pd.notnull(x) and pd.notnull(y)) else pd.NaT for x,y in zip(hour,min)])
     elif time_col.dtype == 'O':
         new_col = time_col.convert_dtypes()
-        if new_col.dtype == "string":
+        if new_col.dtype == "string" or time_col.apply(lambda x: isinstance(x,str) or isinstance(x,int)).all():
             def convert_timestr_to_sec(x):
                 if pd.isnull(x):
                     return x
+                
+                if isinstance(x,int):
+                    hour = np.floor(x/100)
+                    min = x - np.floor(x/100)*100
+                    if hour >= 24:
+                        raise NotImplementedError()
+                    if min > 59:
+                        raise NotImplementedError()
+                    return dt.time(hour=int(hour),minute=int(min))
 
                 time_list = x.split(":")
                 if len(time_list)==1 and len(x.split("."))>1:
@@ -301,7 +345,7 @@ def parse_time(time_col):
                             return pd.NaT
                         else:
                             raise ValueError("Expected HHMM format")
-                    elif x.strip()=="":
+                    elif x.strip()in ["","-"]:
                         return pd.NaT
                     min = float(x[-2:])
                     if len(x) > 2:

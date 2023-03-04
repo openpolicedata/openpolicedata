@@ -211,7 +211,7 @@ class _Ethnicities:
     MIDDLE_EASTERN = _race_keys.MIDDLE_EASTERN
     NONLATINO = "NON-LATINO"
     UNKNOWN = _race_keys.UNKNOWN
-    UNSPECIFIED = _race_keys.UNKNOWN
+    UNSPECIFIED = _race_keys.UNSPECIFIED
 
 _eth_keys = _Ethnicities()
 
@@ -279,6 +279,16 @@ _genders = {
     _gender_keys.UNKNOWN:"UNKNOWN",
     _gender_keys.UNSPECIFIED:"UNSPECIFIED"
 }
+
+class _PersonTypes:
+    OFFICER = "OFFICER"
+    CIVILIAN = "CIVILIAN"
+    UNSPECIFIED = "UNSPECIFIED"
+
+_roles = _PersonTypes()
+
+def get_roles():
+    return _roles
 
 def get_race_keys():
     return _race_keys
