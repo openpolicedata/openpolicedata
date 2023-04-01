@@ -232,40 +232,52 @@ def validate_time(df, match_cols_test, date_col=None):
             except Exception:
                 pass
 
+            new_time_col = parse_time(time_col)
+
             try: 
                 if date_col is not None:
-                    new_date_col = date_col[date_col.notnull()]
-                    if not hasattr(new_date_col.iloc[0],'year'):
-                        new_date_col = parse_date_to_datetime(new_date_col)
+                    date_times = date_col.dt.time
+                    # Find times from the date column that differ from the time column
+                    date_times = date_times[
+                        date_col.dt.time.apply(lambda x: x.replace(second=0) if pd.notnull(x) else pd.NaT) != 
+                        new_time_col.apply(lambda x: x.replace(second=0) if pd.notnull(x) else pd.NaT)]
+                    most_common_time = date_times.mode()
 
-                    unique_times = pd.Series(new_date_col.apply(lambda x: x.replace(year=1970,month=1,day=1)).unique())
-                    # If there is more than 2 times or the times cannot be explained by a time zone differene,
-                    # then there is time information in the date
-                    if (len(unique_times) > 2 and len(unique_times)/len(new_date_col)>0.01) or (len(unique_times)==2 and \
-                        unique_times.notnull().all() and abs(unique_times[1]-unique_times[0]) > pd.Timedelta(hours=1)):
-                        if len(unique_times)==2 and len(new_date_col)>100:
-                            # There are enough dates that they shouldn't all mostly be the same
-                            # See if one could be a UTC time and one could be no time
-                            diffs = unique_times - unique_times.apply(lambda x: x.replace(hour=0,minute=0,second=0))
-                            if not (diffs==pd.Timedelta(0)).any():
-                                raise ValueError(date_has_time_msg)
-                        else:
-                            raise ValueError(date_has_time_msg)
+                    # If the most common time is 00:00:00, use the time column. If not, the times from the date column will be used
+                    if len(most_common_time)==0 or len(most_common_time)>1 or most_common_time[0]!=dt.time(hour=0, minute=0, second=0):
+                        raise ValueError(date_has_time_msg)
+
+                    # new_date_col = date_col[date_col.notnull()]
+                    # if not hasattr(new_date_col.iloc[0],'year'):
+                    #     new_date_col = parse_date_to_datetime(new_date_col)
+
+                    # unique_times = pd.Series(new_date_col.apply(lambda x: x.replace(year=1970,month=1,day=1)).unique())
+                    # # If there is more than 2 times or the times cannot be explained by a time zone differene,
+                    # # then there is time information in the date
+                    # if (len(unique_times) > 2 and len(unique_times)/len(new_date_col)>0.01) or (len(unique_times)==2 and \
+                    #     unique_times.notnull().all() and abs(unique_times[1]-unique_times[0]) > pd.Timedelta(hours=1)):
+                    #     if len(unique_times)==2 and len(new_date_col)>100:
+                    #         # There are enough dates that they shouldn't all mostly be the same
+                    #         # See if one could be a UTC time and one could be no time
+                    #         diffs = unique_times - unique_times.apply(lambda x: x.replace(hour=0,minute=0,second=0))
+                    #         if not (diffs==pd.Timedelta(0)).any():
+                    #             raise ValueError(date_has_time_msg)
+                    #     else:
+                    #         raise ValueError(date_has_time_msg)
             except ValueError as e:
                 if len(e.args)>0 and e.args[0] in [not_a_time_col_msg, date_has_time_msg]:
                     continue
             except Exception:
                 pass
 
-            col = parse_time(time_col)
-            col = col[col.notnull()]
+            new_time_col = new_time_col[new_time_col.notnull()]
             
             new_score = None
-            if len(col) == 0:
+            if len(new_time_col) == 0:
                 continue
 
-            hours = pd.Series([t.hour if pd.notnull(t) else np.nan for t in col])
-            mins = pd.Series([t.minute if pd.notnull(t) else np.nan for t in col])
+            hours = pd.Series([t.hour if pd.notnull(t) else np.nan for t in new_time_col])
+            mins = pd.Series([t.minute if pd.notnull(t) else np.nan for t in new_time_col])
             # secs = time_sec - hours*3600 - mins*60
             max_val = 3
             # same_sec = (secs == secs.iloc[0]).all()
@@ -320,6 +332,11 @@ def parse_time(time_col):
     elif time_col.dtype == 'O':
         new_col = time_col.convert_dtypes()
         if new_col.dtype == "string" or time_col.apply(lambda x: isinstance(x,str) or isinstance(x,int)).all():
+            try:
+                new_col = pd.to_datetime(new_col)
+                return new_col.dt.time
+            except:
+                pass
             def convert_timestr_to_sec(x):
                 if pd.isnull(x):
                     return x
@@ -363,13 +380,13 @@ def parse_time(time_col):
                     time_list[0] = time_list[0][t_loc[0]+1:]
 
                 hours_add = 0
-                if "AM" in time_list[-1]:
-                    time_list[-1] = time_list[-1].replace("AM", "")
+                if "AM" in time_list[-1].upper():
+                    time_list[-1] = time_list[-1].upper().replace("AM", "")
                     if time_list[0].strip() == "12":
                         time_list[0] = "0"
-                elif "PM" in time_list[-1]:
+                elif "PM" in time_list[-1].upper():
                     hours_add = 12
-                    time_list[-1] = time_list[-1].replace("PM", "")
+                    time_list[-1] = time_list[-1].upper().replace("PM", "")
                     if time_list[0].strip() == "12":
                         time_list[0] = "0"
 
