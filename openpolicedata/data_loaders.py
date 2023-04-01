@@ -579,6 +579,16 @@ class Excel(Data_Loader):
         if nrows is not None and len(table)>nrows:
             table = table.head(nrows)
 
+        # Check for empty rows at the bottom
+        num_empty = table.isnull().sum(axis=1)
+        empty_rows = num_empty==len(table.columns)
+        if empty_rows.any():
+            # Check if all rows after first empty row are empty or almost empty
+            empty_rows = empty_rows[empty_rows]
+            num_empty = num_empty.loc[empty_rows.index[0]:]
+            if ((num_empty / len(table.columns)) > 0.75).all():
+                table = table.head(empty_rows.index[0])
+
         # Clean up column names
         table.columns = [x.strip() if isinstance(x, str) else x for x in table.columns]
 
@@ -633,7 +643,7 @@ class Excel(Data_Loader):
             years.sort()
             return list(year_dict.keys())
         if not force:
-            raise ValueError("Extracting the years of a CSV file requires reading the whole file in. In most cases, "+
+            raise ValueError("Extracting the years of a Excel file requires reading the whole file in. In most cases, "+
                 "running load() with no arguments to load in the whole CSV file and manually finding the years will be more "
                 "efficient. If running get_years is still desired, set force=True")
         else:
@@ -1652,7 +1662,8 @@ def filter_dataframe(df, date_field=None, year_filter=None, agency_field=None, a
             # In a future version, `df.iloc[:, i] = newvals` will attempt to set the values inplace instead of always setting a new array. 
             # To retain the old behavior, use either `df[df.columns[i]] = newvals` or, if columns are non-unique, `df.isetitem(i, newvals)`
             warnings.simplefilter("ignore", category=FutureWarning)
-            df.loc[:, date_field] = pd.to_datetime(df[date_field])
+            if date_field.lower()!="year":
+                df.loc[:, date_field] = pd.to_datetime(df[date_field])
     
     if year_filter != None and date_field != None:
         if isinstance(year_filter, list):
