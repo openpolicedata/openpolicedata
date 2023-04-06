@@ -64,7 +64,10 @@ class DataMapping:
                             continue
                         elif isinstance(x,str) and x.isdigit() and isinstance(y,Number) and float(x)==y:
                             continue
-                        elif isinstance(y,str) and x.isdigit() and isinstance(x,Number) and float(y)==x:
+                        elif isinstance(y,str) and y.isdigit() and isinstance(x,Number) and float(y)==x:
+                            continue
+                        elif isinstance(y,str) and isinstance(x, pd._libs.tslibs.timestamps.Timestamp) and \
+                            y==x.strftime("%Y-%m-%d %H:%M:%S"):
                             continue
                         tf_vals = False
                         

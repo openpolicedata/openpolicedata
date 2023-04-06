@@ -31,8 +31,9 @@ _p_age_range = re.compile(r"""
     """, re.VERBOSE)
 
 
-def convert(converter, col, source_name="", cats=None, std_map={}, delim=None, mult_info=_MultData(), 
+def convert(converter, col, source_name="", cats=None, std_map=None, delim=None, mult_info=_MultData(), 
             no_id="pass", agg_cat=False):
+    std_map = {} if std_map is None else std_map
     no_id = no_id.lower()
     if no_id not in ["pass", "null", "error","test"]:
         raise ValueError(f"no_id is {no_id}. It should be 'pass', 'null', or 'error'.")
@@ -153,9 +154,9 @@ def _create_ethnicity_lut(x, no_id, source_name, eth_cats, *args, **kwargs):
             # Same result whether no_id is pass or null
             return ""
         
-    if has_nonlat and (x in ["N", "NH"] or "NOTHISP" in x or "NONHISP" in x or "NONLATINO" in x):
+    if has_nonlat and (x in ["N", "NH", "NHIS"] or "NOTHISP" in x or "NONHIS" in x or "NONLATINO" in x):
         return eth_cats[defs._eth_keys.NONLATINO]
-    if has_latino and (x == "H" or "HISPANIC" in x or "LATINO" in x):
+    if has_latino and (x in ["H","HIS","LAT"] or "HISPANIC" in x or "LATINO" in x):
         return eth_cats[defs._eth_keys.LATINO]
     if defs._eth_keys.UNKNOWN in eth_cats and x in ["U", "UNKNOWN"]:
         return eth_cats[defs._eth_keys.UNKNOWN]
@@ -235,7 +236,11 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
             delim = [d for d in delims if d in x][0]
             race_list = []
             for v in orig.split(delim):
-                race_list.append(_create_race_lut(v, no_id, source_name, race_cats, agg_cat))
+                new_val = _create_race_lut(v, no_id, source_name, race_cats, agg_cat)
+                if isinstance(new_val, list):
+                    race_list.extend(new_val)
+                else:
+                    race_list.append(new_val)
 
             if has_unspecified and agg_cat:
                 num_unspecified = sum([x==race_cats[defs._race_keys.UNSPECIFIED] for x in race_list])
@@ -314,12 +319,21 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
         else:
             # Same result whether no_id is pass or null
             return ""
+        
+    def is_latino(x):
+        if isinstance(x,str):
+            x = x.upper().replace("-","").replace(" ","")
+            return ("HISPANIC" in x and "NONHISPANIC" not in x) or \
+                ("LATINO" in x and "NONLATINO" not in x)
+        else:
+            return False
+
     if has_unspecified and (x in ["MISSING","NOT SPECIFIED", "", "NOT RECORDED","N/A", "NOT REPORTED", "NONE"] or \
         (type(x)==str and ("NO DATA" in x or ("NOT APP" in x and x not in ["NOT APPLICABLE (NON-U.S.)",'NOT APPLICABLE (NON US)']) or "NO RACE" in x or "NULL" in x))):
         return race_cats[defs._race_keys.UNSPECIFIED]
-    if has_white and x in ["W", "CAUCASIAN", "WN", "WHITE", "WHTE"]:  # WN = White-Non-Hispanic
+    if has_white and x.replace(" ","") in ["W", "CAUCASIAN", "WN", "WHITE", "WHTE","WHITENONLATINO", "WHITENONHISPANIC"]:  # WN = White-Non-Hispanic
         return race_cats[defs._race_keys.WHITE]
-    if has_black and ((x in ["B", "AFRICAN AMERICAN", "BLCK"] or "BLAC" in x) and "HISPANIC" not in x):
+    if has_black and ((x in ["B", "AFRICAN AMERICAN", "BLCK"] or "BLAC" in x) and not is_latino(x)):
         if x.count("BLACK") > 1:
             raise ValueError(f"The value of {x} likely contains the races for multiple people")
         return race_cats[defs._race_keys.BLACK]
@@ -329,26 +343,26 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
              return race_cats[defs._race_keys.SOUTH_ASIAN]
         else:
             return race_cats[defs._race_keys.MIDDLE_EASTERN_SOUTH_ASIAN]
-    if (has_asian or has_aapi) and (x in ["A"] or "ASIAN" in x):
-        if has_aapi and ("PAC" in x or "HAWAI" in x):
-            return race_cats[defs._race_keys.AAPI] 
-        elif x in ["A", "ASIAN"]:
-            return race_cats[defs._race_keys.ASIAN] if has_asian else race_cats[defs._race_keys.AAPI]
-    if (has_pi or has_aapi) and ("HAWAI" in x or "PACIFICIS" in x.replace(" ","").replace("_","") or \
-                                 "PACISL" in x.replace(" ","")):
-        return race_cats[defs._race_keys.PACIFIC_ISLANDER] if has_pi else race_cats[defs._race_keys.AAPI]
-    if has_latino and x in ["H", "WH", "HISPANIC", "LATINO", "HISPANIC OR LATINO", "LATINO OR HISPANIC", "HISPANIC/LATINO", "LATINO/HISPANIC"]:
-        return race_cats[defs._race_keys.LATINO] 
-    if has_indigenous and (x in ["I", "INDIAN", "ALASKAN NATIVE", "AI/AN", "AI"] or "AMERICAN IND" in x or \
-        "NATIVE AM" in x or  "AMERIND" in x.replace(" ","") or "ALASK" in x or "AMIND" in x.replace(" ","") or \
-        "NAT AMER" in x):
-        return race_cats[defs._race_keys.INDIGENOUS] 
     if has_me and (x in ["ME","ARABIC"] or "MIDDLE EAST" in x):
         if "SOUTH ASIAN" in x:
             if has_me_or_sa:
                 return race_cats[defs._race_keys.MIDDLE_EASTERN_SOUTH_ASIAN]
         else:
             return race_cats[defs._race_keys.MIDDLE_EASTERN] if defs._race_keys.MIDDLE_EASTERN in race_cats else race_cats[defs._race_keys.MIDDLE_EASTERN_SOUTH_ASIAN]
+    if (has_asian or has_aapi) and (x in ["A", 'ORIENTAL'] or "ASIAN" in x):
+        if has_aapi and ("PAC" in x or "HAWAI" in x):
+            return race_cats[defs._race_keys.AAPI] 
+        else:
+            return race_cats[defs._race_keys.ASIAN] if has_asian else race_cats[defs._race_keys.AAPI]
+    if (has_pi or has_aapi) and ("HAWAI" in x or "PACIFICIS" in x.replace(" ","").replace("_","") or \
+                                 "PACISL" in x.replace(" ","")):
+        return race_cats[defs._race_keys.PACIFIC_ISLANDER] if has_pi else race_cats[defs._race_keys.AAPI]
+    if has_latino and x in ["H", "WH", "HISPANIC", "LATINO", "HISPANIC OR LATINO", "LATINO OR HISPANIC", "HISPANIC/LATINO", "LATINO/HISPANIC",'HISPANIC/LATIN/MEXICAN']:
+        return race_cats[defs._race_keys.LATINO] 
+    if has_indigenous and (x in ["I", "INDIAN", "ALASKAN NATIVE", "AI/AN", "AI", "AL NATIVE"] or "AMERICAN IND" in x or \
+        "NATIVE AM" in x or  "AMERIND" in x.replace(" ","") or "ALASK" in x or "AMIND" in x.replace(" ","") or \
+        "NAT AMER" in x):
+        return race_cats[defs._race_keys.INDIGENOUS] 
     if has_multiple and ("OR MORE" in x or "MULTI" in x or \
         x.replace(" ","") in ["MIXED","BIRACIAL","MIXEDRACE"]):
         return race_cats[defs._race_keys.MULTIPLE]
@@ -360,8 +374,11 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
         return race_cats[defs._race_keys.OTHER]
     
     if agg_cat:
-        if has_latino and (("HISP" in x and "NONHISP" not in x) or ("LATINO" in x and "NONLATINO" not in x)):
-            return race_cats[defs._race_keys.LATINO] 
+        if has_latino and (("HISP" in x and "NONHISP" not in x.replace(" ","")) or ("LATINO" in x and "NONLATINO" not in x.replace(" ",""))):
+            if has_black and "BLACK" in x:
+                return [race_cats[defs._race_keys.LATINO], race_cats[defs._race_keys.BLACK]]
+            else:
+                return race_cats[defs._race_keys.LATINO] 
         elif has_black and x in ["EAST AFRICAN"]:
             return race_cats[defs._race_keys.BLACK]
         elif has_white and x in ["BOSNIAN"]:
@@ -394,7 +411,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
                 (source_name in ["Beloit"] and x in ["L"]) or \
                 (source_name in ["St. John"] and x in ["K","P"]) or \
                 (source_name in ["Rutland"] and x in ["M","R"]) or \
-                (source_name in ["Sacramento"] and x in ["CUBAN/CARRIBEAN"]) or \
+                (source_name in ["Sacramento"] and x in ["CUBAN","CARRIBEAN"]) or \
                 (x=="UN" and source_name=="State Police") or \
                 (x=="W\nW" and source_name=="Sparks") or \
                 ("DOG" in x) or \

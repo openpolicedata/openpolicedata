@@ -294,7 +294,8 @@ class Standardizer:
         always_validate=False,
         validate_args=[],
         std_col_name = None,
-        search_data=False):
+        search_data=False,
+        tables_to_exclude=[]):
 
         if self.table_type in exclude_table_types or \
             (only_table_types != None and self.table_type not in only_table_types):
@@ -345,7 +346,8 @@ class Standardizer:
                 
                 
             if len(match_cols)==0:
-                if not_required_table_types != "ALL" and self.table_type not in not_required_table_types:
+                if not_required_table_types != "ALL" and self.table_type not in not_required_table_types and \
+                    (self.source_name, self.table_type) not in tables_to_exclude:
                     raise ValueError(f"Column not found with substring {match_substr}")
             elif len(match_cols)>1:
                 new_matches = self._pattern_search(match_cols, secondary_patterns, match_substr[0])
@@ -390,7 +392,8 @@ class Standardizer:
                                  defs.TableType.SHOOTINGS_CIVILIANS, defs.TableType.SHOOTINGS_OFFICERS,
                                  defs.TableType.CRASHES_CIVILIANS, defs.TableType.CRASHES_VEHICLES],
             validator=datetime_parser.validate_date,
-            always_validate=True)
+            always_validate=True,
+            tables_to_exclude=[("Winooski", defs.TableType.TRAFFIC)])
 
         if len(match_cols) > 1:
             raise NotImplementedError()
@@ -399,7 +402,7 @@ class Standardizer:
         
         secondary_patterns = []
         validator_args = []
-        exclude_col_names = ["rankattimeofincident"]
+        exclude_col_names = ["rankattimeofincident", ("does not contain","total")]
         if defs.columns.DATE in self.col_map:
             # Create a pattern from the format of the date column name
             # That might also be the pattern of the time column
