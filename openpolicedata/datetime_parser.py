@@ -101,8 +101,8 @@ def parse_date_to_datetime(date_col):
                     except:
                         raise
 
-                    if (new_date_col.dt.year > this_year).any() or (new_date_col.dt.year < 1950).any():
-                        raise ValueError("Date is outside acceptable range (1950 to this year)")
+                    if (new_date_col.dt.year > this_year).any() or (new_date_col.dt.year < 1971).any():
+                        raise ValueError("Date is outside acceptable range (1971 to this year)")
 
                     return new_date_col
                     
@@ -241,29 +241,30 @@ def validate_time(df, match_cols_test, date_col=None):
                     date_times = date_times[
                         date_col.dt.time.apply(lambda x: x.replace(second=0) if pd.notnull(x) else pd.NaT) != 
                         new_time_col.apply(lambda x: x.replace(second=0) if pd.notnull(x) else pd.NaT)]
+                    counts = date_times.value_counts()
+                    if len(counts)==0:
+                        # All times are the same between date and time columns
+                        raise ValueError(date_has_time_msg)
                     most_common_time = date_times.mode()
 
-                    # If the most common time is 00:00:00, use the time column. If not, the times from the date column will be used
-                    if len(most_common_time)==0 or len(most_common_time)>1 or most_common_time[0]!=dt.time(hour=0, minute=0, second=0):
-                        raise ValueError(date_has_time_msg)
+                    # If most common time is all zeros, assume no time in date
+                    if most_common_time[0]!=dt.time(hour=0, minute=0, second=0):
+                        # If the date has no time, it will have zeros, standard time offsets, or DST offsets
+                        if len(counts)>3 or any([x.minute!=0 or x.second!=0 for x in counts.index]):
+                            raise ValueError(date_has_time_msg)
+                        
+                        # 00:00 must be one of the numbers if 3 unique values
+                        if len(counts)==3 and all([x!=dt.time(hour=0, minute=0, second=0) for x in counts.index]):
+                            raise ValueError(date_has_time_msg)
+                        
+                        non_zero = [x for x in counts.index if x.hour!=0]
+                        if len(non_zero)>1:
+                            # Values should be off by one hour
+                            d1 = dt.timedelta(hours=non_zero[0].hour)
+                            d2 = dt.timedelta(hours=non_zero[1].hour)
+                            if d2-d1 != dt.timedelta(hours=1) and d1-d2 != dt.timedelta(hours=1):
+                                raise ValueError(date_has_time_msg)
 
-                    # new_date_col = date_col[date_col.notnull()]
-                    # if not hasattr(new_date_col.iloc[0],'year'):
-                    #     new_date_col = parse_date_to_datetime(new_date_col)
-
-                    # unique_times = pd.Series(new_date_col.apply(lambda x: x.replace(year=1970,month=1,day=1)).unique())
-                    # # If there is more than 2 times or the times cannot be explained by a time zone differene,
-                    # # then there is time information in the date
-                    # if (len(unique_times) > 2 and len(unique_times)/len(new_date_col)>0.01) or (len(unique_times)==2 and \
-                    #     unique_times.notnull().all() and abs(unique_times[1]-unique_times[0]) > pd.Timedelta(hours=1)):
-                    #     if len(unique_times)==2 and len(new_date_col)>100:
-                    #         # There are enough dates that they shouldn't all mostly be the same
-                    #         # See if one could be a UTC time and one could be no time
-                    #         diffs = unique_times - unique_times.apply(lambda x: x.replace(hour=0,minute=0,second=0))
-                    #         if not (diffs==pd.Timedelta(0)).any():
-                    #             raise ValueError(date_has_time_msg)
-                    #     else:
-                    #         raise ValueError(date_has_time_msg)
             except ValueError as e:
                 if len(e.args)>0 and e.args[0] in [not_a_time_col_msg, date_has_time_msg]:
                     continue

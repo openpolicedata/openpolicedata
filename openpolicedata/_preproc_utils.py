@@ -33,7 +33,7 @@ class DataMapping:
                         not (pd.isna(k) and any([pd.isna(x) for x in other.data_maps.keys()])):
                         return False
                     if pd.isnull(k):
-                        kother = np.nan
+                        kother = [x for x in other.data_maps.keys() if pd.isnull(x)][0]
                     else:
                         kother = k
                     if self.data_maps[k] != other.data_maps[kother]:

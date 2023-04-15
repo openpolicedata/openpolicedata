@@ -416,7 +416,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
                 (x=="W\nW" and source_name=="Sparks") or \
                 ("DOG" in x) or \
                 (source_name in ["New Orleans"] and "NOT APPLICABLE (NON" in x) or \
-                (source_name in ["Detroit", "Fairfax County"] and x in ["N","SELECT"]) or \
+                (source_name in ["Detroit", "Fairfax County"] and x in ["N","SELECT","UNVERIFIED"]) or \
                 x in ["OTHER / MIXED RACE", "UNDISCLOSED", "OR SPANISH ORIGIN","PREFER NOT TO SAY","OTHERBLEND","UNDECLARED"] or \
                 len(orig)>100:
                 # This is meant to be temporary for testing
@@ -548,7 +548,7 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
             (x=="X" and source_name in ["Sacramento", "State Police"]) or \
             "DOG" in x or \
             x in ["UNDISCLOSE","UNDISCLOSED","PREFER TO SELF DESCRIBE".replace(" ",""),'NONBINARY/THIRDGENDER',
-                  "PREFER NOT TO SAY".replace(" ",""),"TGNC/OTHER","REFUSED"] or \
+                  "PREFER NOT TO SAY".replace(" ",""),"TGNC/OTHER","REFUSED",'UNVERIFIED'] or \
             source_name == "Buffalo":
             return orig
         else:

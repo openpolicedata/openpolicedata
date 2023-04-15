@@ -313,6 +313,8 @@ class Standardizer:
             if isinstance(match_substr, str):
                 match_substr = [match_substr]
 
+            # columns = [split_words(x) for x in self.df.columns]
+
             match_cols = []
             civilian_terms = ["citizen","subject","suspect","civilian", "cit", "offender"]
             civilian_found = False
@@ -362,15 +364,11 @@ class Standardizer:
                 # Check if one column is an officer column and one is not
                 multi_check = sum([any([y.lower() in x.lower() for y in officer_terms]) for x in match_cols])!=1
 
-            if always_validate or (multi_check and validator != None and len(match_cols) > 1) or \
-                (search_data and len(match_cols)==0):
-                if search_data and len(match_cols)==0:
-                    # Search everything
-                    match_cols_test = self.df.columns
-                else:
-                    match_cols_test = match_cols
+            if always_validate or (multi_check and validator != None and len(match_cols) > 1):
+                match_cols = validator(self.df, match_cols, *validate_args)
 
-                match_cols = validator(self.df, match_cols_test, *validate_args)
+            if search_data and len(match_cols)==0:
+                match_cols = validator(self.df, self.df.columns, *validate_args)
                 
             match_cols = self._remove_excluded(match_cols, exclude_col_names, match_substr)
 
@@ -393,7 +391,8 @@ class Standardizer:
                                  defs.TableType.CRASHES_CIVILIANS, defs.TableType.CRASHES_VEHICLES],
             validator=datetime_parser.validate_date,
             always_validate=True,
-            tables_to_exclude=[("Winooski", defs.TableType.TRAFFIC)])
+            tables_to_exclude=[("Winooski", defs.TableType.TRAFFIC)],
+            search_data=True)
 
         if len(match_cols) > 1:
             raise NotImplementedError()
@@ -456,7 +455,22 @@ class Standardizer:
             if defs.columns.DATE in self.col_map:
                 # Don't select the date column as the time column too
                 exclude_col_names.append(self.col_map[defs.columns.DATE])
-                validator_args.append(self.df[self.col_map[defs.columns.DATE]])
+                date_data = self.df[self.col_map[defs.columns.DATE]]
+                if self.col_map[defs.columns.DATE].lower() == "year":
+                    month_idx = [k for k,x in enumerate(self.df.columns) if x.lower() == "month"]
+                    if len(month_idx) > 0:
+                        date_cols = [self.col_map[defs.columns.DATE], self.df.columns[month_idx[0]]]
+
+                        day_idx = [k for k,x in enumerate(self.df.columns) if x.lower() == "day"]
+                        if len(day_idx) > 0:
+                            date_cols.append(self.df.columns[day_idx[0]])
+                            date_data = self.df[date_cols]
+                        else:
+                            date_data = self.df[date_cols].copy()
+                            date_data["day"] = [1 for _ in range(len(self.df))]
+                                        
+                date_data = datetime_parser.parse_date_to_datetime(date_data)
+                validator_args.append(date_data)
             
         match_cols = self._find_col_matches("time", 
             std_col_name=defs.columns.TIME,
@@ -521,7 +535,7 @@ class Standardizer:
             elif len(match_cols) == 1:
                 self.col_map[defs.columns.CIVILIAN_OR_OFFICER] = match_cols[0]
 
-            match_cols = self._find_col_matches(["race", "citizen_demographics","officer_demographics","ethnicity","re_grp"],
+            match_cols = self._find_col_matches(["race", "citizen_demographics","officer_demographics","rac","ethnicity","re_grp"],
                 validator=_race_validator, 
                 validate_args=[self.source_name],
                 search_data=True)  
@@ -862,7 +876,7 @@ class Standardizer:
                         date_data = self.df[date_cols]
                     else:
                         date_data = self.df[date_cols].copy()
-                        date_data["day"] = [1 for _unused in range(len(self.df))]
+                        date_data["day"] = [1 for _ in range(len(self.df))]
                                     
             s_date = datetime_parser.parse_date_to_datetime(date_data)
             # s_date.name = defs.columns.DATE
@@ -1321,22 +1335,27 @@ class Standardizer:
                     test = [int(x)==y if ((isinstance(x,Number) and pd.notnull(x)) or (type(x)==str and x.strip().isdigit())) 
                             else False for x,y in zip(self.df[self.col_map[col_name]],col)]
                     sum_test = sum(test)
-                    if sum_test / len(test) < 0.2:
+                    if not check_column(self.col_map[col_name], "age") and  sum_test / len(test) < 0.2:
                         logging.getLogger("opd").warn(f"Not converting {self.col_map[col_name]} to an age. If this is an age column only {sum(test) / len(test)*100:.1f}% of the data has a valid value")
                         self.col_map.pop(col_name)
                         return
                     elif sum_test / len(test) < 0.85 and not (sum_test>1 and len(test)-sum_test==1):
                         throw = True
                         if check_column(self.col_map[col_name], "age"):
-                            # See if all values are null or acceptable values                          
-                            for x in self.df[self.col_map[col_name]]:
-                                if pd.isnull(x) or (isinstance(x,str) and x.lower()=="unknown"):
+                            # See if all values are null or acceptable values
+                            badvals = 0                        
+                            for x in self.df[self.col_map[col_name]].unique():
+                                x = x.lower().strip() if isinstance(x,str) else x
+                                if pd.isnull(x) or (isinstance(x,str) and x in ["", "unknown"]):
                                     continue
-                                elif isinstance(x,Number) or  (isinstance(x,str) and x.strip().isdigit()):
+                                elif isinstance(x,Number) or  (isinstance(x,str) and x.isdigit()):
                                     x = int(x)
                                     if x<0 or x>max_age:
-                                        break
+                                        badvals+=1
                                 else:
+                                    badvals+=1
+
+                                if badvals>1:
                                     break
                             else:
                                 throw = False
