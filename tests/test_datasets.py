@@ -52,7 +52,7 @@ class TestDatasets:
     
     def test_check_state_names(self, csvfile, source, last, skip, loghtml):
         all_states = [
-            'Alabama', 'Alaska', 'American Samoa', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware', 'District Of Columbia',
+            'Alabama', 'Alaska', 'American Samoa', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware', 'District of Columbia',
             'Florida', 'Georgia', 'Guam', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky', 'Louisiana', 'Maine',
             'Maryland', 'Massachusetts', 'Michigan', 'Minnesota', 'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire',
             'New Jersey', 'New Mexico', 'New York', 'North Carolina', 'North Dakota', 'Northern Mariana Islands', 'Ohio', 'Oklahoma', 'Oregon',
@@ -197,5 +197,6 @@ class TestDatasets:
 
 if __name__ == "__main__":
     csvfile = None
-    # csvfile = "C:\\Users\\matth\\repos\\opd-data\\opd_source_table.csv"
-    TestDatasets().test_summary_functions(csvfile,None,None,None,None)
+    csvfile = "C:\\Users\\matth\\repos\\opd-data\\opd_source_table.csv"
+    TestDatasets().test_years_multi(csvfile,None,None,None,None)
+    TestDatasets().test_table_types(csvfile,None,None,None,None)

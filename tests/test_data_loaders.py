@@ -50,15 +50,15 @@ class TestProduct:
         r.raise_for_status()
         assert count==r.json()["rows"][0]["count"]
 
-        df = loader.load(year=year)
+        df = loader.load(year=year, pbar=False)
 
         offset = 1
         nrows = count - 2
-        df_offset = loader.load(year=year, nrows=nrows, offset=1)
+        df_offset = loader.load(year=year, nrows=nrows, offset=1, pbar=False)
 
         assert df_offset.equals(df.iloc[offset:offset+nrows].reset_index(drop=True))
 
-        df_offset = loader.load(year=year, offset=1)
+        df_offset = loader.load(year=year, offset=1, pbar=False)
         assert df_offset.equals(df.iloc[offset:].reset_index(drop=True))
 
         r = requests.get(f"https://phl.carto.com/api/v2/sql?format=GeoJSON&q=SELECT * FROM {dataset} WHERE {date_field} >= '{year}-01-01' AND {date_field} < '{year+1}-01-01'")
@@ -71,7 +71,7 @@ class TestProduct:
             from shapely.geometry import Point
             geometry = []
             for feat in features:
-                if "geometry" not in feat or feat["geometry"]==None:
+                if "geometry" not in feat or feat["geometry"]==None or len(feat["geometry"]["coordinates"])<2:
                     geometry.append(None)
                 else:
                     geometry.append(Point(feat["geometry"]["coordinates"][0], feat["geometry"]["coordinates"][1]))
@@ -88,7 +88,7 @@ class TestProduct:
         if data_loaders._has_gpd:
             assert type(df) == gpd.GeoDataFrame
             data_loaders._has_gpd = False
-            df = loader.load(year=year, nrows=nrows)
+            df = loader.load(year=year, nrows=nrows, pbar=False)
             data_loaders._has_gpd = True
             assert isinstance(df, pd.DataFrame)
 
@@ -244,7 +244,7 @@ class TestProduct:
         date_field = "created_dt"
         year = 2020
         loader = data_loaders.Socrata(url=url, data_set=data_set, date_field=date_field)
-        df = loader.load(year=year)
+        df = loader.load(year=year, pbar=False)
         count = loader.get_count(year=year)
 
         # Reset
@@ -259,17 +259,17 @@ class TestProduct:
         url = "data.austintexas.gov"
         data_set = "sc8s-w4ka"
         loader = data_loaders.Socrata(url, data_set)
-        df =loader.load()
+        df =loader.load(pbar=False)
         count = loader.get_count()
 
         offset = 1
         nrows = len(df)-offset-1
-        df_offset = loader.load(offset=offset,nrows=nrows)
+        df_offset = loader.load(offset=offset,nrows=nrows, pbar=False)
         assert set(df.columns)==set(df_offset.columns)
         df_offset = df_offset[df.columns]
         assert df_offset.equals(df.iloc[offset:nrows+offset].reset_index(drop=True))
 
-        df_offset = loader.load(offset=offset)
+        df_offset = loader.load(offset=offset, pbar=False)
         assert set(df.columns)==set(df_offset.columns)
         df_offset = df_offset[df.columns]
         assert df_offset.equals(df.iloc[offset:].reset_index(drop=True))
@@ -287,18 +287,19 @@ class TestProduct:
         url = "https://www.denvergov.org/media/gis/DataCatalog/denver_police_officer_involved_shootings/csv/denver_police_officer_involved_shootings.csv"
         date_field = "INCIDENT_DATE"
         loader = data_loaders.Csv(url, date_field=date_field)
-        df = loader.load()
+        df = loader.load(pbar=False)
 
         offset = 1
         nrows = len(df)-offset-1
-        df_offset = loader.load(offset=offset,nrows=nrows)
+        df_offset = loader.load(offset=offset,nrows=nrows, pbar=False)
         assert df_offset.equals(df.iloc[offset:nrows+offset].reset_index(drop=True))
         
-        df_offset = loader.load(offset=offset)
+        df_offset = loader.load(offset=offset, pbar=False)
         assert df_offset.equals(df.iloc[offset:].reset_index(drop=True))
 
         df_comp = pd.read_csv(url)
         df_comp = df_comp.astype({date_field: 'datetime64[ns]'})
+        df = df.astype({date_field: 'datetime64[ns]'})
 
         count = loader.get_count()
         assert len(df_comp) == count
@@ -324,7 +325,7 @@ class TestProduct:
         url = "https://www.denvergov.org/media/gis/DataCatalog/denver_police_officer_involved_shootings/csv/denver_police_officer_involved_shootings.csv"
         loader = data_loaders.Csv(url, date_field="INCIDENT_DATE")
         year = 2020
-        df = loader.load(year=year)
+        df = loader.load(year=year, pbar=False)
         with pytest.raises(ValueError):
             count = loader.get_count(year=year)
 
@@ -336,14 +337,14 @@ class TestProduct:
         url = "https://www.norristown.org/DocumentCenter/View/1789/2017-2018-Use-of-Force"
         date_field = "Date"
         loader = data_loaders.Excel(url, date_field=date_field)
-        df = loader.load()
+        df = loader.load(pbar=False)
 
         offset = 1
         nrows = len(df)-offset-1
-        df_offset = loader.load(offset=offset,nrows=nrows)
+        df_offset = loader.load(offset=offset,nrows=nrows, pbar=False)
         assert df_offset.equals(df.iloc[offset:nrows+offset].reset_index(drop=True))
 
-        df_offset = loader.load(offset=offset)
+        df_offset = loader.load(offset=offset, pbar=False)
         assert df_offset.equals(df.iloc[offset:].reset_index(drop=True))
 
         df_comp = pd.read_excel(url)
@@ -366,7 +367,7 @@ class TestProduct:
         assert list(df[date_field].dt.year.sort_values(ascending=True).dropna().unique()) == years
 
         nrows = 7
-        df = loader.load(nrows=nrows)        
+        df = loader.load(nrows=nrows, pbar=False)        
         df_comp = pd.read_excel(url, nrows=nrows)
         df_comp = df_comp.convert_dtypes()
         df_comp.columns = [x.strip() if isinstance(x, str) else x for x in df_comp.columns]
@@ -389,7 +390,7 @@ class TestProduct:
         df_comp = df_comp.iloc[:, 1:]
 
         # Load all years
-        df_2014 = loader.load(year=2014)
+        df_2014 = loader.load(year=2014, pbar=False)
 
         assert df_comp.equals(df_2014)
 
@@ -402,17 +403,17 @@ class TestProduct:
         df_comp = df_comp.iloc[:, 1:]
 
         # Load all years
-        df_2015 = loader.load(year=2015)
+        df_2015 = loader.load(year=2015, pbar=False)
 
         assert df_comp.equals(df_2015)
 
         # Note: There is no 2013 data
-        df_multi = loader.load(year=[2013,2015])
+        df_multi = loader.load(year=[2013,2015], pbar=False)
 
         assert df_multi.equals(pd.concat([df_2014, df_2015], ignore_index=True))
 
-        df = loader.load()
-        df_last = loader.load(year=years[-1])
+        df = loader.load(pbar=False)
+        df_last = loader.load(year=years[-1], pbar=False)
 
         assert df.head(len(df_multi)).equals(df_multi)
         assert df.tail(len(df_last)).reset_index(drop=True).equals(df_last.reset_index(drop=True))
@@ -424,7 +425,7 @@ class TestProduct:
         url = "https://cms7files1.revize.com/sparksnv/Document_Center/Sparks%20Police/IA%20Data/2000-2022-SPD-OIS-Incidents%20(3).xlsx"
 
         loader = data_loaders.Excel(url)
-        df = loader.load()
+        df = loader.load(pbar=False)
 
         df_comp = pd.read_excel(url)
         df_comp.columns= [x for x in df_comp.iloc[3]]
@@ -483,7 +484,7 @@ class TestProduct:
         os.remove(file_path_decrypted)
 
         loader = data_loaders.Excel(url)
-        df = loader.load()
+        df = loader.load(pbar=False)
 
         df_comp = df_comp.convert_dtypes()
         df_comp.columns = [x.strip() if isinstance(x, str) else x for x in df_comp.columns]
@@ -492,17 +493,17 @@ class TestProduct:
 if __name__ == "__main__":
     tp = TestProduct()
 
-    tp.test_arcgis_legacy_server(None,None,None,None,None)
-    tp.test_carto(None,None,None,None,None)
-    tp.test_arcgis(None,None,None,None,None)
-    tp.test_arcgis_geopandas(None,None,None,None,None)
-    tp.test_arcgis_pandas(None,None,None,None,None)
-    tp.test_csv(None,None,None,None,None)
-    tp.test_csv_year_filter(None,None,None,None,None)
-    tp.test_process_date_input_empty(None,None,None,None,None)
-    tp.test_process_date_too_many(None,None,None,None,None)
-    tp.test_process_dates_year_input_wrong_order(None,None,None,None,None)
-    tp.test_socrata(None,None,None,None,None)
+    # tp.test_arcgis_legacy_server(None,None,None,None,None)
+    # tp.test_carto(None,None,None,None,None)
+    # tp.test_arcgis(None,None,None,None,None)
+    # tp.test_arcgis_geopandas(None,None,None,None,None)
+    # tp.test_arcgis_pandas(None,None,None,None,None)
+    # tp.test_csv(None,None,None,None,None)
+    # tp.test_csv_year_filter(None,None,None,None,None)
+    # tp.test_process_date_input_empty(None,None,None,None,None)
+    # tp.test_process_date_too_many(None,None,None,None,None)
+    # tp.test_process_dates_year_input_wrong_order(None,None,None,None,None)
+    # tp.test_socrata(None,None,None,None,None)
     tp.test_socrata_geopandas(None,None,None,None,None)
     tp.test_socrata_pandas(None,None,None,None,None)
     tp.test_excel(None,None,None,None,None)

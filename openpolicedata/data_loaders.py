@@ -319,7 +319,8 @@ class Csv(Data_Loader):
             if self.date_field==None:
                 raise ValueError("No date field provided to access year information")
             df = self.load()
-            years = list(df[self.date_field].dt.year.dropna().unique())
+            date_col = pd.to_datetime(df[self.date_field])
+            years = list(date_col.dt.year.dropna().unique())
             years.sort()
             return [int(x) for x in years]
 
@@ -1344,7 +1345,7 @@ class Carto(Data_Loader):
                 if use_gpd:
                     geometry = []
                     for feat in features:
-                        if "geometry" not in feat or feat["geometry"]==None:
+                        if "geometry" not in feat or feat["geometry"]==None or len(feat["geometry"]["coordinates"])<2:
                             geometry.append(None)
                         else:
                             geometry.append(Point(feat["geometry"]["coordinates"][0], feat["geometry"]["coordinates"][1]))
@@ -1450,8 +1451,18 @@ class Socrata(Data_Loader):
 
         if where==None:
             where = self.__construct_where(year, opt_filter)
+
+        try:
+            results = self.client.get(self.data_set, where=where, select="count(*)")
+        except requests.HTTPError as e:
+            raise OPD_SocrataHTTPError(self.url, self.data_set, *e.args, _url_error_msg.format(self.url))
+        except Exception as e: 
+            if len(e.args)>0 and (e.args[0]=='Unknown response format: text/html' or \
+                "Read timed out" in e.args[0]):
+                raise OPD_SocrataHTTPError(self.url, self.data_set, *e.args, _url_error_msg.format(self.url))
+            else:
+                raise e  
             
-        results = self.client.get(self.data_set, where=where, select="count(*)")
         try:
             num_rows = float(results[0]["count"])
         except:
@@ -1669,7 +1680,8 @@ def filter_dataframe(df, date_field=None, year_filter=None, agency_field=None, a
         if isinstance(year_filter, list):
             df = df[(df[date_field].dt.year >= year_filter[0]) & (df[date_field].dt.year <= year_filter[1])]
         else:
-            df = df[df[date_field].dt.year == year_filter]
+            date_col = pd.to_datetime(df[date_field])
+            df = df[date_col.dt.year == year_filter]
 
     if agency != None and agency_field != None:
         df = df.query(agency_field + " = '" + agency + "'")

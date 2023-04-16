@@ -161,7 +161,7 @@ class TestData:
 
 		print("Testing ArcGIS source")
 		src = data.Source("Charlotte-Mecklenburg")
-		count = src.get_count(table_type="EMPLOYEE")
+		count = src.get_count(year="NONE", table_type="EMPLOYEE")
 
 		url = "https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPD/MapServer/16/"
 		gis = data_loaders.Arcgis(url)
@@ -283,17 +283,17 @@ if __name__ == "__main__":
 	tp = TestData()
 	# (self, csvfile, source, last, skip, loghtml)
 	csvfile = None
-	# csvfile = r"..\opd-data\opd_source_table.csv"
+	csvfile = r"..\opd-data\opd_source_table.csv"
 	last = None
 	# last = 631-618+1
 	skip = None
 	skip = "Fayetteville,Seattle"
-	source = None
+	source = "Fairfax County"
 	# source = "Philadelphia"
-	tp.test_load_gen(csvfile, source, last, skip, None) 
-	tp.check_table_type_warning(csvfile, source, last, skip, None) 
-	tp.test_source_download_limitable(csvfile, source, last, skip, None) 
-	tp.test_check_version(csvfile, None, last, skip, None) 
-	tp.test_get_count(csvfile, None, last, skip, None)
+	# tp.test_load_gen(csvfile, source, last, skip, None) 
+	# tp.check_table_type_warning(csvfile, source, last, skip, None) 
+	# tp.test_source_download_limitable(csvfile, source, last, skip, None) 
+	# tp.test_check_version(csvfile, None, last, skip, None) 
+	# tp.test_get_count(csvfile, None, last, skip, None)
 	tp.test_offsets_and_nrows(csvfile, source, last, skip, None) 
 	

@@ -51,6 +51,9 @@ class TableType(str, Enum):
     CRASHES_INCIDENTS = ("CRASHES - INCIDENTS",
         "Crash data may be split into several tables due to the possibility that multiple "+
         "civilians and vehicles may be involved in an incident. This table contains data on the incident.")
+    CRASH_NONMOTORIST = ("CRASHES - NONMOTORIST",
+        "Crash data may be split into several tables due to the possibility that multiple "+
+        "civilians and vehicles may be involved in an incident. This table contains information on non-motorists involved in a crash.")
     CRASHES_VEHICLES = ("CRASHES - VEHICLES",
         "Crash data may be split into several tables due to the possibility that multiple "+
         "civilians and vehicles may be involved in an incident. This table contains data on vehicles    .")
