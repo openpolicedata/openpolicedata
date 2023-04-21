@@ -370,7 +370,7 @@ class Excel(Data_Loader):
         try:
             self.excel_file = pd.ExcelFile(url)
         except urllib.error.HTTPError as e:
-            if str(e) == "HTTP Error 406: Not Acceptable":
+            if str(e) in ["HTTP Error 406: Not Acceptable", 'HTTP Error 403: Forbidden']:
                 # 406 error: https://stackoverflow.com/questions/34832970/http-error-406-not-acceptable-python-urllib2
                 # File-like input for URL: https://stackoverflow.com/questions/57815780/how-can-i-directly-handle-excel-file-link-python/57815864#57815864
                 headers = {'User-agent' : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_3) AppleWebKit/537.75.14 (KHTML, like Gecko) Version/7.0.3 Safari/7046A194A'}
@@ -898,7 +898,7 @@ class Arcgis(Data_Loader):
                 if k==0:
                     where_query = f"{self.date_field} >= '{start_date}' AND  {self.date_field} < '{stop_date}'"
                 else:
-                    break
+                    # break
                     # Dataset (San Jose crash data) that required this does not function well so removing its functionality for now to speed up this function.
                     # This is the recommended way but it has been found to not work sometimes. One dataset was found that requires this.
                     # https://gis.stackexchange.com/questions/451107/arcgis-rest-api-unable-to-complete-operation-on-esrifieldtypedate-in-query
@@ -1130,8 +1130,6 @@ class Arcgis(Data_Loader):
 
                     if "geolocation" not in df:
                         df["geolocation"] = geometry
-                    else:
-                        raise KeyError("geolocation already exists in DataFrame")
 
             return df
         else:
@@ -1734,15 +1732,3 @@ class TqdmReader:
             if self.pbar:
                 self.bar.update(self.bar.total - self.bar.n)
             return ""
-
-
-if __name__ == "__main__":
-    import time
-    _default_limit = 10000
-    start_time = time.time()
-    url = "https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPD/MapServer/13/"
-    # url = 'https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_CRIME_STOPS_P/FeatureServer/32'
-    date_field = 'YR'
-    years = _get_years("ArcGIS", url, date_field)
-    load_arcgis(url, date_field, [2020,2021])
-    print(f"Completed in {time.time()-start_time} seconds")

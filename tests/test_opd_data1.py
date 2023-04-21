@@ -208,6 +208,10 @@ class TestData:
 		for ds in datasets:
 			src = data.Source(ds[0])
 			df = src.load_from_url(ds[1], ds[2]).table
+			with warnings.catch_warnings():
+				warnings.filterwarnings("ignore",category=RuntimeWarning)
+				df = df.convert_dtypes()
+
 			offset = 0
 			for t in src.load_from_url_gen(ds[1], ds[2], nbatch=ds[3], force=True):
 				df_cur = df.iloc[offset:offset+len(t.table)].reset_index(drop=True)
@@ -285,15 +289,15 @@ if __name__ == "__main__":
 	csvfile = None
 	csvfile = r"..\opd-data\opd_source_table.csv"
 	last = None
-	# last = 631-618+1
+	# last = 863-784+1
 	skip = None
-	skip = "Fayetteville,Seattle"
-	source = "Fairfax County"
-	# source = "Philadelphia"
-	# tp.test_load_gen(csvfile, source, last, skip, None) 
+	# skip = "Fayetteville,Seattle"
+	source = None
+	# source = "Mesa"
 	# tp.check_table_type_warning(csvfile, source, last, skip, None) 
 	# tp.test_source_download_limitable(csvfile, source, last, skip, None) 
-	# tp.test_check_version(csvfile, None, last, skip, None) 
+	tp.test_check_version(csvfile, None, last, skip, None) 
 	# tp.test_get_count(csvfile, None, last, skip, None)
-	tp.test_offsets_and_nrows(csvfile, source, last, skip, None) 
+	# tp.test_offsets_and_nrows(csvfile, source, last, skip, None) 
+	# tp.test_load_gen(csvfile, source, last, skip, None) 
 	
