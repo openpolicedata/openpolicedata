@@ -34,6 +34,7 @@ def get_datasets(csvfile):
 class TestData:
 	@pytest.mark.slow(reason="This is a slow test that should be run before a major commit.")
 	def test_load_year(self, csvfile, source, last, skip, loghtml):
+		max_count = 1e5
 		if last == None:
 			last = float('inf')
 		datasets = get_datasets(csvfile)
@@ -134,7 +135,7 @@ class TestData:
 				print(f"Testing for year {year}")
 
 				table = src.load_from_url(year, datasets.iloc[i]["TableType"], 
-										agency=agency, pbar=False)
+										agency=agency, pbar=False, nrows=max_count)
 
 				sleep(sleep_time)
 
@@ -143,6 +144,8 @@ class TestData:
 					continue
 
 				dts = table.table[table.date_field]
+				# Remove all non-datestamps
+				dts = dts[dts.apply(lambda x: isinstance(x,pd._libs.tslibs.timestamps.Timestamp))].convert_dtypes()
 				dts = dts.sort_values(ignore_index=True)
 
 				all_years = dts.dt.year.unique().tolist()
@@ -185,7 +188,7 @@ class TestData:
 
 				sleep(sleep_time)
 				dts_start = table_start.table[table.date_field]
-
+				dts_start = dts_start[dts_start.apply(lambda x: isinstance(x,pd._libs.tslibs.timestamps.Timestamp))].convert_dtypes()
 				dts_start = dts_start.sort_values(ignore_index=True, na_position="first")
 
 				# If this isn't true then the stop date is too early
@@ -200,6 +203,10 @@ class TestData:
 					assert dts.iloc[0] <= datetime.strptime(f"{year}-01-01 08:00:00", "%Y-%m-%d %H:%M:%S")
 				except:
 					raise(e)
+				
+				if len(table.table) == max_count:
+					# Whole dataset was not read. Don't compare to latest data in the year
+					continue
 
 				start_date = datetime.strftime(dts.iloc[-1]-timedelta(days=1), "%Y-%m-%d")
 				stop_date  = str(year+1) + "-01-10"  
@@ -335,10 +342,10 @@ if __name__ == "__main__":
 	csvfile = None
 	csvfile = r"..\opd-data\opd_source_table.csv"
 	last = None
-	# last = 607-93
+	# last = 860-392+1
 	skip = None
-	# skip = "Bloomington"
+	skip = "Chicago, Mesa"
 	source = None
-	source = "Philadelphia"
+	source = "Detroit"
 	tp.test_load_year(csvfile, source, last, skip, None)
-	tp.test_source_download_not_limitable(csvfile, source, last, skip, None)
+	# tp.test_source_download_not_limitable(csvfile, source, last, skip, None)

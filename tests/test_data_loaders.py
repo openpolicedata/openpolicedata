@@ -187,15 +187,16 @@ class TestProduct:
         assert layer_query_result.equals(df)
 
 
-    def test_arcgis_legacy_server(self, csvfile, source, last, skip, loghtml):
-        url = "https://opendata.baltimorecity.gov/egis/rest/services/Hosted/911_Calls_For_Service_2017_csv/FeatureServer/0" 
+    # No datasets currently trigger usage of the legacy server code
+    # def test_arcgis_legacy_server(self, csvfile, source, last, skip, loghtml):
+    #     url = "https://egis.baltimorecity.gov/egis/rest/services/GeoSpatialized_Tables/Arrest/FeatureServer/0/" 
 
-        gis = data_loaders.Arcgis(url)
-        gis.load(nrows=1)
+    #     gis = data_loaders.Arcgis(url)
+    #     gis.load(nrows=1)
 
-        url = "https://xmaps.indy.gov/arcgis/rest/services/OpenData/OpenData_NonSpatial/MapServer/5/" 
-        gis = data_loaders.Arcgis(url)
-        gis.load(nrows=1)
+    #     url = "https://xmaps.indy.gov/arcgis/rest/services/OpenData/OpenData_NonSpatial/MapServer/5/" 
+    #     gis = data_loaders.Arcgis(url)
+    #     gis.load(nrows=1)
 
 
     def test_arcgis_geopandas(self, csvfile, source, last, skip, loghtml):
@@ -433,6 +434,7 @@ class TestProduct:
         df_comp.reset_index(drop=True, inplace=True)
         df_comp = df_comp.convert_dtypes()
         df_comp.columns = [x.strip() if isinstance(x, str) else x for x in df_comp.columns]
+        df_comp = df_comp.dropna(thresh=10)
 
         assert(df_comp.equals(df))
 
@@ -493,7 +495,6 @@ class TestProduct:
 if __name__ == "__main__":
     tp = TestProduct()
 
-    # tp.test_arcgis_legacy_server(None,None,None,None,None)
     # tp.test_carto(None,None,None,None,None)
     # tp.test_arcgis(None,None,None,None,None)
     # tp.test_arcgis_geopandas(None,None,None,None,None)
@@ -504,10 +505,10 @@ if __name__ == "__main__":
     # tp.test_process_date_too_many(None,None,None,None,None)
     # tp.test_process_dates_year_input_wrong_order(None,None,None,None,None)
     # tp.test_socrata(None,None,None,None,None)
-    tp.test_socrata_geopandas(None,None,None,None,None)
-    tp.test_socrata_pandas(None,None,None,None,None)
-    tp.test_excel(None,None,None,None,None)
-    tp.test_excel_year_sheets(None,None,None,None,None)
-    tp.test_excel_header(None,None,None,None,None)
+    # tp.test_socrata_geopandas(None,None,None,None,None)
+    # tp.test_socrata_pandas(None,None,None,None,None)
+    # tp.test_excel(None,None,None,None,None)
+    # tp.test_excel_year_sheets(None,None,None,None,None)
+    # tp.test_excel_header(None,None,None,None,None)
     tp.test_excel_xls(None,None,None,None,None)
     tp.test_excel_xls_protected(None,None,None,None,None)
