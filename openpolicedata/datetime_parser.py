@@ -2,13 +2,14 @@ import numpy as np
 import pandas as pd
 import datetime as dt
 import re
+import warnings
 
 def parse_date_to_datetime(date_col):
     if len(date_col.shape)==2:
         if date_col.shape[1] > 1:
             dts = date_col.iloc[:,0][date_col.iloc[:,0].notnull()]
             if hasattr(dts.iloc[0], "year"):
-                un_vals = pd.to_datetime(dts.unique())
+                un_vals = to_datetime(dts.unique())
                 if (un_vals.month != 1).any() or (un_vals.day != 1).any() or (un_vals.hour != 0).any() or \
                     (un_vals.minute != 0).any() or (un_vals.second != 0).any():
                     raise ValueError("Expected year data to not contain any month, day, or time info")
@@ -27,7 +28,7 @@ def parse_date_to_datetime(date_col):
 
                 d.iloc[:,1] = date_col.iloc[:,1].apply(month_name_to_num)
 
-                return pd.to_datetime(d)
+                return to_datetime(d)
         else:
             date_col = date_col.iloc[:,0]
 
@@ -90,14 +91,14 @@ def parse_date_to_datetime(date_col):
                         any_valid = False
 
                     if any_valid:
-                        return pd.to_datetime({"year" : year, "month" : month, "day" : day})
+                        return to_datetime({"year" : year, "month" : month, "day" : day})
 
                 if not any_valid:
                     # This may be Epoch time
                     try:
-                        new_date_col = pd.to_datetime(dts, unit='s')
+                        new_date_col = to_datetime(dts, unit='s')
                     except pd._libs.tslibs.np_datetime.OutOfBoundsDatetime:
-                        new_date_col = pd.to_datetime(dts, unit='ms')
+                        new_date_col = to_datetime(dts, unit='ms')
                     except:
                         raise
 
@@ -109,7 +110,7 @@ def parse_date_to_datetime(date_col):
             elif date_col.dtype == "O":
                 new_col = date_col.convert_dtypes()
                 if new_col.dtype == "string":
-                    p = re.compile(r"\d{1,2}[/-]\d{1,2}[/-]\d{4}")
+                    p = re.compile(r"\d{1,2}[/-]\d{1,2}[/-]\d{2,4}")
                     p2 = re.compile(r"\d{4}[/-]\d{1,2}[/-]\d{1,2}")
                     p3 = re.compile(r"\d{2}-[A-Z][a-z][a-z]-\d{2}")
                     p_not_match = re.compile(r"\d{1,2}[:\.]?\d\d[:\.]?\d?\d?")
@@ -122,7 +123,7 @@ def parse_date_to_datetime(date_col):
                             if p.search(new_col[m])!=None or p2.search(new_col[m])!=None or p3.search(new_col[m])!=None:
                                 num_match+=1
                             elif p_not_match.match(new_col[m])==None:
-                                a = 1
+                                pass
                             else:
                                 num_not_match+=1
                             k+=1
@@ -133,11 +134,11 @@ def parse_date_to_datetime(date_col):
                     if num_match<num_check-1:
                         raise ValueError("Column is not a date column")
                     try:
-                        return pd.to_datetime(new_col, errors="coerce")
+                        return to_datetime(new_col, errors="coerce")
                     except:
                         def to_dt(x):
                             try:
-                                return pd.to_datetime(x)
+                                return to_datetime(x)
                             except:
                                 return pd.NaT
                         new_col = new_col.apply(to_dt)
@@ -174,28 +175,30 @@ def validate_date(df, match_cols_test):
 
             dts = date_col[date_col.notnull()]
 
-            if len(dts) > 0:
-                one_date = dts.iloc[0]
-                max_val = 6
-                same_sec = (dts.dt.second == one_date.second).all()
-                new_score = None
-                if not same_sec: 
-                    new_score = max_val
-                same_min = (dts.dt.minute == one_date.minute).all()
-                if new_score is None and not same_min: 
-                    new_score = max_val-1
-                same_hour = (dts.dt.hour == one_date.hour).all()
-                if new_score is None and not same_hour: 
-                    new_score = max_val-2
-                same_day = (dts.dt.day == one_date.day).all()
-                if new_score is None and not same_day: 
-                    new_score = max_val-3
-                same_month = (dts.dt.month == one_date.month).all()
-                if new_score is None:
-                    if not same_month: 
-                        new_score = max_val-4
-                    else:
-                        new_score = max_val-5
+            if len(dts) == 0:
+                continue
+
+            one_date = dts.iloc[0]
+            max_val = 6
+            same_sec = (dts.dt.second == one_date.second).all()
+            new_score = None
+            if not same_sec: 
+                new_score = max_val
+            same_min = (dts.dt.minute == one_date.minute).all()
+            if new_score is None and not same_min: 
+                new_score = max_val-1
+            same_hour = (dts.dt.hour == one_date.hour).all()
+            if new_score is None and not same_hour: 
+                new_score = max_val-2
+            same_day = (dts.dt.day == one_date.day).all()
+            if new_score is None and not same_day: 
+                new_score = max_val-3
+            same_month = (dts.dt.month == one_date.month).all()
+            if new_score is None:
+                if not same_month: 
+                    new_score = max_val-4
+                else:
+                    new_score = max_val-5
 
             if score == new_score:
                 match_cols.append(col_name)
@@ -251,20 +254,21 @@ def validate_time(df, match_cols_test, date_col=None):
                     if most_common_time[0]!=dt.time(hour=0, minute=0, second=0):
                         # If the date has no time, it will have zeros, standard time offsets, or DST offsets
                         if len(counts)>3 or any([x.minute!=0 or x.second!=0 for x in counts.index]):
-                            raise ValueError(date_has_time_msg)
-                        
-                        # 00:00 must be one of the numbers if 3 unique values
-                        if len(counts)==3 and all([x!=dt.time(hour=0, minute=0, second=0) for x in counts.index]):
-                            raise ValueError(date_has_time_msg)
-                        
-                        non_zero = [x for x in counts.index if x.hour!=0]
-                        if len(non_zero)>1:
-                            # Values should be off by one hour
-                            d1 = dt.timedelta(hours=non_zero[0].hour)
-                            d2 = dt.timedelta(hours=non_zero[1].hour)
-                            if d2-d1 != dt.timedelta(hours=1) and d1-d2 != dt.timedelta(hours=1):
+                            # Check the percentage of times in the date column whose minute is 0. It should be relatively rare
+                            if sum([counts[x] for x in counts.index if x.minute!=0]) / counts.sum() > 0.4:
                                 raise ValueError(date_has_time_msg)
-
+                        else:
+                            # 00:00 must be one of the numbers if 3 unique values
+                            if len(counts)==3 and all([x!=dt.time(hour=0, minute=0, second=0) for x in counts.index]):
+                                raise ValueError(date_has_time_msg)
+                            
+                            non_zero = [x for x in counts.index if x.hour!=0]
+                            if len(non_zero)>1:
+                                # Values should be off by one hour
+                                d1 = dt.timedelta(hours=non_zero[0].hour)
+                                d2 = dt.timedelta(hours=non_zero[1].hour)
+                                if d2-d1 != dt.timedelta(hours=1) and d1-d2 != dt.timedelta(hours=1):
+                                    raise ValueError(date_has_time_msg)
             except ValueError as e:
                 if len(e.args)>0 and e.args[0] in [not_a_time_col_msg, date_has_time_msg]:
                     continue
@@ -334,10 +338,12 @@ def parse_time(time_col):
         new_col = time_col.convert_dtypes()
         if new_col.dtype == "string" or time_col.apply(lambda x: isinstance(x,str) or isinstance(x,int)).all():
             try:
-                new_col = pd.to_datetime(new_col)
+                new_col = to_datetime(new_col)
                 return new_col.dt.time
             except:
                 pass
+
+            p_date = re.compile(r"\d{1,2}[/-]\d{1,2}[/-]\d{2,4}")
             def convert_timestr_to_sec(x):
                 if pd.isnull(x):
                     return x
@@ -351,6 +357,7 @@ def parse_time(time_col):
                         raise NotImplementedError()
                     return dt.time(hour=int(hour),minute=int(min))
 
+                x = x.replace(" ","")
                 time_list = x.split(":")
                 if len(time_list)==1 and len(x.split("."))>1:
                     time_list = x.split(".")
@@ -358,13 +365,16 @@ def parse_time(time_col):
                         raise NotImplementedError()
 
                 if len(time_list)==1:
-                    if len(x) == 0 or len(x) > 4:
-                        if x in ["#NAME?",'#VALUE!']:
+                    if x.strip() in ["","-"]:
+                        return pd.NaT
+                    elif len(x) == 0 or len(x) > 4 or not x.isdigit():
+                        if x in ["#NAME?",'#VALUE!', 'TIME'] or x.startswith('C2') or \
+                            p_date.search(x):  # Date accidently entered in time column
+                            # C2 values were observed in 1 dataset
                             return pd.NaT
                         else:
                             raise ValueError("Expected HHMM format")
-                    elif x.strip()in ["","-"]:
-                        return pd.NaT
+
                     min = float(x[-2:])
                     if len(x) > 2:
                         hour = float(x[:-2])
@@ -404,9 +414,14 @@ def parse_time(time_col):
                         pass
 
                 return t
-
             return new_col.apply(convert_timestr_to_sec)
         else:
             raise NotImplementedError()
     else:
         raise NotImplementedError()
+    
+
+def to_datetime(col, *args, **kwargs):
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=UserWarning, message="Could not infer format")
+        return pd.to_datetime(col, *args, **kwargs)

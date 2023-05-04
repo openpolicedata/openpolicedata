@@ -8,6 +8,7 @@ import re
 import warnings
 
 if __name__ == '__main__':
+    from datetime_parser import to_datetime
     import data_loaders
     import datasets
     import preproc
@@ -21,6 +22,7 @@ else:
     from . import preproc
     from . import defs
     from . import exceptions
+    from .datetime_parser import to_datetime
 
 class Table:
     """
@@ -607,7 +609,7 @@ class Source:
 
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", message=r"Columns \(.+\) have mixed types", category=pd.errors.DtypeWarning)
-            table.table = pd.read_csv(filename, parse_dates=True)
+            table.table = pd.read_csv(filename, parse_dates=True, encoding_errors='surrogateescape')
         table.table = _check_date(table.table, table.date_field)  
 
         return table
@@ -678,9 +680,9 @@ def _check_date(table, date_field):
                 table[date_field] = pd.to_datetime(table[date_field], errors='ignore')
             elif type(one_date) == str:
                 p = re.compile(r'^Unknown string format: \d{4}-(\d{2}|__)-(\d{2}|__) present at position \d+$')
-                def to_datetime(x):
+                def to_datetime_local(x):
                     try:
-                        return pd.to_datetime(x, errors='ignore')
+                        return to_datetime(x, errors='ignore')
                     except ParserError as e:
                         if len(e.args)>0 and p.match(e.args[0]) != None:
                             return pd.NaT
@@ -691,7 +693,7 @@ def _check_date(table, date_field):
                 
                 with warnings.catch_warnings():
                     warnings.filterwarnings("ignore", message="Could not infer format", category=UserWarning)
-                    table[date_field] = table[date_field].apply(to_datetime)
+                    table[date_field] = table[date_field].apply(to_datetime_local)
                 # table = table.astype({date_field: 'datetime64[ns]'})
             elif ("year" in date_field.lower() or date_field.lower() == "yr") and isinstance(one_date, numbers.Number):
                 table[date_field] = table[date_field].apply(lambda x: datetime(x,1,1))

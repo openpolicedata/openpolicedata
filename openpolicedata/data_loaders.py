@@ -30,8 +30,10 @@ except:
     _has_gpd = False
 
 try:
+    from .datetime_parser import to_datetime
     from .exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError
 except:
+    from datetime_parser import to_datetime
     from exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError
 
 sleep_time = 0.1
@@ -319,7 +321,7 @@ class Csv(Data_Loader):
             if self.date_field==None:
                 raise ValueError("No date field provided to access year information")
             df = self.load()
-            date_col = pd.to_datetime(df[self.date_field])
+            date_col = to_datetime(df[self.date_field])
             years = list(date_col.dt.year.dropna().unique())
             years.sort()
             return [int(x) for x in years]
@@ -1042,7 +1044,7 @@ class Arcgis(Data_Loader):
 
                     attributes = pd.DataFrame.from_records([x["attributes"] for x in data["features"]])
                     for col in [x["name"] for x in data["fields"] if x["type"]=='esriFieldTypeDate']:
-                        attributes[col] = pd.to_datetime(attributes[col], unit="ms")
+                        attributes[col] = to_datetime(attributes[col], unit="ms")
                     
                     if not self.is_table:
                         geom_old = sdf.pop("SHAPE")
@@ -1095,7 +1097,7 @@ class Arcgis(Data_Loader):
 
         df = pd.DataFrame.from_records([x["attributes"] for x in features])
         for col in date_cols:
-            df[col] = pd.to_datetime(df[col], unit="ms")
+            df[col] = to_datetime(df[col], unit="ms")
 
         if len(df) > 0:
             has_point_geometry = any("geometry" in x and "x" in x["geometry"] for x in features)
@@ -1328,7 +1330,7 @@ class Carto(Data_Loader):
 
         df = pd.DataFrame.from_records([x["properties"] for x in features])
         for col in date_cols:
-            df[col] = pd.to_datetime(df[col])
+            df[col] = to_datetime(df[col])
 
         if len(df) > 0:
             has_point_geometry = any("geometry" in x and x["geometry"]!=None for x in features)
@@ -1672,13 +1674,13 @@ def filter_dataframe(df, date_field=None, year_filter=None, agency_field=None, a
             # To retain the old behavior, use either `df[df.columns[i]] = newvals` or, if columns are non-unique, `df.isetitem(i, newvals)`
             warnings.simplefilter("ignore", category=FutureWarning)
             if date_field.lower()!="year":
-                df.loc[:, date_field] = pd.to_datetime(df[date_field])
+                df.loc[:, date_field] = to_datetime(df[date_field])
     
     if year_filter != None and date_field != None:
         if isinstance(year_filter, list):
             df = df[(df[date_field].dt.year >= year_filter[0]) & (df[date_field].dt.year <= year_filter[1])]
         else:
-            date_col = pd.to_datetime(df[date_field])
+            date_col = to_datetime(df[date_field])
             df = df[date_col.dt.year == year_filter]
 
     if agency != None and agency_field != None:

@@ -5,19 +5,10 @@ import pandas as pd
 
 try:
     from . import defs
+    from._preproc_utils import MultType
 except:
     import defs
-
-
-class _MultData:
-    is_mult = False
-    delim_race = None
-    delim_age = None
-    delim_gender = None
-    delim_eth = None
-    is_dict = False
-    has_demo_col = False
-    has_counts = False
+    from _preproc_utils import MultType
 
 
 # Age range XX - YY
@@ -31,7 +22,7 @@ _p_age_range = re.compile(r"""
     """, re.VERBOSE)
 
 
-def convert(converter, col, source_name="", cats=None, std_map=None, delim=None, mult_info=_MultData(), 
+def convert(converter, col, source_name="", cats=None, std_map=None, delim=None, mult_type=None, item_num=None, 
             no_id="pass", agg_cat=False):
     std_map = {} if std_map is None else std_map
     no_id = no_id.lower()
@@ -41,14 +32,16 @@ def convert(converter, col, source_name="", cats=None, std_map=None, delim=None,
     # value_counts handles more data types when getting unique values than .unique()
     counts = col.value_counts(dropna=False)
     vals = counts.index
-    if mult_info.is_dict:
+    if mult_type == MultType.DICT:
         return std_dict(col, std_map, converter, no_id, source_name, cats, agg_cat)
-    elif mult_info.has_demo_col:
-        return std_demo_col(col, vals, std_map, 1, converter, no_id, source_name, cats, agg_cat)
-    elif mult_info.has_counts:
+    elif mult_type == MultType.DEMO_COL:
+        return std_demo_col(col, vals, std_map, item_num, converter, no_id, source_name, cats, agg_cat)
+    elif mult_type == MultType.COUNTS:
         return std_counts(col, vals, std_map, delim, converter, no_id, source_name, cats, agg_cat)
-    elif mult_info.is_mult:
+    elif mult_type == MultType.DELIMITED:
         return std_list(col, vals, std_map, delim, converter, no_id, source_name, cats, agg_cat, known_single=True)
+    elif mult_type == MultType.WITH_NAME:
+        return std_with_names(col, vals, std_map, item_num, converter, no_id, source_name, cats, agg_cat)
     else:
         for x in vals:
             std_map[x] = converter(x, no_id, source_name, cats, agg_cat)
@@ -74,6 +67,7 @@ def convert_off_or_civ(x, no_id, *args, **kwargs):
 
 def _create_age_range_lut(x, no_id, source_name, *args, **kwargs):
     p_plus = re.compile(r"(\d+)\+\s?-?\s?(\1\+)?",re.IGNORECASE)
+    p_plus2 = re.compile(r"(\d+)\s*plus",re.IGNORECASE)
     p_over = re.compile(r"(OVER|>)\s?(\d+)",re.IGNORECASE)
     p_under = re.compile(r"(UNDER|<)\s?(\d+)",re.IGNORECASE)
     p_above = re.compile(r"(\d+) AND ABOVE",re.IGNORECASE)
@@ -90,6 +84,8 @@ def _create_age_range_lut(x, no_id, source_name, *args, **kwargs):
         return p_over.sub(r"\2-120", x)
     elif type(x) == str and p_plus.search(x)!=None:
         return p_plus.sub(r"\1-120", x)
+    elif type(x) == str and p_plus2.search(x)!=None:
+        return p_plus2.sub(r"\1-120", x)
     elif type(x) == str and p_above.search(x)!=None:
         return p_above.sub(r"\1-120", x)
     elif type(x) == str and p_under.search(x)!=None:
@@ -194,7 +190,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
 
     orig = x
 
-    if (type(x) != str or x.isdigit()) and source_name in ["California", "Lincoln"]:
+    if ((not isinstance(x, str) and pd.notnull(x)) or (isinstance(x, str) and x.isdigit())) and source_name in ["California", "Lincoln"]:
         default_cats = defs.get_race_cats(expand=True)
         if source_name == "California":
             # California stops data has a dictionary that can be applied. 
@@ -231,11 +227,16 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
             x = [x for x in abbrev_full_match.groups() if len(x)>1][0]
 
         delims = [",",'|','/']
-        if not known_single and any([d in x for d in delims]):
+        if not known_single and any([d in x for d in delims]) and \
+            x.lower().replace(" ","") not in ["hawaiian/pacific", "middleeastern/southasian","other/unknown","unknown/refused",
+                                              'asian/pacis','unk/oth','oth/unk']:
             # Treat this as a list of races
             delim = [d for d in delims if d in x][0]
             race_list = []
-            for v in orig.split(delim):
+            for v in x.split(delim):
+                if v=="INDIAN" and "BURMESE" in x:
+                    # Handle special case to prevent setting to Indigenous
+                    continue
                 new_val = _create_race_lut(v, no_id, source_name, race_cats, agg_cat)
                 if isinstance(new_val, list):
                     race_list.extend(new_val)
@@ -272,7 +273,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
         x = x.strip()
 
         if source_name in ["Austin", "Bloomington", "New York City", "St. John", "Louisville", "Charleston", 
-                           "Los Angeles"]:
+                           "Los Angeles", "Dallas"]:
             # Handling dataset-specific codes
             if source_name=="Austin":
                 # Per email with Kruemcke, Adrian <Adrian.Kruemcke@austintexas.gov> on 2022-06-17
@@ -299,6 +300,9 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
                             "G":"Guamanian", "H":"Hispanic/Latin/Mexican", "I":"American Indian/Alaskan Native", 
                             "J":"Japanese", "K":"Korean", "L":"Laotian", "O":"Other", "P":"Pacific Islander", 
                             "S":"Samoan", "U":"Hawaiian", "V":"Vietnamese", "W":"White", "X":"Unknown", "Z":"Asian Indian"}
+            elif source_name=="Dallas":
+                # Based on Bloomington and St. John usage as well as names associated with usage
+                map_dict = {"L":"Caucasian, Hispanic"}
 
             if x.upper() in map_dict:
                 x = map_dict[x.upper()].upper()
@@ -349,7 +353,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
                 return race_cats[defs._race_keys.MIDDLE_EASTERN_SOUTH_ASIAN]
         else:
             return race_cats[defs._race_keys.MIDDLE_EASTERN] if defs._race_keys.MIDDLE_EASTERN in race_cats else race_cats[defs._race_keys.MIDDLE_EASTERN_SOUTH_ASIAN]
-    if (has_asian or has_aapi) and (x in ["A", 'ORIENTAL'] or "ASIAN" in x):
+    if (has_asian or has_aapi) and (x in ["A", 'ORIENTAL'] or "ASIAN" in x.replace("CAUCASIAN","")) and x not in ["SOUTHWEST ASIAN"]:
         if has_aapi and ("PAC" in x or "HAWAI" in x):
             return race_cats[defs._race_keys.AAPI] 
         else:
@@ -359,7 +363,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
         return race_cats[defs._race_keys.PACIFIC_ISLANDER] if has_pi else race_cats[defs._race_keys.AAPI]
     if has_latino and x in ["H", "WH", "HISPANIC", "LATINO", "HISPANIC OR LATINO", "LATINO OR HISPANIC", "HISPANIC/LATINO", "LATINO/HISPANIC",'HISPANIC/LATIN/MEXICAN']:
         return race_cats[defs._race_keys.LATINO] 
-    if has_indigenous and (x in ["I", "INDIAN", "ALASKAN NATIVE", "AI/AN", "AI", "AL NATIVE"] or "AMERICAN IND" in x or \
+    if has_indigenous and (x in ["I", "INDIAN", "ALASKAN NATIVE", "AN", "AI", "AL NATIVE"] or "AMERICAN IND" in x.replace("II","I") or \
         "NATIVE AM" in x or  "AMERIND" in x.replace(" ","") or "ALASK" in x or "AMIND" in x.replace(" ","") or \
         "NAT AMER" in x):
         return race_cats[defs._race_keys.INDIGENOUS] 
@@ -370,7 +374,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
         return race_cats[defs._race_keys.OTHER_UNKNOWN]
     if defs._race_keys.UNKNOWN in race_cats and  ("UNK" in x or x in ["U", "UK"]):
         return race_cats[defs._race_keys.UNKNOWN]
-    if defs._race_keys.OTHER in race_cats and (x in ["O","OTHER"] or "OTHER UNCLASS" in x or "OTHER RACE" in x):
+    if defs._race_keys.OTHER in race_cats and (x in ["O","OTHER","OTH"] or "OTHER UNCLASS" in x or "OTHER RACE" in x):
         return race_cats[defs._race_keys.OTHER]
     
     if agg_cat:
@@ -383,11 +387,13 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
             return race_cats[defs._race_keys.BLACK]
         elif has_white and x in ["BOSNIAN"]:
             return race_cats[defs._race_keys.WHITE]
-        elif has_south_asian and "INDIAN" in x and "BURMESE" in x:
+        elif has_me and x in ["SOUTHWEST ASIAN"]:
+            return race_cats[defs._race_keys.MIDDLE_EASTERN] if defs._race_keys.MIDDLE_EASTERN in race_cats else race_cats[defs._race_keys.MIDDLE_EASTERN_SOUTH_ASIAN]
+        elif has_south_asian and (("INDIAN" in x and "BURMESE" in x) or x in ["INDIA","BURMESE"]):
             if defs._race_keys.SOUTH_ASIAN in race_cats:
                 return race_cats[defs._race_keys.SOUTH_ASIAN]
             else:
-                return race_cats[defs._race_keys.MIDDLE_EASTERN]
+                return race_cats[defs._race_keys.MIDDLE_EASTERN_SOUTH_ASIAN]
         elif (has_asian or has_aapi) and (x in ["CAMBODIAN",'VIETNAMESE',"LAOTIAN","JAPANESE","KOREAN","CHINESE","HMONG","MIEN"] or "ASIAN" in x):
             return race_cats[defs._race_keys.ASIAN] if has_asian else race_cats[defs._race_keys.AAPI]
         elif (has_asian or has_aapi or has_pi) and x in ["FILIPINO"]:
@@ -403,15 +409,18 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
         elif no_id=="error":
             raise ValueError(f"Unknown value in race column: {orig}")
         elif no_id=="test":
-            if x in ["MALE","GIVING ANYTHING OF VALUE","REFUSED"] or \
+            if x in ["MALE","GIVING ANYTHING OF VALUE","REFUSED", "NA"] or \
                 (source_name in ["Chapel Hill","Lansing","Fayetteville"] and x in ["M","S","P"]) or \
-                (source_name in ["Cincinnati","San Diego"] and x == "F") or \
+                (source_name=="Burlington" and x in ["EXPUNGED"]) or \
+                (source_name in ["Cincinnati","San Diego"] and x in ["F"]) or \
                 (source_name in ["Columbia"] and x == "P") or \
                 (source_name in ["Bloomington","Beloit"] and x in ["M"]) or \
                 (source_name in ["Beloit"] and x in ["L"]) or \
                 (source_name in ["St. John"] and x in ["K","P"]) or \
                 (source_name in ["Rutland"] and x in ["M","R"]) or \
+                (source_name in ["Dallas"] and x in ["NA"]) or \
                 (source_name in ["Sacramento"] and x in ["CUBAN","CARRIBEAN"]) or \
+                (source_name in ["New York City"] and x in ["SOUTHWEST"]) or \
                 (x=="UN" and source_name=="State Police") or \
                 (x=="W\nW" and source_name=="Sparks") or \
                 ("DOG" in x) or \
@@ -539,16 +548,18 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
         elif x in bad_data or \
             (source_name=="New York City" and (x=="Z" or x.isdigit())) or \
             (source_name=="Baltimore" and x in ["Y","Z"]) or \
+            (source_name=="Burlington" and x in ["EXPUNGED"]) or \
             (source_name in ["Seattle","New Orleans","Menlo Park","Rutland"] and x in ["D","N"]) or \
             (source_name=="Los Angeles County" and x=="0") or \
-            (x=="W" and source_name in ["Cincinnati","Beloit"]) or \
+            (x in ["W","NA"] and source_name in ["Cincinnati","Beloit"]) or \
+            (x=="MA" and source_name in ["Lincoln"]) or \
             (x=="P" and source_name=="Fayetteville") or \
             (x=="5" and source_name=="Lincoln") or \
             (x in ["N","H"] and source_name=="Los Angeles") or \
             (x=="X" and source_name in ["Sacramento", "State Police"]) or \
             "DOG" in x or \
             x in ["UNDISCLOSE","UNDISCLOSED","PREFER TO SELF DESCRIBE".replace(" ",""),'NONBINARY/THIRDGENDER',
-                  "PREFER NOT TO SAY".replace(" ",""),"TGNC/OTHER","REFUSED",'UNVERIFIED'] or \
+                  "PREFER NOT TO SAY".replace(" ",""),"TGNC/OTHER","REFUSED",'UNVERIFIED','NONBINARY/OTHERX'] or \
             source_name == "Buffalo":
             return orig
         else:
@@ -651,6 +662,41 @@ def std_counts(col, vals, map_dict, delim, converter, *args, **kwargs):
         else:
             if x not in map_dict:
                 map_dict[x] = converter(x, *args, **kwargs)
+                map[x] = map_dict[x]
+
+    if multi_found:
+        # Convert non-dicts to dict
+        map = {k:(v if (isinstance(v,dict) or pd.isnull(v)) else {0:v}) for k,v in map.items()}
+
+    return col.map(map)
+
+
+def std_with_names(col, vals, map_dict, item_num, converter, *args, **kwargs):
+    map = {}
+    multi_found = False
+    p = re.compile("[\sÊ](\w{1,2}/\w)")
+    for x in vals:
+        if type(x) == str:
+            items = p.findall(x)
+            
+            new_val = {}
+            for k, i in enumerate(items):
+                i = i.split("/")
+                i = i[item_num]
+
+                if i not in map_dict:
+                    map_dict[i] = converter(i, *args)
+
+                if len(items)==1:
+                    new_val = map_dict[i]
+                else:
+                    new_val[k] = map_dict[i]
+                    multi_found = True
+
+            map[x] = new_val
+        else:
+            if x not in map_dict:
+                map_dict[x] = converter(x, *args)
                 map[x] = map_dict[x]
 
     if multi_found:

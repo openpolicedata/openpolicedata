@@ -1,3 +1,4 @@
+from enum import Enum
 from numbers import Number
 import numpy as np
 import pandas as pd
@@ -48,7 +49,7 @@ class DataMapping:
 
 
         tf_vals = self.orig_value_counts is None and other.orig_value_counts is None
-        if not tf_vals:
+        if not tf_vals and self.orig_value_counts is not None and other.orig_value_counts is not None:
             tf_vals = self.orig_value_counts.equals(other.orig_value_counts)
             if not tf_vals and other.orig_value_counts.index.dtype=="int64" and all([x.isdigit() for x in self.orig_value_counts.index if isinstance(x,str)]):
                 # Found a case where indices were numeric strings but read back in as numbers
@@ -67,7 +68,10 @@ class DataMapping:
                         elif isinstance(y,str) and y.isdigit() and isinstance(x,Number) and float(y)==x:
                             continue
                         elif isinstance(y,str) and isinstance(x, pd._libs.tslibs.timestamps.Timestamp) and \
-                            y==x.strftime("%Y-%m-%d %H:%M:%S"):
+                            (y==x.strftime("%Y-%m-%d %H:%M:%S") or (y==x.strftime("%Y-%m-%d") and x.hour==0 and x.minute==0)):
+                            continue
+                        elif isinstance(x,str) and isinstance(y, pd._libs.tslibs.timestamps.Timestamp) and \
+                            (x==y.strftime("%Y-%m-%d %H:%M:%S") or (x==y.strftime("%Y-%m-%d") and y.hour==0 and y.minute==0)):
                             continue
                         tf_vals = False
                         
@@ -108,3 +112,50 @@ def check_column(col_name, col_types):
     
     return False
     
+
+class _case:
+    def __init__(self, src, table_type, old_name, new_name, year=None):
+        self.src = src
+        self.table_type = table_type
+        self.year = year
+        self.old_name = old_name if type(old_name)==list else [old_name]
+        self.new_name = new_name if type(new_name)==list else [new_name]
+
+    def __repr__(self, ) -> str:
+        return ',\n'.join("%s: %s" % item for item in vars(self).items())
+
+    def equals(self, src, table_type, year):
+        tf = src==self.src and table_type==self.table_type
+        if self.year!=None:
+            if isinstance(self.year, Number):
+                tf = tf and (year==self.year)
+            else:
+                tf = tf and (year in self.year)
+
+        return tf
+    
+    def findcols(self, columns):
+        for k in range(len(self.old_name)):
+            if self.old_name[k] not in columns:
+                return False
+        return True
+
+
+class MultType(Enum):
+    SINGLE = 0
+    DICT = 1
+    DEMO_COL = 2
+    COUNTS = 3
+    DELIMITED = 4
+    WITH_NAME = 5
+
+class _MultData:
+    type = MultType.SINGLE
+    delim_race = None
+    delim_age = None
+    delim_gender = None
+    delim_eth = None
+    item_race = None
+    item_age = None
+    item_gender = None
+    item_eth = None

@@ -21,6 +21,9 @@ def split_words(string):
     words = list(re.split(r"[^A-Za-z]+", string))
     k = 0
     while k < len(words):
+        if len(words[k])==0:
+            del words[k]
+            continue
         new_words = camel_case_split(words[k])
         words[k] = new_words[0]
         for j in range(1, len(new_words)):
