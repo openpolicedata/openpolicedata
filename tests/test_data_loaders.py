@@ -52,6 +52,8 @@ class TestProduct:
 
         df = loader.load(year=year, pbar=False)
 
+        assert len(df)==count
+
         offset = 1
         nrows = count - 2
         df_offset = loader.load(year=year, nrows=nrows, offset=1, pbar=False)
@@ -122,6 +124,8 @@ class TestProduct:
             gis._Arcgis__active_layer
         df = gis.load()
         count = gis.get_count()
+
+        assert len(df)==count
 
         offset = 1
         nrows = count-offset
@@ -225,6 +229,11 @@ class TestProduct:
         assert type(df) == pd.DataFrame
         assert len(df) == count
 
+        count2 = gis.get_count(year=year_filter+1)
+
+        # Ensure that count updates properly with different call (most recent count is cached)
+        assert count!=count2
+
     def test_socrata_geopandas(self, csvfile, source, last, skip, loghtml):
         if _has_gpd:
             url = "data.montgomerycountymd.gov"
@@ -254,6 +263,11 @@ class TestProduct:
         assert type(df) == pd.DataFrame
         assert len(df) == count
 
+        count2 = loader.get_count(year=year+1)
+
+        # Ensure that count updates properly with different call (most recent count is cached)
+        assert count!=count2
+
     def test_socrata(self, csvfile, source, last, skip, loghtml):
         lim = data_loaders._default_limit
         data_loaders._default_limit = 500
@@ -262,6 +276,8 @@ class TestProduct:
         loader = data_loaders.Socrata(url, data_set)
         df =loader.load(pbar=False)
         count = loader.get_count()
+
+        assert len(df)==count
 
         offset = 1
         nrows = len(df)-offset-1
@@ -304,6 +320,8 @@ class TestProduct:
 
         count = loader.get_count()
         assert len(df_comp) == count
+        # Test using cached value
+        assert count == loader.get_count()
 
         assert df_comp.equals(df)
 
@@ -333,6 +351,11 @@ class TestProduct:
         count = loader.get_count(year=year, force=True)
         assert len(df) == count
 
+        count2 = loader.get_count(year=year+1, force=True)
+
+        # Ensure that count updates properly with different call (most recent count is cached)
+        assert count!=count2
+
 
     def test_excel(self, csvfile, source, last, skip, loghtml):
         url = "https://www.norristown.org/DocumentCenter/View/1789/2017-2018-Use-of-Force"
@@ -356,6 +379,9 @@ class TestProduct:
             count = loader.get_count()
         count = loader.get_count(force=True)
         assert len(df_comp) == count
+
+        # Testing 2nd call which should used cached value
+        assert count == loader.get_count(force=True)
 
         assert df_comp.equals(df)
 
@@ -507,8 +533,8 @@ if __name__ == "__main__":
     # tp.test_socrata(None,None,None,None,None)
     # tp.test_socrata_geopandas(None,None,None,None,None)
     # tp.test_socrata_pandas(None,None,None,None,None)
-    # tp.test_excel(None,None,None,None,None)
-    # tp.test_excel_year_sheets(None,None,None,None,None)
-    # tp.test_excel_header(None,None,None,None,None)
+    tp.test_excel(None,None,None,None,None)
+    tp.test_excel_year_sheets(None,None,None,None,None)
+    tp.test_excel_header(None,None,None,None,None)
     tp.test_excel_xls(None,None,None,None,None)
     tp.test_excel_xls_protected(None,None,None,None,None)

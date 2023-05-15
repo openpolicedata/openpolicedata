@@ -106,6 +106,9 @@ class Data_Loader(ABC):
     get_years(nrows=1)
         Get years contained in data set
     """
+
+    _last_count = None
+
     @abstractmethod
     def get_count(self, year=None, *, agency=None, force=False, opt_filter=None, where=None):
         pass
@@ -230,7 +233,9 @@ class Csv(Data_Loader):
             Record count or number of rows in data request
         '''
 
-        if ".zip" not in self.url and year==None and agency==None:            
+        if self._last_count is not None and self._last_count[0] == (self.url, year, agency):
+            return self._last_count[1]
+        if ".zip" not in self.url and year==None and agency==None:
             count = 0
             with requests.get(self.url, stream=True) as r:
                 for chunk in r.iter_content(chunk_size=2**16):
@@ -243,14 +248,15 @@ class Csv(Data_Loader):
                     count-=1
                 else:
                     break
-
-            return count
         elif force:
-            return len(self.load(year=year, agency=agency))
+            count = len(self.load(year=year, agency=agency))
         else:
             raise ValueError("Extracting the number of records for a single year of a CSV file requires reading the whole file in. In most cases, "+
                 "running load() with a year argument to load in the data and manually finding the record count will be more "
                 "efficient. If running get_count with a year argument is still desired, set force=True")
+        
+        self._last_count = ((self.url, year, agency), count)
+        return count
 
 
     def load(self, year=None, nrows=None, offset=0, *, pbar=True, agency=None, **kwargs):
@@ -448,8 +454,12 @@ class Excel(Data_Loader):
             Record count or number of rows in data request
         '''
 
-        if force:
-            return len(self.load(year=year, agency=agency))
+        if self._last_count is not None and self._last_count[0]==(self.url, year, agency):
+            return self._last_count[1]
+        elif force:
+            count = len(self.load(year=year, agency=agency))
+            self._last_count = ((self.url, year, agency), count)
+            return count
         else:
             raise ValueError("Extracting the number of records for an Excel file requires reading the whole file in. In most cases, "+
                 "running load() to load in the data and manually finding the record count will be more "
@@ -815,9 +825,13 @@ class Arcgis(Data_Loader):
             Record count or number of rows in data request
         '''
         
-        if where==None:
-            where, record_count = self.__construct_where(year)
+        if self._last_count is not None and self._last_count[0]==(year,where):
+            record_count = self._last_count[1]
+            where_query = self._last_count[2]
+        elif where==None:
+            where_query, record_count = self.__construct_where(year)
         else:
+            where_query = where
             try:
                 record_count = self.__request(where=where, return_count=True)["count"]
                 if self.verify:
@@ -831,6 +845,8 @@ class Arcgis(Data_Loader):
                     raise
             except:
                 raise
+
+        self._last_count = ((year,where), record_count, where_query)
 
         return record_count
 
@@ -885,7 +901,10 @@ class Arcgis(Data_Loader):
 
     def __construct_where(self, year=None):
         where_query = ""
-        if self.date_field!=None and year!=None:
+        if self._last_count is not None and self._last_count[0]==(year,None):
+            record_count = self._last_count[1]
+            where_query = self._last_count[2]
+        elif self.date_field!=None and year!=None:
             where_query, record_count = self._build_date_query(year)
         else:
             where_query = '1=1'
@@ -902,6 +921,8 @@ class Arcgis(Data_Loader):
                     raise
             except:
                 raise
+
+        self._last_count = ((year,None), record_count, where_query)
 
         return where_query, record_count
 
@@ -1226,11 +1247,17 @@ class Carto(Data_Loader):
         int
             Record count or number of rows in data request
         '''
-        
-        where = self.__construct_where(year)
-        json = self.__request(where=where, return_count=True)
 
-        return json["rows"][0]["count"]
+        if self._last_count is not None and self._last_count[0]==year:
+            return self._last_count[1]
+        else:
+            where = self.__construct_where(year)
+            json = self.__request(where=where, return_count=True)
+            count = json["rows"][0]["count"]
+
+        self._last_count = (year, count, where)
+
+        return count
 
 
     def __request(self, where=None, return_count=False, out_fields="*", out_type="GeoJSON", offset=0, count=None):
@@ -1302,9 +1329,14 @@ class Carto(Data_Loader):
             DataFrame containing downloaded
         '''
         
-        where_query = self.__construct_where(year)
-        json = self.__request(where=where_query, return_count=True)
-        record_count = json["rows"][0]["count"]
+        if self._last_count is not None and self._last_count[0]==year:
+            record_count = self._last_count[1]
+            where_query = self._last_count[2]
+        else:
+            where_query = self.__construct_where(year)
+            json = self.__request(where=where_query, return_count=True)
+            record_count = json["rows"][0]["count"]
+            self._last_count = (year, record_count, where_query)
 
         record_count-=offset
         if record_count<=0:
@@ -1473,6 +1505,9 @@ class Socrata(Data_Loader):
         if where==None:
             where = self.__construct_where(year, opt_filter)
 
+        if self._last_count is not None and self._last_count[0]==(year, opt_filter, where):
+            return self._last_count[1]
+
         try:
             results = self.client.get(self.data_set, where=where, select="count(*)")
         except requests.HTTPError as e:
@@ -1489,7 +1524,10 @@ class Socrata(Data_Loader):
         except:
             num_rows = float(results[0]["count_1"]) # Value used in VT Shootings data
 
-        return int(num_rows)
+        count = int(num_rows)
+        self._last_count = ((year, opt_filter, where),count)
+
+        return count
 
 
     def load(self, year=None, nrows=None, offset=0, *, pbar=True, opt_filter=None, select=None, output_type=None, **kwargs):
