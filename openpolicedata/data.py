@@ -296,7 +296,7 @@ class Source:
         ----------
         table_type - str or TableType enum
             (Optional) If set, only returns agencies for requested table type
-        year - int or the string "MULTI" or "N/A"
+        year - int or the strings opd.defs.MULTI or opd.defs.NONE
             (Optional)  If set, only returns agencies for requested year
         table_type - str or TableType enum
             (Optional) If set, only returns agencies for requested table type
@@ -320,7 +320,7 @@ class Source:
         else:
             raise ValueError("table_type and year inputs must filter for a single source")            
 
-        # If year is multi, need to use self._agencyField to query URL
+        # If year is opd.defs.MULTI, need to use self._agencyField to query URL
         # Otherwise return self.agency
         if src["Agency"] == MULTI:
             _check_version(src)
@@ -353,7 +353,7 @@ class Source:
 
         Parameters
         ----------
-        year (Optional) - int or length 2 list or the string "MULTI" or "N/A"
+        year (Optional) - int or length 2 list or the string opd.defs.MULTI or opd.defs.NONE
             Used to identify the requested dataset if equal to its year value
             Otherwise, for datasets containing multiple years, this filters 
             the return data for a specific year (int input) or a range of years
@@ -382,7 +382,7 @@ class Source:
 
         Parameters
         ----------
-        year - int or length 2 list or the string "MULTI" or "N/A"
+        year - int or length 2 list or the string opd.defs.MULTI or opd.defs.NONE
             Used to identify the requested dataset if equal to its year value
             Otherwise, for datasets containing multiple years, this filters 
             the return data for a specific year (int input) or a range of years
@@ -420,7 +420,7 @@ class Source:
 
         Parameters
         ----------
-        year - int or length 2 list or the string "MULTI" or "N/A"
+        year - int or length 2 list or the string opd.defs.MULTI or opd.defs.NONE
             Used to identify the requested dataset if equal to its year value
             Otherwise, for datasets containing multiple years, this filters 
             the return data for a specific year (int input) or a range of years
@@ -489,7 +489,7 @@ class Source:
             else:
                 src = src.iloc[0]
 
-        # Load data from URL. For year or agency equal to multi, filtering can be done
+        # Load data from URL. For year or agency equal to opd.defs.MULTI, filtering can be done
         data_type =DataType(src["DataType"])
         url = src["URL"]
 
@@ -546,7 +546,7 @@ class Source:
         
         Parameters
         ----------
-        year - int or length 2 list or the string "MULTI" or "N/A"
+        year - int or length 2 list or the string opd.defs.MULTI or opd.defs.NONE
             Used to identify the requested dataset if equal to its year value
             Otherwise, for datasets containing multiple years, this filters 
             the return data for a specific year (int input) or a range of years
@@ -581,7 +581,7 @@ class Source:
         
         Parameters
         ----------
-        year - int or length 2 list or the string "MULTI" or "N/A"
+        year - int or length 2 list or the string opd.defs.MULTI or opd.defs.NONE
             Used to identify the requested dataset if equal to its year value
             Otherwise, for datasets containing multiple years, this filters 
             the return data for a specific year (int input) or a range of years
@@ -678,10 +678,10 @@ def get_csv_filename(state, source_name, agency, table_type, year):
         Name of agency
     table_type - str or TableType enum
         Type of data
-    year = int or length 2 list or the string "MULTI" or "N/A"
+    year = int or length 2 list or the string opd.defs.MULTI or opd.defs.NONE
         Year of data to load, range of years of data to load as a list [X,Y]
         to load years X to Y, or a string to indicate all of multiple year data
-        ("MULTI") or a dataset that has no year filtering ("N/A")
+        (opd.defs.MULTI) or a dataset that has no year filtering ("N/A")
 
     Returns
     -------
@@ -724,103 +724,3 @@ def _check_version(df):
                 f"Year {year} {table_type} data for {src_name} in {state} cannot be loaded in version {__version__} of openpolicedata. " + \
                     f"Update OpenPoliceData to at least version {min_version} to access this data."
             )
-
-
-if __name__ == '__main__':
-    istart = 182
-    from datetime import date
-    datasets = _datasets.datasets_query()
-    max_num_stanford = 1
-    num_stanford = 0
-    prev_sources = []
-    prev_tables = []
-    output_dir = ".\\data"
-    action = "standardize"
-    issue_datasets = ["Austin", "Chapel Hill", "Fayetteville", "San Diego"]
-    is_austin = datasets["SourceName"].apply(lambda x : x in issue_datasets)
-    not_austin = datasets["SourceName"].apply(lambda x : x not in issue_datasets)
-    # Austin has unknown race values. Emailed dataset owner.
-    datasets = pd.concat([datasets[not_austin], datasets[is_austin]])
-    for i in range(istart, len(datasets)):
-        if "stanford.edu" in datasets.iloc[i]["URL"]:
-            num_stanford += 1
-            if num_stanford > max_num_stanford:
-                continue
-
-        srcName = datasets.iloc[i]["SourceName"]
-        state = datasets.iloc[i]["State"]
-
-        if datasets.iloc[i]["Agency"] == MULTI and srcName == "Virginia":
-            # Reduce size of data load by filtering by agency
-            agency = "Fairfax County Police Department"
-        else:
-            agency = None
-
-        skip = False
-        for k in range(len(prev_sources)):
-            if srcName == prev_sources[k] and datasets.iloc[i]["TableType"] ==prev_tables[k]:
-                skip = True
-
-        if skip:
-            continue
-
-        prev_sources.append(srcName)
-        prev_tables.append(datasets.iloc[i]["TableType"])
-
-        table_print = datasets.iloc[i]["TableType"]
-        now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
-        print(f"{now} Saving CSV for dataset {i} of {len(datasets)}: {srcName} {table_print} table")
-
-        src = Source(srcName, state=state)
-
-        if action == "standardize":
-            if datasets.iloc[i]["DataType"] ==DataType.CSV.value:
-                table = src.load_from_csv(datasets.iloc[i]["Year"], table_type=datasets.iloc[i]["TableType"])
-            else:
-                year = date.today().year
-                table = None
-                for y in range(year, year-20, -1):
-                    try:
-                        csv_filename = src.get_csv_filename(y, output_dir, datasets.iloc[i]["TableType"], 
-                            agency=agency)
-                    except ValueError as e:
-                        if "There are no sources matching tableType" in e.args[0]:
-                            continue
-                        else:
-                            raise
-                    except:
-                        raise
-                    
-                    if path.exists(csv_filename):
-                        table = src.load_from_csv(y, table_type=datasets.iloc[i]["TableType"], 
-                            agency=agency,output_dir=output_dir)
-                        break
-
-            table.standardize()
-        else:
-            if datasets.iloc[i]["DataType"] ==DataType.CSV.value:
-                csv_filename = src.get_csv_filename(datasets.iloc[i]["Year"], output_dir, datasets.iloc[i]["TableType"])
-                if path.exists(csv_filename):
-                    continue
-                table = src.load_from_url(datasets.iloc[i]["Year"], datasets.iloc[i]["TableType"])
-            else:
-                years = src.get_years(datasets.iloc[i]["TableType"])
-                
-                if len(years)>1:
-                    # It is preferred to to not use first or last year that start and stop of year are correct
-                    year = years[-2]
-                else:
-                    year = years[0]
-
-                csv_filename = src.get_csv_filename(year, output_dir, datasets.iloc[i]["TableType"], 
-                                        agency=agency)
-
-                if path.exists(csv_filename):
-                    continue
-
-                table = src.load_from_url(year, datasets.iloc[i]["TableType"], 
-                                        agency=agency)
-
-            table.to_csv(".\\data")
-
-    print("data main function complete")

@@ -200,7 +200,7 @@ class TestData:
 
 	def test_load_gen(self, csvfile, source, last, skip, loghtml):
 		datasets = [("Norristown",2016,"USE OF FORCE", 100),
-	      ("Denver", "MULTI", "OFFICER-INVOLVED SHOOTINGS",50),
+	      ("Denver", "MULTIPLE", "OFFICER-INVOLVED SHOOTINGS",50),
 	      ("Philadelphia", 2019, "OFFICER-INVOLVED SHOOTINGS", 500),
 	      ("Charlotte-Mecklenburg", "NONE", "Employee", 1000),
 		  ("Austin", 2012, "USE OF FORCE", 1000)]
@@ -289,15 +289,16 @@ if __name__ == "__main__":
 	csvfile = None
 	csvfile = r"..\opd-data\opd_source_table.csv"
 	last = None
-	# last = 863-784+1
+	# last = 873-857+1
 	skip = None
 	# skip = "Fayetteville,Seattle"
 	source = None
 	# source = "Mesa"
 	# tp.check_table_type_warning(csvfile, source, last, skip, None) 
-	# tp.test_source_download_limitable(csvfile, source, last, skip, None) 
-	tp.test_check_version(csvfile, None, last, skip, None) 
-	# tp.test_get_count(csvfile, None, last, skip, None)
 	# tp.test_offsets_and_nrows(csvfile, source, last, skip, None) 
-	# tp.test_load_gen(csvfile, source, last, skip, None) 
+	# tp.test_check_version(csvfile, None, last, skip, None) #
+	# tp.test_source_download_limitable(csvfile, source, last, skip, None) 
+	
+	tp.test_get_count(csvfile, None, last, skip, None)
+	tp.test_load_gen(csvfile, source, last, skip, None) 
 	
