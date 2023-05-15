@@ -38,6 +38,7 @@ class TestData:
 			skip = skip.split(",")
 			skip = [x.strip() for x in skip]
 
+		already_ran = []
 		for i in range(len(datasets)):
 			if source != None and datasets.iloc[i]["SourceName"] != source:
 				continue
@@ -49,6 +50,10 @@ class TestData:
 				datasets.iloc[i]["DataType"] == DataType.EXCEL.value:  # If Excel, we can possibly check
 				srcName = datasets.iloc[i]["SourceName"]
 				state = datasets.iloc[i]["State"]
+
+				if (srcName, state, datasets.iloc[i]["TableType"]) in already_ran:
+					continue
+
 				src = data.Source(srcName, state=state)
 
 				if datasets.iloc[i]["DataType"] == DataType.EXCEL.value:
@@ -61,6 +66,8 @@ class TestData:
 				table_print = datasets.iloc[i]["TableType"]
 				now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
 				print(f"{now} Testing {i+1} of {len(datasets)}: {srcName} {table_print} table")
+
+				already_ran.append((srcName, state, datasets.iloc[i]["TableType"]))
 
 				try:
 					years = src.get_years(datasets.iloc[i]["TableType"], force=True)

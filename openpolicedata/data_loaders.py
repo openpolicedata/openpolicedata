@@ -4,6 +4,8 @@ import os
 import tempfile
 from datetime import date
 import pandas as pd
+from pandas.api.types import is_numeric_dtype
+from pandas.api.types import is_datetime64_any_dtype as is_datetime
 from numpy import nan
 import requests
 import urllib
@@ -112,7 +114,7 @@ class Data_Loader(ABC):
     def load(self, year=None, nrows=None, offset=0, *, pbar=True, agency=None, opt_filter=None, select=None, output_type=None):
         pass
 
-    def get_years(self, *, nrows=1, **kwargs):
+    def get_years(self, *, nrows=1, check=None, **kwargs):
         '''Get years contained in data set
         
         Parameters
@@ -129,7 +131,17 @@ class Data_Loader(ABC):
         if self.date_field==None:
             raise ValueError("A date field is required to get years")
 
-        year = date.today().year
+        check_input = check is not None
+
+        if check_input and len(check)==0:
+            return []
+
+        if check_input:
+            check = check.copy()
+            check.sort(reverse=True)
+            year = check.pop(0)
+        else:
+            year = date.today().year
 
         oldest_recent = 20
         max_misses_gap = 10
@@ -149,6 +161,12 @@ class Data_Loader(ABC):
             sleep(sleep_time)
 
             year-=1
+            if check_input:
+                if len(check)==0:
+                    break
+                while year not in check:
+                    year-=1
+                check.remove(year)
 
         return years
 
@@ -651,7 +669,12 @@ class Excel(Data_Loader):
             if self.date_field==None:
                 raise ValueError("No date field provided to access year information")
             df = self.load()
-            years = list(df[self.date_field].dt.year.dropna().unique())
+            if is_datetime(df[self.date_field]):
+                years = list(df[self.date_field].dt.year.dropna().unique())
+            elif is_numeric_dtype(df[self.date_field]):
+                years = list(df[self.date_field].dropna().unique())
+            else:
+                raise TypeError("Unknown date column format")
             return [int(x) for x in years]
 
 

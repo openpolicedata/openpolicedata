@@ -235,7 +235,7 @@ class Source:
         return list(self.datasets["TableType"].unique())
 
 
-    def get_years(self, table_type, force=False):
+    def get_years(self, table_type, force=False, manual=False):
         '''Get years available for 1 or more datasets
 
         Parameters
@@ -244,6 +244,8 @@ class Source:
             Only returns years for requested table type
         force - bool
             (Optional) Some data types such as CSV files require reading the whole file to filter for years. By default, an error will be thrown that indicates running load_from_url may be more efficient. For these cases, set force=True to run get_years without error.
+        manual - bool
+            (Optional) If True, for datasets that contain multiple years, the years will be determined by making requests to the dataset rather than using the years stored in the dataset table. The default is False, which runs faster.
 
         Returns
         -------
@@ -252,6 +254,7 @@ class Source:
         '''
         dfs = self.__find_datasets(table_type)
 
+        cur_year = datetime.now().year
         all_years = list(dfs["Year"])
         years = set()
         for k in range(len(all_years)):
@@ -265,9 +268,20 @@ class Source:
                 date_field = df["date_field"] if pd.notnull(df["date_field"]) else None
                 
                 loader = self.__get_loader(data_type, url, dataset_id=df["dataset_id"], date_field=date_field)
-                new_years = loader.get_years(force=force)
 
-                years.update(new_years)
+                check = None
+                if not manual and pd.notnull(df["coverage_start"]) and pd.notnull(df["coverage_end"]) and \
+                    hasattr(df["coverage_start"], 'year') and hasattr(df["coverage_end"], 'year'):
+                    years.update(range(df["coverage_start"].year, df["coverage_end"].year+1))
+                    if df["coverage_end"].year >= cur_year-2:
+                        # Check for updates
+                        check = [x for x in range(df["coverage_end"].year+1,cur_year+1)]
+                        if len(check)>0:
+                            new_years = loader.get_years(force=force, check=check)
+                            years.update(new_years)
+                else:
+                    new_years = loader.get_years(force=force)
+                    years.update(new_years)
             
         years = list(years)
         years.sort()

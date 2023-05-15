@@ -69,7 +69,11 @@ def _build(csv_file):
 
     key_vals = ['State', 'SourceName', 'Agency', 'TableType','Year']
     df.drop_duplicates(subset=key_vals, inplace=True)
-    # df.sort_values(by=keyVals, inplace=True, ignore_index=True)
+
+    if "coverage_start" in df:
+        p = re.compile(r"\d{1,2}/\d{1,2}/\d{4}")
+        df["coverage_start"] = df["coverage_start"].apply(lambda x: pd.to_datetime(x) if pd.notnull(x) and p.search(x) else x)
+        df["coverage_end"] = df["coverage_end"].apply(lambda x: pd.to_datetime(x) if pd.notnull(x) and p.search(x) else x)
 
     return df
 
