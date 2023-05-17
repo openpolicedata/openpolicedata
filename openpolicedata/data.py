@@ -280,7 +280,7 @@ class Source:
         return list(self.datasets["TableType"].unique())
 
 
-    def get_years(self, table_type, force=False):
+    def get_years(self, table_type, force=False, manual=False):
         '''Get years available for 1 or more datasets
 
         Parameters
@@ -289,6 +289,8 @@ class Source:
             Only returns years for requested table type
         force - bool
             (Optional) Some data types such as CSV files require reading the whole file to filter for years. By default, an error will be thrown that indicates running load_from_url may be more efficient. For these cases, set force=True to run get_years without error.
+        manual - bool
+            (Optional) If True, for datasets that contain multiple years, the years will be determined by making requests to the dataset rather than using the years stored in the dataset table. The default is False, which runs faster.
 
         Returns
         -------
@@ -297,6 +299,7 @@ class Source:
         '''
         dfs = self.__find_datasets(table_type)
 
+        cur_year = datetime.now().year
         all_years = list(dfs["Year"])
         years = set()
         for k in range(len(all_years)):
@@ -310,9 +313,20 @@ class Source:
                 date_field = df["date_field"] if pd.notnull(df["date_field"]) else None
                 
                 loader = self.__get_loader(data_type, url, dataset_id=df["dataset_id"], date_field=date_field)
-                new_years = loader.get_years(force=force)
 
-                years.update(new_years)
+                check = None
+                if not manual and pd.notnull(df["coverage_start"]) and pd.notnull(df["coverage_end"]) and \
+                    hasattr(df["coverage_start"], 'year') and hasattr(df["coverage_end"], 'year'):
+                    years.update(range(df["coverage_start"].year, df["coverage_end"].year+1))
+                    if df["coverage_end"].year >= cur_year-2:
+                        # Check for updates
+                        check = [x for x in range(df["coverage_end"].year+1,cur_year+1)]
+                        if len(check)>0:
+                            new_years = loader.get_years(force=force, check=check)
+                            years.update(new_years)
+                else:
+                    new_years = loader.get_years(force=force)
+                    years.update(new_years)
             
         years = list(years)
         years.sort()
@@ -327,7 +341,7 @@ class Source:
         ----------
         table_type - str or TableType enum
             (Optional) If set, only returns agencies for requested table type
-        year - int or the string "MULTI" or "N/A"
+        year - int or the strings opd.defs.MULTI or opd.defs.NONE
             (Optional)  If set, only returns agencies for requested year
         table_type - str or TableType enum
             (Optional) If set, only returns agencies for requested table type
@@ -351,7 +365,7 @@ class Source:
         else:
             raise ValueError("table_type and year inputs must filter for a single source")            
 
-        # If year is multi, need to use self._agencyField to query URL
+        # If year is opd.defs.MULTI, need to use self._agencyField to query URL
         # Otherwise return self.agency
         if src["Agency"] == defs.MULTI:
             _check_version(src)
@@ -384,7 +398,7 @@ class Source:
 
         Parameters
         ----------
-        year (Optional) - int or length 2 list or the string "MULTI" or "N/A"
+        year (Optional) - int or length 2 list or the string opd.defs.MULTI or opd.defs.NONE
             Used to identify the requested dataset if equal to its year value
             Otherwise, for datasets containing multiple years, this filters 
             the return data for a specific year (int input) or a range of years
@@ -413,7 +427,7 @@ class Source:
 
         Parameters
         ----------
-        year - int or length 2 list or the string "MULTI" or "N/A"
+        year - int or length 2 list or the string opd.defs.MULTI or opd.defs.NONE
             Used to identify the requested dataset if equal to its year value
             Otherwise, for datasets containing multiple years, this filters 
             the return data for a specific year (int input) or a range of years
@@ -451,7 +465,7 @@ class Source:
 
         Parameters
         ----------
-        year - int or length 2 list or the string "MULTI" or "N/A"
+        year - int or length 2 list or the string opd.defs.MULTI or opd.defs.NONE
             Used to identify the requested dataset if equal to its year value
             Otherwise, for datasets containing multiple years, this filters 
             the return data for a specific year (int input) or a range of years
@@ -520,8 +534,8 @@ class Source:
             else:
                 src = src.iloc[0]
 
-        # Load data from URL. For year or agency equal to multi, filtering can be done
-        data_type =defs.DataType(src["DataType"])
+        # Load data from URL. For year or agency equal to opd.defs.MULTI, filtering can be done
+        data_type =DataType(src["DataType"])
         url = src["URL"]
 
         if filter_by_year:
@@ -577,7 +591,7 @@ class Source:
         
         Parameters
         ----------
-        year - int or length 2 list or the string "MULTI" or "N/A"
+        year - int or length 2 list or the string opd.defs.MULTI or opd.defs.NONE
             Used to identify the requested dataset if equal to its year value
             Otherwise, for datasets containing multiple years, this filters 
             the return data for a specific year (int input) or a range of years
@@ -619,7 +633,7 @@ class Source:
         
         Parameters
         ----------
-        year - int or length 2 list or the string "MULTI" or "N/A"
+        year - int or length 2 list or the string opd.defs.MULTI or opd.defs.NONE
             Used to identify the requested dataset if equal to its year value
             Otherwise, for datasets containing multiple years, this filters 
             the return data for a specific year (int input) or a range of years
@@ -718,10 +732,10 @@ def get_csv_filename(state, source_name, agency, table_type, year):
         Name of agency
     table_type - str or TableType enum
         Type of data
-    year = int or length 2 list or the string "MULTI" or "N/A"
+    year = int or length 2 list or the string opd.defs.MULTI or opd.defs.NONE
         Year of data to load, range of years of data to load as a list [X,Y]
         to load years X to Y, or a string to indicate all of multiple year data
-        ("MULTI") or a dataset that has no year filtering ("N/A")
+        (opd.defs.MULTI) or a dataset that has no year filtering ("N/A")
 
     Returns
     -------

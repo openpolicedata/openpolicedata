@@ -44,15 +44,16 @@ def _build(csv_file):
 
     # Convert years to int
     df["Year"] = [int(x) if x.isdigit() else x for x in df["Year"]]
+    df["Year"] = df["Year"].apply(lambda x: "MULTIPLE" if x=="MULTI" else x)
     df["SourceName"] = df["SourceName"].str.replace("Police Department", "")
-    df["Agency"] = df["Agency"].str.replace("Police Department", "")
+    df["Agency"] = df["Agency"].str.replace("Police Department", "").apply(lambda x: "MULTIPLE" if x=="MULTI" else x)
 
     for col in df.columns:
         df[col] = [x.strip() if type(x)==str else x for x in df[col]]
 
     # ArcGIS datasets should have a URL ending in either /FeatureServer/# or /MapServer/#
     # Where # is a layer #
-    urls = df["URL"]
+    urls = list(df["URL"])
     p = re.compile(r"(MapServer|FeatureServer)/\d+")
     for i,url in enumerate(urls):
         if df.iloc[i]["DataType"] == defs.DataType.ArcGIS.value:
@@ -69,7 +70,11 @@ def _build(csv_file):
 
     key_vals = ['State', 'SourceName', 'Agency', 'TableType','Year']
     df.drop_duplicates(subset=key_vals, inplace=True)
-    # df.sort_values(by=keyVals, inplace=True, ignore_index=True)
+
+    if "coverage_start" in df:
+        p = re.compile(r"\d{1,2}/\d{1,2}/\d{4}")
+        df["coverage_start"] = df["coverage_start"].apply(lambda x: pd.to_datetime(x) if pd.notnull(x) and p.search(x) else x)
+        df["coverage_end"] = df["coverage_end"].apply(lambda x: pd.to_datetime(x) if pd.notnull(x) and p.search(x) else x)
 
     return df
 

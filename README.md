@@ -2,7 +2,7 @@
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/openpolicedata/opd-examples/HEAD)
 
 # OpenPoliceData
-OpenPoliceData is a Python package that provides easy access to 288 (and growing) incident-level open datasets from police departments around the United States. Datasets include traffic stops, use of force, officer-involved shootings, complaints, and other types of police interactions. 
+OpenPoliceData is a Python package that provides easy access to 365 (and growing) incident-level open datasets from police departments around the United States. Datasets include traffic stops, use of force, officer-involved shootings, complaints, and other types of police interactions. 
 
 Users request data by department name and type of data, and the data is returned as a pandas DataFrame. There is no need to manually find the data online or to know how to work with open data APIs (ArcGIS, Socrata, etc.).
 
@@ -29,9 +29,57 @@ pip install openpolicedata
 Additionally, [geopandas](https://geopandas.org/en/stable/getting_started/install.html) can be installed to enable downloaded data tables to be returned as geopandas DataFrames instead of pandas DataFrames when there is geographic data. It is recommended to use [conda](https://docs.conda.io/en/latest/) to install geopandas.
 
 ## Examples
-[Jupyter notebooks](https://jupyter.org/) demonstrating example usage of OpenPoliceData can be found in the [opd-examples](https://github.com/openpolicedata/opd-examples) repo. 
-
 **[You can try out OpenPoliceData and run examples online on Binder.](https://mybinder.org/v2/gh/openpolicedata/opd-examples/HEAD)**
+
+Basic usage of OpenPoliceData simply involves:
+1. Finding datasets
+2. Loading datasets
+
+The query function is used to find data. To get all available datasets, query can be used with no inputs. To get all police stops datasets in Virginia, try the following:
+```
+> import openpolicedata as opd
+> datasets = opd.datasets.query(state="Virginia", table_type="STOPS")
+> datasets
+```
+| **State**  | **SourceName** | **Agency** | **TableType** | **coverage_start** | **coverage_end** |
+|------------|----------------|------------------|---------------|----------|----------|
+| Virginia | Dumfries        | Dumfries          | STOPS | 2021-07-01    | 2023-03-31
+| Virginia | Virginia    | MULTIPLE      | STOPS | 2021-07-01    | 2023-03-31
+
+(only 1st 6 columns shown above)
+
+There are 2 stops (containing pedestrian and traffic stops) datasets in Virginia: 1 for the town of Dumfries and 1 for every police department in Virginia (indicated by Agency being MULTIPLE). Let's load in data from the state data with `load_data_from_url`. To do this, we will first need to create a `Source`:
+
+```
+> src = opd.Source("Virginia")
+```
+If we are only interested in data from a single police department, we will need to set the optional agency input for load_data_from_url if we do not want to load data from all police departments in the state. `get_agencies` can be used to find the exact department name (if it is not known) by searching for agencies containing the `partial_name` input ("Arlington" in this case).
+```
+> agencies = src.get_agencies(table_type="STOPS", partial_name="Arlington")
+> agencies
+["Arlington County Sheriff's Office", 'Arlington County Police Department']
+```
+Now, we are ready to load the data.
+```
+> tbl = src.load_from_url(year=2021, table_type="STOPS", agency="Arlington County Police Department")
+> tbl.table.head(n=3)
+```
+
+| **incident_date**  | **agency_name** | **agency** | **reason_for_stop** | **race** | **ethnicity** |
+|------------|----------------|------------------|---------------|----------|----------|
+| 2021-01-01 | Arlington County Police Department        | ARLINGTON CO          | OTHER | WHITE    | HISPANIC    |
+| 2021-01-01 | Arlington County Police Department    | ARLINGTON CO      | EQUIPMENT VIOLATION | WHITE    | NON-HISPANIC    |
+| 2021-01-01 | Arlington County Police Department    | ARLINGTON CO      | TRAFFIC VIOLATION | BLACK OR AFRICAN AMERICAN    | NON-HISPANIC    |
+
+(only 1st 6 columns shown above)
+
+`tbl.table` is a [pandas DataFrame](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.html) and therefore, can be analyzed directly in Python using the powerful [pandas analysis library](https://pandas.pydata.org/). Alternatively, the table can be exported to a CSV file to analyze with your favorite tool:
+
+```
+> tbl.to_csv()
+```
+
+More examples can be found in the [opd-examples](https://github.com/openpolicedata/opd-examples) repo. 
 
 ## Contributing
 If you're interesting in helping out, see our [Contributing Guide](https://github.com/openpolicedata/openpolicedata/blob/main/CONTRIBUTING.MD)

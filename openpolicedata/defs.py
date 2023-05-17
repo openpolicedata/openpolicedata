@@ -61,6 +61,7 @@ class TableType(str, Enum):
     EMPLOYEE = ("EMPLOYEE","Demographic data of the police workforce")
     FIELD_CONTACTS = ("FIELD CONTACTS", "Consensual contacts between officers and the community.")
     INCIDENTS = ("INCIDENTS", "Crime incident reports")
+    LAWSUITS = ("LAWSUITS", "Lawsuits against a police department")
     PEDESTRIAN = ("PEDESTRIAN STOPS","Stops of pedestrians based on 'reasonable suspicion'. May lead to a frisk.")
     PEDESTRIAN_ARRESTS = ("PEDESTRIAN ARRESTS","Pedestrian stops leading to an arrest")
     PEDESTRIAN_CITATIONS = ("PEDESTRIAN CITATIONS","Pedestrian stops leading to a citation")
@@ -99,7 +100,7 @@ class TableType(str, Enum):
         "to stop them.")
 
 # Constants used in dataset parameters
-MULTI = "MULTI"    # For data sets that put multiple years or agencies in 1 dataset
+MULTI = "MULTIPLE"    # For data sets that put multiple years or agencies in 1 dataset
 NA = "NONE"         # None = not applicable (pandas converts "N/A" to NaN)
 
 states = {

@@ -4,6 +4,8 @@ import os
 import tempfile
 from datetime import date
 import pandas as pd
+from pandas.api.types import is_numeric_dtype
+from pandas.api.types import is_datetime64_any_dtype as is_datetime
 from numpy import nan
 import requests
 import urllib
@@ -106,6 +108,9 @@ class Data_Loader(ABC):
     get_years(nrows=1)
         Get years contained in data set
     """
+
+    _last_count = None
+
     @abstractmethod
     def get_count(self, year=None, *, agency=None, force=False, opt_filter=None, where=None):
         pass
@@ -114,7 +119,7 @@ class Data_Loader(ABC):
     def load(self, year=None, nrows=None, offset=0, *, pbar=True, agency=None, opt_filter=None, select=None, output_type=None):
         pass
 
-    def get_years(self, *, nrows=1, **kwargs):
+    def get_years(self, *, nrows=1, check=None, **kwargs):
         '''Get years contained in data set
         
         Parameters
@@ -131,7 +136,17 @@ class Data_Loader(ABC):
         if self.date_field==None:
             raise ValueError("A date field is required to get years")
 
-        year = date.today().year
+        check_input = check is not None
+
+        if check_input and len(check)==0:
+            return []
+
+        if check_input:
+            check = check.copy()
+            check.sort(reverse=True)
+            year = check.pop(0)
+        else:
+            year = date.today().year
 
         oldest_recent = 20
         max_misses_gap = 10
@@ -151,6 +166,12 @@ class Data_Loader(ABC):
             sleep(sleep_time)
 
             year-=1
+            if check_input:
+                if len(check)==0:
+                    break
+                while year not in check:
+                    year-=1
+                check.remove(year)
 
         return years
 
@@ -214,7 +235,9 @@ class Csv(Data_Loader):
             Record count or number of rows in data request
         '''
 
-        if ".zip" not in self.url and year==None and agency==None:            
+        if self._last_count is not None and self._last_count[0] == (self.url, year, agency):
+            return self._last_count[1]
+        if ".zip" not in self.url and year==None and agency==None:
             count = 0
             with requests.get(self.url, stream=True) as r:
                 for chunk in r.iter_content(chunk_size=2**16):
@@ -227,14 +250,15 @@ class Csv(Data_Loader):
                     count-=1
                 else:
                     break
-
-            return count
         elif force:
-            return len(self.load(year=year, agency=agency))
+            count = len(self.load(year=year, agency=agency))
         else:
             raise ValueError("Extracting the number of records for a single year of a CSV file requires reading the whole file in. In most cases, "+
                 "running load() with a year argument to load in the data and manually finding the record count will be more "
                 "efficient. If running get_count with a year argument is still desired, set force=True")
+        
+        self._last_count = ((self.url, year, agency), count)
+        return count
 
 
     def load(self, year=None, nrows=None, offset=0, *, pbar=True, agency=None, **kwargs):
@@ -270,17 +294,37 @@ class Csv(Data_Loader):
                 except Exception as e:
                     raise e
         else:
-            r = requests.head(self.url)
-            if r.status_code==404:
-                # Try get instead
-                r = requests.get(self.url)
+            use_legacy = False
             try:
-                r.raise_for_status()
-            except requests.exceptions.HTTPError as e:
-                raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(self.url))
+                r = requests.head(self.url)
+            except requests.exceptions.SSLError as e:
+                if "[SSL: UNSAFE_LEGACY_RENEGOTIATION_DISABLED] unsafe legacy renegotiation disabled" in str(e.args[0]) or \
+                    "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate" in str(e.args[0]):
+                    use_legacy = True
+                else:
+                    raise e
             except Exception as e:
-                raise e
-            with requests.get(self.url, params=None, stream=True) as resp:
+                raise
+                
+            if not use_legacy:
+                if r.status_code==404:
+                    # Try get instead
+                    r = requests.get(self.url)
+                try:
+                    r.raise_for_status()
+                    r.close()
+                except requests.exceptions.HTTPError as e:
+                    raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(self.url))
+                except Exception as e:
+                    raise e
+            
+            def get(url, use_legacy):
+                if use_legacy:
+                    return get_legacy_session().get(url, params=None, stream=True)
+                else:
+                    return requests.get(url, params=None, stream=True)
+                
+            with get(self.url, use_legacy) as resp:
                 try:
                     table = pd.read_csv(TqdmReader(resp, pbar=pbar), nrows=offset+nrows if nrows is not None else None, encoding_errors='surrogateescape')
                 except (urllib.error.HTTPError, pd.errors.ParserError) as e:
@@ -432,8 +476,12 @@ class Excel(Data_Loader):
             Record count or number of rows in data request
         '''
 
-        if force:
-            return len(self.load(year=year, agency=agency))
+        if self._last_count is not None and self._last_count[0]==(self.url, year, agency):
+            return self._last_count[1]
+        elif force:
+            count = len(self.load(year=year, agency=agency))
+            self._last_count = ((self.url, year, agency), count)
+            return count
         else:
             raise ValueError("Extracting the number of records for an Excel file requires reading the whole file in. In most cases, "+
                 "running load() to load in the data and manually finding the record count will be more "
@@ -653,7 +701,12 @@ class Excel(Data_Loader):
             if self.date_field==None:
                 raise ValueError("No date field provided to access year information")
             df = self.load()
-            years = list(df[self.date_field].dt.year.dropna().unique())
+            if is_datetime(df[self.date_field]):
+                years = list(df[self.date_field].dt.year.dropna().unique())
+            elif is_numeric_dtype(df[self.date_field]):
+                years = list(df[self.date_field].dropna().unique())
+            else:
+                raise TypeError("Unknown date column format")
             return [int(x) for x in years]
 
 
@@ -794,9 +847,13 @@ class Arcgis(Data_Loader):
             Record count or number of rows in data request
         '''
         
-        if where==None:
-            where, record_count = self.__construct_where(year)
+        if self._last_count is not None and self._last_count[0]==(year,where):
+            record_count = self._last_count[1]
+            where_query = self._last_count[2]
+        elif where==None:
+            where_query, record_count = self.__construct_where(year)
         else:
+            where_query = where
             try:
                 record_count = self.__request(where=where, return_count=True)["count"]
                 if self.verify:
@@ -810,6 +867,8 @@ class Arcgis(Data_Loader):
                     raise
             except:
                 raise
+
+        self._last_count = ((year,where), record_count, where_query)
 
         return record_count
 
@@ -864,7 +923,10 @@ class Arcgis(Data_Loader):
 
     def __construct_where(self, year=None):
         where_query = ""
-        if self.date_field!=None and year!=None:
+        if self._last_count is not None and self._last_count[0]==(year,None):
+            record_count = self._last_count[1]
+            where_query = self._last_count[2]
+        elif self.date_field!=None and year!=None:
             where_query, record_count = self._build_date_query(year)
         else:
             where_query = '1=1'
@@ -881,6 +943,8 @@ class Arcgis(Data_Loader):
                     raise
             except:
                 raise
+
+        self._last_count = ((year,None), record_count, where_query)
 
         return where_query, record_count
 
@@ -1097,7 +1161,7 @@ class Arcgis(Data_Loader):
 
         df = pd.DataFrame.from_records([x["attributes"] for x in features])
         for col in date_cols:
-            df[col] = to_datetime(df[col], unit="ms")
+            df[col] = to_datetime(df[col], unit="ms", errors='coerce')
 
         if len(df) > 0:
             has_point_geometry = any("geometry" in x and "x" in x["geometry"] for x in features)
@@ -1205,11 +1269,17 @@ class Carto(Data_Loader):
         int
             Record count or number of rows in data request
         '''
-        
-        where = self.__construct_where(year)
-        json = self.__request(where=where, return_count=True)
 
-        return json["rows"][0]["count"]
+        if self._last_count is not None and self._last_count[0]==year:
+            return self._last_count[1]
+        else:
+            where = self.__construct_where(year)
+            json = self.__request(where=where, return_count=True)
+            count = json["rows"][0]["count"]
+
+        self._last_count = (year, count, where)
+
+        return count
 
 
     def __request(self, where=None, return_count=False, out_fields="*", out_type="GeoJSON", offset=0, count=None):
@@ -1281,9 +1351,14 @@ class Carto(Data_Loader):
             DataFrame containing downloaded
         '''
         
-        where_query = self.__construct_where(year)
-        json = self.__request(where=where_query, return_count=True)
-        record_count = json["rows"][0]["count"]
+        if self._last_count is not None and self._last_count[0]==year:
+            record_count = self._last_count[1]
+            where_query = self._last_count[2]
+        else:
+            where_query = self.__construct_where(year)
+            json = self.__request(where=where_query, return_count=True)
+            record_count = json["rows"][0]["count"]
+            self._last_count = (year, record_count, where_query)
 
         record_count-=offset
         if record_count<=0:
@@ -1452,9 +1527,12 @@ class Socrata(Data_Loader):
         if where==None:
             where = self.__construct_where(year, opt_filter)
 
+        if self._last_count is not None and self._last_count[0]==(year, opt_filter, where):
+            return self._last_count[1]
+
         try:
             results = self.client.get(self.data_set, where=where, select="count(*)")
-        except requests.HTTPError as e:
+        except (requests.HTTPError, requests.exceptions.ReadTimeout) as e:
             raise OPD_SocrataHTTPError(self.url, self.data_set, *e.args, _url_error_msg.format(self.url))
         except Exception as e: 
             if len(e.args)>0 and (e.args[0]=='Unknown response format: text/html' or \
@@ -1468,7 +1546,10 @@ class Socrata(Data_Loader):
         except:
             num_rows = float(results[0]["count_1"]) # Value used in VT Shootings data
 
-        return int(num_rows)
+        count = int(num_rows)
+        self._last_count = ((year, opt_filter, where),count)
+
+        return count
 
 
     def load(self, year=None, nrows=None, offset=0, *, pbar=True, opt_filter=None, select=None, output_type=None, **kwargs):
