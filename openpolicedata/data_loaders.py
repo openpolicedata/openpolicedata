@@ -292,17 +292,37 @@ class Csv(Data_Loader):
                 except Exception as e:
                     raise e
         else:
-            r = requests.head(self.url)
-            if r.status_code==404:
-                # Try get instead
-                r = requests.get(self.url)
+            use_legacy = False
             try:
-                r.raise_for_status()
-            except requests.exceptions.HTTPError as e:
-                raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(self.url))
+                r = requests.head(self.url)
+            except requests.exceptions.SSLError as e:
+                if "[SSL: UNSAFE_LEGACY_RENEGOTIATION_DISABLED] unsafe legacy renegotiation disabled" in str(e.args[0]) or \
+                    "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate" in str(e.args[0]):
+                    use_legacy = True
+                else:
+                    raise e
             except Exception as e:
-                raise e
-            with requests.get(self.url, params=None, stream=True) as resp:
+                raise
+                
+            if not use_legacy:
+                if r.status_code==404:
+                    # Try get instead
+                    r = requests.get(self.url)
+                try:
+                    r.raise_for_status()
+                    r.close()
+                except requests.exceptions.HTTPError as e:
+                    raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(self.url))
+                except Exception as e:
+                    raise e
+            
+            def get(url, use_legacy):
+                if use_legacy:
+                    return get_legacy_session().get(url, params=None, stream=True)
+                else:
+                    return requests.get(url, params=None, stream=True)
+                
+            with get(self.url, use_legacy) as resp:
                 try:
                     table = pd.read_csv(TqdmReader(resp, pbar=pbar), nrows=offset+nrows if nrows is not None else None, encoding_errors='surrogateescape')
                 except (urllib.error.HTTPError, pd.errors.ParserError) as e:
@@ -1139,7 +1159,7 @@ class Arcgis(Data_Loader):
 
         df = pd.DataFrame.from_records([x["attributes"] for x in features])
         for col in date_cols:
-            df[col] = pd.to_datetime(df[col], unit="ms")
+            df[col] = pd.to_datetime(df[col], unit="ms", errors='coerce')
 
         if len(df) > 0:
             has_point_geometry = any("geometry" in x and "x" in x["geometry"] for x in features)
@@ -1510,7 +1530,7 @@ class Socrata(Data_Loader):
 
         try:
             results = self.client.get(self.data_set, where=where, select="count(*)")
-        except requests.HTTPError as e:
+        except (requests.HTTPError, requests.exceptions.ReadTimeout) as e:
             raise OPD_SocrataHTTPError(self.url, self.data_set, *e.args, _url_error_msg.format(self.url))
         except Exception as e: 
             if len(e.args)>0 and (e.args[0]=='Unknown response format: text/html' or \

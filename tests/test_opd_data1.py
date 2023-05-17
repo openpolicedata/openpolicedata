@@ -55,6 +55,7 @@ class TestData:
 
 
 	def test_offsets_and_nrows(self, csvfile, source, last, skip, loghtml):
+		get_datasets(csvfile)
 		src = data.Source("Philadelphia")
 		df = src.load_from_url(year=2019, table_type="Officer-Involved Shootings").table
 		offset = 1
@@ -289,15 +290,15 @@ if __name__ == "__main__":
 	csvfile = None
 	csvfile = r"..\opd-data\opd_source_table.csv"
 	last = None
-	# last = 873-857+1
+	last = 873-290+1
 	skip = None
-	# skip = "Fayetteville,Seattle"
+	skip = "Bloomington"
 	source = None
 	# source = "Mesa"
-	# tp.check_table_type_warning(csvfile, source, last, skip, None) 
-	# tp.test_offsets_and_nrows(csvfile, source, last, skip, None) 
-	# tp.test_check_version(csvfile, None, last, skip, None) #
-	# tp.test_source_download_limitable(csvfile, source, last, skip, None) 
+	tp.check_table_type_warning(csvfile, source, last, skip, None) 
+	tp.test_offsets_and_nrows(csvfile, source, last, skip, None) 
+	tp.test_check_version(csvfile, None, last, skip, None) #
+	tp.test_source_download_limitable(csvfile, source, last, skip, None) 
 	
 	tp.test_get_count(csvfile, None, last, skip, None)
 	tp.test_load_gen(csvfile, source, last, skip, None) 

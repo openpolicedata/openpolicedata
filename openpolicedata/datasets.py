@@ -44,15 +44,16 @@ def _build(csv_file):
 
     # Convert years to int
     df["Year"] = [int(x) if x.isdigit() else x for x in df["Year"]]
+    df["Year"] = df["Year"].apply(lambda x: "MULTIPLE" if x=="MULTI" else x)
     df["SourceName"] = df["SourceName"].str.replace("Police Department", "")
-    df["Agency"] = df["Agency"].str.replace("Police Department", "")
+    df["Agency"] = df["Agency"].str.replace("Police Department", "").apply(lambda x: "MULTIPLE" if x=="MULTI" else x)
 
     for col in df.columns:
         df[col] = [x.strip() if type(x)==str else x for x in df[col]]
 
     # ArcGIS datasets should have a URL ending in either /FeatureServer/# or /MapServer/#
     # Where # is a layer #
-    urls = df["URL"]
+    urls = list(df["URL"])
     p = re.compile(r"(MapServer|FeatureServer)/\d+")
     for i,url in enumerate(urls):
         if df.iloc[i]["DataType"] == defs.DataType.ArcGIS.value:
