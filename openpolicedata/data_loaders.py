@@ -22,8 +22,6 @@ from math import ceil
 import re
 from xlrd.biffh import XLRDError
 
-from rapidfuzz import fuzz
-
 try:
     import geopandas as gpd
     from shapely.geometry import Point
@@ -599,6 +597,12 @@ class Excel(Data_Loader):
                                         for k in col_matches[m]:
                                             if table.columns[k]==df.columns[m]:
                                                 break
+                                            try:
+                                                from rapidfuzz import fuzz
+                                            except:
+                                                raise ImportError(f"{self.url} requires installation of rapidfuzz " + 
+                                                    "(https://pypi.org/project/rapidfuzz/) to load data from multiple years (pip install rapidfuzz)")
+
                                             if fuzz.ratio(table.columns[k], df.columns[m]) > 80:
                                                 print(f"Identified difference in column names when combining sheets {year_dict[y-1]} and {year_dict[y]}. " + 
                                                     f"Column names are '{table.columns[k]}' and '{df.columns[m]}'. This appears to be a typo. " + 

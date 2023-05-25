@@ -44,9 +44,9 @@ def _build(csv_file):
 
     # Convert years to int
     df["Year"] = [int(x) if x.isdigit() else x for x in df["Year"]]
-    df["Year"] = df["Year"].apply(lambda x: "MULTIPLE" if x=="MULTI" else x)
+    df["Year"] = df["Year"].apply(lambda x: defs.MULTI if x=="MULTI" else x)
     df["SourceName"] = df["SourceName"].str.replace("Police Department", "")
-    df["Agency"] = df["Agency"].str.replace("Police Department", "").apply(lambda x: "MULTIPLE" if x=="MULTI" else x)
+    df["Agency"] = df["Agency"].str.replace("Police Department", "").apply(lambda x: defs.MULTI if x=="MULTI" else x)
 
     for col in df.columns:
         df[col] = [x.strip() if type(x)==str else x for x in df[col]]

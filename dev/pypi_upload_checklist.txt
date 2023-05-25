@@ -13,3 +13,5 @@ cd to that folder
 Run tests: python -m pytest
 python -m twine upload dist/*
 Add version to GitHub and attach whl and .tar.gz files
+
+To delete env: conda remove --name myenv --all

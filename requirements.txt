@@ -3,6 +3,7 @@ pandas
 rapidfuzz
 numpy
 requests
+packaging
 pyproj
 tqdm
 openpyxl
