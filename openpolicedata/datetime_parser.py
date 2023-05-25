@@ -20,11 +20,11 @@ def parse_date_to_datetime(date_col):
 
                 def month_name_to_num(x):
                     month_list = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"]
-                    if type(x) == str:
+                    if isinstance(x,str) and not x.isdigit():
                         month_num = [k+1 for k,y in enumerate(month_list) if x.lower().startswith(y)]
                         return month_num[0]
                     else:
-                        return x
+                        return int(x) if pd.notnull(x) else x
 
                 d.iloc[:,1] = date_col.iloc[:,1].apply(month_name_to_num)
 
@@ -104,6 +104,9 @@ def parse_date_to_datetime(date_col):
 
                     if (new_date_col.dt.year > this_year).any() or (new_date_col.dt.year < 1971).any():
                         raise ValueError("Date is outside acceptable range (1971 to this year)")
+                    
+                    if new_date_col.dt.year.max() < 1980:
+                        raise ValueError("All dates are before 1980. This is unlikely to be a date column.")
 
                     return new_date_col
                     

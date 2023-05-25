@@ -6,22 +6,15 @@ import numpy as np
 from numbers import Number
 import warnings
 
-try:
-    from . import datetime_parser
-    from . import defs
-    from . import _converters as convert
-    from ._converters import  _p_age_range
-    from ._preproc_utils import _MultData, check_column, DataMapping, _case, MultType
-    from .utils import camel_case_split, split_words
-except:
-    import defs
-    import datetime_parser
-    import _converters as convert
-    from _converters import _p_age_range
-    from _preproc_utils import _MultData, check_column, DataMapping, _case, MultType
-    from utils import camel_case_split, split_words
+from . import datetime_parser
+from . import defs
+from . import _converters as convert
+from ._converters import  _p_age_range
+from ._preproc_utils import _MultData, check_column, DataMapping, _case, MultType, RACE_TABLES_TO_EXCLUDE, NOT_REQUIRED_TABLES_FOR_DATE
+from .utils import camel_case_split, split_words
 
 _skip_tables = ["calls for service"]
+_OLD_COLUMN_INDICATOR = "RAW"
 
 
 def standardize(df, table_type, year, 
@@ -403,20 +396,18 @@ class Standardizer:
         match_cols = self._find_col_matches("date", known_col_name=self.known_cols[defs.columns.DATE], 
             std_col_name=defs.columns.DATE,
             secondary_patterns = [("equals","date"),("contains","time"), ("contains", "cad"),  ("contains", "assigned"), 
-                                  ("contains", "occurred"), ("contains", "offense")],
+                                  ("contains", "occurred"), ("contains", "occured"), ("contains", "offense"), ("contains", "start")],
             exclude_col_names=[("does not contain", ["as_of","last_reported"])], # Terms associated with dates not of interest
             # Calls for services often has multiple date/times with descriptive names for what it corresponds to.
             # Don't generalize by standardizing
             exclude_table_types=[defs.TableType.EMPLOYEE, defs.TableType.CALLS_FOR_SERVICE], 
-            not_required_table_types=[defs.TableType.COMPLAINTS_OFFICERS, defs.TableType.COMPLAINTS_CIVILIANS,
-                                 defs.TableType.USE_OF_FORCE_CIVILIANS_OFFICERS, defs.TableType.USE_OF_FORCE_CIVILIANS, 
-                                 defs.TableType.USE_OF_FORCE_OFFICERS, 
-                                 defs.TableType.SHOOTINGS_CIVILIANS, defs.TableType.SHOOTINGS_OFFICERS,
-                                 defs.TableType.CRASHES_CIVILIANS, defs.TableType.CRASHES_VEHICLES],
+            not_required_table_types=NOT_REQUIRED_TABLES_FOR_DATE,
             validator=datetime_parser.validate_date,
             always_validate=True,
             tables_to_exclude=[("Winooski", defs.TableType.TRAFFIC),
-                               ("Austin", "TRAFFIC ARRESTS")],
+                               ("Austin", defs.TableType.TRAFFIC_ARRESTS),
+                               ("Norwich", defs.TableType.USE_OF_FORCE),
+                               ("Northampton", defs.TableType.USE_OF_FORCE)],
             search_data=True)
 
         if len(match_cols) > 1:
@@ -528,7 +519,7 @@ class Standardizer:
                         new_col = convert.convert(convert.convert_off_or_civ, col)
                         vals = new_col.unique()
 
-                        if defs._roles.CIVILIAN not in vals and defs._roles.OFFICER not in vals:
+                        if not any([isinstance(x,str) for x in vals]) or (defs._roles.CIVILIAN not in vals and defs._roles.OFFICER not in vals):
                             continue
 
                         if defs._roles.CIVILIAN not in vals or defs._roles.OFFICER not in vals:
@@ -575,35 +566,7 @@ class Standardizer:
             race_cols, race_types = self._id_demographic_column(match_cols,
                 defs.columns.RACE_CIVILIAN, defs.columns.RACE_OFFICER,
                 defs.columns.RACE_OFF_AND_CIV,
-                tables_to_exclude=[
-                    ("Santa Rosa", defs.TableType.USE_OF_FORCE),
-                    ("New York City", defs.TableType.CRASHES_CIVILIANS),
-                    ("San Diego", defs.TableType.CRASHES_CIVILIANS),
-                    ("Montgomery County", defs.TableType.COMPLAINTS),
-                    ("Seattle", defs.TableType.COMPLAINTS),
-                    ("Albany", defs.TableType.COMPLAINTS),
-                    ("Dallas", defs.TableType.ARRESTS),
-                    ("Denver", defs.TableType.STOPS),
-                    ("Lincoln", defs.TableType.VEHICLE_PURSUITS),
-                    ("Los Angeles", defs.TableType.STOPS),
-                    ("South Bend", defs.TableType.USE_OF_FORCE),
-                    ("South Bend", defs.TableType.COMPLAINTS),
-                    ("State Police", defs.TableType.SHOOTINGS),
-                    ("Menlo Park",defs.TableType.STOPS),
-                    ("Richmond",defs.TableType.CITATIONS),
-                    ("Gilbert",defs.TableType.STOPS),
-                    ("Anaheim",defs.TableType.TRAFFIC),
-                    ("San Bernardino",defs.TableType.TRAFFIC),
-                    ("Cambridge",defs.TableType.CITATIONS),
-                    ("Saint Petersburg", defs.TableType.TRAFFIC),
-                    ("Idaho Falls",defs.TableType.STOPS),
-                    ("Fort Wayne", defs.TableType.TRAFFIC),
-                    ("Baltimore", defs.TableType.STOPS),
-                    ("Lubbock", defs.TableType.STOPS),
-                    ("Tacoma", defs.TableType.STOPS),
-                    ("State Patrol", defs.TableType.TRAFFIC),
-                    ("Greensboro", defs.TableType.USE_OF_FORCE_OFFICERS),
-                    ],
+                tables_to_exclude=RACE_TABLES_TO_EXCLUDE,
                 specific_cases=[_case("California", defs.TableType.USE_OF_FORCE_CIVILIANS_OFFICERS, "Race_Ethnic_Group", defs.columns.RACE_OFF_AND_CIV),
                                 _case("Minneapolis", defs.TableType.STOPS, "race", defs.columns.RACE_CIVILIAN),
                                 _case("Austin", defs.TableType.USE_OF_FORCE_CIVILIANS, "subject_race_ethnicity", defs.columns.RACE_CIVILIAN),
@@ -706,7 +669,17 @@ class Standardizer:
             validation_types = [defs.columns.RACE_OFFICER if "PO" in re.split(r"[\W^_]+", x.upper()) else defs.columns.RACE_CIVILIAN for x in eth_cols]
 
         if len(set(eth_types)) != len(eth_types):
-            raise NotImplementedError()
+            if (len(eth_cols)==2 and self.table_type==defs.TableType.INCIDENTS and \
+                    ( ("victim" in eth_cols[0] and any([x in eth_cols[1] for x in ["offender","suspect"]])) or \
+                    (any([x in eth_cols[0] for x in ["offender","suspect"]]) and "victim" in eth_cols[1]))):
+                # Has columns for officer perceived and actual race. We don't code separately for this.
+                # Warn and do not create a standardized race column
+                warnings.warn(f"{self.source_name} has multiple race columns for civilians ({eth_cols}). " +
+                            "Neither will be standardized to avoid creating ambiguity.")
+                return
+            else:
+                # TODO: Convert to a warning with an informative message
+                raise NotImplementedError()
 
         k = 0
         while k < len(validation_types):
@@ -849,7 +822,6 @@ class Standardizer:
                             col_names_new.append(col_names[cur_num])
 
                         # Merge columns
-                        # TODO: Change multi-person columns to dicts
                         # TODO: Add # of persons method
                         # TODO: Add get person by # item
                         def combine_col(x):
@@ -862,18 +834,18 @@ class Standardizer:
                                     vals_reversed.append("")
 
                             persons = {}
-                            k = 0
-                            for val in reversed(vals_reversed):
+                            for k, val in enumerate(reversed(vals_reversed)):
                                 persons[k] = val
-                                k+=1
 
                             return persons
 
                         self.df[types[0]] = self.df[col_names_new].apply(combine_col,axis=1)
-                        self.data_maps.append(DataMapping(orig_column_name=col_names, new_column_name=types[0]))
                         for col in col_names:
                             self._cleanup_old_column(col)
-                        col_names = [types[0]]
+                        # Force rename of column to not conflict with final standardized column
+                        new_name = self._cleanup_old_column(types[0], keep_raw=True)
+                        self.data_maps.append(DataMapping(orig_column_name=col_names, new_column_name=new_name))
+                        col_names = [new_name]
                         types = types[0:1]
                 
                 if len(set(types)) != len(types) and adv_type_match != None:
@@ -882,8 +854,8 @@ class Standardizer:
                 if len(set(types)) != len(types):
                     if (self.source_name=="Winooski" and set(col_names)==set(['Perceived Race', 'Issued To Race'])) or \
                         (len(col_names)==2 and self.table_type==defs.TableType.INCIDENTS and \
-                            ( (("victim" in col_names[0]) and ("offender" in col_names[1])) or \
-                             (("offender" in col_names[0]) and ("victim" in col_names[1])))):
+                            ( ("victim" in col_names[0] and any([x in col_names[1] for x in ["offender","suspect"]])) or \
+                            (any([x in col_names[0] for x in ["offender","suspect"]]) and "victim" in col_names[1]))):
                         # Has columns for officer perceived and actual race. We don't code separately for this.
                         # Warn and do not create a standardized race column
                         warnings.warn(f"{self.source_name} has multiple race columns for civilians ({col_names}). " +
@@ -902,8 +874,11 @@ class Standardizer:
     def _cleanup_old_column(self, col_name, keep_raw=None):
         keep_raw = self.keep_raw if keep_raw is None else keep_raw
         if keep_raw:
-            new_name = "RAW_"+col_name
-            self.df.rename(columns={col_name : new_name}, inplace=True)
+            if not col_name.startswith(_OLD_COLUMN_INDICATOR):
+                new_name = _OLD_COLUMN_INDICATOR+"_"+col_name
+                self.df.rename(columns={col_name : new_name}, inplace=True)
+            else:
+                new_name = col_name
             return new_name
         else:
             self.df.drop(col_name, axis=1, inplace=True)
@@ -991,8 +966,8 @@ class Standardizer:
         
     def sort_columns(self):
         # Reorder columns so standardized columns are first and any old columns are last
-        reordered_cols = [x.new_column_name for x in self.data_maps if x.new_column_name in self.df.columns]
-        old_cols = [x for x in self.df.columns if x.startswith("RAW")]
+        old_cols = [x for x in self.df.columns if x.startswith(_OLD_COLUMN_INDICATOR)]
+        reordered_cols = [x.new_column_name for x in self.data_maps if x.new_column_name in self.df.columns and x.new_column_name not in old_cols]
         reordered_cols.extend([x for x in self.df.columns if x not in old_cols and x not in reordered_cols])
         reordered_cols.extend([x for x in old_cols])
         self.df = self.df[reordered_cols]
@@ -1132,11 +1107,14 @@ class Standardizer:
                 max_counts = lens.max(axis=1)
                 for col in avail_cols:
                     needs_append = lens.index[lens[col] < max_counts]
+                    listcol = self.df[col].tolist()
                     for idx in needs_append:
                         val = self.df[col].loc[idx]
                         for k in range(lens[col].loc[idx], max_counts.loc[idx]):
                             val[k] = ""
-                        self.df[col].loc[idx] = val
+                        
+                        listcol[idx] = val
+                    self.df[col] = listcol
 
                 return
             else:
@@ -1235,7 +1213,8 @@ class Standardizer:
                         return
                     if has_any and age_col in self.col_map and not all_bad_age and max_count_age>0:
                         idx = num_race.notnull() & num_age.notnull()
-                        if (num_race[idx]!=num_age[idx]).any():
+                        # Check commonality between race and age values with multiple values
+                        if (num_race[idx]!=num_age[idx]).mean()>0.1:
                             return
                     delim = mult_data.delim_race
 
@@ -1258,22 +1237,22 @@ class Standardizer:
                     if race_col in self.col_map and max_count_race>0:
                         idx = num_race.notnull() & num_gender.notnull()
                         if (num_race[idx]!=num_gender[idx]).any():
-                            count = (num_race[idx]!=num_gender[idx]).sum()
-                            if count==1 and (max_count_race>3 or max_count_gender>3):
-                                # One of the columns has fewer
-                                idx = [k for k in range(len(num_race)) if pd.notnull(num_race[k]) and pd.notnull(num_gender[k]) and num_race[k]!=num_gender[k]][0]
-                                col1 = self.col_map[race_col]
-                                col2 = self.col_map[gender_col]
-                                col1_val = self.df[self.col_map[race_col]].iloc[idx]
-                                col2_val = self.df[self.col_map[gender_col]].iloc[idx]
-                                print(f"Columns {col1} and {col2} contain demographics for multiple people per row and will be converted to columns "+
-                                    f"{race_col} and {gender_col}. However, the number of data in row {idx} is not consistent: "+
-                                    f"{col1_val} vs. {col2_val}")
-                            else:
+                            # count = (num_race[idx]!=num_gender[idx]).sum()
+                            # if count==1 and (max_count_race>3 or max_count_gender>3):
+                            #     # One of the columns has fewer
+                            #     idx = [k for k in range(len(num_race)) if pd.notnull(num_race[k]) and pd.notnull(num_gender[k]) and num_race[k]!=num_gender[k]][0]
+                            #     col1 = self.col_map[race_col]
+                            #     col2 = self.col_map[gender_col]
+                            #     col1_val = self.df[self.col_map[race_col]].iloc[idx]
+                            #     col2_val = self.df[self.col_map[gender_col]].iloc[idx]
+                            #     print(f"Columns {col1} and {col2} contain demographics for multiple people per row and will be converted to columns "+
+                            #         f"{race_col} and {gender_col}. However, the number of data in row {idx} is not consistent: "+
+                            #         f"{col1_val} vs. {col2_val}")
+                            if (num_race[idx]!=num_gender[idx]).mean() > 0.25:
                                 return
                     if age_col in self.col_map and not all_bad_age and max_count_age>0:
                         idx = num_gender.notnull() & num_age.notnull()
-                        if (num_gender[idx]!=num_age[idx]).any():
+                        if (num_age[idx]!=num_gender[idx]).mean()>0.1:
                             return
                     
                 if int(max_count_race>0) + int(max_count_age>0) + int(max_count_gender>0) + int(max_count_eth>0) > 1:
@@ -1305,7 +1284,7 @@ class Standardizer:
                             [self.mult_civilian, self.mult_officer, self.mult_both]):
             if col in self.col_map:
                 map = {}
-                self.df[col] = convert.convert(convert._create_age_range_lut, self.df[self.col_map[col]],
+                self.df[col] = convert.convert(convert._create_age_range_lut, self.df[self.col_map[col]], source_name=self.source_name,
                                                std_map=map, delim=mult.delim_age, mult_type=mult.type, no_id=self.no_id)
                 
                 # Check for age ranges
@@ -1389,10 +1368,12 @@ class Standardizer:
                     cur_val = {}
                     contains_range = False
                     contains_na = False
-                    for k,y in enumerate(x.split(mult_info.delim_age)):
+
+                    loop_over = [x] if isinstance(x,Number) else enumerate(x.split(mult_info.delim_age))
+                    for k,y in loop_over:
                         if k>0:
                             multi_found = True
-                        if pd.notnull(y) and y.strip().isdigit() and 0<int(y)<=max_age:
+                        if pd.notnull(y) and (isinstance(x,Number) or (y.strip().isdigit() and 0<int(y)<=max_age)):
                             cur_val[k] = int(y)
                         else:
                             if isinstance(y, str) and _p_age_range.search(y) and not contains_range:
@@ -1462,9 +1443,7 @@ class Standardizer:
                                 else:
                                     badvals+=1
 
-                                if badvals>1:
-                                    break
-                            else:
+                            if badvals<2 or badvals / len(self.df[self.col_map[col_name]].unique())<0.05:
                                 throw = False
                         if throw:
                             raise e

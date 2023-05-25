@@ -69,6 +69,9 @@ class Table:
     # Data
     table = None
 
+    # Whether data is standardized
+    is_std = False
+
     # From source
     _data_type = None
     _dataset_id = None
@@ -189,7 +192,10 @@ class Table:
         merge_date_time=True,
         empty_time="NaT"
     ):
-        if self.__transforms==None:
+        if len(self.table)==0:
+            return
+        
+        if not self.is_std:
             if known_cols is None:
                 known_cols = {defs.columns.DATE:self.date_field, defs.columns.AGENCY:self.agency_field}
 
@@ -210,6 +216,7 @@ class Table:
                 race_eth_combo=race_eth_combo,
                 merge_date_time=merge_date_time,
                 empty_time=empty_time)
+            self.is_std = True
         else:
             raise ValueError("Dataset has already been cleaned. Aborting cleaning.")
 
@@ -535,7 +542,7 @@ class Source:
                 src = src.iloc[0]
 
         # Load data from URL. For year or agency equal to opd.defs.MULTI, filtering can be done
-        data_type =DataType(src["DataType"])
+        data_type =defs.DataType(src["DataType"])
         url = src["URL"]
 
         if filter_by_year:

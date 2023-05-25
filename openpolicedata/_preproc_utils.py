@@ -3,11 +3,9 @@ from numbers import Number
 import numpy as np
 import pandas as pd
 import re
-try:
-    from .utils import camel_case_split
-except:
-    from utils import camel_case_split
 
+from .utils import camel_case_split
+from . import defs
 
 class DataMapping:
     def __init__(self, orig_column_name=None, new_column_name = None, data_maps=None, orig_column=None):
@@ -74,9 +72,11 @@ class DataMapping:
                             (x==y.strftime("%Y-%m-%d %H:%M:%S") or (x==y.strftime("%Y-%m-%d") and y.hour==0 and y.minute==0)):
                             continue
                         tf_vals = False
+
+        new_name_equal = self.new_column_name == other.new_column_name or self.new_column_name=="RAW_"+other.new_column_name
                         
         tf = self.orig_column_name == other.orig_column_name and \
-            self.new_column_name == other.new_column_name and \
+            new_name_equal and \
             tf_data_maps and tf_vals
 
         return tf
@@ -159,3 +159,42 @@ class _MultData:
     item_age = None
     item_gender = None
     item_eth = None
+
+NOT_REQUIRED_TABLES_FOR_DATE = [defs.TableType.COMPLAINTS_OFFICERS, defs.TableType.COMPLAINTS_CIVILIANS,
+                                defs.TableType.USE_OF_FORCE_CIVILIANS_OFFICERS, defs.TableType.USE_OF_FORCE_CIVILIANS, 
+                                defs.TableType.USE_OF_FORCE_OFFICERS, 
+                                defs.TableType.SHOOTINGS_CIVILIANS, defs.TableType.SHOOTINGS_OFFICERS,
+                                defs.TableType.CRASHES_CIVILIANS, defs.TableType.CRASHES_VEHICLES,
+                                defs.TableType.COMPLAINTS_ALLEGATIONS, defs.TableType.COMPLAINTS_PENALTIES]
+
+RACE_TABLES_TO_EXCLUDE = [
+    ("Milwaukee", defs.TableType.COMPLAINTS),
+    ("Santa Rosa", defs.TableType.USE_OF_FORCE),
+    ("New York City", defs.TableType.CRASHES_CIVILIANS),
+    ("San Diego", defs.TableType.CRASHES_CIVILIANS),
+    ("Montgomery County", defs.TableType.COMPLAINTS),
+    ("Seattle", defs.TableType.COMPLAINTS),
+    ("Albany", defs.TableType.COMPLAINTS),
+    ("Dallas", defs.TableType.ARRESTS),
+    ("Denver", defs.TableType.STOPS),
+    ("Lincoln", defs.TableType.VEHICLE_PURSUITS),
+    ("Los Angeles", defs.TableType.STOPS),
+    ("South Bend", defs.TableType.USE_OF_FORCE),
+    ("South Bend", defs.TableType.COMPLAINTS),
+    ("State Police", defs.TableType.SHOOTINGS),
+    ("Menlo Park",defs.TableType.STOPS),
+    ("Richmond",defs.TableType.CITATIONS),
+    ("Gilbert",defs.TableType.STOPS),
+    ("Anaheim",defs.TableType.TRAFFIC),
+    ("San Bernardino",defs.TableType.TRAFFIC),
+    ("Cambridge",defs.TableType.CITATIONS),
+    ("Saint Petersburg", defs.TableType.TRAFFIC),
+    ("Idaho Falls",defs.TableType.STOPS),
+    ("Fort Wayne", defs.TableType.TRAFFIC),
+    ("Baltimore", defs.TableType.STOPS),
+    ("Lubbock", defs.TableType.STOPS),
+    ("Tacoma", defs.TableType.STOPS),
+    ("State Patrol", defs.TableType.TRAFFIC),
+    ("Greensboro", defs.TableType.USE_OF_FORCE_OFFICERS),
+    ("Minneapolis", defs.TableType.LAWSUITS),
+    ]

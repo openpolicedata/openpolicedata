@@ -66,12 +66,23 @@ def convert_off_or_civ(x, no_id, *args, **kwargs):
     
 
 def _create_age_range_lut(x, no_id, source_name, *args, **kwargs):
+    if isinstance(x,str) and "," in x:
+        # Look for ages of multiple people
+        out = {}
+        for k,y in enumerate(x.split(',')):
+            try:
+                out[k] = _create_age_range_lut(y, "error", source_name)
+            except Exception as e:
+                break
+        else:
+            return out
+
     p_plus = re.compile(r"(\d+)\+\s?-?\s?(\1\+)?",re.IGNORECASE)
     p_plus2 = re.compile(r"(\d+)\s*plus",re.IGNORECASE)
     p_over = re.compile(r"(OVER|>)\s?(\d+)",re.IGNORECASE)
     p_under = re.compile(r"(UNDER|<)\s?(\d+)",re.IGNORECASE)
-    p_above = re.compile(r"(\d+) AND ABOVE",re.IGNORECASE)
-    p_above = re.compile(r"(\d+) AND ABOVE",re.IGNORECASE)
+    p_under2 = re.compile(r"(\d+) (AND|&) (UNDER|YOUNGER)",re.IGNORECASE)
+    p_above = re.compile(r"(\d+) (AND|&) (ABOVE|OLDER)",re.IGNORECASE)
     p_decade = re.compile(r"^(\d+)s$", re.IGNORECASE)
     p_range = re.compile(r"^(\d+)\s?<(=?)\s?\w+\s?<(=?)\s?(\d+)?$", re.IGNORECASE)
 
@@ -90,6 +101,8 @@ def _create_age_range_lut(x, no_id, source_name, *args, **kwargs):
         return p_above.sub(r"\1-120", x)
     elif type(x) == str and p_under.search(x)!=None:
         return p_under.sub(r"0-\2", x)
+    elif type(x) == str and p_under2.search(x)!=None:
+        return p_under2.sub(r"0-\1", x)
     elif type(x) == str and p_decade.search(x)!=None:
         decade = int(p_decade.search(x).group(1))
         return f"{decade}-{decade+9}"
@@ -226,10 +239,11 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
         if abbrev_full_match and any([len(x)==1 for x in abbrev_full_match.groups()]):
             x = [x for x in abbrev_full_match.groups() if len(x)>1][0]
 
-        delims = [",",'|','/']
-        if not known_single and any([d in x for d in delims]) and \
+        delims = [" and ", ",",'|','/']
+        if not known_single and any([d in x.lower() for d in delims]) and \
             x.lower().replace(" ","") not in ["hawaiian/pacific", "middleeastern/southasian","other/unknown","unknown/refused",
-                                              'asian/pacis','unk/oth','oth/unk']:
+                                              'asian/pacis','unk/oth','oth/unk', 'black/africanamerican','hispanic/latino',
+                                              "americanindian/alaskanative",'a/indian']:
             # Treat this as a list of races
             delim = [d for d in delims if d in x][0]
             race_list = []
@@ -337,7 +351,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
         return race_cats[defs._race_keys.UNSPECIFIED]
     if has_white and x.replace(" ","") in ["W", "CAUCASIAN", "WN", "WHITE", "WHTE","WHITENONLATINO", "WHITENONHISPANIC"]:  # WN = White-Non-Hispanic
         return race_cats[defs._race_keys.WHITE]
-    if has_black and ((x in ["B", "AFRICAN AMERICAN", "BLCK"] or "BLAC" in x) and not is_latino(x)):
+    if has_black and (x in ["B", "AFRICAN AMERICAN", "BLCK", "BLK"] or re.search("BLACK?($|[^A-Za-z])",x)) and not is_latino(x):
         if x.count("BLACK") > 1:
             raise ValueError(f"The value of {x} likely contains the races for multiple people")
         return race_cats[defs._race_keys.BLACK]
@@ -363,12 +377,12 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
         return race_cats[defs._race_keys.PACIFIC_ISLANDER] if has_pi else race_cats[defs._race_keys.AAPI]
     if has_latino and x in ["H", "WH", "HISPANIC", "LATINO", "HISPANIC OR LATINO", "LATINO OR HISPANIC", "HISPANIC/LATINO", "LATINO/HISPANIC",'HISPANIC/LATIN/MEXICAN']:
         return race_cats[defs._race_keys.LATINO] 
-    if has_indigenous and (x in ["I", "INDIAN", "ALASKAN NATIVE", "AN", "AI", "AL NATIVE"] or "AMERICAN IND" in x.replace("II","I") or \
+    if has_indigenous and (x in ["I", "INDIAN", "ALASKAN NATIVE", "AN", "AI", "AL NATIVE","A/INDIAN"] or "AMERICAN IND" in x.replace("II","I") or \
         "NATIVE AM" in x or  "AMERIND" in x.replace(" ","") or "ALASK" in x or "AMIND" in x.replace(" ","") or \
         "NAT AMER" in x):
         return race_cats[defs._race_keys.INDIGENOUS] 
     if has_multiple and ("OR MORE" in x or "MULTI" in x or \
-        x.replace(" ","") in ["MIXED","BIRACIAL","MIXEDRACE"]):
+        x.replace(" ","") in ["MIXED","BIRACIAL","MIXEDRACE","MORE THAN TWO RACES".replace(" ","")]):
         return race_cats[defs._race_keys.MULTIPLE]
     if defs._race_keys.OTHER_UNKNOWN in race_cats and "UNK" in x and "OTH" in x:
         return race_cats[defs._race_keys.OTHER_UNKNOWN]
@@ -383,7 +397,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
                 return [race_cats[defs._race_keys.LATINO], race_cats[defs._race_keys.BLACK]]
             else:
                 return race_cats[defs._race_keys.LATINO] 
-        elif has_black and x in ["EAST AFRICAN"]:
+        elif has_black and x in ["EAST AFRICAN","BLACE"]:
             return race_cats[defs._race_keys.BLACK]
         elif has_white and x in ["BOSNIAN"]:
             return race_cats[defs._race_keys.WHITE]
@@ -409,11 +423,11 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
         elif no_id=="error":
             raise ValueError(f"Unknown value in race column: {orig}")
         elif no_id=="test":
-            if x in ["MALE","GIVING ANYTHING OF VALUE","REFUSED", "NA"] or \
-                (source_name in ["Chapel Hill","Lansing","Fayetteville"] and x in ["M","S","P"]) or \
+            if x in ["MALE","FEMALE","GIVING ANYTHING OF VALUE","REFUSED", "NA","M","F"] or \
+                (source_name in ["Chapel Hill","Lansing","Fayetteville"] and x in ["S","P"]) or \
                 (source_name=="Burlington" and x in ["EXPUNGED"]) or \
                 (source_name in ["Cincinnati","San Diego"] and x in ["F"]) or \
-                (source_name in ["Columbia"] and x == "P") or \
+                (source_name in ["Columbia"] and x in ["M","P"]) or \
                 (source_name in ["Bloomington","Beloit"] and x in ["M"]) or \
                 (source_name in ["Beloit"] and x in ["L"]) or \
                 (source_name in ["St. John"] and x in ["K","P"]) or \
@@ -422,6 +436,8 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
                 (source_name in ["Sacramento"] and x in ["CUBAN","CARRIBEAN"]) or \
                 (source_name in ["New York City"] and x in ["SOUTHWEST"]) or \
                 (x=="UN" and source_name=="State Police") or \
+                (x=="P" and source_name=="Pittsfield") or \
+                (x=="PENDING RELEASE" and source_name=="Portland") or \
                 (x=="W\nW" and source_name=="Sparks") or \
                 ("DOG" in x) or \
                 (source_name in ["New Orleans"] and "NOT APPLICABLE (NON" in x) or \
@@ -443,8 +459,6 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
 
 
 def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
-    
-    bad_data = ["BLACK","WHITE"]
 
     orig = x
     if pd.notnull(x) and (type(x) != str or x.isdigit()) and source_name in ["California", "Lincoln"]:
@@ -515,7 +529,7 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
         return gender_cats[defs._gender_keys.UNSPECIFIED]
     elif defs._gender_keys.FEMALE in gender_cats and x in ["F", "FEMALE", "FEMAALE", "FFEMALE", "FEMAL", "FEMALE/WOMAN","WOMAN"]:
         return gender_cats[defs._gender_keys.FEMALE]
-    elif defs._gender_keys.MALE in gender_cats and x in ["M", "MALE", "MMALE", "MALE/MAN","MAN"]:
+    elif defs._gender_keys.MALE in gender_cats and x in ["M", "MALE", "MMALE", "MALE/MAN","MAN", "MLE"]:
         return gender_cats[defs._gender_keys.MALE]
     elif defs._gender_keys.OTHER in gender_cats and x in ["OTHER", "O"]:
         return gender_cats[defs._gender_keys.OTHER]
@@ -543,11 +557,13 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
         return gender_cats[defs._gender_keys.UNKNOWN]
     
     if no_id=="test":
+        bad_data = ["BLACK","WHITE"]
         if "EXEMPT" in x or x in ["DATAPENDING", "NOTAPPLICABLE","N/A"] or ("BUSINESS" in x and source_name=="Cincinnati"):
             return orig
         elif x in bad_data or \
             (source_name=="New York City" and (x=="Z" or x.isdigit())) or \
             (source_name=="Baltimore" and x in ["Y","Z"]) or \
+            (source_name=="Columbia" and x in ["B"]) or \
             (source_name=="Burlington" and x in ["EXPUNGED"]) or \
             (source_name in ["Seattle","New Orleans","Menlo Park","Rutland"] and x in ["D","N"]) or \
             (source_name=="Los Angeles County" and x=="0") or \
@@ -555,8 +571,9 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
             (x=="MA" and source_name in ["Lincoln"]) or \
             (x=="P" and source_name=="Fayetteville") or \
             (x=="5" and source_name=="Lincoln") or \
+            (x=="PENDINGRELEASE" and source_name=="Portland") or \
             (x in ["N","H"] and source_name=="Los Angeles") or \
-            (x=="X" and source_name in ["Sacramento", "State Police"]) or \
+            (x=="X" and source_name in ["Sacramento", "State Police", "Washington D.C."]) or \
             "DOG" in x or \
             x in ["UNDISCLOSE","UNDISCLOSED","PREFER TO SELF DESCRIBE".replace(" ",""),'NONBINARY/THIRDGENDER',
                   "PREFER NOT TO SAY".replace(" ",""),"TGNC/OTHER","REFUSED",'UNVERIFIED','NONBINARY/OTHERX'] or \
@@ -709,8 +726,14 @@ def std_with_names(col, vals, map_dict, item_num, converter, *args, **kwargs):
 def std_list(col, vals, map_dict, delim, converter, *args, **kwargs):
     map = {}
     multi_found = False
+    # Look for multiplication pattern such as F x 2 for 2 females
+    re_mult = re.compile("([A-Za-z])\s?[Xx]\s?(\d+)")
     for x in vals:
         if type(x) == str:
+            for m in re_mult.finditer(x):
+                new_str = delim.join([m.group(1) for _ in range(int(m.group(2)))])
+                x = x.replace(m.group(0), new_str)
+
             items = x.split(delim)
             new_val = {}
             for k, i in enumerate(items):
