@@ -10,7 +10,6 @@ from numpy import nan
 import requests
 import urllib
 import urllib3
-import ssl
 from abc import ABC, abstractmethod
 from sodapy import Socrata as SocrataClient
 from pyproj.exceptions import CRSError
@@ -87,6 +86,11 @@ class CustomHttpAdapter (requests.adapters.HTTPAdapter):
             block=block, ssl_context=self.ssl_context)
         
 def get_legacy_session():
+    try:
+        import ssl
+    except:
+        raise ImportError(f"Loading this dataset requires the SSL package, which typically comes with the Python installation" + 
+                          " but is not for some Python versions like the one used by Jupyter Lite. To install, run 'pip install ssl'")
     ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
     ctx.options |= 0x4  # OP_LEGACY_SERVER_CONNECT
     session = requests.session()
