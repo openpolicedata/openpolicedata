@@ -273,7 +273,7 @@ class Source:
                 if not manual and pd.notnull(df["coverage_start"]) and pd.notnull(df["coverage_end"]) and \
                     hasattr(df["coverage_start"], 'year') and hasattr(df["coverage_end"], 'year'):
                     years.update(range(df["coverage_start"].year, df["coverage_end"].year+1))
-                    if df["coverage_end"].year >= cur_year-2:
+                    if  cur_year-2 <= df["coverage_end"].year < cur_year:
                         # Check for updates
                         check = [x for x in range(df["coverage_end"].year+1,cur_year+1)]
                         if len(check)>0:

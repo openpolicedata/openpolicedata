@@ -20,6 +20,7 @@ from tqdm import tqdm
 from math import ceil
 import re
 from xlrd.biffh import XLRDError
+from zipfile import ZipFile
 
 try:
     import geopandas as gpd
@@ -414,7 +415,18 @@ class Excel(Data_Loader):
         self.agency_field = agency_field
         
         try:
-            self.excel_file = pd.ExcelFile(url)
+            if ".zip" in self.url:
+                # Download file to temporary file
+                r = requests.get(url)
+                r.raise_for_status()
+                with tempfile.TemporaryFile(suffix=".zip") as fp:
+                    fp.write(r.content)
+                    fp.seek(0)
+
+                    z = ZipFile(fp, 'r')
+                    self.excel_file = pd.ExcelFile(BytesIO(z.read(z.namelist()[0])))
+            else:
+                self.excel_file = pd.ExcelFile(url)
         except urllib.error.HTTPError as e:
             if str(e) in ["HTTP Error 406: Not Acceptable", 'HTTP Error 403: Forbidden']:
                 # 406 error: https://stackoverflow.com/questions/34832970/http-error-406-not-acceptable-python-urllib2
