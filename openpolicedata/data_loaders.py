@@ -1773,7 +1773,7 @@ def filter_dataframe(df, date_field=None, year_filter=None, agency_field=None, a
             # To retain the old behavior, use either `df[df.columns[i]] = newvals` or, if columns are non-unique, `df.isetitem(i, newvals)`
             warnings.simplefilter("ignore", category=FutureWarning)
             if date_field.lower()!="year":
-                df.loc[:, date_field] = pd.to_datetime(df[date_field])
+                df[date_field] = pd.to_datetime(df[date_field])
     
     if year_filter != None and date_field != None:
         if isinstance(year_filter, list):

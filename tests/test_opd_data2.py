@@ -25,7 +25,7 @@ def get_datasets(csvfile):
     if csvfile != None:
         datasets.datasets = datasets._build(csvfile)
 
-    return datasets.query()
+    return datasets.datasets
 
 class TestData:
 	def test_get_years(self, csvfile, source, last, skip, loghtml):

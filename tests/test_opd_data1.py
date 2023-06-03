@@ -27,7 +27,7 @@ def get_datasets(csvfile):
     if csvfile != None:
         datasets.datasets = datasets._build(csvfile)
 
-    return datasets.query()
+    return datasets.datasets
 
 class TestData:
 	def check_table_type_warning(self, csvfile, source, last, skip, loghtml):

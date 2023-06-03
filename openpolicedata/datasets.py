@@ -1,12 +1,10 @@
 import pandas as pd
 import numpy as np
 import re
+from typing import Optional, Union
 import warnings
 
-try:
-    from . import defs
-except:
-    import defs
+from . import defs
 
 # Location of table where datasets available in opd are stored
 csv_file = "https://raw.github.com/openpolicedata/opd-data/main/opd_source_table.csv"
@@ -81,7 +79,12 @@ def _build(csv_file):
 
 datasets = _build(csv_file)
 
-def query(source_name=None, state=None, agency=None, table_type=None):
+def query(
+    source_name: Optional[str] = None, 
+    state: Optional[str] = None, 
+    agency: Optional[str] = None,
+    table_type: Union[str,defs.TableType,None] = None
+) -> pd.DataFrame:
     """Query for available datasets.
     Request a DataFrame containing available datasets based on input filters.
     Returns all datasets if no filters applied.
@@ -121,10 +124,10 @@ def query(source_name=None, state=None, agency=None, table_type=None):
     else:
         return datasets.query(query_str[0:-5]).copy()
 
-def num_unique():
+def num_unique() -> int:
     return len(query().drop_duplicates(["State","SourceName","Agency","TableType"]))
 
-def num_sources(full_states_only=False):
+def num_sources(full_states_only: bool = False) -> int:
     d = query().drop_duplicates(subset=["State","SourceName","Agency"])
 
     if full_states_only:
@@ -132,7 +135,7 @@ def num_sources(full_states_only=False):
     else:
         return len(d)
 
-def summary_by_state(by=None):
+def summary_by_state(by: Optional[str] = None) -> pd.DataFrame:
     df = query()
     df_unique = df.drop_duplicates(["State","SourceName","Agency","TableType"])
     s = df_unique.groupby("State").size()
@@ -196,7 +199,7 @@ def summary_by_state(by=None):
     out.index.name = "State"
     return out
 
-def summary_by_table_type(by_year=False):
+def summary_by_table_type(by_year: bool = False) -> pd.DataFrame:
     df = query()
     s = df.drop_duplicates(["State","SourceName","Agency","TableType"]).groupby("TableType").size()
     out = pd.DataFrame(s,columns=["Total"])
@@ -263,7 +266,3 @@ def summary_by_table_type(by_year=False):
 
     out.index.name = "TableType"
     return out
-
-
-if __name__=="__main__":
-    print(summary_by_state(by="table").head(10))
