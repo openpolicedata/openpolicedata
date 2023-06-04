@@ -222,7 +222,8 @@ def summary_by_table_type(by_year: bool = False) -> pd.DataFrame:
     out["Definition"] = definitions
 
     # Group related tables
-    groups = ["STOPS", "CITATIONS","ARRESTS","WARNINGS","OFFICER-INVOLVED SHOOTINGS","USE OF FORCE"]
+    groups = ["STOPS", "CITATIONS","ARRESTS","WARNINGS","OFFICER-INVOLVED SHOOTINGS","USE OF FORCE",
+              "CRASHES", "COMPLAINTS"]
     k = 0
     empty_row = ["" for _ in out.columns]
     while k < len(out):
@@ -236,16 +237,16 @@ def summary_by_table_type(by_year: bool = False) -> pd.DataFrame:
         cur_group = cur_group[0]
 
         matches = [x for x in out.index if cur_group in x]
-        multi_table = any(["INCIDENT" in x for x in matches]) and \
-            (any(["OFFICER" in x for x in matches]) or any(["CIVILIAN" in x for x in matches]))
+        multi_table = any(["INCIDENT" in x for x in matches]) or \
+            any(["OFFICER" in x for x in matches]) or any(["CIVILIAN" in x for x in matches])
 
         out_start = out.iloc[0:k]
         out_end = out.iloc[k:].drop(index=matches)
         out_cur = out.loc[matches]
 
         if multi_table: 
-            index = [cur_group, "  Single Table", "    "+cur_group, "  Multiple Tables"]
-            index.extend(["    "+x for x in matches if x!=cur_group])
+            index = [cur_group+"-RELATED", "  Single Table  ", "    "+cur_group, "  Multi-Table  "]
+            index.extend(["    "+x+"    " for x in matches if x!=cur_group])
             out_cur = pd.concat([
                 pd.DataFrame([empty_row,empty_row],columns=out.columns),
                 pd.DataFrame([out_cur.loc[cur_group]],columns=out.columns),
@@ -256,9 +257,9 @@ def summary_by_table_type(by_year: bool = False) -> pd.DataFrame:
         else:
             out_cur.rename(index={cur_group : cur_group+" (All)"}, inplace=True)
             out_cur.rename(index={x:x+" (Only)" for x in out_cur.index if "(All)" not in x}, inplace=True)
-            out_cur.rename(index={x:"  "+x for x in out_cur.index}, inplace=True)
+            out_cur.rename(index={x:"  "+x+"  " for x in out_cur.index}, inplace=True)
             # Add empty row for spacing
-            out_cur  = pd.concat([pd.DataFrame([empty_row],index=[cur_group],columns=out.columns),out_cur],axis=0)
+            out_cur  = pd.concat([pd.DataFrame([empty_row],index=[cur_group+"-RELATED"],columns=out.columns),out_cur],axis=0)
             # Find all indices for group
         
         out = pd.concat([out_start,out_cur,out_end],axis=0)
