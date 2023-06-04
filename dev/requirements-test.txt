@@ -1,3 +1,4 @@
 -r ../requirements.txt
 msoffcrypto-tool
 pytest
+sphinx
