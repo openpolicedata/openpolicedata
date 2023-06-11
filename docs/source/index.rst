@@ -3,28 +3,28 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-OpenPoliceData: A Python library providing easy access to police data
-=====================================================================
-
-**OpenPoliceData (OPD)** is a Python library providing easy access to 276+ incident-level open datasets released by police departments including traffic stops, use of force, officer-involved shootings, and complaints data. It provides a simple interface for finding publically available data and downloading data to `pandas <https://pandas.pydata.org/>`_ DataFrames.
-
-Check out the :doc:`usage` section for further information, including how to
-:ref:`install <installation>` the project.
-
-What data is available from OPD?
---------------------------------
+**OpenPoliceData**
+==================
 
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
+   :hidden:
 
-   usage
+   getting_started/index
+   datasets/index
+   examples/index
+   installation/index
+   api/index
+   resources/index
 
+**OpenPoliceData (OPD)** is a Python library providing easy access to 365+ incident-level police datasets including traffic stops, use of force, officer-involved shootings, and complaints data. It provides a simple interface for finding publically available data and downloading data into `pandas <https://pandas.pydata.org/>`_ DataFrames.
 
+Features
+--------
 
-Indices and tables
-==================
+What data is available from OPD?
+--------------------------------
 
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+Why use OPD?
+--------------------------------
