@@ -28,14 +28,17 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.doctest',
     'sphinx.ext.duration',
-    "sphinx.ext.intersphinx",
     'sphinx.ext.autosummary',
+    'myst_parser',
     "numpydoc",
+    'sphinx_design',
 ]
 
 autosummary_generate = True
 # https://www.sphinx-doc.org/en/master/usage/extensions/autodoc.html#confval-autodoc_typehints
 autodoc_typehints = "none"
+
+myst_enable_extensions = ["colon_fence"]
 
 # https://numpydoc.readthedocs.io/en/latest/install.html
 numpydoc_attributes_as_param_list = False
@@ -54,7 +57,10 @@ html_theme = 'pydata_sphinx_theme'
 html_static_path = ['_static']
 
 # Unable to get this to work as a relative links so using full link for now
-pypi_logo = os.path.join(docs_loc, "_static","pypi.svg")
+pypi_logo = "_static/pypi.svg"#os.path.join(docs_loc, "_static","pypi.svg")
+
+# https://icon-sets.iconify.design/simple-icons/streamlit/
+streamlit_logo = "_static/streamlit.svg"#os.path.join(docs_loc, "_static","pypi.svg")
 
 html_theme_options = {
     "github_url": "https://github.com/openpolicedata/openpolicedata",
@@ -67,14 +73,18 @@ html_theme_options = {
             "icon": pypi_logo,
             # The type of image to be used (see below for details)
             "type": "local",
+        },
+        {
+            "name": "Streamlit",
+            # URL where the link will redirect
+            "url": "https://openpolicedata.streamlit.app/",  # required
+            # Icon class (if "type": "fontawesome"), or path to local image (if "type": "local")
+            "icon": streamlit_logo,
+            # The type of image to be used (see below for details)
+            "type": "local",
         }
    ]
     # "navbar_end": ["version-switcher", "theme-switcher", "navbar-icon-links"],
 }
-
-intersphinx_mapping = {
-        "pandas": ("https://pandas.pydata.org/", None),
-        "python": ("https://docs.python.org/3/", None),
-    }
 
 # TODO: https://pydata-sphinx-theme.readthedocs.io/en/stable/user_guide/version-dropdown.html
