@@ -272,32 +272,30 @@ class Source:
 
         cur_year = datetime.now().year
         all_years = list(dfs["Year"])
-        years = set()
-        for k in range(len(all_years)):
-            if all_years[k] != MULTI:
-                years.add(all_years[k])
-            else:
-                df = dfs.iloc[k]
-                _check_version(df)
-                data_type =DataType(df["DataType"])
-                url = df["URL"]
-                date_field = df["date_field"] if pd.notnull(df["date_field"]) else None
-                
-                loader = self.__get_loader(data_type, url, dataset_id=df["dataset_id"], date_field=date_field)
+        years = {x for x in all_years if isinstance(x,numbers.Number) or x==NA}
+        for k in [k for k,x in enumerate(all_years) if x==MULTI]:
+            df = dfs.iloc[k]
+            _check_version(df)
+            data_type =DataType(df["DataType"])
+            url = df["URL"]
+            date_field = df["date_field"] if pd.notnull(df["date_field"]) else None
+            
+            loader = self.__get_loader(data_type, url, dataset_id=df["dataset_id"], date_field=date_field)
 
-                check = None
-                if not manual and pd.notnull(df["coverage_start"]) and pd.notnull(df["coverage_end"]) and \
-                    hasattr(df["coverage_start"], 'year') and hasattr(df["coverage_end"], 'year'):
-                    years.update(range(df["coverage_start"].year, df["coverage_end"].year+1))
-                    if  cur_year-2 <= df["coverage_end"].year < cur_year:
-                        # Check for updates
-                        check = [x for x in range(df["coverage_end"].year+1,cur_year+1)]
-                        if len(check)>0:
-                            new_years = loader.get_years(force=force, check=check)
-                            years.update(new_years)
-                else:
-                    new_years = loader.get_years(force=force)
-                    years.update(new_years)
+            check = None
+            if not manual and pd.notnull(df["coverage_start"]) and pd.notnull(df["coverage_end"]) and \
+                hasattr(df["coverage_start"], 'year') and hasattr(df["coverage_end"], 'year'):
+                years.update(range(df["coverage_start"].year, df["coverage_end"].year+1))
+                max_year = max(years)
+                if  cur_year-2 <= max_year < cur_year:
+                    # Check for updates
+                    check = [x for x in range(max_year+1,cur_year+1)]
+                    if len(check)>0:
+                        new_years = loader.get_years(force=force, check=check)
+                        years.update(new_years)
+            else:
+                new_years = loader.get_years(force=force)
+                years.update(new_years)
             
         years = list(years)
         years.sort()
