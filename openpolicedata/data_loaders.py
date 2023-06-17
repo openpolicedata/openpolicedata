@@ -12,8 +12,6 @@ import urllib
 import urllib3
 from abc import ABC, abstractmethod
 from sodapy import Socrata as SocrataClient
-from pyproj.exceptions import CRSError
-from pyproj import CRS
 import warnings
 from time import sleep
 from tqdm import tqdm
@@ -1192,6 +1190,10 @@ class Arcgis(Data_Loader):
                     use_gpd = _has_gpd
 
                 if use_gpd:
+                    # pyproj installs with geopandas
+                    from pyproj.exceptions import CRSError
+                    from pyproj import CRS
+
                     geometry = []
                     for feat in features:
                         if "geometry" not in feat:
