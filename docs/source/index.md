@@ -13,8 +13,6 @@ html_theme.sidebar_secondary.remove: true
 getting_started/index.ipynb
 datasets/index.ipynb
 examples/index.ipynb
-api/index
-resources/index
 ```
 
 # OpenPoliceData
@@ -38,18 +36,6 @@ Learn what types of data are available in OPD and for what agencies
 :link: examples/index.ipynb
 :link-alt: examples/index.ipynb
 Explore how to use OPD with Jupyter Notebooks 
-:::
-:::{grid-item-card} {fas}`book;pst-color-primary` API Reference
-:link: api/index
-:link-type: doc
-:link-alt: api/index
-Detailed descriptions of functions and classes
-:::
-:::{grid-item-card} {fas}`bookmark;pst-color-primary` Other Resources
-:link: resources/index
-:link-type: doc
-:link-alt: resources/index
-Other resources for finding police data
 :::
 ::::
 
