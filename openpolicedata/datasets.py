@@ -125,9 +125,22 @@ def query(
         return datasets.query(query_str[0:-5]).copy()
 
 def num_unique() -> int:
+    """_summary_
+
+    Returns:
+        int: _description_
+    """
     return len(query().drop_duplicates(["State","SourceName","Agency","TableType"]))
 
 def num_sources(full_states_only: bool = False) -> int:
+    """_summary_
+
+    Args:
+        full_states_only (bool, optional): _description_. Defaults to False.
+
+    Returns:
+        int: _description_
+    """
     d = query().drop_duplicates(subset=["State","SourceName","Agency"])
 
     if full_states_only:
