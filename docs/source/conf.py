@@ -30,6 +30,7 @@ extensions = [
     'sphinx.ext.duration',
     'sphinx.ext.autosummary',
     'myst_parser',
+    'nbsphinx',
     "numpydoc",
     'sphinx_design',
 ]
@@ -55,6 +56,7 @@ exclude_patterns = []
 # a list of builtin themes.
 html_theme = 'pydata_sphinx_theme'
 html_static_path = ['_static']
+html_css_files = ["css/custom.css"]
 
 # Unable to get this to work as a relative links so using full link for now
 pypi_logo = "_static/pypi.svg"#os.path.join(docs_loc, "_static","pypi.svg")
@@ -86,5 +88,24 @@ html_theme_options = {
    ]
     # "navbar_end": ["version-switcher", "theme-switcher", "navbar-icon-links"],
 }
+
+source_suffix = {
+    '.rst': 'restructuredtext',
+    '.txt': 'restructuredtext',
+    '.md': 'markdown',
+}
+
+# This removes execution counts when displaying Jupyter notebooks
+# https://nbsphinx.readthedocs.io/en/0.8.9/custom-css.html
+nbsphinx_prolog = """
+.. raw:: html
+
+    <style>
+        .nbinput .prompt,
+        .nboutput .prompt {
+            display: none;
+        }
+    </style>
+"""
 
 # TODO: https://pydata-sphinx-theme.readthedocs.io/en/stable/user_guide/version-dropdown.html

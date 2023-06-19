@@ -1,4 +1,6 @@
-pydata_sphinx_theme
-myst-parser
-sphinx
+pandoc # conda-forge
+pydata_sphinx_theme # conda-forge
+myst-parser # conda-forge
+nbsphinx # conda-forge
+sphinx # conda-forge
 sphinx_design

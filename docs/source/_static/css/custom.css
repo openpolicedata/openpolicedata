@@ -1,0 +1,19 @@
+/* Based on suggestion here: https://github.com/pydata/pydata-sphinx-theme/issues/1017 */
+.table {
+    display: block;
+    overflow-x: scroll;
+    overflow-y: scroll;
+}
+/* https://stackoverflow.com/questions/5533636/add-a-horizontal-scrollbar-to-an-html-table */
+/* table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+}
+table tbody {
+    display: table;
+    width: 100%;
+} */
+html div.rendered_html table {
+    table-layout: auto;
+}
