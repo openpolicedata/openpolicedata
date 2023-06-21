@@ -280,3 +280,11 @@ def summary_by_table_type(by_year: bool = False) -> pd.DataFrame:
 
     out.index.name = "TableType"
     return out
+
+def get_table_types(contains=None):
+    df = query()
+    table_types = df["TableType"].unique()
+    if contains is not None:
+        table_types = [x for x in table_types if contains.lower() in x.lower()]
+    table_types.sort()
+    return table_types
