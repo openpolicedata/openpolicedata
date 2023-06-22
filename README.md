@@ -29,7 +29,9 @@ pip install openpolicedata
 Additionally, [geopandas](https://geopandas.org/en/stable/getting_started/install.html) can be installed to enable downloaded data tables to be returned as geopandas DataFrames instead of pandas DataFrames when there is geographic data. It is recommended to use [conda](https://docs.conda.io/en/latest/) to install geopandas.
 
 ## Examples
-**[You can try out OpenPoliceData and run examples online on Binder.](https://mybinder.org/v2/gh/openpolicedata/opd-examples/HEAD)**
+**Not ready to code or only looking for a single dataset? Checkout our [OPD Explorer Streamlit App](https://openpolicedata.streamlit.app/)!**
+
+**You can try out OpenPoliceData and run examples online on [Binder](https://mybinder.org/v2/gh/openpolicedata/opd-examples/HEAD).**
 
 Basic usage of OpenPoliceData simply involves:
 1. Finding datasets
