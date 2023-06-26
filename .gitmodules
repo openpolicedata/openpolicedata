@@ -1,0 +1,3 @@
+[submodule "docs/source/examples/opd-examples"]
+	path = docs/source/examples/opd-examples
+	url = git@github.com:openpolicedata/opd-examples.git

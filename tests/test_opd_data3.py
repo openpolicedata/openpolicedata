@@ -29,7 +29,7 @@ def get_datasets(csvfile):
     if csvfile != None:
         datasets.datasets = datasets._build(csvfile)
 
-    return datasets.query()
+    return datasets.datasets
 
 class TestData:
 	@pytest.mark.slow(reason="This is a slow test that should be run before a major commit.")

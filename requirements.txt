@@ -4,7 +4,6 @@ rapidfuzz
 numpy
 requests
 packaging
-pyproj
 tqdm
 openpyxl
 xlrd

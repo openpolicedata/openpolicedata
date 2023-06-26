@@ -1,12 +1,10 @@
 import pandas as pd
 import numpy as np
 import re
+from typing import Optional, Union
 import warnings
 
-try:
-    from . import defs
-except:
-    import defs
+from . import defs
 
 # Location of table where datasets available in opd are stored
 csv_file = "https://raw.github.com/openpolicedata/opd-data/main/opd_source_table.csv"
@@ -81,7 +79,12 @@ def _build(csv_file):
 
 datasets = _build(csv_file)
 
-def query(source_name=None, state=None, agency=None, table_type=None):
+def query(
+    source_name: Optional[str] = None, 
+    state: Optional[str] = None, 
+    agency: Optional[str] = None,
+    table_type: Union[str,defs.TableType,None] = None
+) -> pd.DataFrame:
     """Query for available datasets.
     Request a DataFrame containing available datasets based on input filters.
     Returns all datasets if no filters applied.
@@ -121,10 +124,23 @@ def query(source_name=None, state=None, agency=None, table_type=None):
     else:
         return datasets.query(query_str[0:-5]).copy()
 
-def num_unique():
+def num_unique() -> int:
+    """_summary_
+
+    Returns:
+        int: _description_
+    """
     return len(query().drop_duplicates(["State","SourceName","Agency","TableType"]))
 
-def num_sources(full_states_only=False):
+def num_sources(full_states_only: bool = False) -> int:
+    """_summary_
+
+    Args:
+        full_states_only (bool, optional): _description_. Defaults to False.
+
+    Returns:
+        int: _description_
+    """
     d = query().drop_duplicates(subset=["State","SourceName","Agency"])
 
     if full_states_only:
@@ -132,7 +148,7 @@ def num_sources(full_states_only=False):
     else:
         return len(d)
 
-def summary_by_state(by=None):
+def summary_by_state(by: Optional[str] = None) -> pd.DataFrame:
     df = query()
     df_unique = df.drop_duplicates(["State","SourceName","Agency","TableType"])
     s = df_unique.groupby("State").size()
@@ -196,7 +212,7 @@ def summary_by_state(by=None):
     out.index.name = "State"
     return out
 
-def summary_by_table_type(by_year=False):
+def summary_by_table_type(by_year: bool = False) -> pd.DataFrame:
     df = query()
     s = df.drop_duplicates(["State","SourceName","Agency","TableType"]).groupby("TableType").size()
     out = pd.DataFrame(s,columns=["Total"])
@@ -219,7 +235,8 @@ def summary_by_table_type(by_year=False):
     out["Definition"] = definitions
 
     # Group related tables
-    groups = ["STOPS", "CITATIONS","ARRESTS","WARNINGS","OFFICER-INVOLVED SHOOTINGS","USE OF FORCE"]
+    groups = ["STOPS", "CITATIONS","ARRESTS","WARNINGS","OFFICER-INVOLVED SHOOTINGS","USE OF FORCE",
+              "CRASHES", "COMPLAINTS"]
     k = 0
     empty_row = ["" for _ in out.columns]
     while k < len(out):
@@ -233,16 +250,16 @@ def summary_by_table_type(by_year=False):
         cur_group = cur_group[0]
 
         matches = [x for x in out.index if cur_group in x]
-        multi_table = any(["INCIDENT" in x for x in matches]) and \
-            (any(["OFFICER" in x for x in matches]) or any(["CIVILIAN" in x for x in matches]))
+        multi_table = any(["INCIDENT" in x for x in matches]) or \
+            any(["OFFICER" in x for x in matches]) or any(["CIVILIAN" in x for x in matches])
 
         out_start = out.iloc[0:k]
         out_end = out.iloc[k:].drop(index=matches)
         out_cur = out.loc[matches]
 
         if multi_table: 
-            index = [cur_group, "  Single Table", "    "+cur_group, "  Multiple Tables"]
-            index.extend(["    "+x for x in matches if x!=cur_group])
+            index = [cur_group+"-RELATED", "  Single Table  ", "    "+cur_group, "  Multi-Table  "]
+            index.extend(["    "+x+"    " for x in matches if x!=cur_group])
             out_cur = pd.concat([
                 pd.DataFrame([empty_row,empty_row],columns=out.columns),
                 pd.DataFrame([out_cur.loc[cur_group]],columns=out.columns),
@@ -253,9 +270,9 @@ def summary_by_table_type(by_year=False):
         else:
             out_cur.rename(index={cur_group : cur_group+" (All)"}, inplace=True)
             out_cur.rename(index={x:x+" (Only)" for x in out_cur.index if "(All)" not in x}, inplace=True)
-            out_cur.rename(index={x:"  "+x for x in out_cur.index}, inplace=True)
+            out_cur.rename(index={x:"  "+x+"  " for x in out_cur.index}, inplace=True)
             # Add empty row for spacing
-            out_cur  = pd.concat([pd.DataFrame([empty_row],index=[cur_group],columns=out.columns),out_cur],axis=0)
+            out_cur  = pd.concat([pd.DataFrame([empty_row],index=[cur_group+"-RELATED"],columns=out.columns),out_cur],axis=0)
             # Find all indices for group
         
         out = pd.concat([out_start,out_cur,out_end],axis=0)
@@ -264,6 +281,10 @@ def summary_by_table_type(by_year=False):
     out.index.name = "TableType"
     return out
 
-
-if __name__=="__main__":
-    print(summary_by_state(by="table").head(10))
+def get_table_types(contains=None):
+    df = query()
+    table_types = df["TableType"].unique()
+    if contains is not None:
+        table_types = [x for x in table_types if contains.lower() in x.lower()]
+    table_types.sort()
+    return table_types

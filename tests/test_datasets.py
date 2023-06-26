@@ -192,12 +192,15 @@ class TestDatasets:
         opd.datasets.datasets.loc[0,"TableType"] = "TEST"
         with pytest.warns(UserWarning):
             opd.datasets.summary_by_table_type()
-        
-        
+
+    def test_get_table_types(self, csvfile, source, last, skip, loghtml):    
+        opd.datasets.get_table_types()
+        assert opd.datasets.get_table_types(contains="STOPS") == ["PEDESTRIAN STOPS","STOPS","TRAFFIC STOPS"]
 
 if __name__ == "__main__":
     csvfile = None
-    csvfile = "C:\\Users\\matth\\repos\\opd-data\\opd_source_table.csv"
+    # csvfile = "C:\\Users\\matth\\repos\\opd-data\\opd_source_table.csv"
+    TestDatasets().test_get_table_types(csvfile,None,None,None,None)
     TestDatasets().test_table_for_nulls(csvfile,None,None,None,None)
     # TestDatasets().test_years_multi(csvfile,None,None,None,None)
     # TestDatasets().test_table_types(csvfile,None,None,None,None)

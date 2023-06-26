@@ -1,8 +1,8 @@
 [![PyPI version](https://badge.fury.io/py/openpolicedata.svg)](https://badge.fury.io/py/openpolicedata)
-[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/openpolicedata/opd-examples/HEAD)
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://openpolicedata.streamlit.app)
 
 # OpenPoliceData
-OpenPoliceData is a Python package that provides easy access to 365 (and growing) incident-level open datasets from police departments around the United States. Datasets include traffic stops, use of force, officer-involved shootings, complaints, and other types of police interactions. 
+OpenPoliceData is a Python library that provides easy access to 365 (and growing) incident-level open datasets from police departments around the United States. Datasets include traffic stops, use of force, officer-involved shootings, complaints, and other types of police interactions. 
 
 Users request data by department name and type of data, and the data is returned as a pandas DataFrame. There is no need to manually find the data online or to know how to work with open data APIs (ArcGIS, Socrata, etc.).
 
@@ -108,8 +108,11 @@ Query the available datasets to see what is available. Various filters can be ap
 
 datasets is a [pandas DataFrame](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.html). The first 5 datasets available from California include traffic stops data from multiples years from Anaheim and Bakersfield and data from every agency in California for all types of police stops for years 2018, 2019, and 2020.
 
-### opd.datasets.num_unique()
-Returns the number of unique datasets in OpenPoliceData. This counts the number of datasets from distinct sources AND table types (stops, use of force, etc.).
+### opd.datasets.summary_by_table_type(by_year=False)
+Returns a pandas DataFrame with the number of datasets available for each type of table (stops, use of force, etc.). Setting `by_year` to True also returns a breakdown of table types by year.
+
+### opd.datasets.get_table_types(contains=None)
+Returns types of tables available in OpenPoliceData. If `contains` is not None, only table types containing `contains` are returned.
 
 ### opd.datasets.num_sources(full_states_only=False)
 Returns the number of sources (police departments and states) that provide the data available in OpenPoliceData. Setting `full_states_only` to True returns only the number of states that share data for all agencies in the state.

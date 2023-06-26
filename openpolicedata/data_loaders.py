@@ -12,8 +12,6 @@ import urllib
 import urllib3
 from abc import ABC, abstractmethod
 from sodapy import Socrata as SocrataClient
-from pyproj.exceptions import CRSError
-from pyproj import CRS
 import warnings
 from time import sleep
 from tqdm import tqdm
@@ -1194,6 +1192,10 @@ class Arcgis(Data_Loader):
                     use_gpd = _has_gpd
 
                 if use_gpd:
+                    # pyproj installs with geopandas
+                    from pyproj.exceptions import CRSError
+                    from pyproj import CRS
+
                     geometry = []
                     for feat in features:
                         if "geometry" not in feat:
@@ -1775,7 +1777,7 @@ def filter_dataframe(df, date_field=None, year_filter=None, agency_field=None, a
             # To retain the old behavior, use either `df[df.columns[i]] = newvals` or, if columns are non-unique, `df.isetitem(i, newvals)`
             warnings.simplefilter("ignore", category=FutureWarning)
             if date_field.lower()!="year":
-                df.loc[:, date_field] = to_datetime(df[date_field])
+                df[date_field] = to_datetime(df[date_field])
     
     if year_filter != None and date_field != None:
         if isinstance(year_filter, list):
