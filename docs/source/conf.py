@@ -90,9 +90,9 @@ html_theme_options = {
 }
 
 source_suffix = {
+    '.md': 'markdown',
     '.rst': 'restructuredtext',
     '.txt': 'restructuredtext',
-    '.md': 'markdown',
 }
 
 # This removes execution counts when displaying Jupyter notebooks
