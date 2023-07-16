@@ -93,6 +93,8 @@ source_suffix = {
     '.md': 'markdown',
 }
 
+source_parsers = {'.md': 'recommonmark.parser.CommonMarkParser'}
+
 # This removes execution counts when displaying Jupyter notebooks
 # https://nbsphinx.readthedocs.io/en/0.8.9/custom-css.html
 nbsphinx_prolog = """
