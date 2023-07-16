@@ -7,3 +7,4 @@ sphinx==6.2.1
 # Only available on pip
 sphinx_design==0.4.1
 openpolicedata
+numpydoc
