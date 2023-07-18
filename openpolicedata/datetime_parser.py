@@ -40,7 +40,9 @@ def parse_date_to_datetime(date_col):
             is_num = date_col.dtype == np.int64
             if not is_num:
                 # Try to convert to all numbers
-                new_col = date_col.convert_dtypes()
+                with warnings.catch_warnings():
+                    warnings.filterwarnings("ignore", category=RuntimeWarning, message="invalid value encountered in cast")
+                    new_col = date_col.convert_dtypes()
                 if new_col.dtype in ["object", "string"] and \
                     new_col.apply(lambda x: pd.isnull(x) or isinstance(x,int) or x.isdigit() or x.strip()=="").all():
                     date_col = new_col.apply(lambda x: int(x) if (pd.notnull(x) and (isinstance(x,int) or x.isdigit())) else np.nan)
@@ -316,9 +318,11 @@ def validate_time(df, match_cols_test, date_col=None):
 
 def parse_time(time_col):
     # Returns time in seconds since 00:00
+    time_col = time_col.copy()
     if time_col.dtype == np.int64 or time_col.dtype == np.float64:
         # Expected to be time as integer in 24-hr HHMM format
         # Check that this is true
+        time_col[(time_col==9999) | (time_col==999)] = pd.NA  # 9999 is used as error code
         hour = np.floor(time_col/100)
         min = time_col - np.floor(time_col/100)*100
         if hour.max() >= 24:
@@ -346,7 +350,9 @@ def parse_time(time_col):
             except:
                 pass
 
-            p_date = re.compile(r"\d{1,2}[/-]\d{1,2}[/-]\d{2,4}")
+            p_date = [re.compile(r"\d{1,2}[/-]\d{1,2}[/-]\d{2,4}"),
+                      re.compile(r"^\d{1,2}-(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)$"),
+                      re.compile(r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{1,2}$")]
             def convert_timestr_to_sec(x):
                 if pd.isnull(x):
                     return x
@@ -372,7 +378,7 @@ def parse_time(time_col):
                         return pd.NaT
                     elif len(x) == 0 or len(x) > 4 or not x.isdigit():
                         if x in ["#NAME?",'#VALUE!', 'TIME'] or x.startswith('C2') or \
-                            p_date.search(x):  # Date accidently entered in time column
+                            any([y.search(x) for y in p_date]):  # Date accidently entered in time column
                             # C2 values were observed in 1 dataset
                             return pd.NaT
                         else:

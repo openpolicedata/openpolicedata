@@ -140,7 +140,12 @@ def _create_ethnicity_lut(x, no_id, source_name, eth_cats, *args, **kwargs):
     ferndale_eth_vals = ['NR', 'FRENCH/GERMAN', 'MEXICAN', 'HUNGARIAN', 'LEBANESE', 'POLISH/SCOTTISH', 'IRISH', 'SYRIAN', 'POLISH']
     orig = x
     if type(x) == str:
-        x = x.upper().replace("-","").replace(" ", "")
+        # Look for {Full name} {- or =} {Abbreviation_Initial}
+        abbrev_full_match = re.search(r"^([\w\s/\.-]+)\s?[-]\s?([\w\s/\.])$",x)
+        if abbrev_full_match and any([len(x)==1 for x in abbrev_full_match.groups()]):
+            x = [x for x in abbrev_full_match.groups() if len(x)>1][0]
+
+        x = x.upper().replace("-","").replace(" ", "").strip()
 
     has_unspecified = defs._eth_keys.UNSPECIFIED in eth_cats
     has_nonlat = defs._eth_keys.NONLATINO in eth_cats
@@ -237,13 +242,14 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
         # Look for {Abbreviation_Initial} {- or =} {Full name}
         abbrev_full_match = re.search(r"^([\w\s/\.]+)\s?[-=]\s?([\w\s/\.]+)$",x)
         if abbrev_full_match and any([len(x)==1 for x in abbrev_full_match.groups()]):
-            x = [x for x in abbrev_full_match.groups() if len(x)>1][0]
+            x = [x for x in abbrev_full_match.groups() if len(x)>1][0].strip()
 
         delims = [" and ", ",",'|','/']
         if not known_single and any([d in x.lower() for d in delims]) and \
-            x.lower().replace(" ","") not in ["hawaiian/pacific", "middleeastern/southasian","other/unknown","unknown/refused",
+            x.lower().replace(" ","") not in ["hawaiian/pacific", "middleeastern/southasian",
                                               'asian/pacis','unk/oth','oth/unk', 'black/africanamerican','hispanic/latino',
-                                              "americanindian/alaskanative",'a/indian']:
+                                              "americanindian/alaskanative",'a/indian'] and \
+            not any([y in x.lower() for y in ["unknown","other"]]):
             # Treat this as a list of races
             delim = [d for d in delims if d in x][0]
             race_list = []
@@ -423,7 +429,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
         elif no_id=="error":
             raise ValueError(f"Unknown value in race column: {orig}")
         elif no_id=="test":
-            if x in ["MALE","FEMALE","GIVING ANYTHING OF VALUE","REFUSED", "NA","M","F"] or \
+            if x in ["MALE","FEMALE","GIVING ANYTHING OF VALUE","REFUSED", "NA","M","F","OTHER/NOT REPORTED"] or \
                 (source_name in ["Chapel Hill","Lansing","Fayetteville"] and x in ["S","P"]) or \
                 (source_name=="Burlington" and x in ["EXPUNGED"]) or \
                 (source_name in ["Cincinnati","San Diego"] and x in ["F"]) or \
@@ -492,7 +498,7 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
         # Look for {Abbreviation_Initial} {- or =} {Full name}
         abbrev_full_match = re.search(r"^([\w\s/\.]+)\s?[-=]\s?([\w\s/\.]+)$",x)
         if abbrev_full_match and any([len(x)==1 for x in abbrev_full_match.groups()]):
-            x = [x for x in abbrev_full_match.groups() if len(x)>1][0]
+            x = [x for x in abbrev_full_match.groups() if len(x)>1][0].strip()
         x = x.upper().replace("-","").replace("_","").replace(" ","").replace("'","")
 
         if source_name in ["New York City", "Los Angeles"]:

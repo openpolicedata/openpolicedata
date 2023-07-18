@@ -395,9 +395,8 @@ class Standardizer:
         # Find the date columns
         match_cols = self._find_col_matches("date", known_col_name=self.known_cols[defs.columns.DATE], 
             std_col_name=defs.columns.DATE,
-            secondary_patterns = [("equals","date"),("contains","time"), ("contains", "cad"),  ("contains", "assigned"), 
-                                  ("contains", "occurred"), ("contains", "occured"), ("contains", "offense"), ("contains", "start")],
-            exclude_col_names=[("does not contain", ["as_of","last_reported"])], # Terms associated with dates not of interest
+            secondary_patterns = [("equals","date"),("contains","time")],
+            exclude_col_names=[("does not contain", ["as_of","last_reported","objectid"])], # Terms associated with dates not of interest
             # Calls for services often has multiple date/times with descriptive names for what it corresponds to.
             # Don't generalize by standardizing
             exclude_table_types=[defs.TableType.EMPLOYEE, defs.TableType.CALLS_FOR_SERVICE], 
@@ -411,7 +410,8 @@ class Standardizer:
             search_data=True)
 
         if len(match_cols) > 1:
-            raise NotImplementedError()
+            # Not relabeling multiple dates because they can have useful info in the column name
+            pass
         elif len(match_cols) == 1:
             self.col_map[defs.columns.DATE] = match_cols[0]
         
@@ -493,7 +493,7 @@ class Standardizer:
                 date_data = datetime_parser.parse_date_to_datetime(date_data)
                 validator_args.append(date_data)
             
-        match_cols = self._find_col_matches(["time", "tm"], 
+        match_cols = self._find_col_matches(["time", "tm", "toa"], 
             std_col_name=defs.columns.TIME,
             secondary_patterns=secondary_patterns, 
             validator=datetime_parser.validate_time,
@@ -579,7 +579,9 @@ class Standardizer:
 
             # enthnicity is to deal with typo in Ferndale data. Consider using rapidfuzz in future for fuzzy matching
             match_cols = self._find_col_matches(["ethnicity", "ethnic", "enthnicity"], exclude_col_names=race_cols,
-                                                exclude_table_types=[defs.TableType.COMPLAINTS_ALLEGATIONS])
+                                                exclude_table_types=[defs.TableType.COMPLAINTS_ALLEGATIONS],
+                                                validator=_eth_validator,
+                                                always_validate=True)
             self._id_ethnicity_column(race_types, match_cols, race_cols,
                 specific_cases=[
                     _case("Fairfax County", defs.TableType.ARRESTS, "ArresteeEt", defs.columns.ETHNICITY_CIVILIAN)
@@ -628,8 +630,7 @@ class Standardizer:
 
         for key, value in self.col_map.items():
             if key == value:
-                # Need to rename original column
-                self.col_map[key] = self._cleanup_old_column(value, keep_raw=True)
+                self._cleanup_old_column(value, keep_raw=True)
 
     
     def _id_ethnicity_column(self, race_types, eth_cols, race_cols, specific_cases=[]):
@@ -1580,6 +1581,29 @@ def _race_validator(df, cols_test, source_name, mult_data=_MultData()):
             pass
 
     return match_cols
+
+
+def _eth_validator(df, cols_test):
+    match_cols = []
+    for col_name in cols_test:
+        col = df[col_name]
+        try:
+            for x in col.unique():
+                if isinstance(x,str):
+                    x = x.upper()
+                    if x in ["N","H"] or "LATINO" in x or "HISPANIC" in x:
+                        found = True
+                        break
+            else:
+                found = False
+
+            if found:
+                match_cols.append(col_name)
+        except Exception as e:
+            pass
+
+    return match_cols
+
 
 def _gender_validator(df, match_cols_test, source_name):
     match_cols = []
