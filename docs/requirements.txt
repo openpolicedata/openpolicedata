@@ -8,3 +8,5 @@ sphinx==6.2.1
 sphinx_design==0.4.1
 openpolicedata
 numpydoc
+myst-nb
+ipython
