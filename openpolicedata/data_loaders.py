@@ -364,8 +364,11 @@ class Csv(Data_Loader):
             if self.date_field==None:
                 raise ValueError("No date field provided to access year information")
             df = self.load()
-            date_col = pd.to_datetime(df[self.date_field])
-            years = list(date_col.dt.year.dropna().unique())
+            if self.date_field.lower()=="year":
+                years = df[self.date_field].unique()
+            else:
+                date_col = pd.to_datetime(df[self.date_field])
+                years = list(date_col.dt.year.dropna().unique())
             years.sort()
             return [int(x) for x in years]
 
@@ -977,6 +980,9 @@ class Arcgis(Data_Loader):
             start_date, stop_date = _process_date(year)
             
             for k in range(0,2):
+                if self._date_format is not None and self._date_format!=k:
+                    continue
+
                 if k==0:
                     where_query = f"{self.date_field} >= '{start_date}' AND  {self.date_field} < '{stop_date}'"
                 else:
@@ -1023,7 +1029,8 @@ class Arcgis(Data_Loader):
             "{} LIKE '%[0-9][0-9]/[0-9][0-9]/{}%'",   # mm/dd/yyyy
             double_format("{} LIKE '{}/[0-9][0-9]' OR {} LIKE '{}/[0-9]'"),                # yyyy/mm
             "{} = {}",                # yyyy
-            double_format("{} LIKE '[0-9][0-9]-{}' OR {} LIKE '[0-9]-{}'")   # mm-yyyy or m-yyyy
+            double_format("{} LIKE '[0-9][0-9]-{}' OR {} LIKE '[0-9]-{}'"),   # mm-yyyy or m-yyyy
+            "{} = '{}'",                # 'yyyy'
         ]
         # Make year iterable
         year = [year] if isinstance(year, numbers.Number) else year
@@ -1779,10 +1786,15 @@ def filter_dataframe(df, date_field=None, year_filter=None, agency_field=None, a
     
     if year_filter != None and date_field != None:
         if isinstance(year_filter, list):
-            df = df[(df[date_field].dt.year >= year_filter[0]) & (df[date_field].dt.year <= year_filter[1])]
-        else:
+            if date_field.lower()!="year":
+                df = df[(df[date_field].dt.year >= year_filter[0]) & (df[date_field].dt.year <= year_filter[1])]
+            else:
+                df = df[df[date_field].isin(year_filter)]
+        elif date_field.lower()!="year":
             date_col = pd.to_datetime(df[date_field])
             df = df[date_col.dt.year == year_filter]
+        else:
+            df = df[df[date_field] == year_filter]
 
     if agency != None and agency_field != None:
         df = df.query(agency_field + " = '" + agency + "'")
