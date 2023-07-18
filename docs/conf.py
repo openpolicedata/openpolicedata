@@ -30,6 +30,7 @@ extensions = [
     'sphinx.ext.duration',
     'sphinx.ext.autosummary',
     'myst_parser',
+    "myst_nb",
     'nbsphinx',
     "numpydoc",
     'sphinx_design',
