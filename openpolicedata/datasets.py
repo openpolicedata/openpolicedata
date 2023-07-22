@@ -67,7 +67,7 @@ def _build(csv_file):
         raise ValueError(f"{len(misspelled)} states are misspelled in the data sources table including {misspelled.iloc[0]} at index {misspelled.index[0]}")
 
     key_vals = ['State', 'SourceName', 'Agency', 'TableType','Year']
-    df.drop_duplicates(subset=key_vals, inplace=True)
+    df.drop_duplicates(subset=key_vals, inplace=True, ignore_index=True)
 
     if "coverage_start" in df:
         p = re.compile(r"\d{1,2}/\d{1,2}/\d{4}")

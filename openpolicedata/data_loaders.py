@@ -984,7 +984,6 @@ class Arcgis(Data_Loader):
             for k in range(0,2):
                 if self._date_format is not None and self._date_format!=k:
                     continue
-                
                 if k==0:
                     where_query = f"{self.date_field} >= '{start_date}' AND  {self.date_field} < '{stop_date}'"
                 else:

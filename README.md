@@ -2,7 +2,7 @@
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://openpolicedata.streamlit.app)
 
 # OpenPoliceData
-OpenPoliceData is a Python library that provides easy access to 365 (and growing) incident-level open datasets from police departments around the United States. Datasets include traffic stops, use of force, officer-involved shootings, complaints, and other types of police interactions. 
+OpenPoliceData is a Python library that provides easy access to 365 (and growing) incident-level open datasets for over 4000 police agencies around the United States. Datasets include traffic stops, use of force, officer-involved shootings, complaints, and other types of police interactions. 
 
 Users request data by department name and type of data, and the data is returned as a pandas DataFrame. There is no need to manually find the data online or to know how to work with open data APIs (ArcGIS, Socrata, etc.).
 
@@ -29,7 +29,9 @@ pip install openpolicedata
 Additionally, [geopandas](https://geopandas.org/en/stable/getting_started/install.html) can be installed to enable downloaded data tables to be returned as geopandas DataFrames instead of pandas DataFrames when there is geographic data. It is recommended to use [conda](https://docs.conda.io/en/latest/) to install geopandas.
 
 ## Examples
-**[You can try out OpenPoliceData and run examples online on Binder.](https://mybinder.org/v2/gh/openpolicedata/opd-examples/HEAD)**
+**Not ready to code or only looking for a single dataset? Checkout our [OPD Explorer Streamlit App](https://openpolicedata.streamlit.app/)!**
+
+**You can try out OpenPoliceData and run examples online on [Binder](https://mybinder.org/v2/gh/openpolicedata/opd-examples/HEAD).**
 
 Basic usage of OpenPoliceData simply involves:
 1. Finding datasets

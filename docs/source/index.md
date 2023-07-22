@@ -17,7 +17,7 @@ examples/index.ipynb
 
 # OpenPoliceData
 
-Welcome to the *BETA* version of the OpenPoliceData documentation. **OpenPoliceData (OPD)** is a Python library providing easy access to 365+ incident-level police datasets including traffic stops, use of force, officer-involved shootings, and complaints data. It provides a simple interface for finding publically available data and downloading data into [pandas](https://pandas.pydata.org/) DataFrames.
+Welcome to the *BETA* version of the OpenPoliceData documentation. **OpenPoliceData (OPD)** is a Python library providing easy access to 365+ incident-level datasets for over 4000 police agencies including traffic stops, use of force, officer-involved shootings, and complaints data. It provides a simple interface for finding publically available data and downloading data into [pandas](https://pandas.pydata.org/) DataFrames.
 
 ::::{grid} 3
 :gutter: 1 2 3 4
