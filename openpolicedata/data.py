@@ -3,9 +3,14 @@ import os.path as path
 import pandas as pd
 from datetime import datetime
 from dateutil.parser._parser import ParserError
+import logging
 from packaging import version
 import re
 from typing import Iterator, List, Optional, Union
+try:
+    from typing import Literal
+except:
+    from typing_extensions import Literal
 import warnings
 
 from . import data_loaders
@@ -188,17 +193,17 @@ class Table:
     
 
     def standardize(self, 
-        race_cats="basic",
-        agg_race_cat=False,
-        eth_cats=None,
-        gender_cats=None,
-        keep_raw=True,        
-        known_cols=None,
-        verbose=False,
-        no_id="keep",
-        race_eth_combo="merge",
-        merge_date_time=True,
-        empty_time="NaT"
+        race_cats: Union[dict, str, None] = None,
+        agg_race_cat: bool = False,
+        eth_cats: Optional[dict] = None,
+        gender_cats: Optional[dict] = None,
+        keep_raw: bool =True,        
+        known_cols: Optional[dict] = None,
+        verbose: bool = False,
+        no_id: Literal["pass", "null", "error","test"] = "keep",
+        race_eth_combo: Literal[False, "merge", "concat"] = "merge",
+        merge_date_time: bool =True,
+        empty_time: Literal["nat", "ignore"] = "NaT"
     ):
         if len(self.table)==0:
             return
@@ -207,23 +212,36 @@ class Table:
             if known_cols is None:
                 known_cols = {defs.columns.DATE:self.date_field, defs.columns.AGENCY:self.agency_field}
 
-            race_cats = defs.get_race_cats() if race_cats=="basic" else race_cats
+            race_cats = defs.get_race_cats() if race_cats is None else race_cats
             race_cats = defs.get_race_cats(expand=True) if race_cats=="expand" else race_cats
             eth_cats = eth_cats if eth_cats is not None else defs.get_eth_cats()
             gender_cats = gender_cats if gender_cats is not None else defs.get_gender_cats()
-            self.table, self.__transforms = preproc.standardize(self.table, self.table_type, self.year,
-                known_cols=known_cols, 
-                source_name=self.source_name,
-                keep_raw=keep_raw,
-                verbose=verbose,
-                agg_race_cat=agg_race_cat,
-                race_cats=race_cats,
-                eth_cats=eth_cats,
-                gender_cats=gender_cats,
-                no_id=no_id,
-                race_eth_combo=race_eth_combo,
-                merge_date_time=merge_date_time,
-                empty_time=empty_time)
+            try:
+                if verbose:
+                    # Set logger to info so log messages in preproc.standardize will be displayed
+                    logger = logging.getLogger("opd-std")
+                    log_level = logger.level
+                    logger.setLevel(logging.INFO)
+                    
+                self.table, self.__transforms = preproc.standardize(self.table, self.table_type, self.year,
+                    known_cols=known_cols, 
+                    source_name=self.source_name,
+                    keep_raw=keep_raw,
+                    agg_race_cat=agg_race_cat,
+                    race_cats=race_cats,
+                    eth_cats=eth_cats,
+                    gender_cats=gender_cats,
+                    no_id=no_id,
+                    race_eth_combo=race_eth_combo,
+                    merge_date_time=merge_date_time,
+                    empty_time=empty_time)
+            except Exception as e:
+                if verbose:
+                    logger.setLevel(log_level)
+                raise e
+
+            if verbose:
+                logger.setLevel(log_level)
             self.is_std = True
         else:
             raise ValueError("Dataset has already been cleaned. Aborting cleaning.")

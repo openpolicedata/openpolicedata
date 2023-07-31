@@ -58,7 +58,7 @@ def convert_off_or_civ(x, no_id, *args, **kwargs):
     elif x in ["OFFICER"]:
         return defs._roles.OFFICER
     elif x in ["SUBJECT","CIVILIAN"]:
-        return defs._roles.CIVILIAN
+        return defs._roles.SUBJECT
     elif no_id in ["error","test"]:
         raise ValueError(f"Unknown person type {orig}")
     else:
@@ -245,19 +245,20 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
             x = [x for x in abbrev_full_match.groups() if len(x)>1][0].strip()
 
         delims = [" and ", ",",'|','/']
-        if not known_single and any([d in x.lower() for d in delims]) and \
+        delim = [d for d in delims if d in x]
+        if not known_single and len(delim)>0 and \
             x.lower().replace(" ","") not in ["hawaiian/pacific", "middleeastern/southasian",
                                               'asian/pacis','unk/oth','oth/unk', 'black/africanamerican','hispanic/latino',
                                               "americanindian/alaskanative",'a/indian'] and \
-            not any([y in x.lower() for y in ["unknown","other"]]):
+            not any([x.lower() in ['unknown','other'] for x in x.split(delim[0])]):
             # Treat this as a list of races
-            delim = [d for d in delims if d in x][0]
+            delim = delim[0]
             race_list = []
             for v in x.split(delim):
                 if v=="INDIAN" and "BURMESE" in x:
                     # Handle special case to prevent setting to Indigenous
                     continue
-                new_val = _create_race_lut(v, no_id, source_name, race_cats, agg_cat)
+                new_val = _create_race_lut(v, no_id, source_name, race_cats, agg_cat, known_single=True)
                 if isinstance(new_val, list):
                     race_list.extend(new_val)
                 else:
@@ -355,7 +356,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
     if has_unspecified and (x in ["MISSING","NOT SPECIFIED", "", "NOT RECORDED","N/A", "NOT REPORTED", "NONE"] or \
         (type(x)==str and ("NO DATA" in x or ("NOT APP" in x and x not in ["NOT APPLICABLE (NON-U.S.)",'NOT APPLICABLE (NON US)']) or "NO RACE" in x or "NULL" in x))):
         return race_cats[defs._race_keys.UNSPECIFIED]
-    if has_white and x.replace(" ","") in ["W", "CAUCASIAN", "WN", "WHITE", "WHTE","WHITENONLATINO", "WHITENONHISPANIC"]:  # WN = White-Non-Hispanic
+    if has_white and x.replace(" ","") in ["W", "CAUCASIAN", "WN", "WHITE", "WHTE","WHITENONLATINO", "WHITENONHISPANIC", "WHITE,OTHER"]:  # WN = White-Non-Hispanic
         return race_cats[defs._race_keys.WHITE]
     if has_black and (x in ["B", "AFRICAN AMERICAN", "BLCK", "BLK"] or re.search("BLACK?($|[^A-Za-z])",x)) and not is_latino(x):
         if x.count("BLACK") > 1:
@@ -434,6 +435,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
                 (source_name=="Burlington" and x in ["EXPUNGED"]) or \
                 (source_name in ["Cincinnati","San Diego"] and x in ["F"]) or \
                 (source_name in ["Columbia"] and x in ["M","P"]) or \
+                (source_name in ["Urbana"] and x in ["BUSINESS OR OTHER"]) or \
                 (source_name in ["Bloomington","Beloit"] and x in ["M"]) or \
                 (source_name in ["Beloit"] and x in ["L"]) or \
                 (source_name in ["St. John"] and x in ["K","P"]) or \
@@ -569,6 +571,7 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
         elif x in bad_data or \
             (source_name=="New York City" and (x=="Z" or x.isdigit())) or \
             (source_name=="Baltimore" and x in ["Y","Z"]) or \
+            (source_name=="Urbana" and x in ["."]) or \
             (source_name=="Columbia" and x in ["B"]) or \
             (source_name=="Burlington" and x in ["EXPUNGED"]) or \
             (source_name in ["Seattle","New Orleans","Menlo Park","Rutland"] and x in ["D","N"]) or \

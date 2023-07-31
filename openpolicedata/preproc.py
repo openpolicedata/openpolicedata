@@ -16,6 +16,52 @@ from .utils import camel_case_split, split_words
 _skip_tables = ["calls for service"]
 _OLD_COLUMN_INDICATOR = "RAW"
 
+logger = logging.getLogger("opd-std")
+
+class _ColMapDict():
+    def __init__(self):
+        self.cur_dict = {}
+        self.orig_dict = {}
+
+    def __repr__(self):
+        return f"cur_dict: {self.cur_dict}\norig_dict: {self.orig_dict}"
+    
+    def __str__(self):
+        return f"cur_dict: {self.cur_dict}\norig_dict: {self.orig_dict}"
+
+    def __setitem__(self, key, value):
+        self.cur_dict[key] = value
+        self.orig_dict[key] = value
+
+    def __getitem__(self,key):
+        return self.cur_dict[key]
+    
+    def __contains__(self, __key: object) -> bool:
+        return __key in self.cur_dict
+    
+    def keys(self):
+        return self.cur_dict.keys()
+    
+    def values(self):
+        return self.cur_dict.values()
+    
+    def items(self):
+        return self.cur_dict.items()
+    
+    def pop(self, key):
+        self.orig_dict.pop(key)
+        return self.cur_dict.pop(key)
+    
+    def update_current(self, key, value):
+        self.cur_dict[key] = value
+
+    def get_original(self, key):
+        return self.orig_dict[key]
+    
+    def replace(self, old_key, new_key):
+        self.cur_dict[new_key] = self.cur_dict.pop(old_key)
+        self.orig_dict[new_key] = self.orig_dict.pop(old_key)
+        
 
 def standardize(df, table_type, year, 
     known_cols={}, 
@@ -25,7 +71,6 @@ def standardize(df, table_type, year,
     race_cats=defs.get_race_cats(),
     eth_cats=defs.get_eth_cats(),
     gender_cats=defs.get_gender_cats(),
-    verbose=False,
     no_id="pass",
     race_eth_combo="merge",
     merge_date_time=True,
@@ -35,8 +80,7 @@ def standardize(df, table_type, year,
         print(f"Standardization is not currently applied to {table_type} table.")
         return df, None
     
-    if verbose:
-        logging.getLogger("opd").debug(f"Original columns:\n{df.columns}")
+    logger.info(f"Original columns:\n{df.columns}")
     
     std = Standardizer(df, table_type, year, known_cols, source_name, keep_raw, agg_race_cat, race_cats, eth_cats, gender_cats, no_id)
 
@@ -60,15 +104,15 @@ def standardize(df, table_type, year,
     std.cleanup()
     std.sort_columns()
 
-    if verbose:
-        # Print column changes and then full maps
-        logging.getLogger("opd").debug(f"Identified columns:")
-        for map in std.data_maps:
-            logging.getLogger("opd").debug(f"\t{map.orig_column_name}: {map.new_column_name}")
+    # Print column changes and then full maps
+    logger.info(f"Identified columns:")
+    for map in std.data_maps:
+        logger.info(f"\t{map.orig_column_name}: {map.new_column_name}")
 
-        for map in std.data_maps:
-            logging.getLogger("opd").debug(map)
-            logging.getLogger("opd").debug("\n")
+    logger.info("\nData mappings:")
+    for map in std.data_maps:
+        logger.info(map)
+        logger.info("\n")
     
     return std.df, std.data_maps
 
@@ -89,9 +133,11 @@ def _count_values(col, known_delim=None):
     # Put nans in for cases where there could be a single value where there should be multiple
     max_num_vals[col.isnull()] = np.nan
     max_num_vals[col == ""] = np.nan
-    max_num_vals[col == "Marsy’s Law Exempt"] = np.nan
+    # In Florida, PD's use Marsy's law to try to shield themselves from releasing certain data
+    is_exempt = col.apply(lambda x: "Marsy" in x and "Exempt" in x if isinstance(x,str) else False)
+    max_num_vals[is_exempt] = np.nan
 
-    return max_num_vals, delim, max_count
+    return max_num_vals, delim, max_count, is_exempt
 
 
 def _find_gender_col_type_advanced(df, source_name, col_names, types, col_map, civilian_col_name, officer_col_name):
@@ -106,6 +152,8 @@ def _find_gender_col_type_advanced(df, source_name, col_names, types, col_map, c
             if not x.startswith("raw_"):
                 col_names.append(x)
                 types.append(y)
+            else:
+                logger.info(f"Removing raw channel {x} from potential gender column names")
     else:
         col_names, types = _set_type_based_on_order(col_names, types, df, source_name, officer_col_name, civilian_col_name)
 
@@ -126,11 +174,13 @@ def _find_race_col_type_advanced(df, source_name, col_names, types, col_map, civ
                 types.append(y)
     elif len(col_names)==2 and all([x in ['tcole_race_ethnicity', 'standardized_race'] for x in col_names]):
         # Austin data
+        logger.info(f"Austin data has 2 subject race columns {col_names}. tcole_race_ethnicity will be used to standardize.")
         col_names = ['tcole_race_ethnicity']
         types = types[0:1]
     elif len(col_names)==2 and source_name in ["Los Angeles"] and any([x.endswith("_cd") for x in col_names]):
         # The one with cd is a coded-version of the other
         keep = [k for k,x in enumerate(col_names) if not x.endswith("_cd")]
+        logger.info(f"Removing potential race columns {[x for x in col_names if x.endswith('_cd')]} and keeping {col_names[keep[0]:keep[0]+1]}")
         col_names = col_names[keep[0]:keep[0]+1]
         types = types[keep[0]:keep[0]+1]
     else:
@@ -215,7 +265,7 @@ class Standardizer:
         self.gender_cats = gender_cats
         self.no_id = no_id
 
-        self.col_map = {}
+        self.col_map = _ColMapDict()
         self.data_maps = []
 
         self.mult_civilian = _MultData()
@@ -270,16 +320,17 @@ class Standardizer:
 
 
     def _remove_excluded(self, match_cols, exclude_col_names, match_substr):
+        match_cols_out = match_cols.copy()
         for e in exclude_col_names:
             if type(e) == tuple:
-                match_cols = self._pattern_search(match_cols, [e], match_substr[0], run_all=True)
-            elif e in match_cols:
-                match_cols.remove(e)
+                match_cols_out = self._pattern_search(match_cols_out, [e], match_substr[0], run_all=True)
+            elif e in match_cols_out:
+                match_cols_out.remove(e)
 
-        return match_cols
+        return match_cols_out
 
 
-    def _find_col_matches(self, match_substr, 
+    def _find_col_matches(self, id, match_substr, 
         known_col_name=None, 
         only_table_types=None,
         exclude_table_types=[], 
@@ -293,17 +344,21 @@ class Standardizer:
         search_data=False,
         tables_to_exclude=[]):
 
+        logger.info(f"Searching for {id} column")
         if self.table_type in exclude_table_types or \
             (only_table_types != None and self.table_type not in only_table_types):
             if std_col_name in self.df.columns:
+                logger.info(f"\tSetting {id} column as {std_col_name}")
                 return [std_col_name]
             else:
+                logger.info(f"\tTable type {self.table_type} is excluded from tables to search for {id} column. Skipping...")
                 return []
 
         officer_terms = ["officer","deputy", "empl"]
         if known_col_name != None:
             if known_col_name not in self.df.columns:
                 raise ValueError(f"Known column {known_col_name} is not in the DataFrame")
+            logger.info(f"\tSetting {id} column as {known_col_name}")
             return [known_col_name]
         else:
             if isinstance(match_substr, str):
@@ -334,7 +389,7 @@ class Standardizer:
                     if not officer_found and not civilian_found:
                         match_cols.extend(new_matches)
                     elif officer_found:
-                        # Only keep columns with civilian terms
+                        # Only keep columns with subject terms
                         match_cols.extend([x for x in new_matches if any([y in x.lower() for y in civilian_terms])])
                     elif civilian_found:
                         # Only keep columns with officer terms
@@ -377,12 +432,19 @@ class Standardizer:
                 multi_check = sum([any([y.lower() in x.lower() for y in officer_terms]) for x in match_cols])!=1
 
             if always_validate or (multi_check and validator != None and len(match_cols) > 1):
+                logger.info(f"Testing data in column(s) {match_cols} as potential {id} column")
                 match_cols = validator(self.df, match_cols, *validate_args)
+                logger.info(f"Validated data in column(s) {match_cols} as potential {id} column")
 
             if search_data and len(match_cols)==0:
+                logger.info(f"Testing data in all columns as potential {id} column")
                 match_cols = validator(self.df, self.df.columns, *validate_args)
+                logger.info(f"Validated data in column(s) {match_cols} as potential {id} column")
                 
-            match_cols = self._remove_excluded(match_cols, exclude_col_names, match_substr)
+            match_cols_out = self._remove_excluded(match_cols, exclude_col_names, match_substr)
+            if match_cols_out!=match_cols:
+                logger.info(f"After applying rules {exclude_col_names}, potential {id} columns reduced from {match_cols} to {match_cols_out}")
+                match_cols = match_cols_out
 
             if len(match_cols)==0 and not_required_table_types != "ALL" and self.table_type not in not_required_table_types and \
                 (self.source_name, self.table_type) not in tables_to_exclude:
@@ -393,9 +455,9 @@ class Standardizer:
 
     def id_columns(self):
         # Find the date columns
-        match_cols = self._find_col_matches("date", known_col_name=self.known_cols[defs.columns.DATE], 
+        match_cols = self._find_col_matches("date", "date", known_col_name=self.known_cols[defs.columns.DATE], 
             std_col_name=defs.columns.DATE,
-            secondary_patterns = [("equals","date"),("contains","time")],
+            secondary_patterns = [("equals","date"),("contains","time"),("does not contain", "officer")],
             exclude_col_names=[("does not contain", ["as_of","last_reported","objectid"])], # Terms associated with dates not of interest
             # Calls for services often has multiple date/times with descriptive names for what it corresponds to.
             # Don't generalize by standardizing
@@ -411,8 +473,9 @@ class Standardizer:
 
         if len(match_cols) > 1:
             # Not relabeling multiple dates because they can have useful info in the column name
-            pass
+            logger.info(f"Multiple {defs.columns.DATE} columns found. None will be standardized.")
         elif len(match_cols) == 1:
+            logger.info(f"Column {match_cols[0]} identified as a {defs.columns.DATE} column")
             self.col_map[defs.columns.DATE] = match_cols[0]
         
         secondary_patterns = []
@@ -493,7 +556,7 @@ class Standardizer:
                 date_data = datetime_parser.parse_date_to_datetime(date_data)
                 validator_args.append(date_data)
             
-        match_cols = self._find_col_matches(["time", "tm", "toa"], 
+        match_cols = self._find_col_matches("time", ["time", "tm", "toa"], 
             std_col_name=defs.columns.TIME,
             secondary_patterns=secondary_patterns, 
             validator=datetime_parser.validate_time,
@@ -503,9 +566,10 @@ class Standardizer:
             always_validate=True)
 
         if len(match_cols) > 1:
-            raise NotImplementedError()
+            # Not relabeling multiple times because they can have useful info in the column name
+            logger.info(f"Multiple {defs.columns.TIME} columns found. None will be standardized.")
         elif len(match_cols) == 1:
-            # Found time column
+            logger.info(f"Column {match_cols[0]} identified as a {defs.columns.TIME} column")
             self.col_map[defs.columns.TIME] = match_cols[0]
             
         # Incidents tables shouldn't have demographics data
@@ -519,13 +583,13 @@ class Standardizer:
                         new_col = convert.convert(convert.convert_off_or_civ, col)
                         vals = new_col.unique()
 
-                        if not any([isinstance(x,str) for x in vals]) or (defs._roles.CIVILIAN not in vals and defs._roles.OFFICER not in vals):
+                        if not any([isinstance(x,str) for x in vals]) or (defs._roles.SUBJECT not in vals and defs._roles.OFFICER not in vals):
                             continue
 
-                        if defs._roles.CIVILIAN not in vals or defs._roles.OFFICER not in vals:
+                        if defs._roles.SUBJECT not in vals or defs._roles.OFFICER not in vals:
                             # California data, RAE = Race and Ethnicity
                             # Check if it's possible this does not indicate civilian vs officer
-                            race_match_cols = self._find_col_matches(["race", "descent","rae_full","citizen_demographics","officer_demographics","ethnicity"],
+                            race_match_cols = self._find_col_matches("race", ["race", "descent","rae_full","citizen_demographics","officer_demographics","ethnicity"],
                                 validator=_race_validator, validate_args=[self.source_name])
 
                             off_type = False
@@ -548,89 +612,110 @@ class Standardizer:
 
                 return match_cols
 
-            match_cols = self._find_col_matches(["Civilian_Officer","ROLE"], 
+            match_cols = self._find_col_matches("Is Person Officer or Subject", ["Civilian_Officer","ROLE"], 
                 only_table_types = [defs.TableType.USE_OF_FORCE, defs.TableType.USE_OF_FORCE_CIVILIANS_OFFICERS, defs.TableType.SHOOTINGS],
                 exclude_col_names=[("not equal","SubjectRole")],  # Subject role would be role of subject not whether person is subject or officer
                 validator=role_validator,
                 always_validate=True)
             if len(match_cols) > 1:
-                raise NotImplementedError()
+                raise NotImplementedError(f"Multiple columns {match_cols} found for {defs.columns.SUBJECT_OR_OFFICER} column")
             elif len(match_cols) == 1:
-                self.col_map[defs.columns.CIVILIAN_OR_OFFICER] = match_cols[0]
+                logger.info(f"Column {match_cols[0]} identified as a {defs.columns.SUBJECT_OR_OFFICER} column")
+                self.col_map[defs.columns.SUBJECT_OR_OFFICER] = match_cols[0]
 
-            match_cols = self._find_col_matches(["race", "citizen_demographics","officer_demographics","ethnicity","re_grp"],
+            match_cols = self._find_col_matches("race", ["race", "citizen_demographics","officer_demographics","ethnicity","re_grp"],
                 validator=_race_validator, 
                 validate_args=[self.source_name],
+                exclude_table_types=[defs.TableType.INCIDENTS],  # Standardization will be make it unclear if column is for suspect or victim
                 search_data=True)  
+            
+            logger.info(f"Potential race columns found: {match_cols}")
+
             # TODO: Remove failures when column are not found
             race_cols, race_types = self._id_demographic_column(match_cols,
-                defs.columns.RACE_CIVILIAN, defs.columns.RACE_OFFICER,
-                defs.columns.RACE_OFF_AND_CIV,
+                defs.columns.RACE_SUBJECT, defs.columns.RACE_OFFICER,
+                defs.columns.RACE_OFFICER_SUBJECT,
                 tables_to_exclude=RACE_TABLES_TO_EXCLUDE,
-                specific_cases=[_case("California", defs.TableType.USE_OF_FORCE_CIVILIANS_OFFICERS, "Race_Ethnic_Group", defs.columns.RACE_OFF_AND_CIV),
-                                _case("Minneapolis", defs.TableType.STOPS, "race", defs.columns.RACE_CIVILIAN),
-                                _case("Austin", defs.TableType.USE_OF_FORCE_CIVILIANS, "subject_race_ethnicity", defs.columns.RACE_CIVILIAN),
-                                _case("Fairfax County", defs.TableType.ARRESTS, ["ArresteeRa","OfficerRac"], [defs.columns.RACE_CIVILIAN, defs.columns.RACE_OFFICER], year=range(2016,2021)),
-                                _case("Fairfax County", defs.TableType.TRAFFIC_CITATIONS, ["Person_Rac","OfficerRac"], [defs.columns.RACE_CIVILIAN, defs.columns.RACE_OFFICER]),
-                                _case("Lansing", defs.TableType.SHOOTINGS, ["Race_Sex","Officer"], [defs.columns.RACE_CIVILIAN, defs.columns.RACE_OFFICER]),
+                specific_cases=[_case("California", defs.TableType.USE_OF_FORCE_CIVILIANS_OFFICERS, "Race_Ethnic_Group", defs.columns.RACE_OFFICER_SUBJECT),
+                                _case("Minneapolis", defs.TableType.STOPS, "race", defs.columns.RACE_SUBJECT),
+                                _case("Austin", defs.TableType.USE_OF_FORCE_CIVILIANS, "subject_race_ethnicity", defs.columns.RACE_SUBJECT),
+                                _case("Fairfax County", defs.TableType.ARRESTS, ["ArresteeRa","OfficerRac"], [defs.columns.RACE_SUBJECT, defs.columns.RACE_OFFICER], year=range(2016,2021)),
+                                _case("Fairfax County", defs.TableType.TRAFFIC_CITATIONS, ["Person_Rac","OfficerRac"], [defs.columns.RACE_SUBJECT, defs.columns.RACE_OFFICER]),
+                                _case("Lansing", defs.TableType.SHOOTINGS, ["Race_Sex","Officer"], [defs.columns.RACE_SUBJECT, defs.columns.RACE_OFFICER]),
                                 _case("Dallas", defs.TableType.SHOOTINGS, "officer_s", defs.columns.RACE_OFFICER)
                     ],
                 adv_type_match=_find_race_col_type_advanced)
 
             # enthnicity is to deal with typo in Ferndale data. Consider using rapidfuzz in future for fuzzy matching
-            match_cols = self._find_col_matches(["ethnicity", "ethnic", "enthnicity"], exclude_col_names=race_cols,
-                                                exclude_table_types=[defs.TableType.COMPLAINTS_ALLEGATIONS],
+            match_cols = self._find_col_matches("ethnicity", ["ethnicity", "ethnic", "enthnicity"], exclude_col_names=race_cols,
+                                                exclude_table_types=[defs.TableType.COMPLAINTS_ALLEGATIONS,defs.TableType.INCIDENTS],
                                                 validator=_eth_validator,
                                                 always_validate=True)
+            logger.info(f"Potential ethnicity columns found: {match_cols}")
+
             self._id_ethnicity_column(race_types, match_cols, race_cols,
                 specific_cases=[
-                    _case("Fairfax County", defs.TableType.ARRESTS, "ArresteeEt", defs.columns.ETHNICITY_CIVILIAN)
+                    _case("Fairfax County", defs.TableType.ARRESTS, "ArresteeEt", defs.columns.ETHNICITY_SUBJECT)
                 ])
 
             # Do not want the result to contain the word agency
             match_substr=["age","citizen_demographics","officer_demographics"]
-            match_cols = self._find_col_matches(match_substr, 
+            match_cols = self._find_col_matches("age", match_substr, 
                 exclude_col_names=[("does not contain",["group","range","at_hire"])],
                 validator=_age_validator,
                 validate_args=[match_substr],
+                exclude_table_types=[defs.TableType.INCIDENTS],  # Standardization will be make it unclear if column is for suspect or victim
                 always_validate=True)
+            
+            logger.info(f"Potential age columns found: {match_cols}")
+
             self._id_demographic_column(match_cols, 
-                defs.columns.AGE_CIVILIAN, defs.columns.AGE_OFFICER,
-                defs.columns.AGE_OFF_AND_CIV,
+                defs.columns.AGE_SUBJECT, defs.columns.AGE_OFFICER,
+                defs.columns.AGE_OFFICER_SUBJECT,
                 required=False,
                 specific_cases=[_case("Norman", defs.TableType.COMPLAINTS, "Age", defs.columns.AGE_OFFICER, year=[2016,2017,2018]),
                                 _case("Norman", defs.TableType.USE_OF_FORCE, "Age", defs.columns.AGE_OFFICER, year=[2016,2017]),
-                                _case("Fairfax County", defs.TableType.ARRESTS, "ArresteeAg", defs.columns.AGE_CIVILIAN)]
+                                _case("Fairfax County", defs.TableType.ARRESTS, "ArresteeAg", defs.columns.AGE_SUBJECT)]
                 )
 
-            match_cols = self._find_col_matches(["agerange","age_range","age range","agegroup","age_group"])
+            match_cols = self._find_col_matches("age range", ["agerange","age_range","age range","agegroup","age_group"],
+                                                exclude_table_types=[defs.TableType.INCIDENTS])  # Standardization will be make it unclear if column is for suspect or victim)
+            
+            logger.info(f"Potential age group columns found: {match_cols}")
+
             self._id_demographic_column(match_cols,
-                defs.columns.AGE_RANGE_CIVILIAN, defs.columns.AGE_RANGE_OFFICER,
-                defs.columns.AGE_RANGE_OFF_AND_CIV,
+                defs.columns.AGE_RANGE_SUBJECT, defs.columns.AGE_RANGE_OFFICER,
+                defs.columns.AGE_RANGE_OFFICER_SUBJECT,
                 required=False)
             
-            match_cols = self._find_col_matches(["gender", "gend", "sex","citizen_demographics","officer_demographics"],
-                validator=_gender_validator, validate_args=[self.source_name])        
+            match_cols = self._find_col_matches("gender", ["gender", "gend", "sex","citizen_demographics","officer_demographics"],
+                validator=_gender_validator, validate_args=[self.source_name],
+                exclude_table_types=[defs.TableType.INCIDENTS])  # Standardization will be make it unclear if column is for suspect or victim) 
+
+            logger.info(f"Potential gender columns found: {match_cols}")
+
             self._id_demographic_column(match_cols,
-                defs.columns.GENDER_CIVILIAN, defs.columns.GENDER_OFFICER, 
-                defs.columns.GENDER_OFF_AND_CIV,
+                defs.columns.GENDER_SUBJECT, defs.columns.GENDER_OFFICER, 
+                defs.columns.GENDER_OFFICER_SUBJECT,
                 required=False,
-                specific_cases=[_case("California", defs.TableType.STOPS, "G_FULL", defs.columns.GENDER_CIVILIAN),
-                                _case("Lansing", defs.TableType.SHOOTINGS, ["Race_Sex","Officer"], [defs.columns.GENDER_CIVILIAN, defs.columns.GENDER_OFFICER]),
-                                _case("Fairfax County", defs.TableType.ARRESTS, ["ArresteeSe","OfficerSex"], [defs.columns.GENDER_CIVILIAN, defs.columns.GENDER_OFFICER]),
+                specific_cases=[_case("California", defs.TableType.STOPS, "G_FULL", defs.columns.GENDER_SUBJECT),
+                                _case("Lansing", defs.TableType.SHOOTINGS, ["Race_Sex","Officer"], [defs.columns.GENDER_SUBJECT, defs.columns.GENDER_OFFICER]),
+                                _case("Fairfax County", defs.TableType.ARRESTS, ["ArresteeSe","OfficerSex"], [defs.columns.GENDER_SUBJECT, defs.columns.GENDER_OFFICER]),
                                 _case("Dallas", defs.TableType.SHOOTINGS, "officer_s", defs.columns.GENDER_OFFICER)
                     ],
                 adv_type_match=_find_gender_col_type_advanced)
 
-        match_cols = self._find_col_matches([], known_col_name=self.known_cols[defs.columns.AGENCY])
+        match_cols = self._find_col_matches("agency", [], known_col_name=self.known_cols[defs.columns.AGENCY])
         if len(match_cols) > 1:
             raise NotImplementedError()
         elif len(match_cols) == 1:
+            logger.info(f"Column {match_cols[0]} identified as a {defs.columns.AGENCY} column")
             self.col_map[defs.columns.AGENCY] = match_cols[0]
 
         for key, value in self.col_map.items():
             if key == value:
-                self._cleanup_old_column(value, keep_raw=True)
+                self.col_map.update_current(key, self._cleanup_old_column(value, keep_raw=True))
+                logger.info(f"Column {key} matches output standardized column name so changed to {self.col_map[key]}")
 
     
     def _id_ethnicity_column(self, race_types, eth_cols, race_cols, specific_cases=[]):
@@ -645,12 +730,13 @@ class Standardizer:
 
         eth_types = []
         validation_types = []
-        if defs.columns.CIVILIAN_OR_OFFICER in self.col_map:
+        if defs.columns.SUBJECT_OR_OFFICER in self.col_map:
             if len(eth_cols) > 1:
                 raise NotImplementedError()
 
-            eth_types.append(defs.columns.ETHNICITY_OFF_AND_CIV)
-            validation_types.append(defs.columns.RACE_OFF_AND_CIV)
+            eth_types.append(defs.columns.ETHNICITY_OFFICER_SUBJECT)
+            validation_types.append(defs.columns.RACE_OFFICER_SUBJECT)
+            logger.info(f"Column {eth_cols[0]} associated with {eth_types[0]}")
         else:
             is_officer_table = self.table_type == defs.TableType.EMPLOYEE.value or \
                     ("- OFFICERS" in self.table_type and "CIVILIANS" not in self.table_type)
@@ -661,13 +747,18 @@ class Standardizer:
                     eth_types.append(defs.columns.ETHNICITY_OFFICER)
                     validation_types.append(defs.columns.RACE_OFFICER)
                 else:
-                    eth_types.append(defs.columns.ETHNICITY_CIVILIAN)
-                    validation_types.append(defs.columns.RACE_CIVILIAN)
+                    eth_types.append(defs.columns.ETHNICITY_SUBJECT)
+                    validation_types.append(defs.columns.RACE_SUBJECT)
 
-        if len(set(eth_types)) != len(eth_types) and all([x==defs.columns.ETHNICITY_CIVILIAN for x in eth_types]):
+                logger.info(f"Column {eth_cols[k]} associated with {eth_types[k]}")
+
+        if len(set(eth_types)) != len(eth_types) and all([x==defs.columns.ETHNICITY_SUBJECT for x in eth_types]):
             # See if we can split the column names and find PO for police officer
-            eth_types = [defs.columns.ETHNICITY_OFFICER if "PO" in re.split(r"[\W^_]+", x.upper()) else defs.columns.ETHNICITY_CIVILIAN for x in eth_cols]
-            validation_types = [defs.columns.RACE_OFFICER if "PO" in re.split(r"[\W^_]+", x.upper()) else defs.columns.RACE_CIVILIAN for x in eth_cols]
+            eth_types = [defs.columns.ETHNICITY_OFFICER if "PO" in re.split(r"[\W^_]+", x.upper()) else defs.columns.ETHNICITY_SUBJECT for x in eth_cols]
+            validation_types = [defs.columns.RACE_OFFICER if "PO" in re.split(r"[\W^_]+", x.upper()) else defs.columns.RACE_SUBJECT for x in eth_cols]
+            if any([x==defs.columns.ETHNICITY_OFFICER for x in eth_types]):
+                tmp = [x for x,y in zip(eth_cols, eth_types) if y==defs.columns.ETHNICITY_OFFICER]
+                logger.info(f"Column(s) {tmp} updated to be associated with {defs.columns.ETHNICITY_OFFICER}")
 
         if len(set(eth_types)) != len(eth_types):
             if (len(eth_cols)==2 and self.table_type==defs.TableType.INCIDENTS and \
@@ -689,7 +780,7 @@ class Standardizer:
                 # Check if detected ethnicity column might actually be a race/ethnicity column
                 try:
                     mult_data = _MultData()
-                    num_race, mult_data.delim_race, max_count_race = _count_values(self.df[eth_cols[k]])
+                    num_race, mult_data.delim_race, max_count_race, _ = _count_values(self.df[eth_cols[k]])
                     if max_count_race>0:
                         potential_mults = self.df[eth_cols[k]][num_race>1]
                         # races = ["WHITE","BLACK","ASIAN"]  # Leaving out HISPANIC as items could be labeled race/ethnicity
@@ -715,7 +806,7 @@ class Standardizer:
                 k+=1
 
         for k in range(len(eth_cols)):
-            if eth_types[k] == defs.columns.ETHNICITY_CIVILIAN and \
+            if eth_types[k] == defs.columns.ETHNICITY_SUBJECT and \
                 "subject_race" in race_cols and eth_cols[k].startswith("raw"):
                 # This is a raw column from Stanford data that has already been standardized into subject_race
                 continue
@@ -752,7 +843,7 @@ class Standardizer:
             else:
                 raise NotImplementedError()
 
-        if defs.columns.CIVILIAN_OR_OFFICER in self.col_map:
+        if defs.columns.SUBJECT_OR_OFFICER in self.col_map:
             if len(col_names) > 1:
                 raise NotImplementedError()
 
@@ -775,6 +866,8 @@ class Standardizer:
                 else:
                     types.append(civilian_col_name)
 
+                logger.info(f"Column {col_names[k]} associated with {types[k]}")
+
             if len(set(types)) != len(types):
                 if is_officer_table:
                     # Check if one of the columns is clearly an officer column
@@ -782,18 +875,23 @@ class Standardizer:
                     for k in range(len(col_names)):
                         if "off" in col_names[k].lower() or "deputy" in col_names[k].lower() or \
                             "employee" in col_names[k].lower() or "ofcr" in col_names[k].lower():
+                            logger.info(f"Column {col_names[k]} contains information suggesting it describes officer demographics")
                             is_def_off.append(True)
                         else:
                             is_def_off.append(False)
                     if any(is_def_off):
                         for k in reversed(range(len(col_names))):
                             if types[k]==officer_col_name and not is_def_off[k]:
+                                logger.info(f"Removing {col_names[k]} from columns that will be standardized")
                                 col_names.pop(k)
                                 types.pop(k)
 
                 if len(set(types)) != len(types) and all([x==civilian_col_name for x in types]):
                     # See if we can split the column names and find PO for police officer
                     types = [officer_col_name if "PO" in re.split(r"[\W^_]+", x.upper()) else civilian_col_name for x in col_names]
+                    if any([x==officer_col_name for x in types]):
+                        tmp = [x for x,y in zip(col_names, types) if y==officer_col_name]
+                        logger.info(f"Column(s) {tmp} updated to be associated with {officer_col_name}")
 
                 if len(set(types)) != len(types) and all([x==types[0] for x in types]):
                     # Check if all columns are the same except an incrementing number indicating same data for multiple people
@@ -840,11 +938,13 @@ class Standardizer:
 
                             return persons
 
+                        logger.info(f"Combining multiple subject demographics columns, {col_names_new}, into a new column")
                         self.df[types[0]] = self.df[col_names_new].apply(combine_col,axis=1)
                         for col in col_names:
                             self._cleanup_old_column(col)
                         # Force rename of column to not conflict with final standardized column
                         new_name = self._cleanup_old_column(types[0], keep_raw=True)
+                        logger.info(f"New column name is {new_name}")
                         self.data_maps.append(DataMapping(orig_column_name=col_names, new_column_name=new_name))
                         col_names = [new_name]
                         types = types[0:1]
@@ -868,6 +968,7 @@ class Standardizer:
                         raise NotImplementedError()
 
             for k in range(len(col_names)):
+                logger.info(f"Column {col_names[k]} will be mapped to {types[k]}")
                 self.col_map[types[k]] = col_names[k]
 
         return col_names, types
@@ -877,11 +978,13 @@ class Standardizer:
         if keep_raw:
             if not col_name.startswith(_OLD_COLUMN_INDICATOR):
                 new_name = _OLD_COLUMN_INDICATOR+"_"+col_name
+                logger.info(f"Renaming raw column {col_name} to {new_name}")
                 self.df.rename(columns={col_name : new_name}, inplace=True)
             else:
                 new_name = col_name
             return new_name
         else:
+            logger.info(f"Removing raw column {col_name}")
             self.df.drop(col_name, axis=1, inplace=True)
             return None
         
@@ -907,7 +1010,7 @@ class Standardizer:
             self.df[defs.columns.DATE] = s_date
             # self.df = pd.concat([self.df, s_date], axis=1)
 
-            self.data_maps.append(DataMapping(orig_column_name=self.col_map[defs.columns.DATE], new_column_name=defs.columns.DATE,
+            self.data_maps.append(DataMapping(orig_column_name=self.col_map.get_original(defs.columns.DATE), new_column_name=defs.columns.DATE,
                                               orig_column=self.df[self.col_map[defs.columns.DATE]]))
 
 
@@ -915,7 +1018,7 @@ class Standardizer:
         if defs.columns.TIME in self.col_map:
             self.df[defs.columns.TIME] = datetime_parser.parse_time(self.df[self.col_map[defs.columns.TIME]])
 
-            self.data_maps.append(DataMapping(orig_column_name=self.col_map[defs.columns.TIME], new_column_name=defs.columns.TIME,
+            self.data_maps.append(DataMapping(orig_column_name=self.col_map.get_original(defs.columns.TIME), new_column_name=defs.columns.TIME,
                                               orig_column=self.df[self.col_map[defs.columns.TIME]]))
             
     
@@ -943,21 +1046,21 @@ class Standardizer:
 
 
     def standardize_gender(self):
-        for col,mult in zip([defs.columns.GENDER_CIVILIAN, defs.columns.GENDER_OFFICER, defs.columns.GENDER_OFF_AND_CIV], 
+        for col,mult in zip([defs.columns.GENDER_SUBJECT, defs.columns.GENDER_OFFICER, defs.columns.GENDER_OFFICER_SUBJECT], 
                             [self.mult_civilian, self.mult_officer, self.mult_both]):
             if col in self.col_map:
                 std_map = {}
                 self.df[col] = convert.convert(convert._create_gender_lut, self.df[self.col_map[col]], self.source_name, self.gender_cats, std_map=std_map, 
                                                     mult_type=mult.type, delim=mult.delim_gender, no_id=self.no_id, item_num=mult.item_gender)
 
-                self.data_maps.append(DataMapping(orig_column_name=self.col_map[col], new_column_name=col, data_maps=std_map,
+                self.data_maps.append(DataMapping(orig_column_name=self.col_map.get_original(col), new_column_name=col, data_maps=std_map,
                                                 orig_column=self.df[self.col_map[col]]))
 
 
     def standardize_agency(self):
         if defs.columns.AGENCY in self.col_map:
             self.df[defs.columns.AGENCY] = self.df[self.col_map[defs.columns.AGENCY]]
-            self.data_maps.append(DataMapping(orig_column_name=self.col_map[defs.columns.AGENCY], new_column_name=defs.columns.AGENCY,
+            self.data_maps.append(DataMapping(orig_column_name=self.col_map.get_original(defs.columns.AGENCY), new_column_name=defs.columns.AGENCY,
                                     orig_column=self.df[self.col_map[defs.columns.AGENCY]]))
 
     def cleanup(self):
@@ -975,19 +1078,19 @@ class Standardizer:
 
     
     def standardize_off_or_civ(self):
-        if defs.columns.CIVILIAN_OR_OFFICER in self.col_map:
-            col_name = defs.columns.CIVILIAN_OR_OFFICER
+        if defs.columns.SUBJECT_OR_OFFICER in self.col_map:
+            col_name = defs.columns.SUBJECT_OR_OFFICER
             std_map = {}
             self.df[col_name] = convert.convert(convert.convert_off_or_civ, self.df[self.col_map[col_name]], self.source_name, 
                                                         std_map=std_map, no_id=self.no_id)
 
-            self.data_maps.append(DataMapping(orig_column_name=self.col_map[col_name], new_column_name=col_name,
+            self.data_maps.append(DataMapping(orig_column_name=self.col_map.get_original(col_name), new_column_name=col_name,
                                               data_maps=std_map,
                                               orig_column=self.df[self.col_map[col_name]]))
 
 
     def standardize_race(self):        
-        for col,mult in zip([defs.columns.RACE_CIVILIAN, defs.columns.RACE_OFFICER, defs.columns.RACE_OFF_AND_CIV], 
+        for col,mult in zip([defs.columns.RACE_SUBJECT, defs.columns.RACE_OFFICER, defs.columns.RACE_OFFICER_SUBJECT], 
                             [self.mult_civilian, self.mult_officer, self.mult_both]):
             if col in self.col_map:
                 race_column = self.col_map[col]
@@ -998,14 +1101,14 @@ class Standardizer:
                                                         no_id=self.no_id, item_num=mult.item_race)
 
                 self.data_maps.append(
-                    DataMapping(orig_column_name=race_column, new_column_name=col,
+                    DataMapping(orig_column_name=self.col_map.get_original(col), new_column_name=col,
                         data_maps=race_map_dict, orig_column=self.df[race_column])
                 )
 
     
     def standardize_ethnicity(self):
         
-        for col,mult in zip([defs.columns.ETHNICITY_CIVILIAN, defs.columns.ETHNICITY_OFFICER, defs.columns.ETHNICITY_OFF_AND_CIV], 
+        for col,mult in zip([defs.columns.ETHNICITY_SUBJECT, defs.columns.ETHNICITY_OFFICER, defs.columns.ETHNICITY_OFFICER_SUBJECT], 
                             [ self.mult_civilian,  self.mult_officer,  self.mult_both]):
             if col in self.col_map:
                 eth_column = self.col_map[col]
@@ -1017,15 +1120,15 @@ class Standardizer:
                                                 no_id=self.no_id, item_num=mult.item_eth)
 
                 self.data_maps.append(
-                    DataMapping(orig_column_name=eth_column, new_column_name=col,
+                    DataMapping(orig_column_name=self.col_map.get_original(col), new_column_name=col,
                         data_maps=eth_map_dict, orig_column=self.df[eth_column])
                 )
 
     
     def combine_race_ethnicity(self, combo_type):
-        for eth_col,race_col_orig, race_col in zip([defs.columns.ETHNICITY_CIVILIAN, defs.columns.ETHNICITY_OFFICER, defs.columns.ETHNICITY_OFF_AND_CIV], 
-                        [defs.columns.RACE_ONLY_CIVILIAN, defs.columns.RACE_ONLY_OFFICER, defs.columns.RACE_ONLY_OFF_AND_CIV], 
-                        [defs.columns.RACE_CIVILIAN, defs.columns.RACE_OFFICER, defs.columns.RACE_OFF_AND_CIV]):
+        for eth_col,race_col_orig, race_col in zip([defs.columns.ETHNICITY_SUBJECT, defs.columns.ETHNICITY_OFFICER, defs.columns.ETHNICITY_OFFICER_SUBJECT], 
+                        [defs.columns.RACE_ONLY_SUBJECT, defs.columns.RACE_ONLY_OFFICER, defs.columns.RACE_ONLY_OFFICER_SUBJECT], 
+                        [defs.columns.RACE_SUBJECT, defs.columns.RACE_OFFICER, defs.columns.RACE_OFFICER_SUBJECT]):
             self._combine_race_ethnicity(race_col, eth_col, race_col_orig, combo_type)
 
 
@@ -1075,15 +1178,15 @@ class Standardizer:
         
     
     def check_for_multiple(self):        
-        self._check_for_multiple(self.mult_civilian, defs.columns.RACE_CIVILIAN, defs.columns.AGE_CIVILIAN, 
-                                 defs.columns.GENDER_CIVILIAN, defs.columns.ETHNICITY_CIVILIAN,
-                                 defs.columns.AGE_RANGE_CIVILIAN)
+        self._check_for_multiple(self.mult_civilian, defs.columns.RACE_SUBJECT, defs.columns.AGE_SUBJECT, 
+                                 defs.columns.GENDER_SUBJECT, defs.columns.ETHNICITY_SUBJECT,
+                                 defs.columns.AGE_RANGE_SUBJECT)
         self._check_for_multiple(self.mult_officer, defs.columns.RACE_OFFICER, defs.columns.AGE_OFFICER, 
                                  defs.columns.GENDER_OFFICER, defs.columns.ETHNICITY_OFFICER,
                                  defs.columns.AGE_RANGE_OFFICER)
-        self._check_for_multiple(self.mult_both, defs.columns.RACE_OFF_AND_CIV, defs.columns.AGE_OFF_AND_CIV, 
-                                 defs.columns.GENDER_OFF_AND_CIV, defs.columns.ETHNICITY_OFF_AND_CIV,
-                                 defs.columns.AGE_RANGE_OFF_AND_CIV)
+        self._check_for_multiple(self.mult_both, defs.columns.RACE_OFFICER_SUBJECT, defs.columns.AGE_OFFICER_SUBJECT, 
+                                 defs.columns.GENDER_OFFICER_SUBJECT, defs.columns.ETHNICITY_OFFICER_SUBJECT,
+                                 defs.columns.AGE_RANGE_OFFICER_SUBJECT)
     
 
     def _check_for_multiple(self, mult_data, race_col, age_col, gender_col, eth_col, age_range_col):
@@ -1101,6 +1204,8 @@ class Standardizer:
 
         if any_cols and any_dict:
             if all_dict:
+                logger.info("Demographics columns are all dictionaries where each entry corresponds to a separate person.")
+                logger.info("Setting flag to handle this case.")
                 mult_data.type = MultType.DICT
 
                 # Ensure that all dictionaries have the same length. If not, add empty vals
@@ -1122,6 +1227,7 @@ class Standardizer:
                 raise NotImplementedError("One or more but not all demographics columns are dictionaries")
             
         if self.source_name=="Dallas" and self.table_type==defs.TableType.SHOOTINGS and "officer_s" in self.df.columns:
+            logger.info("officer_s column has race and gender in it and will be parsed and split into standardized officer race and gender columns")
             mult_data.type = MultType.WITH_NAME
             mult_data.item_race = 0
             mult_data.item_gender = 1
@@ -1196,31 +1302,47 @@ class Standardizer:
                 max_count_eth = 0
                 max_count_age = 0
                 max_count_gender = 0
+                has_exempt = False
                 delim = None
                 if age_col in self.col_map:
                     all_bad_age = self.df[self.col_map[age_col]].apply(lambda x: pd.isnull(x) or (isinstance(x,str) and "exempt" in x.lower())).all()
                     if not all_bad_age:  # Not all null or exempt
                         # Starting with age because it is least likely to have complicated values that could trick
                         # the delimiter search
-                        num_age, mult_data.delim_age, max_count_age = _count_values(self.df[self.col_map[age_col]])
-                        if max_count_age==0:
+                        num_age, mult_data.delim_age, max_count_age, is_exempt_age = _count_values(self.df[self.col_map[age_col]])
+                        if is_exempt_age.any():
+                            # It's possible that one of the columns has multiple values but this column has exemptions in the same place
+                            has_exempt = True
+                        elif max_count_age==0:
                             return
                         delim = mult_data.delim_age
 
                 if race_col in self.col_map:
-                    num_race, mult_data.delim_race, max_count_race = _count_values(self.df[self.col_map[race_col]], known_delim=delim)
+                    num_race, mult_data.delim_race, max_count_race, is_exempt_race = _count_values(self.df[self.col_map[race_col]], known_delim=delim)
                     has_any = max_count_race!=0
-                    if not has_any and age_col in self.col_map and not all_bad_age and num_race[num_age>1].notnull().any():
-                        return
-                    if has_any and age_col in self.col_map and not all_bad_age and max_count_age>0:
-                        idx = num_race.notnull() & num_age.notnull()
-                        # Check commonality between race and age values with multiple values
-                        if (num_race[idx]!=num_age[idx]).mean()>0.1:
+                    if has_any:
+                        if age_col in self.col_map and not all_bad_age and max_count_age>0:
+                            idx = num_race.notnull() & num_age.notnull()
+                            # Check commonality between race and age values with multiple values
+                            if (num_race[idx]!=num_age[idx]).mean()>0.1:
+                                return                          
+                    else:
+                        if age_col in self.col_map:
+                            if has_exempt and is_exempt_age.equals(is_exempt_race):
+                                # It's possible that one of the columns has multiple values but this column has exemptions in the same place
+                                pass
+                            elif not all_bad_age and num_race[num_age>1].notnull().any():
+                                return
+                        elif is_exempt_race.any():
+                            # It's possible that one of the columns has multiple values but this column has exemptions in the same place
+                            has_exempt = True
+                        else:
                             return
+
                     delim = mult_data.delim_race
 
                 if eth_col in self.col_map:
-                    num_eth, mult_data.delim_eth, max_count_eth = _count_values(self.df[self.col_map[eth_col]], known_delim=delim)
+                    num_eth, mult_data.delim_eth, max_count_eth, is_exempt_eth = _count_values(self.df[self.col_map[eth_col]], known_delim=delim)
                     has_any = max_count_eth!=0
                     if not has_any and num_eth[num_race>1].notnull().any():
                         return
@@ -1232,7 +1354,7 @@ class Standardizer:
                     delim = mult_data.delim_eth
 
                 if gender_col in self.col_map:
-                    num_gender, mult_data.delim_gender, max_count_gender = _count_values(self.df[self.col_map[gender_col]])
+                    num_gender, mult_data.delim_gender, max_count_gender, _ = _count_values(self.df[self.col_map[gender_col]])
                     if max_count_gender==0:
                         return
                     if race_col in self.col_map and max_count_race>0:
@@ -1257,6 +1379,12 @@ class Standardizer:
                             return
                     
                 if int(max_count_race>0) + int(max_count_age>0) + int(max_count_gender>0) + int(max_count_eth>0) > 1:
+                    logger.info("Demographics columns identified as contained delimited demographics data for multiple individuals. "+
+                                "Resulting standardized demographics columns will be dictionaries.")
+                    mult_data.type = MultType.DELIMITED
+                elif int(max_count_race>0) + int(max_count_age>0) + int(max_count_gender>0) + int(max_count_eth>0) == 1 and has_exempt:
+                    logger.info("Demographics columns identified as contained delimited demographics data for multiple individuals with Florida Marsy's Law Exemptions. "+
+                                "Resulting standardized demographics columns will be dictionaries.")
                     mult_data.type = MultType.DELIMITED
         elif race_col in self.col_map:
             # Look for count followed by race            
@@ -1264,7 +1392,7 @@ class Standardizer:
             if self.df[self.col_map[race_col]].apply(lambda x: race_count_re.search(x) is not None if pd.notnull(x) else False).any():
                 mult_data.type = MultType.COUNTS
                 return
-            num_race, mult_data.delim_race, max_count_race = _count_values(self.df[self.col_map[race_col]])
+            num_race, mult_data.delim_race, max_count_race, _ = _count_values(self.df[self.col_map[race_col]])
             if max_count_race>0:
                 potential_mults = self.df[self.col_map[race_col]][num_race>1]
                 # races = ["WHITE","BLACK","ASIAN"]  # Leaving out HISPANIC as items could be labeled race/ethnicity
@@ -1281,8 +1409,9 @@ class Standardizer:
 
 
     def standardize_age_range(self):
-        for col,mult in zip([defs.columns.AGE_RANGE_CIVILIAN, defs.columns.AGE_RANGE_OFFICER, defs.columns.AGE_RANGE_OFF_AND_CIV],
+        for col_prop,mult in zip(["AGE_RANGE_SUBJECT", "AGE_RANGE_OFFICER", "AGE_RANGE_OFFICER_SUBJECT"],
                             [self.mult_civilian, self.mult_officer, self.mult_both]):
+            col = getattr(defs.columns, col_prop)
             if col in self.col_map:
                 map = {}
                 self.df[col] = convert.convert(convert._create_age_range_lut, self.df[self.col_map[col]], source_name=self.source_name,
@@ -1297,9 +1426,10 @@ class Standardizer:
                         new_col = pd.to_numeric(self.df[col], errors="raise", downcast="integer").astype("Int64")
                         if new_col.notnull().mean() > 0.5:
                             # This appears to be an age column
-                            new_col_name = col.replace("_RANGE","")
-                            if hasattr(defs.columns, new_col_name):
-                                self.col_map[new_col_name] = self.col_map.pop(col)
+                            new_col_prop = col_prop.replace("_RANGE","")
+                            if hasattr(defs.columns, new_col_prop):
+                                new_col_name = getattr(defs.columns, new_col_prop)
+                                self.col_map.replace(col, new_col_name)
                                 self.df.rename(columns={col:new_col_name}, inplace=True)
                                 col = new_col_name
                                 map = None
@@ -1308,19 +1438,20 @@ class Standardizer:
                     except:
                         pass
 
-                self.data_maps.append(DataMapping(orig_column_name=self.col_map[col], new_column_name=col,
+                self.data_maps.append(DataMapping(orig_column_name=self.col_map.get_original(col), new_column_name=col,
                         orig_column=self.df[self.col_map[col]],
                         data_maps=map))
 
 
     def standardize_age(self):
-        for col, mult in zip([defs.columns.AGE_CIVILIAN, defs.columns.AGE_OFFICER, defs.columns.AGE_OFF_AND_CIV],
+        for col_prop, mult in zip(["AGE_SUBJECT", "AGE_OFFICER", "AGE_OFFICER_SUBJECT"],
                             [self.mult_civilian, self.mult_officer, self.mult_both]):
-            if col in self.col_map:
-                self._standardize_age(col, mult)
+            if getattr(defs.columns,col_prop) in self.col_map:
+                self._standardize_age(col_prop, mult)
         
 
-    def _standardize_age(self, col_name, mult_info):
+    def _standardize_age(self, col_prop, mult_info):
+        col_name = getattr(defs.columns,col_prop)
         max_age = 120  # Somewhat conservative max age of a human
         val_counts = self.df[self.col_map[col_name]].value_counts()
         vals = [x for x in val_counts.index if type(x)==str]
@@ -1394,9 +1525,9 @@ class Standardizer:
             if "AGE" in col_name and (num_ranges / len(self.df)>0.6 or \
                 (num_ranges/len(self.df) > 0.05 and num_ranges+num_na==len(self.df))):
                 # This appears to be an age range column not an age column
-                new_col_name = col_name.replace("AGE","AGE_RANGE")
-                if hasattr(defs.columns, new_col_name):
-                    self.col_map[new_col_name] = self.col_map.pop(col_name)
+                new_col_prop = col_prop.replace("AGE","AGE_RANGE")
+                if hasattr(defs.columns, new_col_prop):
+                    self.col_map.replace(col_name, getattr(defs.columns, new_col_prop))
                     return
             self.df[col_name] = new_ages
         else:
@@ -1409,15 +1540,15 @@ class Standardizer:
                     all([x in ["UNKNOWN","ADULT","JUVENILE"] for x in vals]):
                     if "AGE" in col_name:
                         # This appears to be an age range column not an age column
-                        new_col_name = col_name.replace("AGE","AGE_RANGE")
-                        if hasattr(defs.columns, new_col_name):
-                            self.col_map[new_col_name] = self.col_map.pop(col_name)
+                        new_col_prop = col_prop.replace("AGE","AGE_RANGE")
+                        if hasattr(defs.columns, new_col_prop):
+                            self.col_map.replace(col_name, getattr(defs.columns, new_col_prop))
                             return
                 else:            
                     # Attempt to convert most values to numbers
                     col = pd.to_numeric(self.df[self.col_map[col_name]], errors="coerce", downcast="integer")
                     if pd.isnull(col).all():
-                        logging.getLogger("opd").warn(f"Unable to convert column {self.col_map[col_name]} to an age")
+                        logger.warn(f"Unable to convert column {self.col_map[col_name]} to an age")
                         self.col_map.pop(col_name)
                         return
 
@@ -1425,7 +1556,7 @@ class Standardizer:
                             else False for x,y in zip(self.df[self.col_map[col_name]],col)]
                     sum_test = sum(test)
                     if not check_column(self.col_map[col_name], "age") and  sum_test / len(test) < 0.2:
-                        logging.getLogger("opd").warn(f"Not converting {self.col_map[col_name]} to an age. If this is an age column only {sum(test) / len(test)*100:.1f}% of the data has a valid value")
+                        logger.warn(f"Not converting {self.col_map[col_name]} to an age. If this is an age column only {sum(test) / len(test)*100:.1f}% of the data has a valid value")
                         self.col_map.pop(col_name)
                         return
                     elif sum_test / len(test) < 0.85 and not (sum_test>1 and len(test)-sum_test==1):
@@ -1469,7 +1600,7 @@ class Standardizer:
             # Int64 rather than int64 allows NaNs to be used
             self.df[col_name] = col.astype("Int64")
 
-        self.data_maps.append(DataMapping(orig_column_name=self.col_map[col_name], new_column_name=col_name,
+        self.data_maps.append(DataMapping(orig_column_name=self.col_map.get_original(col_name), new_column_name=col_name,
                                 orig_column=self.df[self.col_map[col_name]]))
    
 
@@ -1585,13 +1716,14 @@ def _race_validator(df, cols_test, source_name, mult_data=_MultData()):
 
 def _eth_validator(df, cols_test):
     match_cols = []
+    ferndale_eth_vals = ['FRENCH/GERMAN', 'MEXICAN', 'HUNGARIAN', 'LEBANESE', 'POLISH/SCOTTISH', 'IRISH', 'SYRIAN', 'POLISH']
     for col_name in cols_test:
         col = df[col_name]
         try:
             for x in col.unique():
                 if isinstance(x,str):
                     x = x.upper()
-                    if x in ["N","H"] or "LATINO" in x or "HISPANIC" in x:
+                    if x in ["N","H"] or "LATINO" in x or "HISPANIC" in x or x in ferndale_eth_vals:
                         found = True
                         break
             else:
