@@ -199,6 +199,15 @@ class TestData:
 		year = [2020,2022]
 		assert loader.get_count(year=year) == src.get_count(year=year, table_type=TableType.STOPS)
 
+	
+	def test_get_years_to_check(self, csvfile, source, last, skip, loghtml):
+		assert data._get_years_to_check([2020], cur_year=2023, force=True, isfile=False) == []
+		assert data._get_years_to_check([2022], cur_year=2023, force=False, isfile=True) == []
+		assert data._get_years_to_check([2022, 2020], cur_year=2023, force=False, isfile=False) == [2023]
+		assert data._get_years_to_check([2020, 2021], cur_year=2023, force=True, isfile=True) == [2022, 2023]
+		assert data._get_years_to_check([2020, 2021], cur_year=2023, force=True, isfile=False) == [2022, 2023]
+	
+	
 	def test_load_gen(self, csvfile, source, last, skip, loghtml):
 		datasets = [("Norristown",2016,"USE OF FORCE", 100),
 	      ("Denver", "MULTIPLE", "OFFICER-INVOLVED SHOOTINGS",50),
@@ -295,6 +304,8 @@ if __name__ == "__main__":
 	skip = "Bloomington"
 	source = None
 	# source = "Mesa"
+
+	tp.test_get_years_to_check(csvfile, source, last, skip, None) 
 	tp.check_table_type_warning(csvfile, source, last, skip, None) 
 	tp.test_offsets_and_nrows(csvfile, source, last, skip, None) 
 	tp.test_check_version(csvfile, None, last, skip, None) #

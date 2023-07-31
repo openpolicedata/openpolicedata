@@ -282,17 +282,14 @@ class Source:
             
             loader = self.__get_loader(data_type, url, dataset_id=df["dataset_id"], date_field=date_field)
 
-            check = None
             if not manual and pd.notnull(df["coverage_start"]) and pd.notnull(df["coverage_end"]) and \
                 hasattr(df["coverage_start"], 'year') and hasattr(df["coverage_end"], 'year'):
                 years.update(range(df["coverage_start"].year, df["coverage_end"].year+1))
-                max_year = max(years)
-                if  cur_year-2 <= max_year < cur_year:
+                years_to_check = _get_years_to_check(years, cur_year, force, loader.isfile())
+                if len(years_to_check)>0:
                     # Check for updates
-                    check = [x for x in range(max_year+1,cur_year+1)]
-                    if len(check)>0:
-                        new_years = loader.get_years(force=force, check=check)
-                        years.update(new_years)
+                    new_years = loader.get_years(force=force, check=years_to_check)
+                    years.update(new_years)
             else:
                 new_years = loader.get_years(force=force)
                 years.update(new_years)
@@ -791,3 +788,11 @@ def _check_version(df):
                 f"Year {year} {table_type} data for {src_name} in {state} cannot be loaded in version {__version__} of openpolicedata. " + \
                     f"Update OpenPoliceData to at least version {min_version} to access this data."
             )
+
+def _get_years_to_check(years, cur_year, force, isfile):
+    max_year = max(years)
+    years_to_check = []
+    if  cur_year-2 <= max_year < cur_year and (force or not isfile):
+        years_to_check = [x for x in range(max_year+1,cur_year+1)]
+
+    return years_to_check
