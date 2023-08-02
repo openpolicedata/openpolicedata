@@ -113,6 +113,10 @@ class Data_Loader(ABC):
     _last_count = None
 
     @abstractmethod
+    def isfile(self):
+        pass
+
+    @abstractmethod
     def get_count(self, year=None, *, agency=None, force=False, opt_filter=None, where=None):
         pass
 
@@ -216,6 +220,16 @@ class Csv(Data_Loader):
         self.url = url
         self.date_field = date_field
         self.agency_field = agency_field
+
+
+    def isfile(self):
+        '''Returns True to indicate that Csv data is file-based
+
+        Returns
+        -------
+        True
+        '''
+        return True
 
 
     def get_count(self, year=None, *,  agency=None, force=False, **kwargs):
@@ -471,6 +485,16 @@ class Excel(Data_Loader):
                 raise
         except:
             raise
+
+
+    def isfile(self):
+        '''Returns True to indicate that Excel data is file-based
+
+        Returns
+        -------
+        True
+        '''
+        return True
 
 
     def get_count(self, year=None, *,  agency=None, force=False, **kwargs):
@@ -796,6 +820,16 @@ class Arcgis(Data_Loader):
             raise ValueError("Unexpected ArcGIS layer type: {}".format(meta["type"]))
 
         self.__set_verify(_verify_arcgis)
+
+
+    def isfile(self):
+        '''Returns False to indicate that ArcGIS data is not file-based
+
+        Returns
+        -------
+        False
+        '''
+        return False
 
 
     def __set_verify(self, verify):
@@ -1283,6 +1317,16 @@ class Carto(Data_Loader):
         self.data_set = data_set
         self.date_field = date_field
 
+    
+    def isfile(self):
+        '''Returns False to indicate that Carto data is not file-based
+
+        Returns
+        -------
+        False
+        '''
+        return False
+
 
     def get_count(self, year=None, **kwargs):
         '''Get number of records for a data request
@@ -1532,6 +1576,16 @@ class Socrata(Data_Loader):
                 where = where[len(andStr):]
 
         return where
+    
+
+    def isfile(self):
+        '''Returns False to indicate that Socrata data is not file-based
+
+        Returns
+        -------
+        False
+        '''
+        return False
 
 
     def get_count(self, year=None, *,  opt_filter=None, where=None, **kwargs):
