@@ -1722,8 +1722,8 @@ def _eth_validator(df, cols_test):
         try:
             for x in col.unique():
                 if isinstance(x,str):
-                    x = x.upper()
-                    if x in ["N","H"] or "LATINO" in x or "HISPANIC" in x or x in ferndale_eth_vals:
+                    x = x.upper().strip()
+                    if x in ["N","H","NHIS","HIS","LAT"] or "LATINO" in x or "HISPANIC" in x or x in ferndale_eth_vals:
                         found = True
                         break
             else:
