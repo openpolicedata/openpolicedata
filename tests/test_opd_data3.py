@@ -139,11 +139,11 @@ class TestData:
 
 				sleep(sleep_time)
 
-				if table._date_field == None or datasets.iloc[i]["DataType"]==DataType.EXCEL.value or \
-					table._date_field.lower()=="year":
+				if table.date_field == None or datasets.iloc[i]["DataType"]==DataType.EXCEL.value or \
+					table.date_field.lower()=="year":
 					continue
 
-				dts = table.table[table._date_field]
+				dts = table.table[table.date_field]
 				# Remove all non-datestamps
 				dts = dts[dts.apply(lambda x: isinstance(x,pd._libs.tslibs.timestamps.Timestamp))].convert_dtypes()
 				dts = dts.sort_values(ignore_index=True)
@@ -167,7 +167,7 @@ class TestData:
 				if not multi_case:
 					continue
 
-				if "month" in table._date_field.lower():
+				if "month" in table.date_field.lower():
 					# Cannot currently filter only by month/year
 					continue
 				
@@ -187,7 +187,7 @@ class TestData:
 					raise
 
 				sleep(sleep_time)
-				dts_start = table_start.table[table._date_field]
+				dts_start = table_start.table[table.date_field]
 				dts_start = dts_start[dts_start.apply(lambda x: isinstance(x,pd._libs.tslibs.timestamps.Timestamp))].convert_dtypes()
 				dts_start = dts_start.sort_values(ignore_index=True, na_position="first")
 
@@ -214,7 +214,7 @@ class TestData:
 				table_stop = src.load_from_url([start_date, stop_date], datasets.iloc[i]["TableType"], 
 												agency=agency, pbar=False)
 				sleep(sleep_time)
-				dts_stop = table_stop.table[table._date_field]
+				dts_stop = table_stop.table[table.date_field]
 
 				dts_stop = dts_stop.sort_values(ignore_index=True)
 
@@ -279,10 +279,10 @@ class TestData:
 				sleep(sleep_time)
 
 				assert len(table.table)>1
-				if not pd.isnull(table._date_field):
-					assert table._date_field in table.table
+				if not pd.isnull(table.date_field):
+					assert table.date_field in table.table
 					#assuming a Pandas string dtype('O').name = object is okay too
-					assert (table.table[table._date_field].dtype.name in ['datetime64[ns]', 'datetime64[ms]'])
+					assert (table.table[table.date_field].dtype.name in ['datetime64[ns]', 'datetime64[ms]'])
 				if not pd.isnull(datasets.iloc[i]["agency_field"]):
 					assert datasets.iloc[i]["agency_field"] in table.table
 

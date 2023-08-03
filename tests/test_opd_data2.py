@@ -164,8 +164,8 @@ class TestData:
 		table = src.load_from_url(2021, agency=agency, pbar=False, nrows=100)
 		
 		assert len(table.table)==100
-		assert table.table[table._agency_field].nunique()==1
-		assert table.table.iloc[0][table._agency_field] == agency
+		assert table.table[table.agency_field].nunique()==1
+		assert table.table.iloc[0][table.agency_field] == agency
 
 	def test_to_csv(self, csvfile, source, last, skip, loghtml):
 		src = data.Source("Virginia")
