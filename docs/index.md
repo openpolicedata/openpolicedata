@@ -10,9 +10,9 @@ html_theme.sidebar_secondary.remove: true
 :maxdepth: 2
 :hidden:
 
-source/getting_started/index.ipynb
-source/datasets/index.ipynb
-source/examples/index.ipynb
+getting_started/index.ipynb
+datasets/index.ipynb
+examples/index.ipynb
 ```
 
 # OpenPoliceData
@@ -23,18 +23,18 @@ Welcome to the *BETA* version of the OpenPoliceData documentation. **OpenPoliceD
 :gutter: 1 2 3 4
 
 :::{grid-item-card} {fas}`star;pst-color-primary` Getting Started
-:link: source/getting_started/index.ipynb
-:link-alt: source/getting_started/index.ipynb
+:link: getting_started/index.ipynb
+:link-alt: getting_started/index.ipynb
 Find out how to install OPD and learn the basics
 :::
 :::{grid-item-card} {fas}`database;pst-color-primary` Datasets
-:link: source/datasets/index.ipynb
-:link-alt: source/datasets/index.ipynb
+:link: datasets/index.ipynb
+:link-alt: datasets/index.ipynb
 Learn what types of data are available in OPD and for what agencies
 :::
 :::{grid-item-card} {fas}`lightbulb;pst-color-primary` Examples
-:link: source/examples/index.ipynb
-:link-alt: source/examples/index.ipynb
+:link: examples/index.ipynb
+:link-alt: examples/index.ipynb
 Explore how to use OPD with Jupyter Notebooks 
 :::
 ::::
