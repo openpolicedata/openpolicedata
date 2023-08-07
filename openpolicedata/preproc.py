@@ -10,7 +10,7 @@ from . import datetime_parser
 from . import defs
 from . import _converters as convert
 from ._converters import  _p_age_range
-from ._preproc_utils import _MultData, check_column, DataMapping, _case, MultType, RACE_TABLES_TO_EXCLUDE, NOT_REQUIRED_TABLES_FOR_DATE
+from ._preproc_utils import _MultData, check_column, DataMapping, _case, MultType
 from .utils import camel_case_split, split_words
 
 _skip_tables = ["calls for service"]
@@ -462,7 +462,6 @@ class Standardizer:
             # Calls for services often has multiple date/times with descriptive names for what it corresponds to.
             # Don't generalize by standardizing
             exclude_table_types=[defs.TableType.EMPLOYEE, defs.TableType.CALLS_FOR_SERVICE], 
-            not_required_table_types=NOT_REQUIRED_TABLES_FOR_DATE,
             validator=datetime_parser.validate_date,
             always_validate=True,
             tables_to_exclude=[("Winooski", defs.TableType.TRAFFIC),
@@ -635,7 +634,6 @@ class Standardizer:
             race_cols, race_types = self._id_demographic_column(match_cols,
                 defs.columns.RACE_SUBJECT, defs.columns.RACE_OFFICER,
                 defs.columns.RACE_OFFICER_SUBJECT,
-                tables_to_exclude=RACE_TABLES_TO_EXCLUDE,
                 specific_cases=[_case("California", defs.TableType.USE_OF_FORCE_CIVILIANS_OFFICERS, "Race_Ethnic_Group", defs.columns.RACE_OFFICER_SUBJECT),
                                 _case("Minneapolis", defs.TableType.STOPS, "race", defs.columns.RACE_SUBJECT),
                                 _case("Austin", defs.TableType.USE_OF_FORCE_CIVILIANS, "subject_race_ethnicity", defs.columns.RACE_SUBJECT),
@@ -815,7 +813,7 @@ class Standardizer:
     
     def _id_demographic_column(self, col_names, 
         civilian_col_name, officer_col_name, civ_officer_col_name,
-        required=True,
+        required=False,
         tables_to_exclude=[],
         sources_to_exclude=[],
         specific_cases=[],
