@@ -108,4 +108,6 @@ nbsphinx_prolog = """
     </style>
 """
 
+nbsphinx_execute = 'never'
+
 # TODO: https://pydata-sphinx-theme.readthedocs.io/en/stable/user_guide/version-dropdown.html
