@@ -55,7 +55,7 @@ exclude_patterns = []
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 html_theme = 'pydata_sphinx_theme'
-html_static_path = ['_static']
+html_static_path = ['source/_static']
 html_css_files = ["css/custom.css"]
 
 # Unable to get this to work as a relative links so using full link for now
