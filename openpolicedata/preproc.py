@@ -10,7 +10,7 @@ from . import datetime_parser
 from . import defs
 from . import _converters as convert
 from ._converters import  _p_age_range
-from ._preproc_utils import _MultData, check_column, DataMapping, _case, MultType, RACE_TABLES_TO_EXCLUDE, NOT_REQUIRED_TABLES_FOR_DATE
+from ._preproc_utils import _MultData, check_column, DataMapping, _case, MultType
 from .utils import camel_case_split, split_words
 
 _skip_tables = ["calls for service"]
@@ -462,7 +462,6 @@ class Standardizer:
             # Calls for services often has multiple date/times with descriptive names for what it corresponds to.
             # Don't generalize by standardizing
             exclude_table_types=[defs.TableType.EMPLOYEE, defs.TableType.CALLS_FOR_SERVICE], 
-            not_required_table_types=NOT_REQUIRED_TABLES_FOR_DATE,
             validator=datetime_parser.validate_date,
             always_validate=True,
             tables_to_exclude=[("Winooski", defs.TableType.TRAFFIC),
@@ -631,7 +630,6 @@ class Standardizer:
             
             logger.info(f"Potential race columns found: {match_cols}")
 
-            # TODO: Remove failures when column are not found
             race_cols, race_types = self._id_demographic_column(match_cols,
                 defs.columns.RACE_SUBJECT, defs.columns.RACE_OFFICER,
                 defs.columns.RACE_OFFICER_SUBJECT,
@@ -671,7 +669,6 @@ class Standardizer:
             self._id_demographic_column(match_cols, 
                 defs.columns.AGE_SUBJECT, defs.columns.AGE_OFFICER,
                 defs.columns.AGE_OFFICER_SUBJECT,
-                required=False,
                 specific_cases=[_case("Norman", defs.TableType.COMPLAINTS, "Age", defs.columns.AGE_OFFICER, year=[2016,2017,2018]),
                                 _case("Norman", defs.TableType.USE_OF_FORCE, "Age", defs.columns.AGE_OFFICER, year=[2016,2017]),
                                 _case("Fairfax County", defs.TableType.ARRESTS, "ArresteeAg", defs.columns.AGE_SUBJECT)]
@@ -684,8 +681,7 @@ class Standardizer:
 
             self._id_demographic_column(match_cols,
                 defs.columns.AGE_RANGE_SUBJECT, defs.columns.AGE_RANGE_OFFICER,
-                defs.columns.AGE_RANGE_OFFICER_SUBJECT,
-                required=False)
+                defs.columns.AGE_RANGE_OFFICER_SUBJECT)
             
             match_cols = self._find_col_matches("gender", ["gender", "gend", "sex","citizen_demographics","officer_demographics"],
                 validator=_gender_validator, validate_args=[self.source_name],
@@ -696,7 +692,6 @@ class Standardizer:
             self._id_demographic_column(match_cols,
                 defs.columns.GENDER_SUBJECT, defs.columns.GENDER_OFFICER, 
                 defs.columns.GENDER_OFFICER_SUBJECT,
-                required=False,
                 specific_cases=[_case("California", defs.TableType.STOPS, "G_FULL", defs.columns.GENDER_SUBJECT),
                                 _case("Lansing", defs.TableType.SHOOTINGS, ["Race_Sex","Officer"], [defs.columns.GENDER_SUBJECT, defs.columns.GENDER_OFFICER]),
                                 _case("Fairfax County", defs.TableType.ARRESTS, ["ArresteeSe","OfficerSex"], [defs.columns.GENDER_SUBJECT, defs.columns.GENDER_OFFICER]),
@@ -768,9 +763,6 @@ class Standardizer:
                 warnings.warn(f"{self.source_name} has multiple race columns for subjects ({eth_cols}). " +
                             "Neither will be standardized to avoid creating ambiguity.")
                 return
-            else:
-                # TODO: Convert to a warning with an informative message
-                raise NotImplementedError()
 
         k = 0
         while k < len(validation_types):
@@ -814,7 +806,7 @@ class Standardizer:
     
     def _id_demographic_column(self, col_names, 
         civilian_col_name, officer_col_name, civ_officer_col_name,
-        required=True,
+        required=False,
         tables_to_exclude=[],
         sources_to_exclude=[],
         specific_cases=[],
@@ -920,8 +912,6 @@ class Standardizer:
                             col_names_new.append(col_names[cur_num])
 
                         # Merge columns
-                        # TODO: Add # of persons method
-                        # TODO: Add get person by # item
                         def combine_col(x):
                             # Create a list of values to include starting from first non-null to exclude empties at end
                             vals_reversed = []
@@ -962,9 +952,6 @@ class Standardizer:
                                     "Neither will be standardized to avoid creating ambiguity.")
                         col_names = []
                         types = []
-                    else:
-                        # TODO: Convert to a warning with an informative message
-                        raise NotImplementedError()
 
             for k in range(len(col_names)):
                 logger.info(f"Column {col_names[k]} will be mapped to {types[k]}")
