@@ -588,14 +588,14 @@ class Standardizer:
 
                         if defs._roles.SUBJECT not in vals or defs._roles.OFFICER not in vals:
                             # California data, RAE = Race and Ethnicity
-                            # Check if it's possible this does not indicate civilian vs officer
+                            # Check if it's possible this does not indicate subject vs officer
                             race_match_cols = self._find_col_matches("race", ["race", "descent","rae_full","citizen_demographics","officer_demographics","ethnicity"],
                                 validator=_race_validator, validate_args=[self.source_name])
 
                             off_type = False
                             civ_type = False
                             is_officer_table = self.table_type == defs.TableType.EMPLOYEE.value or \
-                                ("- OFFICERS" in self.table_type and "CIVILIANS" not in self.table_type)
+                                ("- OFFICERS" in self.table_type and "SUBJECTS" not in self.table_type)
                             for k in range(len(race_match_cols)):
                                 if "off" in race_match_cols[k].lower() or "deputy" in race_match_cols[k].lower() or \
                                     (is_officer_table and "suspect" not in race_match_cols[k].lower() and "supsect" not in race_match_cols[k].lower()):
@@ -613,7 +613,7 @@ class Standardizer:
                 return match_cols
 
             match_cols = self._find_col_matches("Is Person Officer or Subject", ["Civilian_Officer","ROLE"], 
-                only_table_types = [defs.TableType.USE_OF_FORCE, defs.TableType.USE_OF_FORCE_CIVILIANS_OFFICERS, defs.TableType.SHOOTINGS],
+                only_table_types = [defs.TableType.USE_OF_FORCE, defs.TableType.USE_OF_FORCE_SUBJECTS_OFFICERS, defs.TableType.SHOOTINGS],
                 exclude_col_names=[("not equal","SubjectRole")],  # Subject role would be role of subject not whether person is subject or officer
                 validator=role_validator,
                 always_validate=True)
@@ -635,10 +635,9 @@ class Standardizer:
             race_cols, race_types = self._id_demographic_column(match_cols,
                 defs.columns.RACE_SUBJECT, defs.columns.RACE_OFFICER,
                 defs.columns.RACE_OFFICER_SUBJECT,
-                tables_to_exclude=RACE_TABLES_TO_EXCLUDE,
-                specific_cases=[_case("California", defs.TableType.USE_OF_FORCE_CIVILIANS_OFFICERS, "Race_Ethnic_Group", defs.columns.RACE_OFFICER_SUBJECT),
+                specific_cases=[_case("California", defs.TableType.USE_OF_FORCE_SUBJECTS_OFFICERS, "Race_Ethnic_Group", defs.columns.RACE_OFFICER_SUBJECT),
                                 _case("Minneapolis", defs.TableType.STOPS, "race", defs.columns.RACE_SUBJECT),
-                                _case("Austin", defs.TableType.USE_OF_FORCE_CIVILIANS, "subject_race_ethnicity", defs.columns.RACE_SUBJECT),
+                                _case("Austin", defs.TableType.USE_OF_FORCE_SUBJECTS, "subject_race_ethnicity", defs.columns.RACE_SUBJECT),
                                 _case("Fairfax County", defs.TableType.ARRESTS, ["ArresteeRa","OfficerRac"], [defs.columns.RACE_SUBJECT, defs.columns.RACE_OFFICER], year=range(2016,2021)),
                                 _case("Fairfax County", defs.TableType.TRAFFIC_CITATIONS, ["Person_Rac","OfficerRac"], [defs.columns.RACE_SUBJECT, defs.columns.RACE_OFFICER]),
                                 _case("Lansing", defs.TableType.SHOOTINGS, ["Race_Sex","Officer"], [defs.columns.RACE_SUBJECT, defs.columns.RACE_OFFICER]),
@@ -739,7 +738,7 @@ class Standardizer:
             logger.info(f"Column {eth_cols[0]} associated with {eth_types[0]}")
         else:
             is_officer_table = self.table_type == defs.TableType.EMPLOYEE.value or \
-                    ("- OFFICERS" in self.table_type and "CIVILIANS" not in self.table_type)
+                    ("- OFFICERS" in self.table_type and "SUBJECTS" not in self.table_type)
             for k in range(len(eth_cols)):
                 if "officer" in eth_cols[k].lower() or \
                     "offcr" in eth_cols[k].lower() or is_officer_table or \
@@ -766,7 +765,7 @@ class Standardizer:
                     (any([x in eth_cols[0] for x in ["offender","suspect"]]) and "victim" in eth_cols[1]))):
                 # Has columns for officer perceived and actual race. We don't code separately for this.
                 # Warn and do not create a standardized race column
-                warnings.warn(f"{self.source_name} has multiple race columns for civilians ({eth_cols}). " +
+                warnings.warn(f"{self.source_name} has multiple race columns for subjects ({eth_cols}). " +
                             "Neither will be standardized to avoid creating ambiguity.")
                 return
             else:
@@ -834,7 +833,7 @@ class Standardizer:
                 self.table_type in [defs.TableType.USE_OF_FORCE_INCIDENTS, defs.TableType.SHOOTINGS_INCIDENTS, 
                                     defs.TableType.CALLS_FOR_SERVICE, 
                                     defs.TableType.CRASHES, defs.TableType.CRASHES_INCIDENTS, defs.TableType.CRASHES_VEHICLES, 
-                                    defs.TableType.CRASHES_CIVILIANS, defs.TableType.CRASH_NONMOTORIST,
+                                    defs.TableType.CRASHES_SUBJECTS, defs.TableType.CRASH_NONMOTORIST,
                                     defs.TableType.INCIDENTS, defs.TableType.COMPLAINTS_BACKGROUND,
                                     defs.TableType.COMPLAINTS_ALLEGATIONS, defs.TableType.COMPLAINTS_PENALTIES] or \
                 self.source_name in sources_to_exclude or \
@@ -851,7 +850,7 @@ class Standardizer:
             return col_names, [civ_officer_col_name]
         else:     
             is_officer_table = self.table_type == defs.TableType.EMPLOYEE.value or \
-                ("- OFFICERS" in self.table_type and "CIVILIANS" not in self.table_type)
+                ("- OFFICERS" in self.table_type and "SUBJECTS" not in self.table_type)
             off_words = ["off", "deputy", "employee", "ofc", "empl"]
             not_off_words = ["offender"]
 
@@ -959,7 +958,7 @@ class Standardizer:
                             (any([x in col_names[0] for x in ["offender","suspect"]]) and "victim" in col_names[1]))):
                         # Has columns for officer perceived and actual race. We don't code separately for this.
                         # Warn and do not create a standardized race column
-                        warnings.warn(f"{self.source_name} has multiple race columns for civilians ({col_names}). " +
+                        warnings.warn(f"{self.source_name} has multiple race columns for subjects ({col_names}). " +
                                     "Neither will be standardized to avoid creating ambiguity.")
                         col_names = []
                         types = []
@@ -1234,8 +1233,8 @@ class Standardizer:
             return
 
         if self.table_type not in [defs.TableType.SHOOTINGS, defs.TableType.USE_OF_FORCE, defs.TableType.COMPLAINTS,
-                defs.TableType.SHOOTINGS_CIVILIANS, defs.TableType.USE_OF_FORCE_CIVILIANS,
-                defs.TableType.SHOOTINGS_OFFICERS, defs.TableType.USE_OF_FORCE_OFFICERS, defs.TableType.USE_OF_FORCE_CIVILIANS_OFFICERS]:
+                defs.TableType.SHOOTINGS_SUBJECTS, defs.TableType.USE_OF_FORCE_SUBJECTS,
+                defs.TableType.SHOOTINGS_OFFICERS, defs.TableType.USE_OF_FORCE_OFFICERS, defs.TableType.USE_OF_FORCE_SUBJECTS_OFFICERS]:
             return
         
         # If only 1 of these columns, it will be handled by the standardize function
