@@ -5,6 +5,8 @@ from typing import Optional, Union
 import warnings
 
 from . import defs
+from .deprecated._pandas import DeprecationHandlerDataFrame
+from .deprecated.messages import CIV_DEPRECATION_MESSAGE, CIV_REPLACEMENT_MESSAGE
 
 # Location of table where datasets available in opd are stored
 csv_file = "https://raw.github.com/openpolicedata/opd-data/main/opd_source_table.csv"
@@ -66,7 +68,7 @@ def _build(csv_file):
         misspelled = df["State"][not_state]
         raise ValueError(f"{len(misspelled)} states are misspelled in the data sources table including {misspelled.iloc[0]} at index {misspelled.index[0]}")
 
-    key_vals = ['State', 'SourceName', 'Agency', 'TableType','Year']
+    key_vals = ['State', 'SourceName', 'Agency', 'TableType','Year', 'coverage_start', 'coverage_end']
     df.drop_duplicates(subset=key_vals, inplace=True, ignore_index=True)
 
     if "coverage_start" in df:
@@ -74,7 +76,7 @@ def _build(csv_file):
         df["coverage_start"] = df["coverage_start"].apply(lambda x: pd.to_datetime(x) if pd.notnull(x) and p.search(x) else x)
         df["coverage_end"] = df["coverage_end"].apply(lambda x: pd.to_datetime(x) if pd.notnull(x) and p.search(x) else x)
 
-    return df
+    return DeprecationHandlerDataFrame(df)
 
 
 datasets = _build(csv_file)
@@ -115,8 +117,11 @@ def query(
         query_str += "Agency == '" + agency + "' and " 
 
     if table_type != None:
-        if isinstance(table_type, defs.TableType):
-            table_type = table_type.value
+        if "CIVILIAN" in str(table_type):
+            new_table_type = str(table_type).replace("CIVILIAN", "SUBJECT")
+            warnings.warn(CIV_DEPRECATION_MESSAGE + CIV_REPLACEMENT_MESSAGE.format(table_type, new_table_type),
+                            DeprecationWarning)
+            table_type = new_table_type
         query_str += "TableType == '" + table_type + "' and "
 
     if len(query_str) == 0:
@@ -285,6 +290,11 @@ def get_table_types(contains=None):
     df = query()
     table_types = df["TableType"].unique()
     if contains is not None:
+        if "CIVILIAN" in contains:
+            new_contains = str(contains).replace("CIVILIAN", "SUBJECT")
+            warnings.warn(CIV_DEPRECATION_MESSAGE + CIV_REPLACEMENT_MESSAGE.format(contains, new_contains),
+                            DeprecationWarning)
+            contains = new_contains
         table_types = [x for x in table_types if contains.lower() in x.lower()]
     table_types.sort()
     return table_types

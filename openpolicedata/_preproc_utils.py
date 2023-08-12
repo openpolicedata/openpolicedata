@@ -160,18 +160,18 @@ class _MultData:
     item_gender = None
     item_eth = None
 
-NOT_REQUIRED_TABLES_FOR_DATE = [defs.TableType.COMPLAINTS_OFFICERS, defs.TableType.COMPLAINTS_CIVILIANS,
-                                defs.TableType.USE_OF_FORCE_CIVILIANS_OFFICERS, defs.TableType.USE_OF_FORCE_CIVILIANS, 
+NOT_REQUIRED_TABLES_FOR_DATE = [defs.TableType.COMPLAINTS_OFFICERS, defs.TableType.COMPLAINTS_SUBJECTS,
+                                defs.TableType.USE_OF_FORCE_SUBJECTS_OFFICERS, defs.TableType.USE_OF_FORCE_SUBJECTS, 
                                 defs.TableType.USE_OF_FORCE_OFFICERS, 
-                                defs.TableType.SHOOTINGS_CIVILIANS, defs.TableType.SHOOTINGS_OFFICERS,
-                                defs.TableType.CRASHES_CIVILIANS, defs.TableType.CRASHES_VEHICLES,
+                                defs.TableType.SHOOTINGS_SUBJECTS, defs.TableType.SHOOTINGS_OFFICERS,
+                                defs.TableType.CRASHES_SUBJECTS, defs.TableType.CRASHES_VEHICLES,
                                 defs.TableType.COMPLAINTS_ALLEGATIONS, defs.TableType.COMPLAINTS_PENALTIES]
 
 RACE_TABLES_TO_EXCLUDE = [
     ("Milwaukee", defs.TableType.COMPLAINTS),
     ("Santa Rosa", defs.TableType.USE_OF_FORCE),
-    ("New York City", defs.TableType.CRASHES_CIVILIANS),
-    ("San Diego", defs.TableType.CRASHES_CIVILIANS),
+    ("New York City", defs.TableType.CRASHES_SUBJECTS),
+    ("San Diego", defs.TableType.CRASHES_SUBJECTS),
     ("Montgomery County", defs.TableType.COMPLAINTS),
     ("Seattle", defs.TableType.COMPLAINTS),
     ("Albany", defs.TableType.COMPLAINTS),

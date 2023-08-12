@@ -550,12 +550,9 @@ class Source:
         return self.__load(year, table_type, agency, True, pbar, nrows=nrows, offset=offset)
 
     def __find_datasets(self, table_type):
-        if isinstance(table_type, defs.TableType):
-            table_type = table_type.value
-
         src = self.datasets.copy()
         if table_type != None:
-            src = src[self.datasets["TableType"].str.upper() == table_type.upper()]
+            src = src[self.datasets["TableType"].str.upper() == str(table_type).upper()]
 
         return src
 

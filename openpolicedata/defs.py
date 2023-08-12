@@ -2,6 +2,7 @@
 from __future__ import annotations
 from enum import Enum
 from sys import version_info
+import warnings
 
 # These are the types of data currently available in opd.
 # They all have corresponding data loaders in data_loaders.py
@@ -28,6 +29,25 @@ class TableType(str, Enum):
         obj._value_ = value
         obj.description = description
         return obj
+    
+    def __str__(self):
+        return self.value
+    
+    
+    @classmethod
+    def _missing_(cls, value):
+        # https://stackoverflow.com/questions/37444002/overriding-enum-call-method
+        # Handles deprecation of CIVILIANS usage to SUBJECTS
+        if "- CIVILIANS" in value:
+            new_value = value.replace("- CIVILIANS", "- SUBJECTS")
+            if new_value in TableType._value2member_map_:
+                warnings.warn(
+                    f"TableType {value} is deprecated. CIVILIAN has been replaced with SUBJECT in TableType names. Requested TableType has been automatically updated to {new_value}.",
+                    DeprecationWarning,
+                )
+                return TableType(new_value)
+        
+        return super()._missing_(value)
 
     # Below tuples are (value, description)
     ARRESTS = ("ARRESTS", "Seizures or forcible restraints by police")
@@ -39,25 +59,25 @@ class TableType(str, Enum):
         "Complaint data may be split into several tables. This table contains specific data on the allegations.")
     COMPLAINTS_BACKGROUND = ("COMPLAINTS - BACKGROUND",
         "Complaint data may be split into several tables. This table contains data on the general background of the complaints.")
-    COMPLAINTS_CIVILIANS = ("COMPLAINTS - CIVILIANS",
-        "Complaint data may be split into several tables. This table contains specific data on the involved civilians.")
+    COMPLAINTS_SUBJECTS = ("COMPLAINTS - SUBJECTS",
+        "Complaint data may be split into several tables. This table contains specific data on the involved subjects.")
     COMPLAINTS_OFFICERS = ("COMPLAINTS - OFFICERS",
         "Complaint data may be split into several tables. This table contains specific data on the involved officers.")
     COMPLAINTS_PENALTIES = ("COMPLAINTS - PENALTIES",
         "Complaint data may be split into several tables. This table contains specific data on any resulting penalties.")
     CRASHES = ("CRASHES", "Traffic crashes")
-    CRASHES_CIVILIANS = ("CRASHES - CIVILIANS",
+    CRASHES_SUBJECTS = ("CRASHES - SUBJECTS",
         "Crash data may be split into several tables due to the possibility that multiple "+
-        "civilians and vehicles may be involved in an incident. This table contains data on civilians.")
+        "subjects (drivers and/or passengers) and vehicles may be involved in an incident. This table contains data on subjects.")
     CRASHES_INCIDENTS = ("CRASHES - INCIDENTS",
         "Crash data may be split into several tables due to the possibility that multiple "+
-        "civilians and vehicles may be involved in an incident. This table contains data on the incident.")
+        "subjects and vehicles may be involved in an incident. This table contains data on the incident.")
     CRASH_NONMOTORIST = ("CRASHES - NONMOTORIST",
         "Crash data may be split into several tables due to the possibility that multiple "+
-        "civilians and vehicles may be involved in an incident. This table contains information on non-motorists involved in a crash.")
+        "subjects and vehicles may be involved in an incident. This table contains information on non-motorists involved in a crash.")
     CRASHES_VEHICLES = ("CRASHES - VEHICLES",
         "Crash data may be split into several tables due to the possibility that multiple "+
-        "civilians and vehicles may be involved in an incident. This table contains data on vehicles    .")
+        "subjects and vehicles may be involved in an incident. This table contains data on vehicles    .")
     EMPLOYEE = ("EMPLOYEE","Demographic data of the police workforce")
     FIELD_CONTACTS = ("FIELD CONTACTS", "Consensual contacts between officers and the community.")
     INCIDENTS = ("INCIDENTS", "Crime incident reports")
@@ -67,34 +87,34 @@ class TableType(str, Enum):
     PEDESTRIAN_CITATIONS = ("PEDESTRIAN CITATIONS","Pedestrian stops leading to a citation")
     PEDESTRIAN_WARNINGS = ("PEDESTRIAN WARNINGS","Pedestrian stops leading to a warning")
     SHOOTINGS = ("OFFICER-INVOLVED SHOOTINGS","Shootings by officers")
-    SHOOTINGS_CIVILIANS = ("OFFICER-INVOLVED SHOOTINGS - CIVILIANS",
+    SHOOTINGS_SUBJECTS = ("OFFICER-INVOLVED SHOOTINGS - SUBJECTS",
         "Officer-involved shootings data may be split into several tables due to the possibility that multiple "+
-        "civilians and officers may be involved in an incident. This table contains data on civilians.")
+        "subjects and officers may be involved in an incident. This table contains data on subjects.")
     SHOOTINGS_OFFICERS = ("OFFICER-INVOLVED SHOOTINGS - OFFICERS",
         "Officer-involved shootings data may be split into several tables due to the possibility that multiple "+
-        "civilians and officers may be involved in an incident. This table contains data on officer.")
+        "subjects and officers may be involved in an incident. This table contains data on officer.")
     SHOOTINGS_INCIDENTS = ("OFFICER-INVOLVED SHOOTINGS - INCIDENTS",
         "Officer-involved shootings data may be split into several tables due to the possibility that multiple "+
-        "civilians and officers may be involved in an incident. This table contains data on the incident.")
+        "subjects and officers may be involved in an incident. This table contains data on the incident.")
     STOPS = ("STOPS","Contains data on both pedestrian and traffic stops.")
     TRAFFIC = ("TRAFFIC STOPS","Traffic stops are stops by police of motor vehicles due to reasonable suspicion " + 
         " or traffic violations.")
     TRAFFIC_ARRESTS = ("TRAFFIC ARRESTS","Traffic stops leading to an arrest.")
     TRAFFIC_CITATIONS = ("TRAFFIC CITATIONS","Traffic stops leading to a citation.")
     TRAFFIC_WARNINGS = ("TRAFFIC WARNINGS","Traffic stops leading to a warning.")
-    USE_OF_FORCE = ("USE OF FORCE","Documentation of physical force used against civilians.")
-    USE_OF_FORCE_CIVILIANS = ("USE OF FORCE - CIVILIANS",
+    USE_OF_FORCE = ("USE OF FORCE","Documentation of physical force used against subjects.")
+    USE_OF_FORCE_SUBJECTS = ("USE OF FORCE - SUBJECTS",
         "Use of force data may be split into several tables due to the possibility that multiple "+
-        "civilians and officers may be involved in an incident. This table contains data on civilians.")
+        "subjects and officers may be involved in an incident. This table contains data on subjects.")
     USE_OF_FORCE_OFFICERS = ("USE OF FORCE - OFFICERS",
         "Use of force data may be split into several tables due to the possibility that multiple "+
-        "civilians and officers may be involved in an incident. This table contains data on officer.")
+        "subjects and officers may be involved in an incident. This table contains data on officer.")
     USE_OF_FORCE_INCIDENTS = ("USE OF FORCE - INCIDENTS",
         "Use of force data may be split into several tables due to the possibility that multiple "+
-        "civilians and officers may be involved in an incident. This table contains data on the incident.")
-    USE_OF_FORCE_CIVILIANS_OFFICERS = ("USE OF FORCE - CIVILIANS/OFFICERS",
+        "subjects and officers may be involved in an incident. This table contains data on the incident.")
+    USE_OF_FORCE_SUBJECTS_OFFICERS = ("USE OF FORCE - SUBJECTS/OFFICERS",
         "Use of force data may be split into several tables due to the possibility that multiple "+
-        "civilians and officers may be involved in an incident. This table contains data on civilians and officers.")
+        "subjects and officers may be involved in an incident. This table contains data on subjects and officers.")
     VEHICLE_PURSUITS = ("VEHICLE PURSUITS","Attempts by officers in vehicles to pursue vehicles where the operator " + 
         "is believed to be aware that they are being signaled to stop but who is fleeing or ignoring the officer's attempt "+
         "to stop them.")
