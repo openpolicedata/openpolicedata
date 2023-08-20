@@ -644,9 +644,10 @@ class Standardizer:
                 adv_type_match=_find_race_col_type_advanced)
 
             # enthnicity is to deal with typo in Ferndale data. Consider using rapidfuzz in future for fuzzy matching
-            match_cols = self._find_col_matches("ethnicity", ["ethnicity", "ethnic", "enthnicity"], exclude_col_names=race_cols,
+            match_cols = self._find_col_matches("ethnicity", ["ethnicity", "ethnic", "enthnicity","nationality"], exclude_col_names=race_cols,
                                                 exclude_table_types=[defs.TableType.COMPLAINTS_ALLEGATIONS,defs.TableType.INCIDENTS],
                                                 validator=_eth_validator,
+                                                secondary_patterns=[("equals", "Eth")],
                                                 always_validate=True)
             logger.info(f"Potential ethnicity columns found: {match_cols}")
 
@@ -1058,6 +1059,12 @@ class Standardizer:
         # Reorder columns so standardized columns are first and any old columns are last
         old_cols = [x for x in self.df.columns if x.startswith(_OLD_COLUMN_INDICATOR)]
         reordered_cols = [x.new_column_name for x in self.data_maps if x.new_column_name in self.df.columns and x.new_column_name not in old_cols]
+        # Remove columns that were combined to form other columns
+        for map in self.data_maps:
+            if isinstance(map.orig_column_name, list):
+                for x in map.orig_column_name:
+                    if x in reordered_cols:
+                        reordered_cols.remove(x)
         reordered_cols.extend([x for x in self.df.columns if x not in old_cols and x not in reordered_cols])
         reordered_cols.extend([x for x in old_cols])
         self.df = self.df[reordered_cols]
@@ -1129,35 +1136,37 @@ class Standardizer:
         self.df[race_col_orig] = self.df[race_col]
         if type=="concat":
             def concat(x):
-                if isinstance(x[race_col],dict):
-                    return {k:f"{r} {e}" for k,r,e in zip(x[race_col].keys(), x[race_col].values(), x[eth_col].values())}
+                if isinstance(x[race_col_orig],dict):
+                    return {k:f"{r} {e}" for k,r,e in zip(x[race_col_orig].keys(), x[race_col_orig].values(), x[eth_col].values())}
                 else:
-                    return f"{x[race_col]} {x[eth_col]}"
+                    return f"{x[race_col_orig]} {x[eth_col]}"
                 
             f = concat
         elif type=="merge":
             if defs._eth_keys.NONLATINO not in self.eth_cats:
                 raise KeyError(f"Unable to merge race and ethnicity columns without a value for self.eth_cats[{defs._eth_keys.NONLATINO}]")
             def merge(x):
-                 if isinstance(x[race_col],dict) and isinstance(x[eth_col],dict):
+                 if isinstance(x[race_col_orig],dict) and isinstance(x[eth_col],dict):
                     return {k:(r if e==self.eth_cats[defs._eth_keys.NONLATINO] else e) for k,r,e in 
-                            zip(x[race_col].keys(), x[race_col].values(), x[eth_col].values())}
-                 elif isinstance(x[race_col],dict):
+                            zip(x[race_col_orig].keys(), x[race_col_orig].values(), x[eth_col].values())}
+                 elif isinstance(x[race_col_orig],dict):
                     if isinstance(x[eth_col], str) and ("exempt" in x[eth_col].lower() or x[eth_col].lower()=="unspecified"):
                         return {k:
                                 v+" - Ethnicity " +x[eth_col] if "exempt" not in v.lower() else v 
-                                for k,v in x[race_col].items()
+                                for k,v in x[race_col_orig].items()
                                 }
                     else:
                         raise NotImplementedError()
                  elif isinstance(x[eth_col],dict):
                      raise NotImplementedError()
                  else:
-                    return x[race_col] if x[eth_col]==self.eth_cats[defs._eth_keys.NONLATINO] else x[eth_col]
+                    return x[race_col_orig] if x[eth_col]==self.eth_cats[defs._eth_keys.NONLATINO] else x[eth_col]
 
             f = merge
 
-        self.df[race_col] = self.df[[race_col, eth_col]].apply(f, axis=1)
+        self.df[race_col] = self.df[[race_col_orig, eth_col]].apply(f, axis=1)
+        idx_race = [k for k,x in enumerate(self.data_maps) if x.new_column_name==race_col][0]
+        self.data_maps[idx_race].new_column_name = race_col_orig
         self.data_maps.append(
             DataMapping(orig_column_name=[race_col_orig, eth_col], new_column_name=race_col)
         )
@@ -1284,94 +1293,128 @@ class Standardizer:
                 mult_data.type = MultType.DEMO_COL
                 return
             else:
-                max_count_race = 0
-                max_count_eth = 0
-                max_count_age = 0
-                max_count_gender = 0
-                has_exempt = False
-                delim = None
-                if age_col in self.col_map:
-                    all_bad_age = self.df[self.col_map[age_col]].apply(lambda x: pd.isnull(x) or (isinstance(x,str) and "exempt" in x.lower())).all()
-                    if not all_bad_age:  # Not all null or exempt
-                        # Starting with age because it is least likely to have complicated values that could trick
-                        # the delimiter search
-                        num_age, mult_data.delim_age, max_count_age, is_exempt_age = _count_values(self.df[self.col_map[age_col]])
-                        if is_exempt_age.any():
-                            # It's possible that one of the columns has multiple values but this column has exemptions in the same place
-                            has_exempt = True
-                        elif max_count_age==0:
-                            return
-                        delim = mult_data.delim_age
+                cols = [self.col_map[x] for x in [age_col, race_col, eth_col, gender_col] if x in self.col_map]
+                if len(cols)<2:
+                    return
+                df = self.df[cols]
 
-                if race_col in self.col_map:
-                    num_race, mult_data.delim_race, max_count_race, is_exempt_race = _count_values(self.df[self.col_map[race_col]], known_delim=delim)
-                    has_any = max_count_race!=0
-                    if has_any:
-                        if age_col in self.col_map and not all_bad_age and max_count_age>0:
-                            idx = num_race.notnull() & num_age.notnull()
-                            # Check commonality between race and age values with multiple values
-                            if (num_race[idx]!=num_age[idx]).mean()>0.1:
-                                return                          
+                all_bad = df.isnull().all()
+                cols = [x for x in cols if not all_bad[x]]
+
+                if len(cols)<2:
+                    return
+                df = self.df[cols]
+                
+                def expand(x, d):
+                    if isinstance(x,str):
+                        result = 0
+                        for val in x.split(d):
+                            y = val.lower().split("x")
+                            if len(y)==2 and y[1].strip().isdigit():
+                                result+=int(y[1])
+                            else:
+                                result+=1
+                        return result
                     else:
-                        if age_col in self.col_map:
-                            if has_exempt and is_exempt_age.equals(is_exempt_race):
-                                # It's possible that one of the columns has multiple values but this column has exemptions in the same place
-                                pass
-                            elif not all_bad_age and num_race[num_age>1].notnull().any():
+                        return 1
+
+                delims = [",", "|", ";", "/","\n"]
+                max_count = pd.Series({x:-1 for x in cols})
+                delim_found = pd.Series({x:"" for x in cols})
+                max_num_vals = pd.DataFrame()
+                for d in delims:
+                    num_vals = df.apply(lambda y: y.apply(expand, args=(d)))
+                    count = (num_vals>1).sum()
+                    for c in cols:
+                        # , is sometimes used in label such as Hispanic, Latino, or Spanish Origin 
+                        # so if another delimiter is found, that delimiter is more likely than the ,
+                        if count[c] > max_count[c] or (count[c]>0 and delim_found[c]==","):
+                            max_count[c] = count[c]
+                            max_num_vals[c] = num_vals[c]
+                            delim_found[c] = d
+
+                if (max_count>0).sum()<2:
+                    if (max_count>0).sum()==1:
+                        # PDs in Florida claim that they are exempt from releasing some information due to Marsy's Law.
+                        # Check if some rows that have multiple values in 1 columns are labeled exempted in another
+                        for k in df[max_num_vals.max(axis=1)>1].index:
+                            # Check if columns without multiple values are all exempt
+                            if not df.loc[k][max_num_vals.loc[k]==1].apply(lambda x: "Marsy" in x and "Exempt" in x if isinstance(x,str) else False).all():
                                 return
-                        elif is_exempt_race.any():
-                            # It's possible that one of the columns has multiple values but this column has exemptions in the same place
-                            has_exempt = True
-                        else:
-                            return
-
-                    delim = mult_data.delim_race
-
-                if eth_col in self.col_map:
-                    num_eth, mult_data.delim_eth, max_count_eth, is_exempt_eth = _count_values(self.df[self.col_map[eth_col]], known_delim=delim)
-                    has_any = max_count_eth!=0
-                    if not has_any and num_eth[num_race>1].notnull().any():
+                        logger.info("One column found that potentially contains demographics data for multiple individuals. The rest are labeled as exempt.")
+                        all_exempt = True
+                    else:
                         return
-                    if has_any and race_col in self.col_map and max_count_race>0:
-                        idx = num_race.notnull() & num_eth.notnull()
-                        if (num_race[idx]!=num_eth[idx]).any():
-                            return
-                        
-                    delim = mult_data.delim_eth
-
-                if gender_col in self.col_map:
-                    num_gender, mult_data.delim_gender, max_count_gender, _ = _count_values(self.df[self.col_map[gender_col]])
-                    if max_count_gender==0:
-                        return
-                    if race_col in self.col_map and max_count_race>0:
-                        idx = num_race.notnull() & num_gender.notnull()
-                        if (num_race[idx]!=num_gender[idx]).any():
-                            # count = (num_race[idx]!=num_gender[idx]).sum()
-                            # if count==1 and (max_count_race>3 or max_count_gender>3):
-                            #     # One of the columns has fewer
-                            #     idx = [k for k in range(len(num_race)) if pd.notnull(num_race[k]) and pd.notnull(num_gender[k]) and num_race[k]!=num_gender[k]][0]
-                            #     col1 = self.col_map[race_col]
-                            #     col2 = self.col_map[gender_col]
-                            #     col1_val = self.df[self.col_map[race_col]].iloc[idx]
-                            #     col2_val = self.df[self.col_map[gender_col]].iloc[idx]
-                            #     print(f"Columns {col1} and {col2} contain demographics for multiple people per row and will be converted to columns "+
-                            #         f"{race_col} and {gender_col}. However, the number of data in row {idx} is not consistent: "+
-                            #         f"{col1_val} vs. {col2_val}")
-                            if (num_race[idx]!=num_gender[idx]).mean() > 0.25:
-                                return
-                    if age_col in self.col_map and not all_bad_age and max_count_age>0:
-                        idx = num_gender.notnull() & num_age.notnull()
-                        if (num_age[idx]!=num_gender[idx]).mean()>0.1:
-                            return
+                else:
+                    all_exempt = False
+                
+                logger.info(f"Demographics columns {cols} may contain data for multiple individuals that are separated by a delimiter. "
+                            "If confirmed, dictionaries will be used to encode data for each individual.")
+                
+                def has_multiplier(x, d):
+                    # In addition to showing multiple people separate by delimiters,
+                    # Norristown data also has data like Mx3 / F for 3 males and a female
+                    if isinstance(x,str):
+                        for val in x.split(d):
+                            y = val.lower().split("x")
+                            if len(y)==2 and y[1].strip().isdigit():
+                                return True
+                        return False
+                    else:
+                        return False
                     
-                if int(max_count_race>0) + int(max_count_age>0) + int(max_count_gender>0) + int(max_count_eth>0) > 1:
+                if not all_exempt:
+                    has_multiply = df.apply(lambda y: y.apply(has_multiplier, args=(delim_found[y.name]))).any()
+                if all_exempt:
+                    pass
+                elif has_multiply.any():
+                    logger.info(f"Identified pattern where multiple individuals are indicated by multiply symbol "
+                                "(i.e. Mx3 / F would be 3 males and a female).")
+                else:
+                    # Replace blank space and na with nan
+                    max_num_vals[df.isnull()] = np.nan
+                    max_num_vals[df==""] = np.nan
+                    # In Florida, PD's use Marsy's law to try to shield themselves from releasing certain data
+                    is_exempt = df.apply(lambda y: y.apply(lambda x: "Marsy" in x and "Exempt" in x if isinstance(x,str) else False))
+                    max_num_vals[is_exempt] = np.nan
+                    all_florida_exempt = is_exempt.all()
+                    
+                    has_match = pd.Series({x:True for x in cols})
+                    for k,c0 in enumerate(cols):
+                        if max_count[c0]==0:
+                            has_match[c0] = all_florida_exempt[c0]
+                            continue
+                        notnull0 = max_num_vals[c0].notnull()
+                        is_age0 = age_col in self.col_map and self.col_map[age_col]==c0
+                        for c1 in cols[k+1:]:
+                            if max_count[c1]==0:
+                                has_match[c1] = all_florida_exempt[c1]
+                                continue
+                            idx = notnull0 & max_num_vals[c1].notnull()
+                            if is_age0 or (age_col in self.col_map and self.col_map[age_col]==c1):
+                                age_matches = max_num_vals[c0][idx]==max_num_vals[c1][idx]
+                                m = age_matches.mean()>=0.9 and (max_num_vals[c0][idx][age_matches] > 1).any()
+                            else:
+                                m = (max_num_vals[c0][idx]==max_num_vals[c1][idx]).all()
+                            has_match[c0]&=m
+                            has_match[c1]&=m
+
+                if all_exempt or has_multiply.any() or has_match.all():
+                    if age_col in self.col_map:
+                        mult_data.delim_age = delim_found[self.col_map[age_col]] if self.col_map[age_col] in delim_found else delim_found.mode()[0]
+                    if race_col in self.col_map:
+                        mult_data.delim_race = delim_found[self.col_map[race_col]] if self.col_map[race_col] in delim_found else delim_found.mode()[0]
+                    if eth_col in self.col_map:
+                        mult_data.delim_eth = delim_found[self.col_map[eth_col]] if self.col_map[eth_col] in delim_found else delim_found.mode()[0]
+                    if gender_col in self.col_map:
+                        mult_data.delim_gender = delim_found[self.col_map[gender_col]] if self.col_map[gender_col] in delim_found else delim_found.mode()[0]
                     logger.info("Demographics columns identified as contained delimited demographics data for multiple individuals. "+
-                                "Resulting standardized demographics columns will be dictionaries.")
+                                "Resulting standardized demographics columns contain dictionaries. The dictionaries will be "
+                                "formatted to use numerical values for the keys and the demographic as the value. "
+                                "For example, a race value of {0:'WHITE', 1:'BLACK'} and a gender value of {0:'MALE', 1:'FEMALE'} "
+                                "would indicate that person 0 was a white male and person 1 was a black female.")
                     mult_data.type = MultType.DELIMITED
-                elif int(max_count_race>0) + int(max_count_age>0) + int(max_count_gender>0) + int(max_count_eth>0) == 1 and has_exempt:
-                    logger.info("Demographics columns identified as contained delimited demographics data for multiple individuals with Florida Marsy's Law Exemptions. "+
-                                "Resulting standardized demographics columns will be dictionaries.")
-                    mult_data.type = MultType.DELIMITED
+                return
         elif race_col in self.col_map:
             # Look for count followed by race            
             race_count_re = re.compile("\d+\s?-\s?[A-Za-z]+")

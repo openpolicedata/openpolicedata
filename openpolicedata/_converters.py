@@ -738,10 +738,14 @@ def std_list(col, vals, map_dict, delim, converter, *args, **kwargs):
     multi_found = False
     # Look for multiplication pattern such as F x 2 for 2 females
     re_mult = re.compile("([A-Za-z])\s?[Xx]\s?(\d+)")
+    re_mult_reverse = re.compile("(\d+)\s?[Xx]\s?([A-Za-z])")
     for x in vals:
         if type(x) == str:
             for m in re_mult.finditer(x):
                 new_str = delim.join([m.group(1) for _ in range(int(m.group(2)))])
+                x = x.replace(m.group(0), new_str)
+            for m in re_mult_reverse.finditer(x):
+                new_str = delim.join([m.group(2) for _ in range(int(m.group(1)))])
                 x = x.replace(m.group(0), new_str)
 
             items = x.split(delim)

@@ -71,6 +71,12 @@ class DataMapping:
                         elif isinstance(x,str) and isinstance(y, pd._libs.tslibs.timestamps.Timestamp) and \
                             (x==y.strftime("%Y-%m-%d %H:%M:%S") or (x==y.strftime("%Y-%m-%d") and y.hour==0 and y.minute==0)):
                             continue
+                        elif isinstance(y,str):
+                            try:
+                                float(y)==x
+                                continue
+                            except:
+                                pass
                         tf_vals = False
 
         new_name_equal = self.new_column_name == other.new_column_name or self.new_column_name=="RAW_"+other.new_column_name
@@ -159,3 +165,6 @@ class _MultData:
     item_age = None
     item_gender = None
     item_eth = None
+
+    def __repr__(self, ) -> str:
+        return ',\n'.join("%s: %s" % item for item in vars(self).items())
