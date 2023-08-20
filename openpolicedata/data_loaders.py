@@ -972,8 +972,18 @@ class Arcgis(Data_Loader):
 
             else: raise e
         except: raise
+
+        result = r.json()
+
+        if isinstance(result, dict) and len(result.keys()) and "error" in result:
+            args = ()
+            for k,v in result['error'].items():
+                if not hasattr(v,'__len__') or len(v)>0:
+                    v = v[0] if isinstance(v,list) and len(v)==1 else v
+                    args += (k,v)
+            raise OPD_DataUnavailableError(url, 'Error returned by ArcGIS query', *args)
         
-        return r.json()
+        return result
 
 
     def __construct_where(self, year=None):
@@ -1008,7 +1018,7 @@ class Arcgis(Data_Loader):
 
         # List of error messages that can occur for bad queries as we search for the right query format
         query_err_msg = ["Unable to complete operation", "Failed to execute query", "Unable to perform query", "Database error has occurred", 
-                         "'where' parameter is invalid", "Parsing error"]
+                         "'where' parameter is invalid", "Parsing error",'Query with count request failed']
         
         where_query = ""
         zero_found = False
@@ -1029,16 +1039,8 @@ class Arcgis(Data_Loader):
                     where_query = f"{self.date_field} >= TIMESTAMP '{start_date}' AND  {self.date_field} < TIMESTAMP '{stop_date_tmp}'"
             
                 try:
-                    record_count = self.__request(where=where_query, return_count=True)
-                    if "count" not in record_count:
-                        err = "Error Code {}: ".format(record_count["error"]["code"])
-                        if len(record_count["error"]["message"])!=0:
-                            err+=record_count["error"]["message"]
-                            err+=" "
-                        if len(record_count["error"]["details"])>0 and len(record_count["error"]["details"][0])>0:
-                            err+=record_count["error"]["details"][0]
-                        raise KeyError(err)
-                    record_count = record_count["count"]
+                    record_count = self.__request(where=where_query, return_count=True)["count"]
+
                     if self.verify:
                         record_count_orig = self.__active_layer.query(where=where_query, return_count_only=True)
                         if record_count_orig!=record_count:
@@ -1051,7 +1053,7 @@ class Arcgis(Data_Loader):
                 except Exception as e:
                     if len(e.args)>0 and "Error Code: 429" in e.args[0]:
                         raise OPD_TooManyRequestsError(self.url, *e.args, _url_error_msg.format(self.url))
-                    elif len(e.args)>0 and any([x in e.args[0] for x in query_err_msg]):
+                    elif len(e.args)>0 and (any([x in e.args[0] for x in query_err_msg]) or any([x in e.args[-1] for x in query_err_msg])):
                         # This query throws an error for this dataset. Try another one below
                         pass
                     else:
@@ -1081,16 +1083,8 @@ class Arcgis(Data_Loader):
                     where_query = f"{where_query} or " + format.format(self.date_field, x)
 
                 try:
-                    record_count = self.__request(where=where_query, return_count=True)
-                    if "count" not in record_count:
-                        err = "Error Code {}: ".format(record_count["error"]["code"])
-                        if len(record_count["error"]["message"])!=0:
-                            err+=record_count["error"]["message"]
-                            err+=" "
-                        if len(record_count["error"]["details"])>0 and len(record_count["error"]["details"][0])>0:
-                            err+=record_count["error"]["details"][0]
-                        raise KeyError(err)
-                    record_count = record_count["count"]
+                    record_count = self.__request(where=where_query, return_count=True)["count"]
+
                     if self.verify:
                         record_count_orig = self.__active_layer.query(where=where_query, return_count_only=True)
                         if record_count_orig!=record_count:
@@ -1103,7 +1097,7 @@ class Arcgis(Data_Loader):
                 except Exception as e:
                     if len(e.args)>0 and "Error Code: 429" in e.args[0]:
                         raise OPD_TooManyRequestsError(self.url, *e.args, _url_error_msg.format(self.url))
-                    elif len(e.args)>0 and any([x in e.args[0] for x in query_err_msg]):
+                    elif len(e.args)>0 and (any([x in e.args[0] for x in query_err_msg]) or any([x in e.args[-1] for x in query_err_msg])):
                         # This query throws an error for this dataset. Try another one below
                         pass
                     else:
