@@ -71,7 +71,7 @@ def standardize(df, table_type, year,
     race_cats=defs.get_race_cats(),
     eth_cats=defs.get_eth_cats(),
     gender_cats=defs.get_gender_cats(),
-    no_id="pass",
+    no_id="keep",
     race_eth_combo="merge",
     merge_date_time=True,
     empty_time="NaT"): 
@@ -250,7 +250,7 @@ class Standardizer:
             race_cats=defs.get_race_cats(),
             eth_cats=defs.get_eth_cats(),
             gender_cats=defs.get_gender_cats(),
-            no_id="pass"
+            no_id="keep"
         ) -> None:
 
         self.df = df

@@ -200,7 +200,7 @@ class Table:
         keep_raw: bool =True,        
         known_cols: Optional[dict] = None,
         verbose: bool = False,
-        no_id: Literal["pass", "null", "error","test"] = "keep",
+        no_id: Literal["keep", "null", "error", "test"] = "keep",
         race_eth_combo: Literal[False, "merge", "concat"] = "merge",
         merge_date_time: bool =True,
         empty_time: Literal["nat", "ignore"] = "NaT"
@@ -647,7 +647,7 @@ class Source:
                       output_dir: Optional[str] = None, 
                       table_type: Union[str, defs.TableType, None] = None,
                       agency: Optional[str] = None,
-                      zip: bool =True
+                      zip: bool =False
                       ) -> Table:
         '''Load data from previously saved CSV file
         

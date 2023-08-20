@@ -23,11 +23,11 @@ _p_age_range = re.compile(r"""
 
 
 def convert(converter, col, source_name="", cats=None, std_map=None, delim=None, mult_type=None, item_num=None, 
-            no_id="pass", agg_cat=False):
+            no_id="keep", agg_cat=False):
     std_map = {} if std_map is None else std_map
     no_id = no_id.lower()
-    if no_id not in ["pass", "null", "error","test"]:
-        raise ValueError(f"no_id is {no_id}. It should be 'pass', 'null', or 'error'.")
+    if no_id not in ["keep", "null", "error","test"]:
+        raise ValueError(f"no_id is {no_id}. It should be 'keep', 'null', or 'error'.")
     
     # value_counts handles more data types when getting unique values than .unique()
     counts = col.value_counts(dropna=False)
@@ -62,7 +62,7 @@ def convert_off_or_civ(x, no_id, *args, **kwargs):
     elif no_id in ["error","test"]:
         raise ValueError(f"Unknown person type {orig}")
     else:
-        return orig if no_id=="pass" else ""
+        return orig if no_id=="keep" else ""
     
 
 def _create_age_range_lut(x, no_id, source_name, *args, **kwargs):
@@ -125,7 +125,7 @@ def _create_age_range_lut(x, no_id, source_name, *args, **kwargs):
         try:
             return datetime.strftime(datetime.strptime(x, "%d-%b"),"%m-%d")
         except:
-            if no_id=="pass" or (no_id=="test" and x in ["#VALUE!", "NOT AVAILABLE", "OTHER"]):
+            if no_id=="keep" or (no_id=="test" and x in ["#VALUE!", "NOT AVAILABLE", "OTHER"]):
                 return orig
             elif no_id=="error":
                 raise TypeError(f"Unknown val {x} for age range")
@@ -165,7 +165,7 @@ def _create_ethnicity_lut(x, no_id, source_name, eth_cats, *args, **kwargs):
         elif no_id=="error":
             raise ValueError(f"Null value found in ethnicity column: {orig}")
         else:
-            # Same result whether no_id is pass or null
+            # Same result whether no_id is keep or null
             return ""
         
     if has_nonlat and (x in ["N", "NH", "NHIS"] or "NOTHISP" in x or "NONHIS" in x or "NONLATINO" in x):
@@ -186,7 +186,7 @@ def _create_ethnicity_lut(x, no_id, source_name, eth_cats, *args, **kwargs):
     elif no_id=="error":
         raise ValueError(f"Unknown value in ethnicity column: {orig}")
     else:
-        return orig if no_id=="pass" else ""
+        return orig if no_id=="keep" else ""
 
 
 def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_cat=False, known_single=False):
@@ -233,7 +233,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
             if no_id=="error":
                 raise KeyError(f"Unknown race value for {source_name} data: {orig}")
             else:
-                return orig if no_id=="pass" else ""
+                return orig if no_id=="keep" else ""
         else:
             # Replace numerical code with default value
             x = map_dict[x]
@@ -342,7 +342,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
         elif no_id=="error":
             raise ValueError(f"Null value found in race column: {orig}")
         else:
-            # Same result whether no_id is pass or null
+            # Same result whether no_id is keep or null
             return ""
         
     def is_latino(x):
@@ -459,11 +459,11 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
             else:
                 raise ValueError(f"Unknown value in race column: {orig}")
         else:
-            return orig if no_id=="pass" else ""
+            return orig if no_id=="keep" else ""
     elif no_id=="error":
         raise ValueError(f"Unknown value in race column: {orig}")
     else:
-        return orig if no_id=="pass" else ""
+        return orig if no_id=="keep" else ""
 
 
 def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
@@ -490,7 +490,7 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
             if no_id=="error":
                 raise KeyError(f"Unknown gender value for {source_name} data: {orig}")
             else:
-                return orig if no_id=="pass" else ""
+                return orig if no_id=="keep" else ""
         else:
             # Replace numerical code with default value
             x = map_dict[x]
@@ -530,7 +530,7 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
         elif no_id=="error":
             raise ValueError(f"Null value found in gender column: {orig}")
         else:
-            # Same result whether no_id is pass or null
+            # Same result whether no_id is keep or null
             return ""
     if has_unspecified and x in ["MISSING", "UNSPECIFIED", "",",",'NOTSPECIFIED',"NOTRECORDED","NONE"] or \
         "NODATA" in x or "NOSEX" in x or "NULL" in x:
@@ -572,6 +572,7 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
             (source_name=="New York City" and (x=="Z" or x.isdigit())) or \
             (source_name=="Baltimore" and x in ["Y","Z"]) or \
             (source_name=="Urbana" and x in ["."]) or \
+            (source_name=="Greensboro" and x in ["ASIAN"]) or \
             (source_name=="Columbia" and x in ["B"]) or \
             (source_name=="Burlington" and x in ["EXPUNGED"]) or \
             (source_name in ["Seattle","New Orleans","Menlo Park","Rutland"] and x in ["D","N"]) or \
@@ -582,7 +583,7 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
             (x=="5" and source_name=="Lincoln") or \
             (x=="PENDINGRELEASE" and source_name=="Portland") or \
             (x in ["N","H"] and source_name=="Los Angeles") or \
-            (x=="X" and source_name in ["Sacramento", "State Police", "Washington D.C."]) or \
+            (x=="X" and source_name in ["Sacramento", "State Police", "Washington D.C.","Northampton"]) or \
             "DOG" in x or \
             x in ["UNDISCLOSE","UNDISCLOSED","PREFER TO SELF DESCRIBE".replace(" ",""),'NONBINARY/THIRDGENDER',
                   "PREFER NOT TO SAY".replace(" ",""),"TGNC/OTHER","REFUSED",'UNVERIFIED','NONBINARY/OTHERX'] or \
@@ -593,7 +594,7 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
     if no_id=="error":
         raise ValueError(f"Unknown value in gender column: {orig}")
     else:
-        return orig if no_id=="pass" else ""
+        return orig if no_id=="keep" else ""
 
 
 def std_dict(col, std_map, converter, *args):
