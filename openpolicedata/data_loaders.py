@@ -1136,7 +1136,7 @@ class Arcgis(Data_Loader):
         # Update record count for request record offset
         record_count-=offset
         if record_count<=0:
-            return None
+            return pd.DataFrame()
 
         batch_size = self.max_record_count or _default_limit
         nrows = nrows if nrows!=None and record_count>=nrows else record_count
@@ -1255,7 +1255,7 @@ class Arcgis(Data_Loader):
 
             return df
         else:
-            return None
+            return pd.DataFrame()
 
 
 class Carto(Data_Loader):
@@ -1428,7 +1428,7 @@ class Carto(Data_Loader):
 
         record_count-=offset
         if record_count<=0:
-            return None
+            return pd.DataFrame()
 
         batch_size = _default_limit
         nrows = nrows if nrows!=None and record_count>=nrows else record_count
@@ -1502,7 +1502,7 @@ class Carto(Data_Loader):
 
             return df
         else:
-            return None
+            return pd.DataFrame()
 
 
 class Socrata(Data_Loader):
@@ -1669,7 +1669,7 @@ class Socrata(Data_Loader):
         record_count = int(self.get_count(where=where))
         record_count-=offset
         if record_count<=0:
-            return None
+            return pd.DataFrame()
         batch_size =  _default_limit
         nrows = nrows if nrows!=None and record_count>=nrows else record_count
         batch_size = nrows if nrows < batch_size else batch_size
@@ -1836,9 +1836,15 @@ def filter_dataframe(df, date_field=None, year_filter=None, agency_field=None, a
     if year_filter != None and date_field != None:
         if isinstance(year_filter, list):
             if date_field.lower()!="year":
-                df = df[(df[date_field].dt.year >= year_filter[0]) & (df[date_field].dt.year <= year_filter[1])]
+                if isinstance(year_filter[0],int):
+                    if len(year_filter)==1:
+                        year_filter.append(f"{year_filter[0]}-12-31")
+                    year_filter[0] = f"{year_filter[0]}-01-01"
+                if isinstance(year_filter[-1],int):
+                    year_filter[-1] = f"{year_filter[-1]}-12-31"
+                df = df[(df[date_field] >= year_filter[0]) & (df[date_field] <= year_filter[-1])]
             else:
-                df = df[df[date_field].isin(year_filter)]
+                df = df[df[date_field].isin(range(year_filter[0], year_filter[-1]+1))]
         elif date_field.lower()!="year":
             date_col = to_datetime(df[date_field])
             df = df[date_col.dt.year == year_filter]
