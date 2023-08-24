@@ -131,13 +131,50 @@ class TestData:
 				else:
 					years = years[:1]
 
+			tables = []
+			future_error = False
+			for year in years:
+				try:
+					table = src.load_from_url(year, datasets.iloc[i]["TableType"], 
+											agency=agency, pbar=False, 
+											nrows=max_count if datasets.iloc[i]["DataType"] not in ["CSV","Excel"] else None)
+				except OPD_FutureError as e:
+					future_error = True
+					break
+				except:
+					raise
+
+				sleep(sleep_time)
+
+				if len(table.table)==0:
+					# Ensure count should have been 0
+					count = src.get_count(year, datasets.iloc[i]["TableType"], agency=agency)
+					if count!=0:
+						raise ValueError(f"Expected data for year {year} but received none")
+
+					# There may not be any data for the year requested. First and last year are most likely to have data
+					if years_orig[-1] not in years:
+						years = [x if x!=year else years_orig[-1] for x in years]
+						table = src.load_from_url(years_orig[-1], datasets.iloc[i]["TableType"], 
+											agency=agency, pbar=False, 
+											nrows=max_count if datasets.iloc[i]["DataType"] not in ["CSV","Excel"] else None)
+					elif years_orig[0] not in years:
+						years = [x if x!=year else years_orig[0] for x in years]
+						table = src.load_from_url(years_orig[0], datasets.iloc[i]["TableType"], 
+											agency=agency, pbar=False, 
+											nrows=max_count if datasets.iloc[i]["DataType"] not in ["CSV","Excel"] else None)
+
+				tables.append(table)
+
+			if future_error:
+				continue
+
 			for year in years:
 				print(f"Testing for year {year}")
 
-				table = src.load_from_url(year, datasets.iloc[i]["TableType"], 
-										agency=agency, pbar=False, nrows=max_count)
+				table = tables[years.index(year)]
 
-				sleep(sleep_time)
+				assert len(table.table)>0
 
 				if table.date_field == None or datasets.iloc[i]["DataType"]==DataType.EXCEL.value or \
 					table.date_field.lower()=="year":
@@ -200,7 +237,7 @@ class TestData:
 					assert dts.iloc[0] == dts_start.iloc[0]
 				except AssertionError as e:
 					# See comments in above try/except
-					assert dts.iloc[0] <= datetime.strptime(f"{year}-01-01 08:00:00", "%Y-%m-%d %H:%M:%S")
+					assert dts.iloc[0].tz_localize(None) <= datetime.strptime(f"{year}-01-01 08:00:00", "%Y-%m-%d %H:%M:%S")
 				except:
 					raise(e)
 				
@@ -216,6 +253,7 @@ class TestData:
 				sleep(sleep_time)
 				dts_stop = table_stop.table[table.date_field]
 
+				dts_stop = dts_stop[dts_stop.apply(lambda x: not isinstance(x,str))]
 				dts_stop = dts_stop.sort_values(ignore_index=True)
 
 				# If this isn't true then the start date is too late
@@ -274,7 +312,12 @@ class TestData:
 
 				now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
 				print(f"{now} Testing {i+1} of {len(datasets)}: {srcName}, {state} {table_type} table for {year}")
-				table = src.load_from_url(year, table_type, pbar=False)
+				try:
+					table = src.load_from_url(year, table_type, pbar=False)
+				except OPD_FutureError:
+					continue
+				except:
+					raise
 
 				sleep(sleep_time)
 
@@ -342,10 +385,10 @@ if __name__ == "__main__":
 	csvfile = None
 	csvfile = r"..\opd-data\opd_source_table.csv"
 	last = None
-	# last = 860-392+1
+	last = 876-258+1
 	skip = None
-	skip = "Chicago, Mesa"
+	skip = "Corona,Bloomington"
 	source = None
-	source = "Detroit"
+	# source = "Detroit"
 	tp.test_load_year(csvfile, source, last, skip, None)
-	# tp.test_source_download_not_limitable(csvfile, source, last, skip, None)
+	tp.test_source_download_not_limitable(csvfile, source, last, skip, None)

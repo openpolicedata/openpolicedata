@@ -76,8 +76,10 @@ class TestData:
 			skip = [x.strip() for x in skip]
 			
 		for i in range(len(datasets)):
+			# Skip sources that the user requested to skip
 			if skip != None and datasets.iloc[i]["SourceName"] in skip:
 				continue
+			# User requested only the last values to run
 			if i < len(datasets) - last:
 				continue
 			if source != None and datasets.iloc[i]["SourceName"] != source:
@@ -299,9 +301,9 @@ if __name__ == "__main__":
 	csvfile = None
 	csvfile = r"..\opd-data\opd_source_table.csv"
 	last = None
-	last = 873-290+1
+	# last = 875-497+1
 	skip = None
-	skip = "Bloomington"
+	skip = "Corona,Bloomington"
 	source = None
 	# source = "Mesa"
 

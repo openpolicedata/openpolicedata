@@ -128,7 +128,7 @@ def _create_age_range_lut(x, no_id, source_name, *args, **kwargs):
             if no_id=="keep" or (no_id=="test" and x in ["#VALUE!", "NOT AVAILABLE", "OTHER"]):
                 return orig
             elif no_id=="error":
-                raise TypeError(f"Unknown val {x} for age range")
+                raise ValueError(f"Unknown val {x} for age range")
             else:
                 # no_id == "null"
                 return ""

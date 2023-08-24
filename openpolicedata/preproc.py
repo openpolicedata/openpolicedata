@@ -17,6 +17,10 @@ _skip_tables = ["calls for service"]
 _OLD_COLUMN_INDICATOR = "RAW"
 
 logger = logging.getLogger("opd-std")
+logger.setLevel(logging.WARNING)
+sh = logging.StreamHandler()
+sh.name = 'main'
+logger.addHandler(sh)
 
 class _ColMapDict():
     def __init__(self):
@@ -331,7 +335,7 @@ class Standardizer:
 
 
     def _find_col_matches(self, id, match_substr, 
-        known_col_name=None, 
+        known_col_names=None, 
         only_table_types=None,
         exclude_table_types=[], 
         not_required_table_types="ALL", 
@@ -355,11 +359,16 @@ class Standardizer:
                 return []
 
         officer_terms = ["officer","deputy", "empl"]
-        if known_col_name != None:
-            if known_col_name not in self.df.columns:
-                raise ValueError(f"Known column {known_col_name} is not in the DataFrame")
-            logger.info(f"\tSetting {id} column as {known_col_name}")
-            return [known_col_name]
+        if known_col_names != None and (not isinstance(known_col_names, list) or any([x is not None for x in known_col_names])):
+            if isinstance(known_col_names,str):
+                known_col_names = [known_col_names]
+            else:
+                known_col_names = [x for x in known_col_names if x is not None]
+            for n in known_col_names:
+                if n not in self.df.columns:
+                    raise ValueError(f"Known column {n} is not in the DataFrame")
+                logger.info(f"\tSetting {id} column as {n}")
+            return known_col_names
         else:
             if isinstance(match_substr, str):
                 match_substr = [match_substr]
@@ -455,7 +464,7 @@ class Standardizer:
 
     def id_columns(self):
         # Find the date columns
-        match_cols = self._find_col_matches("date", "date", known_col_name=self.known_cols[defs.columns.DATE], 
+        match_cols = self._find_col_matches("date", "date", known_col_names=self.known_cols[defs.columns.DATE], 
             std_col_name=defs.columns.DATE,
             secondary_patterns = [("equals","date"),("contains","time"),("does not contain", "officer")],
             exclude_col_names=[("does not contain", ["as_of","last_reported","objectid"])], # Terms associated with dates not of interest
@@ -556,6 +565,7 @@ class Standardizer:
                 validator_args.append(date_data)
             
         match_cols = self._find_col_matches("time", ["time", "tm", "toa"], 
+            known_col_names=self.known_cols[defs.columns.TIME], 
             std_col_name=defs.columns.TIME,
             secondary_patterns=secondary_patterns, 
             validator=datetime_parser.validate_time,
@@ -612,6 +622,7 @@ class Standardizer:
                 return match_cols
 
             match_cols = self._find_col_matches("Is Person Officer or Subject", ["Civilian_Officer","ROLE"], 
+                known_col_names=self.known_cols[defs.columns.SUBJECT_OR_OFFICER],
                 only_table_types = [defs.TableType.USE_OF_FORCE, defs.TableType.USE_OF_FORCE_SUBJECTS_OFFICERS, defs.TableType.SHOOTINGS],
                 exclude_col_names=[("not equal","SubjectRole")],  # Subject role would be role of subject not whether person is subject or officer
                 validator=role_validator,
@@ -623,10 +634,12 @@ class Standardizer:
                 self.col_map[defs.columns.SUBJECT_OR_OFFICER] = match_cols[0]
 
             match_cols = self._find_col_matches("race", ["race", "citizen_demographics","officer_demographics","ethnicity","re_grp"],
-                validator=_race_validator, 
-                validate_args=[self.source_name],
-                exclude_table_types=[defs.TableType.INCIDENTS],  # Standardization will be make it unclear if column is for suspect or victim
-                search_data=True)  
+                                                known_col_names=[self.known_cols[x] for x in [defs.columns.RACE_OFFICER,defs.columns.RACE_OFFICER_SUBJECT, 
+                                                                                              defs.columns.RACE_SUBJECT]],
+                                                validator=_race_validator, 
+                                                validate_args=[self.source_name],
+                                                exclude_table_types=[defs.TableType.INCIDENTS],  # Standardization will be make it unclear if column is for suspect or victim
+                                                search_data=True)  
             
             logger.info(f"Potential race columns found: {match_cols}")
 
@@ -645,6 +658,8 @@ class Standardizer:
 
             # enthnicity is to deal with typo in Ferndale data. Consider using rapidfuzz in future for fuzzy matching
             match_cols = self._find_col_matches("ethnicity", ["ethnicity", "ethnic", "enthnicity","nationality"], exclude_col_names=race_cols,
+                                                known_col_names=[self.known_cols[x] for x in [defs.columns.ETHNICITY_OFFICER,defs.columns.ETHNICITY_OFFICER_SUBJECT, 
+                                                                                              defs.columns.ETHNICITY_SUBJECT]],
                                                 exclude_table_types=[defs.TableType.COMPLAINTS_ALLEGATIONS,defs.TableType.INCIDENTS],
                                                 validator=_eth_validator,
                                                 secondary_patterns=[("equals", "Eth")],
@@ -659,11 +674,13 @@ class Standardizer:
             # Do not want the result to contain the word agency
             match_substr=["age","citizen_demographics","officer_demographics"]
             match_cols = self._find_col_matches("age", match_substr, 
-                exclude_col_names=[("does not contain",["group","range","at_hire"])],
-                validator=_age_validator,
-                validate_args=[match_substr],
-                exclude_table_types=[defs.TableType.INCIDENTS],  # Standardization will be make it unclear if column is for suspect or victim
-                always_validate=True)
+                                                known_col_names=[self.known_cols[x] for x in [defs.columns.AGE_OFFICER,defs.columns.AGE_OFFICER_SUBJECT, 
+                                                                                              defs.columns.AGE_SUBJECT]],
+                                                exclude_col_names=[("does not contain",["group","range","at_hire"])],
+                                                validator=_age_validator,
+                                                validate_args=[match_substr],
+                                                exclude_table_types=[defs.TableType.INCIDENTS],  # Standardization will be make it unclear if column is for suspect or victim
+                                                always_validate=True)
             
             logger.info(f"Potential age columns found: {match_cols}")
 
@@ -676,6 +693,8 @@ class Standardizer:
                 )
 
             match_cols = self._find_col_matches("age range", ["agerange","age_range","age range","agegroup","age_group"],
+                                                known_col_names=[self.known_cols[x] for x in [defs.columns.AGE_RANGE_SUBJECT,defs.columns.AGE_RANGE_OFFICER, 
+                                                                                              defs.columns.AGE_RANGE_OFFICER_SUBJECT]],
                                                 exclude_table_types=[defs.TableType.INCIDENTS])  # Standardization will be make it unclear if column is for suspect or victim)
             
             logger.info(f"Potential age group columns found: {match_cols}")
@@ -685,8 +704,10 @@ class Standardizer:
                 defs.columns.AGE_RANGE_OFFICER_SUBJECT)
             
             match_cols = self._find_col_matches("gender", ["gender", "gend", "sex","citizen_demographics","officer_demographics"],
-                validator=_gender_validator, validate_args=[self.source_name],
-                exclude_table_types=[defs.TableType.INCIDENTS])  # Standardization will be make it unclear if column is for suspect or victim) 
+                                                known_col_names=[self.known_cols[x] for x in [defs.columns.GENDER_OFFICER,defs.columns.GENDER_OFFICER_SUBJECT, 
+                                                                                              defs.columns.GENDER_SUBJECT]],
+                                                validator=_gender_validator, validate_args=[self.source_name],
+                                                exclude_table_types=[defs.TableType.INCIDENTS])  # Standardization will be make it unclear if column is for suspect or victim) 
 
             logger.info(f"Potential gender columns found: {match_cols}")
 
@@ -700,7 +721,7 @@ class Standardizer:
                     ],
                 adv_type_match=_find_gender_col_type_advanced)
 
-        match_cols = self._find_col_matches("agency", [], known_col_name=self.known_cols[defs.columns.AGENCY])
+        match_cols = self._find_col_matches("agency", [], known_col_names=self.known_cols[defs.columns.AGENCY])
         if len(match_cols) > 1:
             raise NotImplementedError()
         elif len(match_cols) == 1:
@@ -714,6 +735,18 @@ class Standardizer:
 
     
     def _id_ethnicity_column(self, race_types, eth_cols, race_cols, specific_cases=[]):
+        known_col_names = []
+        known_col_types = []
+        for c in [defs.columns.ETHNICITY_SUBJECT, defs.columns.ETHNICITY_OFFICER, defs.columns.ETHNICITY_OFFICER_SUBJECT]:
+            if self.known_cols[c] is not None:
+                logger.info(f"Column {self.known_cols[c]} will be mapped to {c} based on user request")
+                self.col_map[c] = self.known_cols[c]
+                known_col_names.append(self.known_cols[c])
+                known_col_types.append(c)
+
+        if len(known_col_names)>0:
+            return known_col_names, known_col_types
+
         for c in specific_cases:
             if c.equals(self.source_name, self.table_type, self.year) and c.findcols(self.df.columns):
                 for k in range(len(c.old_name)):
@@ -767,7 +800,7 @@ class Standardizer:
 
         k = 0
         while k < len(validation_types):
-            # Check if there is a corresponding race column (this is required)
+            # Check if there is a corresponding race column
             if validation_types[k] not in race_types:
                 # Check if detected ethnicity column might actually be a race/ethnicity column
                 try:
@@ -793,7 +826,7 @@ class Standardizer:
                     validation_types.pop(k)
                     eth_types.pop(k)
                 except:
-                    raise NotImplementedError() 
+                    k+=1
             else:
                 k+=1
 
@@ -812,6 +845,19 @@ class Standardizer:
         sources_to_exclude=[],
         specific_cases=[],
         adv_type_match=None):
+
+        known_col_names = []
+        known_col_types = []
+        for c in [civilian_col_name, officer_col_name, civ_officer_col_name]:
+            if self.known_cols[c] is not None:
+                logger.info(f"Column {self.known_cols[c]} will be mapped to {c} based on user request")
+                self.col_map[c] = self.known_cols[c]
+                known_col_names.append(self.known_cols[c])
+                known_col_types.append(c)
+
+        if len(known_col_names)>0:
+            return known_col_names, known_col_types
+
 
         for c in specific_cases:
             if c.equals(self.source_name, self.table_type, self.year) and c.findcols(self.df.columns):
@@ -1011,13 +1057,9 @@ class Standardizer:
     
     def merge_date_time(self, empty_time="NaT"):
         if defs.columns.DATE in self.col_map and defs.columns.TIME in self.col_map:
-            empty_time = empty_time.lower()
-            if empty_time not in ["nat", "ignore"]:
-                raise ValueError("empty_time must either be 'NaT' or 'ignore'")
-            self.df[defs.columns.DATETIME] = datetime_parser.merge_date_and_time(self.df[defs.columns.DATE], self.df[defs.columns.TIME])
+            self.df[defs.columns.DATETIME] = datetime_parser.merge_date_and_time(self.df[defs.columns.DATE], self.df[defs.columns.TIME], empty_time)
             self.data_maps.append(DataMapping(orig_column_name=[defs.columns.DATE, defs.columns.TIME], new_column_name=defs.columns.DATETIME))
-            if empty_time == "nat":
-                self.df.loc[self.df[defs.columns.TIME] == "", defs.columns.DATETIME] = pd.NaT
+
 
         # Commenting this out. Trying to keep time column as local time to enable day vs. night analysis.
         # Date column is often in UTC but it's not easy to tell when that is the case nor what the local timezone is 
@@ -1134,17 +1176,28 @@ class Standardizer:
             return
         
         self.df[race_col_orig] = self.df[race_col]
+        if defs._eth_keys.NONLATINO not in self.eth_cats:
+            raise KeyError(f"Unable to combine race and ethnicity columns without a value for self.eth_cats[{defs._eth_keys.NONLATINO}]")
         if type=="concat":
             def concat(x):
-                if isinstance(x[race_col_orig],dict):
-                    return {k:f"{r} {e}" for k,r,e in zip(x[race_col_orig].keys(), x[race_col_orig].values(), x[eth_col].values())}
+                if isinstance(x[race_col_orig],dict) and isinstance(x[eth_col],dict):
+                    return {k:(r if e==self.eth_cats[defs._eth_keys.NONLATINO] else "{r} {e}") for k,r,e in 
+                            zip(x[race_col_orig].keys(), x[race_col_orig].values(), x[eth_col].values())}
+                elif isinstance(x[race_col_orig],dict):
+                    if isinstance(x[eth_col], str) and ("exempt" in x[eth_col].lower() or x[eth_col].lower()=="unspecified"):
+                        return {k:
+                                v+" - Ethnicity " +x[eth_col] if "exempt" not in v.lower() else v 
+                                for k,v in x[race_col_orig].items()
+                                }
+                    else:
+                        raise NotImplementedError()
+                elif isinstance(x[eth_col],dict):
+                    raise NotImplementedError()
                 else:
-                    return f"{x[race_col_orig]} {x[eth_col]}"
+                    return x[race_col_orig] if x[eth_col]==self.eth_cats[defs._eth_keys.NONLATINO] else f"{x[race_col_orig]} {x[eth_col]}"
                 
             f = concat
         elif type=="merge":
-            if defs._eth_keys.NONLATINO not in self.eth_cats:
-                raise KeyError(f"Unable to merge race and ethnicity columns without a value for self.eth_cats[{defs._eth_keys.NONLATINO}]")
             def merge(x):
                  if isinstance(x[race_col_orig],dict) and isinstance(x[eth_col],dict):
                     return {k:(r if e==self.eth_cats[defs._eth_keys.NONLATINO] else e) for k,r,e in 
@@ -1417,7 +1470,7 @@ class Standardizer:
                 return
         elif race_col in self.col_map:
             # Look for count followed by race            
-            race_count_re = re.compile("\d+\s?-\s?[A-Za-z]+")
+            race_count_re = re.compile(r"\d+\s?-\s?[A-Za-z]+")
             if self.df[self.col_map[race_col]].apply(lambda x: race_count_re.search(x) is not None if pd.notnull(x) else False).any():
                 mult_data.type = MultType.COUNTS
                 return

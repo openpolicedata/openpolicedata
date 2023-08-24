@@ -1,5 +1,6 @@
 # Definition of constants
 from __future__ import annotations
+from copy import deepcopy
 from enum import Enum
 from sys import version_info
 import warnings
@@ -312,22 +313,22 @@ class _PersonTypes:
 _roles = _PersonTypes()
 
 def get_roles():
-    return _roles
+    return deepcopy(_roles)
 
 def get_race_keys():
-    return _race_keys
+    return deepcopy(_race_keys)
 
 def get_eth_keys():
-    return _eth_keys
+    return deepcopy(_eth_keys)
 
 def get_race_cats(expand=False):
-    return _race_cats_expanded if expand else _race_cats_basic
+    return _race_cats_expanded.copy() if expand else _race_cats_basic.copy()
 
 def get_eth_cats():
-    return _eth_cats_basic
+    return _eth_cats_basic.copy()
 
 def get_gender_keys():
-    return _gender_keys
+    return deepcopy(_gender_keys)
 
 def get_gender_cats():
-    return _genders
+    return _genders.copy()

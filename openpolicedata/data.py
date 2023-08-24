@@ -199,7 +199,7 @@ class Table:
         gender_cats: Optional[dict] = None,
         keep_raw: bool =True,        
         known_cols: Optional[dict] = None,
-        verbose: bool = False,
+        verbose: Union[bool,str] = False,
         no_id: Literal["keep", "null", "error", "test"] = "keep",
         race_eth_combo: Literal[False, "merge", "concat"] = "merge",
         merge_date_time: bool =True,
@@ -218,9 +218,18 @@ class Table:
             gender_cats = gender_cats if gender_cats is not None else defs.get_gender_cats()
             try:
                 if verbose:
-                    # Set logger to info so log messages in preproc.standardize will be displayed
                     logger = logging.getLogger("opd-std")
                     log_level = logger.level
+                if isinstance(verbose,str):
+                    # verbose is a filename
+                    fh = logging.FileHandler(verbose)
+                    logger.addHandler(fh)
+                    for handler in logger.handlers:
+                        if handler.name == "main":
+                            # Temporarily up level of stream handler so that only print to file
+                            handler.setLevel(logging.WARNING)
+                if verbose:
+                    # Set logger to info so log messages in preproc.standardize will be displayed
                     logger.setLevel(logging.INFO)
                     
                 self.table, self.__transforms = preproc.standardize(self.table, self.table_type, self.year,
@@ -236,12 +245,17 @@ class Table:
                     merge_date_time=merge_date_time,
                     empty_time=empty_time)
             except Exception as e:
+                raise e
+            finally:
                 if verbose:
                     logger.setLevel(log_level)
-                raise e
+                if isinstance(verbose,str):
+                    logger.removeHandler(fh)
+                    for handler in logger.handlers:
+                        if handler.name == "main":
+                            # Revert stream handler
+                            handler.setLevel(logging.NOTSET)
 
-            if verbose:
-                logger.setLevel(log_level)
             self.is_std = True
         else:
             raise ValueError("Dataset has already been cleaned. Aborting cleaning.")

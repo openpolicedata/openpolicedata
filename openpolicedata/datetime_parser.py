@@ -159,7 +159,7 @@ def parse_date_to_datetime(date_col):
     return date_col
 
 
-def merge_date_and_time(date_col, time_col):
+def merge_date_and_time(date_col, time_col, empty_time):
     # If date even has a time, this ignores it.
     # We assume that the time in time column is more likely to be local time
     # Often returned date is in UTC but local time is preferred for those who want to do day vs. night analysis
@@ -167,7 +167,21 @@ def merge_date_and_time(date_col, time_col):
     # We could use:
     # return pd.to_datetime(date_col.dt.date.astype(str) + " " + time_col.astype(str), errors="coerce")
     # but not for now to catch unexpected values
-    return pd.Series([d.replace(hour=t.hour, minute=t.minute, second=t.second) if (pd.notnull(d) and pd.notnull(t)) else pd.NaT for d,t in zip(date_col, time_col)])
+    empty_time = empty_time.lower()
+    def combine(d, t):
+        if pd.isnull(d):
+            return pd.NaT
+        elif pd.isnull(t):
+            if empty_time=="nat":
+                return pd.NaT
+            elif empty_time == "ignore":
+                return d
+            else:
+                raise ValueError("empty_time must be 'NaT' or 'ignore'")
+        else:
+            return d.replace(hour=t.hour, minute=t.minute, second=t.second)
+
+    return pd.Series([combine(d, t) for d,t in zip(date_col, time_col)])
 
 def validate_date(df, match_cols_test):
     score = None
