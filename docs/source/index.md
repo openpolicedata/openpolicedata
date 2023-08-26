@@ -12,7 +12,7 @@ html_theme.sidebar_secondary.remove: true
 
 getting_started/index.ipynb
 datasets/index.ipynb
-examples/index.ipynb
+examples/index.md
 ```
 
 # OpenPoliceData
@@ -33,8 +33,8 @@ Find out how to install OPD and learn the basics
 Learn what types of data are available in OPD and for what agencies
 :::
 :::{grid-item-card} {fas}`lightbulb;pst-color-primary` Examples
-:link: examples/index.ipynb
-:link-alt: examples/index.ipynb
+:link: examples/index.md
+:link-alt: examples/index.md
 Explore how to use OPD with Jupyter Notebooks 
 :::
 ::::
