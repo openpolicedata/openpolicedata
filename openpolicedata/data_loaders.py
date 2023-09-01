@@ -341,7 +341,9 @@ class Csv(Data_Loader):
                 
             with get(self.url, use_legacy) as resp:
                 try:
-                    table = pd.read_csv(TqdmReader(resp, pbar=pbar), nrows=offset+nrows if nrows is not None else None, encoding_errors='surrogateescape')
+                    with warnings.catch_warnings():
+                        warnings.filterwarnings("ignore", message=r"Columns \(.+\) have mixed types", category=pd.errors.DtypeWarning)
+                        table = pd.read_csv(TqdmReader(resp, pbar=pbar), nrows=offset+nrows if nrows is not None else None, encoding_errors='surrogateescape')
                 except (urllib.error.HTTPError, pd.errors.ParserError) as e:
                     raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(self.url))
                 except Exception as e:
@@ -414,7 +416,7 @@ class Excel(Data_Loader):
         Get years contained in data set
     """
 
-    def __init__(self, url, date_field=None, agency_field=None):
+    def __init__(self, url, date_field=None, agency_field=None, sheet=None):
         '''Create Excel object
 
         Parameters
@@ -424,12 +426,19 @@ class Excel(Data_Loader):
         date_field : str
             (Optional) Name of the column that contains the date
         agency_field : str
-                (Optional) Name of the column that contains the agency name (i.e. name of the police departments)
+            (Optional) Name of the column that contains the agency name (i.e. name of the police departments)
+        sheet : str
+            (Optional) Excel sheet to use. If not provided, an error will be thrown when loading data if there is more than 1 sheet
         '''
         
         self.url = url
         self.date_field = date_field
         self.agency_field = agency_field
+        self.sheet = sheet
+
+        if self.sheet is not None and re.match(r'^[“”"].+[“”"]$', self.sheet):
+            # Sheet name was put in quotes due to it being a number to prevent Excel from dropping any zeros from the front
+            self.sheet = self.sheet[1:-1]
         
         try:
             if ".zip" in self.url:
@@ -455,6 +464,17 @@ class Excel(Data_Loader):
                 self.excel_file = pd.ExcelFile(file_like)
             else:
                 raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(self.url))
+        except urllib.error.URLError as e:
+            if "[SSL: UNSAFE_LEGACY_RENEGOTIATION_DISABLED] unsafe legacy renegotiation disabled" in str(e.args[0]):
+                headers = {'User-agent' : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_3) AppleWebKit/537.75.14 (KHTML, like Gecko) Version/7.0.3 Safari/7046A194A'}
+                with get_legacy_session() as session:
+                    r = session.get(url)
+                    
+                r.raise_for_status()
+                file_like = BytesIO(r.content)
+                self.excel_file = pd.ExcelFile(file_like)
+            else:
+                raise e
         except XLRDError as e:
             if len(e.args)>0 and e.args[0] == "Workbook is encrypted" and \
                 any([url.startswith(x) for x in ["http://www.rutlandcitypolice.com"]]):  # Only perform on known datasets to prevent security issues
@@ -604,14 +624,14 @@ class Excel(Data_Loader):
         '''
 
         nrows_read = offset+nrows if nrows is not None else None
-        year_dict, has_year_sheets = self.__get_sheets()
+        sheets, has_year_sheets = self.__get_sheets()
 
         with warnings.catch_warnings():        
             # Progress bar is not used because TqdmReader object has no attribute 'seek' and would need to be modified to not have a newline operator
             warnings.simplefilter("ignore", category=pd.errors.DtypeWarning)
             if has_year_sheets:
                 if year==None:
-                    year = list(year_dict.keys())
+                    year = list(sheets.keys())
                     year.sort()
                     year = [year[0], year[-1]]
                 if not isinstance(year, list):
@@ -620,8 +640,8 @@ class Excel(Data_Loader):
                 table = None
                 cols_added = 0
                 for y in range(year[0], year[1]+1):
-                    if y in year_dict:
-                        df = pd.read_excel(self.excel_file, nrows=nrows_read, sheet_name=year_dict[y])
+                    if y in sheets:
+                        df = pd.read_excel(self.excel_file, nrows=nrows_read, sheet_name=sheets[y])
 
                         df = self.__clean(df)
 
@@ -645,7 +665,7 @@ class Excel(Data_Loader):
                                                     "(https://pypi.org/project/rapidfuzz/) to load data from multiple years (pip install rapidfuzz)")
 
                                             if fuzz.ratio(table.columns[k], df.columns[m]) > 80:
-                                                print(f"Identified difference in column names when combining sheets {year_dict[y-1]} and {year_dict[y]}. " + 
+                                                print(f"Identified difference in column names when combining sheets {sheets[y-1]} and {sheets[y]}. " + 
                                                     f"Column names are '{table.columns[k]}' and '{df.columns[m]}'. This appears to be a typo. " + 
                                                     f"These columns are assumed to be the same and will be combined as column '{table.columns[k]}'")
                                                 df.columns = [table.columns[k] if j==m else df.columns[j] for j in range(len(df.columns))]
@@ -666,7 +686,9 @@ class Excel(Data_Loader):
                 if isinstance(table, type(None)):
                     return table
             else:
-                table = pd.read_excel(self.excel_file, nrows=nrows_read)
+                self.__check_sheet(sheets)
+                sheet_name = 0 if self.sheet is None else self.sheet
+                table = pd.read_excel(self.excel_file, nrows=nrows_read, sheet_name=sheet_name)
                 table = self.__clean(table)               
 
         if offset>0:
@@ -692,6 +714,15 @@ class Excel(Data_Loader):
             agency_field=self.agency_field, agency=agency)
 
         return table
+
+
+    def __check_sheet(self, sheets):
+        if self.sheet is None:
+            if not all([re.match(r"Sheet\d+",x) for x in sheets[1:]]):
+                # More than 1 sheet has non-default name so can't assume 1st sheet
+                raise ValueError(f"The Excel file at {self.url} has {len(sheets)} sheets but no dataset id is specified to indicate which to use.")
+        elif self.sheet not in sheets:
+            raise ValueError(f"Sheet {self.sheet} not found in Excel file at {self.url}")
 
 
     def __clean(self, df):
@@ -732,12 +763,12 @@ class Excel(Data_Loader):
             list containing years in data set
         '''
 
-        year_dict, has_year_sheets = self.__get_sheets()
+        sheets, has_year_sheets = self.__get_sheets()
 
         if has_year_sheets:
-            years = list(year_dict.keys())
+            years = list(sheets.keys())
             years.sort()
-            return list(year_dict.keys())
+            return list(sheets.keys())
         if not force:
             raise ValueError("Extracting the years of a Excel file requires reading the whole file in. In most cases, "+
                 "running load() with no arguments to load in the whole CSV file and manually finding the years will be more "
@@ -779,6 +810,9 @@ class Arcgis(Data_Loader):
     get_years()
         Get years contained in data set
     """
+
+    # Based on https://developers.arcgis.com/rest/services-reference/online/feature-layer.htm
+    __max_maxRecordCount = 32000
     
     def __init__(self, url, date_field=None):
         '''Create Arcgis object
@@ -808,7 +842,7 @@ class Arcgis(Data_Loader):
         meta = self.__request()
 
         if "maxRecordCount" in meta:
-            self.max_record_count = meta["maxRecordCount"]
+            self.max_record_count = meta["maxRecordCount"] if meta['maxRecordCount']<self.__max_maxRecordCount else self.__max_maxRecordCount
         else:
             self.max_record_count = None
 
@@ -971,7 +1005,8 @@ class Arcgis(Data_Loader):
                     raise OPD_DataUnavailableError(self.url, e.args)
 
             else: raise e
-        except: raise
+        except Exception as e: 
+            raise e
 
         result = r.json()
 

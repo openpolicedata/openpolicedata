@@ -365,7 +365,7 @@ class TestProduct:
     def test_excel(self, csvfile, source, last, skip, loghtml):
         url = "https://www.norristown.org/DocumentCenter/View/1789/2017-2018-Use-of-Force"
         date_field = "Date"
-        loader = data_loaders.Excel(url, date_field=date_field)
+        loader = data_loaders.Excel(url, date_field=date_field, sheet='2017-2018')
         assert loader.isfile()
         df = loader.load(pbar=False)
 
