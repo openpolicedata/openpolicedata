@@ -56,7 +56,7 @@ def _build(csv_file):
     urls = list(df["URL"])
     p = re.compile(r"(MapServer|FeatureServer)/\d+")
     for i,url in enumerate(urls):
-        if df.iloc[i]["DataType"] == defs.DataType.ArcGIS.value:
+        if df.iloc[i]["DataType"] == defs.DataType.ArcGIS:
             result = p.search(url)
             urls[i] = url[:result.span()[1]]
 

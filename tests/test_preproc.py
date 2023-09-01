@@ -15,13 +15,6 @@ from openpolicedata import datasets, data, preproc
 from openpolicedata import defs
 from openpolicedata._preproc_utils import DataMapping
 
-# https://code.visualstudio.com/docs/python/testing#_test-configuration-settings
-def get_datasets(csvfile):
-    if csvfile != None:
-        datasets.datasets = datasets._build(csvfile)
-
-    return datasets.datasets
-
 date_col = "incident_date"
 agency_col = "agency_name"
 race_col = "race"

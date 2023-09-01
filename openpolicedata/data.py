@@ -359,11 +359,10 @@ class Source:
         for k in [k for k,x in enumerate(all_years) if x==defs.MULTI]:
             df = dfs.iloc[k]
             _check_version(df)
-            data_type =defs.DataType(df["DataType"])
             url = df["URL"]
             date_field = df["date_field"] if pd.notnull(df["date_field"]) else None
             
-            loader = self.__get_loader(data_type, url, dataset_id=df["dataset_id"], date_field=date_field)
+            loader = self.__get_loader(df["DataType"], url, dataset_id=df["dataset_id"], date_field=date_field)
 
             if not manual and pd.notnull(df["coverage_start"]) and pd.notnull(df["coverage_end"]) and \
                 hasattr(df["coverage_start"], 'year') and hasattr(df["coverage_end"], 'year'):
@@ -422,13 +421,12 @@ class Source:
         # Otherwise return self.agency
         if src["Agency"] == defs.MULTI:
             _check_version(src)
-            data_type =defs.DataType(src["DataType"])
-            loader = self.__get_loader(data_type, src["URL"], dataset_id=src["dataset_id"], date_field=src["date_field"], agency_field=src["agency_field"])
-            if data_type ==defs.DataType.CSV:
-                raise NotImplementedError(f"Unable to get agencies for {data_type}")
-            elif data_type ==defs.DataType.ArcGIS:
-                raise NotImplementedError(f"Unable to get agencies for {data_type}")
-            elif data_type ==defs.DataType.SOCRATA:
+            loader = self.__get_loader(src["DataType"], src["URL"], dataset_id=src["dataset_id"], date_field=src["date_field"], agency_field=src["agency_field"])
+            if src["DataType"] ==defs.DataType.CSV:
+                raise NotImplementedError(f"Unable to get agencies for {src['DataType']}")
+            elif src['DataType'] ==defs.DataType.ArcGIS:
+                raise NotImplementedError(f"Unable to get agencies for {src['DataType']}")
+            elif src['DataType'] ==defs.DataType.SOCRATA:
                 if partial_name is not None:
                     opt_filter = src["agency_field"] + " LIKE '%" + partial_name + "%'"
                 else:
@@ -441,7 +439,7 @@ class Source:
                 agency_set = loader.load(year, opt_filter=opt_filter, select=select, output_type="set")
                 return list(agency_set)
             else:
-                raise ValueError(f"Unknown data type: {data_type}")
+                raise ValueError(f"Unknown data type: {src['DataType']}")
         else:
             return [src["Agency"]]
 
@@ -604,7 +602,6 @@ class Source:
                 src = src.iloc[0]
 
         # Load data from URL. For year or agency equal to opd.defs.MULTI, filtering can be done
-        data_type =defs.DataType(src["DataType"])
         url = src["URL"]
 
         if filter_by_year:
@@ -628,7 +625,7 @@ class Source:
         table_agency = None
         if not pd.isnull(src["agency_field"]):
             agency_field = src["agency_field"]
-            if agency != None and data_type !=defs.DataType.ArcGIS:
+            if agency != None and src['DataType'] !=defs.DataType.ArcGIS:
                 table_agency = agency
         else:
             agency_field = None
@@ -636,7 +633,7 @@ class Source:
         #It is assumed that each data loader method will return data with the proper data type so date type etc...
         if load_table:
             _check_version(src)
-            loader = self.__get_loader(data_type, url, dataset_id=dataset_id, date_field=date_field, agency_field=agency_field)
+            loader = self.__get_loader(src['DataType'], url, dataset_id=dataset_id, date_field=date_field, agency_field=agency_field)
 
             opt_filter = None
             if agency != None and agency_field != None:
@@ -752,7 +749,7 @@ class Source:
         if data_type ==defs.DataType.CSV:
             loader = data_loaders.Csv(url, date_field=date_field, agency_field=agency_field)
         elif data_type ==defs.DataType.EXCEL:
-            loader = data_loaders.Excel(url, date_field=date_field, agency_field=agency_field) 
+            loader = data_loaders.Excel(url, sheet=dataset_id, date_field=date_field, agency_field=agency_field) 
         elif data_type ==defs.DataType.ArcGIS:
             loader = data_loaders.Arcgis(url, date_field=date_field)
         elif data_type ==defs.DataType.SOCRATA:
@@ -785,7 +782,7 @@ def _check_date(table, date_field):
         if len(dts) > 0:
             one_date = dts.iloc[0]  
             if type(one_date) == pd._libs.tslibs.timestamps.Timestamp:
-                table[date_field] = pd.to_datetime(table[date_field], errors='ignore')
+                table.loc[:, date_field] = pd.to_datetime(table[date_field], errors='ignore')
             elif type(one_date) == str:
                 p = re.compile(r'^Unknown string format: \d{4}-(\d{2}|__)-(\d{2}|__) present at position \d+$')
                 def to_datetime_local(x):
@@ -803,7 +800,7 @@ def _check_date(table, date_field):
                     warnings.filterwarnings("ignore", message="Could not infer format", category=UserWarning)
                     table[date_field] = table[date_field].apply(to_datetime_local)
                 # table = table.astype({date_field: 'datetime64[ns]'})
-            elif ("year" in date_field.lower() or date_field.lower() == "yr") and isinstance(one_date, numbers.Number):
+            elif isinstance(one_date, numbers.Number) and ("year" in date_field.lower() or date_field.lower() == "yr" or ((dts>=1900) & (dts<2100)).all()):
                 table[date_field] = table[date_field].apply(lambda x: datetime(x,1,1))
                 
             # Replace bad dates with NaT

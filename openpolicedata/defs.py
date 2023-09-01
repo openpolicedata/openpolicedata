@@ -2,13 +2,16 @@
 from __future__ import annotations
 from copy import deepcopy
 from enum import Enum
+import inspect
+import pandas as pd
+import re
 from sys import version_info
 import warnings
 
 # These are the types of data currently available in opd.
 # They all have corresponding data loaders in data_loaders.py
 # When new data loaders are added, this list should be updated.
-class DataType(Enum):
+class DataType(str, Enum):
     EXCEL = "Excel"
     CSV = "CSV"
     ArcGIS = "ArcGIS"
@@ -78,8 +81,9 @@ class TableType(str, Enum):
         "subjects and vehicles may be involved in an incident. This table contains information on non-motorists involved in a crash.")
     CRASHES_VEHICLES = ("CRASHES - VEHICLES",
         "Crash data may be split into several tables due to the possibility that multiple "+
-        "subjects and vehicles may be involved in an incident. This table contains data on vehicles    .")
+        "subjects and vehicles may be involved in an incident. This table contains data on vehicles.")
     EMPLOYEE = ("EMPLOYEE","Demographic data of the police workforce")
+    DEATHS_IN_CUSTODY = ("DEATHS IN CUSTODY", "Deaths that occur in custody or during the process of arrest")
     FIELD_CONTACTS = ("FIELD CONTACTS", "Consensual contacts between officers and the community.")
     INCIDENTS = ("INCIDENTS", "Crime incident reports")
     LAWSUITS = ("LAWSUITS", "Lawsuits against a police department")
