@@ -188,8 +188,13 @@ states = {
     "U.S. Virgin Islands": "VI",
 }
 
+class _ToDict_Mixin:
+    def to_dict(self):
+        attributes = inspect.getmembers(self, lambda a:not(inspect.isroutine(a)))
+        return {a:v for a,v in attributes if not(a.startswith('__'))}
+
 # Standard column names
-class _Columns:
+class _Columns(_ToDict_Mixin):
     DATE = "DATE"
     TIME = "TIME"
     DATETIME = "DATETIME"
@@ -215,39 +220,38 @@ class _Columns:
     SUBJECT_OR_OFFICER = "SUBJECT_OR_OFFICER"
 
     def _get_columns_as_df(self):
-        attributes = inspect.getmembers(self, lambda a:not(inspect.isroutine(a)))
+        attributes = self.to_dict()
         props = []
         columns = []
         defs = []
         sort_by = []
-        for a, v in attributes:
-            if not(a.startswith('__')):
-                props.append(a)
-                columns.append(v)
+        for a, v in attributes.items():
+            props.append(a)
+            columns.append(v)
 
-                match = re.match(r"^(SUBJECT|OFFICER|OFFICER/SUBJECT)\s(.+)$", v.replace("_"," "))
-                if v=='SUBJECT_OR_OFFICER':
-                    sort_by.append(v)
-                    defs.append("Whether row describes an officer or an subject/civilian")
-                elif match:
-                    if match.group(2)=="RACE ONLY":
-                        addon = f". This is the standardized race column when both race and ethnicity are detected. "+\
-                                f"If present, {v.replace('_ONLY','')} is a combination of race and ethnicity."
-                    else:
-                        addon = ''
-                    if match.group(1)=="OFFICER/SUBJECT":
-                        defs.append(f'{match.group(2).title()} of either an officer or subject (depending on column "{self.SUBJECT_OR_OFFICER}")'+addon)
-                    else:
-                        defs.append(f"{match.group(2).title()} of {match.group(1).lower()}"+addon)
-                    sort_by.append(match.group(2).title())
+            match = re.match(r"^(SUBJECT|OFFICER|OFFICER/SUBJECT)\s(.+)$", v.replace("_"," "))
+            if v=='SUBJECT_OR_OFFICER':
+                sort_by.append(v)
+                defs.append("Whether row describes an officer or an subject/civilian")
+            elif match:
+                if match.group(2)=="RACE ONLY":
+                    addon = f". This is the standardized race column when both race and ethnicity are detected. "+\
+                            f"If present, {v.replace('_ONLY','')} is a combination of race and ethnicity."
                 else:
-                    if a=="DATETIME":
-                        defs.append("Combination of date and time when both columns are found (not generated when detected date column contains datetime values)")
-                    elif a=="DATE":
-                        defs.append("Date. Some agencies only provide the period. In these cases, the date will be the 1st date of the period (i.e. Jan. 1 for years and the 1st of the month for months).")
-                    else:
-                        defs.append(v.title())
-                    sort_by.append(v.title())
+                    addon = ''
+                if match.group(1)=="OFFICER/SUBJECT":
+                    defs.append(f'{match.group(2).title()} of either an officer or subject (depending on column "{self.SUBJECT_OR_OFFICER}")'+addon)
+                else:
+                    defs.append(f"{match.group(2).title()} of {match.group(1).lower()}"+addon)
+                sort_by.append(match.group(2).title())
+            else:
+                if a=="DATETIME":
+                    defs.append("Combination of date and time when both columns are found (not generated when detected date column contains datetime values)")
+                elif a=="DATE":
+                    defs.append("Date. Some agencies only provide the period. In these cases, the date will be the 1st date of the period (i.e. Jan. 1 for years and the 1st of the month for months).")
+                else:
+                    defs.append(v.title())
+                sort_by.append(v.title())
 
         df = pd.DataFrame({"Attribute":props, "Column Name":columns, "Definition":defs, 'sort_by':sort_by})
         return df.sort_values(by='sort_by').drop(columns='sort_by')
@@ -264,7 +268,7 @@ class _Columns:
 
 columns = _Columns()
 
-class _Races:
+class _Races(_ToDict_Mixin):
     AAPI = "AAPI"
     ASIAN = "ASIAN"
     BLACK = "BLACK"
@@ -283,7 +287,7 @@ class _Races:
 
 _race_keys = _Races()
 
-class _Ethnicities:
+class _Ethnicities(_ToDict_Mixin):
     LATINO = _race_keys.LATINO
     MIDDLE_EASTERN = _race_keys.MIDDLE_EASTERN
     NONLATINO = "NON-LATINO"
@@ -328,7 +332,7 @@ if version_info.minor >= 9:
 else:
     _race_cats_expanded = {**_race_cats_basic, **_more_race_cats}
 
-class _Genders:
+class _Genders(_ToDict_Mixin):
     MALE = "MALE"
     FEMALE = "FEMALE"
     TRANSGENDER_MALE = "TRANSGENDER_MALE"
@@ -357,7 +361,7 @@ _genders = {
     _gender_keys.UNSPECIFIED:"UNSPECIFIED"
 }
 
-class _PersonTypes:
+class _PersonTypes(_ToDict_Mixin):
     OFFICER = "OFFICER"
     SUBJECT = "SUBJECT"
     UNSPECIFIED = "UNSPECIFIED"

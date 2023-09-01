@@ -185,7 +185,7 @@ class Csv(Data_Loader):
     """
     A class for accessing data from CSV download URLs
 
-    Attributes
+    Parameters
     ----------
     url : str
         URL
@@ -395,7 +395,7 @@ class Excel(Data_Loader):
     """
     A class for accessing data from Excel download URLs
 
-    Attributes
+    Parameters
     ----------
     url : str
         URL
@@ -790,7 +790,7 @@ class Arcgis(Data_Loader):
     """
     A class for accessing data from ArcGIS clients
 
-    Attributes
+    Parameters
     ----------
     url : str
         URL
@@ -1297,7 +1297,7 @@ class Carto(Data_Loader):
     """
     A class for accessing data from Carto clients
 
-    Attributes
+    Parameters
     ----------
     url : str
         URL
@@ -1544,7 +1544,7 @@ class Socrata(Data_Loader):
     """
     A class for accessing data from Socrata clients
 
-    Attributes
+    Parameters
     ----------
     url : str
         URL of data homepage

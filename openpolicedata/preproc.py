@@ -11,6 +11,7 @@ from . import defs
 from . import _converters as convert
 from ._converters import  _p_age_range
 from ._preproc_utils import _MultData, check_column, DataMapping, _case, MultType
+from .exceptions import BadCategoryDict
 from .utils import camel_case_split, split_words
 
 _skip_tables = ["calls for service"]
@@ -276,7 +277,20 @@ class Standardizer:
         self.mult_officer = _MultData()
         self.mult_both = _MultData()
 
-    def _pattern_search(self, select_cols, patterns, match_substr, run_all=False):
+        self.__check_for_unknown_keys('race_cats', defs.get_race_keys())
+        self.__check_for_unknown_keys('eth_cats', defs.get_eth_keys())
+        self.__check_for_unknown_keys('gender_cats', defs.get_gender_keys())
+        self.__check_for_unknown_keys('known_cols', defs.columns)
+
+
+    def __check_for_unknown_keys(self, attr, keys):
+        cat_dict = getattr(self, attr)
+        unknown = [x for x in cat_dict.keys() if x not in keys.to_dict().values()]
+        if len(unknown):
+            raise BadCategoryDict(f"Unknown key(s) {unknown} in {attr} dictionary")
+        
+
+    def __pattern_search(self, select_cols, patterns, match_substr, run_all=False):
         matches = []
         for p in patterns:
             if p[0].lower() == "equals":
@@ -327,7 +341,7 @@ class Standardizer:
         match_cols_out = match_cols.copy()
         for e in exclude_col_names:
             if type(e) == tuple:
-                match_cols_out = self._pattern_search(match_cols_out, [e], match_substr[0], run_all=True)
+                match_cols_out = self.__pattern_search(match_cols_out, [e], match_substr[0], run_all=True)
             elif e in match_cols_out:
                 match_cols_out.remove(e)
 
@@ -424,11 +438,11 @@ class Standardizer:
                         break
 
             if len(match_cols)==0 and len(match_substr)>0:
-                match_cols = self._pattern_search(self.df.columns, secondary_patterns, match_substr[0])
+                match_cols = self.__pattern_search(self.df.columns, secondary_patterns, match_substr[0])
                 match_cols = self._remove_excluded(match_cols, exclude_col_names, match_substr)
                 
             if len(match_cols)>1:
-                new_matches = self._pattern_search(match_cols, secondary_patterns, match_substr[0])
+                new_matches = self.__pattern_search(match_cols, secondary_patterns, match_substr[0])
                 if len(new_matches)>0:
                     match_cols = new_matches
                     match_cols = self._remove_excluded(match_cols, exclude_col_names, match_substr)

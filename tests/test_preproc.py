@@ -14,6 +14,7 @@ if __name__ == "__main__":
 from openpolicedata import datasets, data, preproc
 from openpolicedata import defs
 from openpolicedata._preproc_utils import DataMapping
+from openpolicedata.exceptions import BadCategoryDict
 
 date_col = "incident_date"
 agency_col = "agency_name"
@@ -142,6 +143,26 @@ def test_race_cats(csvfile, source, last, skip, loghtml, table, std_table):
     assert ((orig==white) == (renamed=="TEST")).all()
 
 
+def test_race_cats_bad_input(csvfile, source, last, skip, loghtml, table):
+    cats = defs.get_race_cats()
+    cats["BAD"] = 'ERROR'
+    with pytest.raises(BadCategoryDict):
+        table.standardize(race_cats=cats)
+
+def test_eth_cats_bad_input(csvfile, source, last, skip, loghtml, table):
+    cats = defs.get_eth_cats()
+    cats["BAD"] = 'ERROR'
+    with pytest.raises(BadCategoryDict):
+        table.standardize(eth_cats=cats)
+
+
+def test_gender_cats_bad_input(csvfile, source, last, skip, loghtml, table):
+    cats = defs.get_gender_cats()
+    cats["BAD"] = 'ERROR'
+    with pytest.raises(BadCategoryDict):
+        table.standardize(gender_cats=cats)
+
+
 def test_eth_cats(csvfile, source, last, skip, loghtml, table, std_table):
     eth_cats = defs.get_eth_cats()
     keys = defs.get_race_keys()
@@ -227,6 +248,10 @@ def test_not_keep_raw(csvfile, source, last, skip, loghtml, table):
 def test_known_col_not_in_table(csvfile, source, last, skip, loghtml, table, column):
     with pytest.raises(ValueError, match="Known column .+ is not in the DataFrame"):
         table.standardize(known_cols={column:"TEST"})
+
+def test_known_col_bad_key(csvfile, source, last, skip, loghtml, table):
+    with pytest.raises(BadCategoryDict):
+        table.standardize(known_cols={"BAD":"TEST"})
 
 @pytest.mark.parametrize("old_column, new_column", 
                          [(date_col, defs.columns.DATE),
@@ -362,6 +387,3 @@ def test_empty_time_ignore(csvfile, source, last, skip, loghtml, table):
     assert idx.sum()>0
     assert defs.columns.DATETIME in table.table
     assert (table.table[defs.columns.DATETIME][idx]==table.table[defs.columns.DATE][idx]).all()
-
-# TODO:
-#         empty_time: Literal["nat", "ignore"] = "NaT"
