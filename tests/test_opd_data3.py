@@ -23,6 +23,10 @@ sleep_time = 0.1
 log_filename = f"pytest_url_errors_{datetime.now().strftime('%Y%m%d_%H')}.txt"
 log_folder = os.path.join(".","data/test_logs")
 
+outages_file = os.path.join("..","opd-data","outages.csv")
+if has_outages:=os.path.exists(outages_file):
+	outages = pd.read_csv(outages_file)
+
 warn_errors = (OPD_DataUnavailableError, OPD_SocrataHTTPError, OPD_FutureError, OPD_MinVersionError)
 
 def get_datasets(csvfile):
@@ -151,18 +155,19 @@ class TestData:
 					count = src.get_count(year, datasets.iloc[i]["TableType"], agency=agency)
 					if count!=0:
 						raise ValueError(f"Expected data for year {year} but received none")
-
-					# There may not be any data for the year requested. First and last year are most likely to have data
-					if years_orig[-1] not in years:
-						years = [x if x!=year else years_orig[-1] for x in years]
-						table = src.load_from_url(years_orig[-1], datasets.iloc[i]["TableType"], 
+					
+					# There may not be any data for the year requested.
+					for y in years_orig:
+						if y not in years:
+							count = src.get_count(y, datasets.iloc[i]["TableType"], agency=agency)
+							if count>0:
+								years = [x if x!=year else y for x in years]
+								table = src.load_from_url(y, datasets.iloc[i]["TableType"], 
 											agency=agency, pbar=False, 
 											nrows=max_count if datasets.iloc[i]["DataType"] not in ["CSV","Excel"] else None)
-					elif years_orig[0] not in years:
-						years = [x if x!=year else years_orig[0] for x in years]
-						table = src.load_from_url(years_orig[0], datasets.iloc[i]["TableType"], 
-											agency=agency, pbar=False, 
-											nrows=max_count if datasets.iloc[i]["DataType"] not in ["CSV","Excel"] else None)
+								break
+					else:
+						raise ValueError("Unable to find data for any year")
 
 				tables.append(table)
 
@@ -174,7 +179,12 @@ class TestData:
 
 				table = tables[years.index(year)]
 
-				assert len(table.table)>0
+				if len(table.table)==0 and has_outages and \
+					(outages[["State","SourceName","Agency","TableType","Year"]] == datasets.iloc[i][["State","SourceName","Agency","TableType","Year"]]).all(axis=1).any():
+					caught_exceptions_warn.append(f'Outage continues for {str(datasets.iloc[i][["State","SourceName","Agency","TableType","Year"]])}')
+					continue
+				else:
+					assert len(table.table)>0
 
 				if table.date_field == None or datasets.iloc[i]["DataType"]==DataType.EXCEL.value or \
 					table.date_field.lower()=="year":
@@ -278,8 +288,6 @@ class TestData:
 				warnings.warn(str(e))
 
 
-
-	@pytest.mark.slow(reason="This is a slow test and should be run before a major commit.")
 	def test_source_download_not_limitable(self, csvfile, source, last, skip, loghtml):
 		if last == None:
 			last = float('inf')
@@ -385,10 +393,11 @@ if __name__ == "__main__":
 	csvfile = None
 	csvfile = r"..\opd-data\opd_source_table.csv"
 	last = None
-	last = 876-258+1
+	last = 896-841+1
 	skip = None
-	skip = "Corona,Bloomington"
+	# skip = "Corona,Bloomington"
 	source = None
 	# source = "Detroit"
 	tp.test_load_year(csvfile, source, last, skip, None)
+	last = None
 	tp.test_source_download_not_limitable(csvfile, source, last, skip, None)

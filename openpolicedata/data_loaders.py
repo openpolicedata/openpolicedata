@@ -1824,32 +1824,35 @@ def filter_dataframe(df, date_field=None, year_filter=None, agency_field=None, a
         (Optional) Name of the agency to filter for. None value returns data for all agencies.
     '''
 
-    if date_field != None and not hasattr(df[date_field], "dt"):
-        with warnings.catch_warnings():
-            # Ignore future warning about how this operation will be attempted to be done inplace:
-            # In a future version, `df.iloc[:, i] = newvals` will attempt to set the values inplace instead of always setting a new array. 
-            # To retain the old behavior, use either `df[df.columns[i]] = newvals` or, if columns are non-unique, `df.isetitem(i, newvals)`
-            warnings.simplefilter("ignore", category=FutureWarning)
-            if date_field.lower()!="year":
+    if date_field != None:
+        is_year = date_field.lower()=='year'
+        if not is_year and pd.api.types.is_integer_dtype(df[date_field]):
+            is_year = ((df[date_field] >= 1900) & (df[date_field] <= 2200)).all()
+
+        if not is_year and not hasattr(df[date_field], "dt"):
+            with warnings.catch_warnings():
+                # Ignore future warning about how this operation will be attempted to be done inplace:
+                # In a future version, `df.iloc[:, i] = newvals` will attempt to set the values inplace instead of always setting a new array. 
+                # To retain the old behavior, use either `df[df.columns[i]] = newvals` or, if columns are non-unique, `df.isetitem(i, newvals)`
+                warnings.simplefilter("ignore", category=FutureWarning)
                 df[date_field] = to_datetime(df[date_field])
     
-    if year_filter != None and date_field != None:
-        if isinstance(year_filter, list):
-            if date_field.lower()!="year":
-                if isinstance(year_filter[0],int):
-                    if len(year_filter)==1:
-                        year_filter.append(f"{year_filter[0]}-12-31")
-                    year_filter[0] = f"{year_filter[0]}-01-01"
-                if isinstance(year_filter[-1],int):
-                    year_filter[-1] = f"{year_filter[-1]}-12-31"
-                df = df[(df[date_field] >= year_filter[0]) & (df[date_field] <= year_filter[-1])]
+        if year_filter != None:
+            if isinstance(year_filter, list):
+                if not is_year:
+                    if isinstance(year_filter[0],int):
+                        if len(year_filter)==1:
+                            year_filter.append(f"{year_filter[0]}-12-31")
+                        year_filter[0] = f"{year_filter[0]}-01-01"
+                    if isinstance(year_filter[-1],int):
+                        year_filter[-1] = f"{year_filter[-1]}-12-31"
+                    df = df[(df[date_field] >= year_filter[0]) & (df[date_field] <= year_filter[-1])]
+                else:
+                    df = df[df[date_field].isin(range(year_filter[0], year_filter[-1]+1))]
+            elif not is_year:
+                df = df[df[date_field].dt.year == year_filter]
             else:
-                df = df[df[date_field].isin(range(year_filter[0], year_filter[-1]+1))]
-        elif date_field.lower()!="year":
-            date_col = to_datetime(df[date_field])
-            df = df[date_col.dt.year == year_filter]
-        else:
-            df = df[df[date_field] == year_filter]
+                df = df[df[date_field] == year_filter]
 
     if agency != None and agency_field != None:
         df = df.query(agency_field + " = '" + agency + "'")
