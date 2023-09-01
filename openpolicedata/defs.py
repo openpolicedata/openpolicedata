@@ -199,21 +199,69 @@ class _Columns:
     RACE_OFFICER = "OFFICER_RACE"
     RACE_ONLY_OFFICER = "OFFICER_RACE_ONLY"
     ETHNICITY_OFFICER = "OFFICER_ETHNICITY"
-    ETHNICITY_OFFICER_SUBJECT = "ETHNICITY_OFFICER/SUBJECT"
-    RACE_OFFICER_SUBJECT = "RACE_OFFICER/SUBJECT"
-    RACE_ONLY_OFFICER_SUBJECT = "RACE_ONLY_OFFICER/SUBJECT"
+    ETHNICITY_OFFICER_SUBJECT = "OFFICER/SUBJECT_ETHNICITY"
+    RACE_OFFICER_SUBJECT = "OFFICER/SUBJECT_RACE"
+    RACE_ONLY_OFFICER_SUBJECT = "OFFICER/SUBJECT_RACE_ONLY"
     AGENCY = "AGENCY"
     AGE_SUBJECT = "SUBJECT_AGE"
     AGE_OFFICER = "OFFICER_AGE"
-    AGE_OFFICER_SUBJECT = "AGE_OFFICER/SUBJECT"
+    AGE_OFFICER_SUBJECT = "OFFICER/SUBJECT_AGE"
     AGE_RANGE_SUBJECT = "SUBJECT_AGE_RANGE"
     AGE_RANGE_OFFICER = "OFFICER_AGE_RANGE"
-    AGE_RANGE_OFFICER_SUBJECT = "AGE_RANGE_OFFICER/SUBJECT"
+    AGE_RANGE_OFFICER_SUBJECT = "OFFICER/SUBJECT_AGE_RANGE"
     GENDER_SUBJECT = "SUBJECT_GENDER"
     GENDER_OFFICER = "OFFICER_GENDER"
-    GENDER_OFFICER_SUBJECT = "GENDER_OFFICER/SUBJECT"
+    GENDER_OFFICER_SUBJECT = "OFFICER/SUBJECT_GENDER"
     SUBJECT_OR_OFFICER = "SUBJECT_OR_OFFICER"
+
+    def _get_columns_as_df(self):
+        attributes = inspect.getmembers(self, lambda a:not(inspect.isroutine(a)))
+        props = []
+        columns = []
+        defs = []
+        sort_by = []
+        for a, v in attributes:
+            if not(a.startswith('__')):
+                props.append(a)
+                columns.append(v)
+
+                match = re.match(r"^(SUBJECT|OFFICER|OFFICER/SUBJECT)\s(.+)$", v.replace("_"," "))
+                if v=='SUBJECT_OR_OFFICER':
+                    sort_by.append(v)
+                    defs.append("Whether row describes an officer or an subject/civilian")
+                elif match:
+                    if match.group(2)=="RACE ONLY":
+                        addon = f". This is the standardized race column when both race and ethnicity are detected. "+\
+                                f"If present, {v.replace('_ONLY','')} is a combination of race and ethnicity."
+                    else:
+                        addon = ''
+                    if match.group(1)=="OFFICER/SUBJECT":
+                        defs.append(f'{match.group(2).title()} of either an officer or subject (depending on column "{self.SUBJECT_OR_OFFICER}")'+addon)
+                    else:
+                        defs.append(f"{match.group(2).title()} of {match.group(1).lower()}"+addon)
+                    sort_by.append(match.group(2).title())
+                else:
+                    if a=="DATETIME":
+                        defs.append("Combination of date and time when both columns are found (not generated when detected date column contains datetime values)")
+                    elif a=="DATE":
+                        defs.append("Date. Some agencies only provide the period. In these cases, the date will be the 1st date of the period (i.e. Jan. 1 for years and the 1st of the month for months).")
+                    else:
+                        defs.append(v.title())
+                    sort_by.append(v.title())
+
+        df = pd.DataFrame({"Attribute":props, "Column Name":columns, "Definition":defs, 'sort_by':sort_by})
+        return df.sort_values(by='sort_by').drop(columns='sort_by')
+
+    def __repr__(self, ) -> str:
+        df = self._get_columns_as_df()
+        repr_params = pd.io.formats.format.get_dataframe_repr_params()
+        return df.to_string(**repr_params)
     
+    def _repr_html_(self):
+        df = self._get_columns_as_df()
+        return df.to_html()
+    
+
 columns = _Columns()
 
 class _Races:
