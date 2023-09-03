@@ -24,7 +24,9 @@ log_filename = f"pytest_url_errors_{datetime.now().strftime('%Y%m%d_%H')}.txt"
 log_folder = os.path.join(".","data/test_logs")
 
 outages_file = os.path.join("..","opd-data","outages.csv")
-if has_outages:=os.path.exists(outages_file):
+# if has_outages:=os.path.exists(outages_file):
+has_outages=os.path.exists(outages_file)
+if has_outages:
 	outages = pd.read_csv(outages_file)
 
 warn_errors = (OPD_DataUnavailableError, OPD_SocrataHTTPError, OPD_FutureError, OPD_MinVersionError)

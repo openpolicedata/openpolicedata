@@ -22,7 +22,9 @@ log_filename = f"pytest_url_errors_{datetime.now().strftime('%Y%m%d_%H')}.txt"
 log_folder = os.path.join(".","data/test_logs")
 
 outages_file = os.path.join("..","opd-data","outages.csv")
-if has_outages:=os.path.exists(outages_file):
+# if has_outages:=os.path.exists(outages_file):
+has_outages=os.path.exists(outages_file)
+if has_outages:
 	outages = pd.read_csv(outages_file)
 
 warn_errors = (OPD_DataUnavailableError, OPD_SocrataHTTPError, OPD_FutureError, OPD_MinVersionError)
@@ -337,19 +339,19 @@ if __name__ == "__main__":
 	csvfile = None
 	csvfile = r"..\opd-data\opd_source_table.csv"
 	last = None
-	last = 912-902+1
+	# last = 912-902+1
 	skip = None
 	# skip = "Corona,Bloomington"
 	source = None
 	# source = "Mesa"
 
-	# tp.check_excel_sheets(csvfile, source, last, skip, None) 
-	# tp.test_get_years_to_check(csvfile, source, last, skip, None) 
-	# tp.check_table_type_warning(csvfile, source, last, skip, None) 
-	# tp.test_offsets_and_nrows(csvfile, source, last, skip, None) 
-	# tp.test_check_version(csvfile, None, last, skip, None) #
+	tp.check_excel_sheets(csvfile, source, last, skip, None) 
+	tp.test_get_years_to_check(csvfile, source, last, skip, None) 
+	tp.check_table_type_warning(csvfile, source, last, skip, None) 
+	tp.test_offsets_and_nrows(csvfile, source, last, skip, None) 
+	tp.test_check_version(csvfile, None, last, skip, None) #
 	tp.test_source_download_limitable(csvfile, source, last, skip, None) 
 	
-	# tp.test_get_count(csvfile, None, last, skip, None)
-	# tp.test_load_gen(csvfile, source, last, skip, None) 
+	tp.test_get_count(csvfile, None, last, skip, None)
+	tp.test_load_gen(csvfile, source, last, skip, None) 
 	
