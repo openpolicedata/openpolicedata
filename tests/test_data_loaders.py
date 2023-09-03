@@ -37,6 +37,8 @@ class TestProduct:
         date_field = "date_"
         loader = data_loaders.Carto(url, dataset, date_field)
 
+        assert not loader.isfile()
+
         count = loader.get_count()
 
         r = requests.get(f"https://phl.carto.com/api/v2/sql?q=SELECT count(*) FROM {dataset}")
@@ -104,6 +106,7 @@ class TestProduct:
         data_loaders._verify_arcgis = True
         url = "https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPD/MapServer/16"
         gis = data_loaders.Arcgis(url)
+        assert not gis.isfile()
         try:
             # Check if arcgis is installed
             from arcgis.features import FeatureLayerCollection
@@ -275,6 +278,7 @@ class TestProduct:
         data_set = "sc8s-w4ka"
         loader = data_loaders.Socrata(url, data_set)
         df =loader.load(pbar=False)
+        assert not loader.isfile()
         count = loader.get_count()
 
         assert len(df)==count
@@ -304,6 +308,7 @@ class TestProduct:
         url = "https://www.denvergov.org/media/gis/DataCatalog/denver_police_officer_involved_shootings/csv/denver_police_officer_involved_shootings.csv"
         date_field = "INCIDENT_DATE"
         loader = data_loaders.Csv(url, date_field=date_field)
+        assert loader.isfile()
         df = loader.load(pbar=False)
 
         offset = 1
@@ -360,7 +365,8 @@ class TestProduct:
     def test_excel(self, csvfile, source, last, skip, loghtml):
         url = "https://www.norristown.org/DocumentCenter/View/1789/2017-2018-Use-of-Force"
         date_field = "Date"
-        loader = data_loaders.Excel(url, date_field=date_field)
+        loader = data_loaders.Excel(url, date_field=date_field, sheet='2017-2018')
+        assert loader.isfile()
         df = loader.load(pbar=False)
 
         offset = 1

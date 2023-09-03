@@ -28,8 +28,10 @@ except:
     _has_gpd = False
 
 try:
+    from .datetime_parser import to_datetime
     from .exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError
 except:
+    from datetime_parser import to_datetime
     from exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError
 
 sleep_time = 0.1
@@ -111,6 +113,10 @@ class Data_Loader(ABC):
     _last_count = None
 
     @abstractmethod
+    def isfile(self):
+        pass
+
+    @abstractmethod
     def get_count(self, year=None, *, agency=None, force=False, opt_filter=None, where=None):
         pass
 
@@ -179,7 +185,7 @@ class Csv(Data_Loader):
     """
     A class for accessing data from CSV download URLs
 
-    Attributes
+    Parameters
     ----------
     url : str
         URL
@@ -214,6 +220,16 @@ class Csv(Data_Loader):
         self.url = url
         self.date_field = date_field
         self.agency_field = agency_field
+
+
+    def isfile(self):
+        '''Returns True to indicate that Csv data is file-based
+
+        Returns
+        -------
+        True
+        '''
+        return True
 
 
     def get_count(self, year=None, *,  agency=None, force=False, **kwargs):
@@ -325,7 +341,9 @@ class Csv(Data_Loader):
                 
             with get(self.url, use_legacy) as resp:
                 try:
-                    table = pd.read_csv(TqdmReader(resp, pbar=pbar), nrows=offset+nrows if nrows is not None else None, encoding_errors='surrogateescape')
+                    with warnings.catch_warnings():
+                        warnings.filterwarnings("ignore", message=r"Columns \(.+\) have mixed types", category=pd.errors.DtypeWarning)
+                        table = pd.read_csv(TqdmReader(resp, pbar=pbar), nrows=offset+nrows if nrows is not None else None, encoding_errors='surrogateescape')
                 except (urllib.error.HTTPError, pd.errors.ParserError) as e:
                     raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(self.url))
                 except Exception as e:
@@ -364,8 +382,11 @@ class Csv(Data_Loader):
             if self.date_field==None:
                 raise ValueError("No date field provided to access year information")
             df = self.load()
-            date_col = pd.to_datetime(df[self.date_field])
-            years = list(date_col.dt.year.dropna().unique())
+            if self.date_field.lower()=="year":
+                years = df[self.date_field].unique()
+            else:
+                date_col = to_datetime(df[self.date_field])
+                years = list(date_col.dt.year.dropna().unique())
             years.sort()
             return [int(x) for x in years]
 
@@ -374,7 +395,7 @@ class Excel(Data_Loader):
     """
     A class for accessing data from Excel download URLs
 
-    Attributes
+    Parameters
     ----------
     url : str
         URL
@@ -395,7 +416,7 @@ class Excel(Data_Loader):
         Get years contained in data set
     """
 
-    def __init__(self, url, date_field=None, agency_field=None):
+    def __init__(self, url, date_field=None, agency_field=None, sheet=None):
         '''Create Excel object
 
         Parameters
@@ -405,12 +426,19 @@ class Excel(Data_Loader):
         date_field : str
             (Optional) Name of the column that contains the date
         agency_field : str
-                (Optional) Name of the column that contains the agency name (i.e. name of the police departments)
+            (Optional) Name of the column that contains the agency name (i.e. name of the police departments)
+        sheet : str
+            (Optional) Excel sheet to use. If not provided, an error will be thrown when loading data if there is more than 1 sheet
         '''
         
         self.url = url
         self.date_field = date_field
         self.agency_field = agency_field
+        self.sheet = sheet
+
+        if self.sheet is not None and re.match(r'^[“”"].+[“”"]$', self.sheet):
+            # Sheet name was put in quotes due to it being a number to prevent Excel from dropping any zeros from the front
+            self.sheet = self.sheet[1:-1]
         
         try:
             if ".zip" in self.url:
@@ -436,6 +464,17 @@ class Excel(Data_Loader):
                 self.excel_file = pd.ExcelFile(file_like)
             else:
                 raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(self.url))
+        except urllib.error.URLError as e:
+            if "[SSL: UNSAFE_LEGACY_RENEGOTIATION_DISABLED] unsafe legacy renegotiation disabled" in str(e.args[0]):
+                headers = {'User-agent' : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_3) AppleWebKit/537.75.14 (KHTML, like Gecko) Version/7.0.3 Safari/7046A194A'}
+                with get_legacy_session() as session:
+                    r = session.get(url)
+                    
+                r.raise_for_status()
+                file_like = BytesIO(r.content)
+                self.excel_file = pd.ExcelFile(file_like)
+            else:
+                raise e
         except XLRDError as e:
             if len(e.args)>0 and e.args[0] == "Workbook is encrypted" and \
                 any([url.startswith(x) for x in ["http://www.rutlandcitypolice.com"]]):  # Only perform on known datasets to prevent security issues
@@ -466,6 +505,16 @@ class Excel(Data_Loader):
                 raise
         except:
             raise
+
+
+    def isfile(self):
+        '''Returns True to indicate that Excel data is file-based
+
+        Returns
+        -------
+        True
+        '''
+        return True
 
 
     def get_count(self, year=None, *,  agency=None, force=False, **kwargs):
@@ -575,14 +624,14 @@ class Excel(Data_Loader):
         '''
 
         nrows_read = offset+nrows if nrows is not None else None
-        year_dict, has_year_sheets = self.__get_sheets()
+        sheets, has_year_sheets = self.__get_sheets()
 
         with warnings.catch_warnings():        
             # Progress bar is not used because TqdmReader object has no attribute 'seek' and would need to be modified to not have a newline operator
             warnings.simplefilter("ignore", category=pd.errors.DtypeWarning)
             if has_year_sheets:
                 if year==None:
-                    year = list(year_dict.keys())
+                    year = list(sheets.keys())
                     year.sort()
                     year = [year[0], year[-1]]
                 if not isinstance(year, list):
@@ -591,8 +640,8 @@ class Excel(Data_Loader):
                 table = None
                 cols_added = 0
                 for y in range(year[0], year[1]+1):
-                    if y in year_dict:
-                        df = pd.read_excel(self.excel_file, nrows=nrows_read, sheet_name=year_dict[y])
+                    if y in sheets:
+                        df = pd.read_excel(self.excel_file, nrows=nrows_read, sheet_name=sheets[y])
 
                         df = self.__clean(df)
 
@@ -616,7 +665,7 @@ class Excel(Data_Loader):
                                                     "(https://pypi.org/project/rapidfuzz/) to load data from multiple years (pip install rapidfuzz)")
 
                                             if fuzz.ratio(table.columns[k], df.columns[m]) > 80:
-                                                print(f"Identified difference in column names when combining sheets {year_dict[y-1]} and {year_dict[y]}. " + 
+                                                print(f"Identified difference in column names when combining sheets {sheets[y-1]} and {sheets[y]}. " + 
                                                     f"Column names are '{table.columns[k]}' and '{df.columns[m]}'. This appears to be a typo. " + 
                                                     f"These columns are assumed to be the same and will be combined as column '{table.columns[k]}'")
                                                 df.columns = [table.columns[k] if j==m else df.columns[j] for j in range(len(df.columns))]
@@ -637,7 +686,9 @@ class Excel(Data_Loader):
                 if isinstance(table, type(None)):
                     return table
             else:
-                table = pd.read_excel(self.excel_file, nrows=nrows_read)
+                self.__check_sheet(sheets)
+                sheet_name = 0 if self.sheet is None else self.sheet
+                table = pd.read_excel(self.excel_file, nrows=nrows_read, sheet_name=sheet_name)
                 table = self.__clean(table)               
 
         if offset>0:
@@ -663,6 +714,15 @@ class Excel(Data_Loader):
             agency_field=self.agency_field, agency=agency)
 
         return table
+
+
+    def __check_sheet(self, sheets):
+        if self.sheet is None:
+            if not all([re.match(r"Sheet\d+",x) for x in sheets[1:]]):
+                # More than 1 sheet has non-default name so can't assume 1st sheet
+                raise ValueError(f"The Excel file at {self.url} has {len(sheets)} sheets but no dataset id is specified to indicate which to use.")
+        elif self.sheet not in sheets:
+            raise ValueError(f"Sheet {self.sheet} not found in Excel file at {self.url}")
 
 
     def __clean(self, df):
@@ -703,12 +763,12 @@ class Excel(Data_Loader):
             list containing years in data set
         '''
 
-        year_dict, has_year_sheets = self.__get_sheets()
+        sheets, has_year_sheets = self.__get_sheets()
 
         if has_year_sheets:
-            years = list(year_dict.keys())
+            years = list(sheets.keys())
             years.sort()
-            return list(year_dict.keys())
+            return list(sheets.keys())
         if not force:
             raise ValueError("Extracting the years of a Excel file requires reading the whole file in. In most cases, "+
                 "running load() with no arguments to load in the whole CSV file and manually finding the years will be more "
@@ -730,7 +790,7 @@ class Arcgis(Data_Loader):
     """
     A class for accessing data from ArcGIS clients
 
-    Attributes
+    Parameters
     ----------
     url : str
         URL
@@ -750,6 +810,9 @@ class Arcgis(Data_Loader):
     get_years()
         Get years contained in data set
     """
+
+    # Based on https://developers.arcgis.com/rest/services-reference/online/feature-layer.htm
+    __max_maxRecordCount = 32000
     
     def __init__(self, url, date_field=None):
         '''Create Arcgis object
@@ -779,7 +842,7 @@ class Arcgis(Data_Loader):
         meta = self.__request()
 
         if "maxRecordCount" in meta:
-            self.max_record_count = meta["maxRecordCount"]
+            self.max_record_count = meta["maxRecordCount"] if meta['maxRecordCount']<self.__max_maxRecordCount else self.__max_maxRecordCount
         else:
             self.max_record_count = None
 
@@ -791,6 +854,16 @@ class Arcgis(Data_Loader):
             raise ValueError("Unexpected ArcGIS layer type: {}".format(meta["type"]))
 
         self.__set_verify(_verify_arcgis)
+
+
+    def isfile(self):
+        '''Returns False to indicate that ArcGIS data is not file-based
+
+        Returns
+        -------
+        False
+        '''
+        return False
 
 
     def __set_verify(self, verify):
@@ -932,9 +1005,20 @@ class Arcgis(Data_Loader):
                     raise OPD_DataUnavailableError(self.url, e.args)
 
             else: raise e
-        except: raise
+        except Exception as e: 
+            raise e
+
+        result = r.json()
+
+        if isinstance(result, dict) and len(result.keys()) and "error" in result:
+            args = ()
+            for k,v in result['error'].items():
+                if not hasattr(v,'__len__') or len(v)>0:
+                    v = v[0] if isinstance(v,list) and len(v)==1 else v
+                    args += (k,v)
+            raise OPD_DataUnavailableError(url, 'Error returned by ArcGIS query', *args)
         
-        return r.json()
+        return result
 
 
     def __construct_where(self, year=None):
@@ -969,7 +1053,7 @@ class Arcgis(Data_Loader):
 
         # List of error messages that can occur for bad queries as we search for the right query format
         query_err_msg = ["Unable to complete operation", "Failed to execute query", "Unable to perform query", "Database error has occurred", 
-                         "'where' parameter is invalid", "Parsing error"]
+                         "'where' parameter is invalid", "Parsing error",'Query with count request failed']
         
         where_query = ""
         zero_found = False
@@ -977,6 +1061,8 @@ class Arcgis(Data_Loader):
             start_date, stop_date = _process_date(year)
             
             for k in range(0,2):
+                if self._date_format is not None and self._date_format!=k:
+                    continue
                 if k==0:
                     where_query = f"{self.date_field} >= '{start_date}' AND  {self.date_field} < '{stop_date}'"
                 else:
@@ -988,16 +1074,8 @@ class Arcgis(Data_Loader):
                     where_query = f"{self.date_field} >= TIMESTAMP '{start_date}' AND  {self.date_field} < TIMESTAMP '{stop_date_tmp}'"
             
                 try:
-                    record_count = self.__request(where=where_query, return_count=True)
-                    if "count" not in record_count:
-                        err = "Error Code {}: ".format(record_count["error"]["code"])
-                        if len(record_count["error"]["message"])!=0:
-                            err+=record_count["error"]["message"]
-                            err+=" "
-                        if len(record_count["error"]["details"])>0 and len(record_count["error"]["details"][0])>0:
-                            err+=record_count["error"]["details"][0]
-                        raise KeyError(err)
-                    record_count = record_count["count"]
+                    record_count = self.__request(where=where_query, return_count=True)["count"]
+
                     if self.verify:
                         record_count_orig = self.__active_layer.query(where=where_query, return_count_only=True)
                         if record_count_orig!=record_count:
@@ -1010,7 +1088,7 @@ class Arcgis(Data_Loader):
                 except Exception as e:
                     if len(e.args)>0 and "Error Code: 429" in e.args[0]:
                         raise OPD_TooManyRequestsError(self.url, *e.args, _url_error_msg.format(self.url))
-                    elif len(e.args)>0 and any([x in e.args[0] for x in query_err_msg]):
+                    elif len(e.args)>0 and (any([x in e.args[0] for x in query_err_msg]) or any([x in e.args[-1] for x in query_err_msg])):
                         # This query throws an error for this dataset. Try another one below
                         pass
                     else:
@@ -1023,7 +1101,8 @@ class Arcgis(Data_Loader):
             "{} LIKE '%[0-9][0-9]/[0-9][0-9]/{}%'",   # mm/dd/yyyy
             double_format("{} LIKE '{}/[0-9][0-9]' OR {} LIKE '{}/[0-9]'"),                # yyyy/mm
             "{} = {}",                # yyyy
-            double_format("{} LIKE '[0-9][0-9]-{}' OR {} LIKE '[0-9]-{}'")   # mm-yyyy or m-yyyy
+            double_format("{} LIKE '[0-9][0-9]-{}' OR {} LIKE '[0-9]-{}'"),   # mm-yyyy or m-yyyy
+            "{} = '{}'",                # 'yyyy'
         ]
         # Make year iterable
         year = [year] if isinstance(year, numbers.Number) else year
@@ -1039,16 +1118,8 @@ class Arcgis(Data_Loader):
                     where_query = f"{where_query} or " + format.format(self.date_field, x)
 
                 try:
-                    record_count = self.__request(where=where_query, return_count=True)
-                    if "count" not in record_count:
-                        err = "Error Code {}: ".format(record_count["error"]["code"])
-                        if len(record_count["error"]["message"])!=0:
-                            err+=record_count["error"]["message"]
-                            err+=" "
-                        if len(record_count["error"]["details"])>0 and len(record_count["error"]["details"][0])>0:
-                            err+=record_count["error"]["details"][0]
-                        raise KeyError(err)
-                    record_count = record_count["count"]
+                    record_count = self.__request(where=where_query, return_count=True)["count"]
+
                     if self.verify:
                         record_count_orig = self.__active_layer.query(where=where_query, return_count_only=True)
                         if record_count_orig!=record_count:
@@ -1061,7 +1132,7 @@ class Arcgis(Data_Loader):
                 except Exception as e:
                     if len(e.args)>0 and "Error Code: 429" in e.args[0]:
                         raise OPD_TooManyRequestsError(self.url, *e.args, _url_error_msg.format(self.url))
-                    elif len(e.args)>0 and any([x in e.args[0] for x in query_err_msg]):
+                    elif len(e.args)>0 and (any([x in e.args[0] for x in query_err_msg]) or any([x in e.args[-1] for x in query_err_msg])):
                         # This query throws an error for this dataset. Try another one below
                         pass
                     else:
@@ -1100,7 +1171,7 @@ class Arcgis(Data_Loader):
         # Update record count for request record offset
         record_count-=offset
         if record_count<=0:
-            return None
+            return pd.DataFrame()
 
         batch_size = self.max_record_count or _default_limit
         nrows = nrows if nrows!=None and record_count>=nrows else record_count
@@ -1124,7 +1195,7 @@ class Arcgis(Data_Loader):
 
                     attributes = pd.DataFrame.from_records([x["attributes"] for x in data["features"]])
                     for col in [x["name"] for x in data["fields"] if x["type"]=='esriFieldTypeDate']:
-                        attributes[col] = pd.to_datetime(attributes[col], unit="ms")
+                        attributes[col] = to_datetime(attributes[col], unit="ms")
                     
                     if not self.is_table:
                         geom_old = sdf.pop("SHAPE")
@@ -1177,7 +1248,7 @@ class Arcgis(Data_Loader):
 
         df = pd.DataFrame.from_records([x["attributes"] for x in features])
         for col in date_cols:
-            df[col] = pd.to_datetime(df[col], unit="ms", errors='coerce')
+            df[col] = to_datetime(df[col], unit="ms", errors='coerce')
 
         if len(df) > 0:
             has_point_geometry = any("geometry" in x and "x" in x["geometry"] for x in features)
@@ -1219,14 +1290,14 @@ class Arcgis(Data_Loader):
 
             return df
         else:
-            return None
+            return pd.DataFrame()
 
 
 class Carto(Data_Loader):
     """
     A class for accessing data from Carto clients
 
-    Attributes
+    Parameters
     ----------
     url : str
         URL
@@ -1274,6 +1345,16 @@ class Carto(Data_Loader):
         self.url = url_clean
         self.data_set = data_set
         self.date_field = date_field
+
+    
+    def isfile(self):
+        '''Returns False to indicate that Carto data is not file-based
+
+        Returns
+        -------
+        False
+        '''
+        return False
 
 
     def get_count(self, year=None, **kwargs):
@@ -1382,7 +1463,7 @@ class Carto(Data_Loader):
 
         record_count-=offset
         if record_count<=0:
-            return None
+            return pd.DataFrame()
 
         batch_size = _default_limit
         nrows = nrows if nrows!=None and record_count>=nrows else record_count
@@ -1425,7 +1506,7 @@ class Carto(Data_Loader):
 
         df = pd.DataFrame.from_records([x["properties"] for x in features])
         for col in date_cols:
-            df[col] = pd.to_datetime(df[col])
+            df[col] = to_datetime(df[col])
 
         if len(df) > 0:
             has_point_geometry = any("geometry" in x and x["geometry"]!=None for x in features)
@@ -1456,14 +1537,14 @@ class Carto(Data_Loader):
 
             return df
         else:
-            return None
+            return pd.DataFrame()
 
 
 class Socrata(Data_Loader):
     """
     A class for accessing data from Socrata clients
 
-    Attributes
+    Parameters
     ----------
     url : str
         URL of data homepage
@@ -1524,6 +1605,16 @@ class Socrata(Data_Loader):
                 where = where[len(andStr):]
 
         return where
+    
+
+    def isfile(self):
+        '''Returns False to indicate that Socrata data is not file-based
+
+        Returns
+        -------
+        False
+        '''
+        return False
 
 
     def get_count(self, year=None, *,  opt_filter=None, where=None, **kwargs):
@@ -1613,7 +1704,7 @@ class Socrata(Data_Loader):
         record_count = int(self.get_count(where=where))
         record_count-=offset
         if record_count<=0:
-            return None
+            return pd.DataFrame()
         batch_size =  _default_limit
         nrows = nrows if nrows!=None and record_count>=nrows else record_count
         batch_size = nrows if nrows < batch_size else batch_size
@@ -1768,21 +1859,35 @@ def filter_dataframe(df, date_field=None, year_filter=None, agency_field=None, a
         (Optional) Name of the agency to filter for. None value returns data for all agencies.
     '''
 
-    if date_field != None and not hasattr(df[date_field], "dt"):
-        with warnings.catch_warnings():
-            # Ignore future warning about how this operation will be attempted to be done inplace:
-            # In a future version, `df.iloc[:, i] = newvals` will attempt to set the values inplace instead of always setting a new array. 
-            # To retain the old behavior, use either `df[df.columns[i]] = newvals` or, if columns are non-unique, `df.isetitem(i, newvals)`
-            warnings.simplefilter("ignore", category=FutureWarning)
-            if date_field.lower()!="year":
-                df[date_field] = pd.to_datetime(df[date_field])
+    if date_field != None:
+        is_year = date_field.lower()=='year'
+        if not is_year and pd.api.types.is_integer_dtype(df[date_field]):
+            is_year = ((df[date_field] >= 1900) & (df[date_field] <= 2200)).all()
+
+        if not is_year and not hasattr(df[date_field], "dt"):
+            with warnings.catch_warnings():
+                # Ignore future warning about how this operation will be attempted to be done inplace:
+                # In a future version, `df.iloc[:, i] = newvals` will attempt to set the values inplace instead of always setting a new array. 
+                # To retain the old behavior, use either `df[df.columns[i]] = newvals` or, if columns are non-unique, `df.isetitem(i, newvals)`
+                warnings.simplefilter("ignore", category=FutureWarning)
+                df[date_field] = to_datetime(df[date_field])
     
-    if year_filter != None and date_field != None:
-        if isinstance(year_filter, list):
-            df = df[(df[date_field].dt.year >= year_filter[0]) & (df[date_field].dt.year <= year_filter[1])]
-        else:
-            date_col = pd.to_datetime(df[date_field])
-            df = df[date_col.dt.year == year_filter]
+        if year_filter != None:
+            if isinstance(year_filter, list):
+                if not is_year:
+                    if isinstance(year_filter[0],int):
+                        if len(year_filter)==1:
+                            year_filter.append(f"{year_filter[0]}-12-31")
+                        year_filter[0] = f"{year_filter[0]}-01-01"
+                    if isinstance(year_filter[-1],int):
+                        year_filter[-1] = f"{year_filter[-1]}-12-31"
+                    df = df[(df[date_field] >= year_filter[0]) & (df[date_field] <= year_filter[-1])]
+                else:
+                    df = df[df[date_field].isin(range(year_filter[0], year_filter[-1]+1))]
+            elif not is_year:
+                df = df[df[date_field].dt.year == year_filter]
+            else:
+                df = df[df[date_field] == year_filter]
 
     if agency != None and agency_field != None:
         df = df.query(agency_field + " = '" + agency + "'")

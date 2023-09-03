@@ -21,13 +21,35 @@ data_loaders._verify_arcgis = True
 log_filename = f"pytest_url_errors_{datetime.now().strftime('%Y%m%d_%H')}.txt"
 log_folder = os.path.join(".","data/test_logs")
 
+outages_file = os.path.join("..","opd-data","outages.csv")
+if has_outages:=os.path.exists(outages_file):
+	outages = pd.read_csv(outages_file)
+
 warn_errors = (OPD_DataUnavailableError, OPD_SocrataHTTPError, OPD_FutureError, OPD_MinVersionError)
 
 def get_datasets(csvfile):
-    if csvfile != None:
-        datasets.datasets = datasets._build(csvfile)
+	if csvfile is not None and not os.path.exists(csvfile):
+		raise ValueError(f"Unable to find {csvfile}")
 
-    return datasets.datasets
+	if csvfile != None:
+		datasets.datasets = datasets._build(csvfile)
+
+	return datasets.datasets
+
+def user_request_skip(datasets, i, skip, last, source):
+	# Skip sources that the user requested to skip
+	if skip != None:
+		skip = skip.split(",")
+		skip = [x.strip() for x in skip]
+	if skip != None and datasets.iloc[i]["SourceName"] in skip:
+		return True
+	# User requested only the last values to run
+	if last!=None and i < len(datasets) - last:
+		return True
+	if source != None and datasets.iloc[i]["SourceName"] != source:
+		return True
+	
+	return False
 
 class TestData:
 	def check_table_type_warning(self, csvfile, source, last, skip, loghtml):
@@ -62,26 +84,46 @@ class TestData:
 		nrows = len(df)-2
 		df_offset = src.load_from_url(year=2019, table_type="Officer-Involved Shootings", offset=offset, nrows=nrows).table
 		assert df_offset.equals(df.iloc[offset:offset+nrows].reset_index(drop=True))
+
+	def check_excel_sheets(self, csvfile, source, last, skip, loghtml):
+		datasets = get_datasets(csvfile)
+		for i in range(len(datasets)):
+			if user_request_skip(datasets, i, skip, last, source):
+				continue
+
+			if datasets.iloc[i]["DataType"]!=DataType.EXCEL:
+				continue
+
+			srcName = datasets.iloc[i]["SourceName"]
+			state = datasets.iloc[i]["State"]
+			src = data.Source(srcName, state=state)
+
+			table_print = datasets.iloc[i]["TableType"]
+			now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
+			print(f"{now} Testing {i+1} of {len(datasets)}: {srcName} {table_print} table")
+
+			excel = src._Source__get_loader(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"], 
+				   dataset_id=datasets.iloc[i]["dataset_id"])
+			sheets, has_year_sheets = excel._Excel__get_sheets()
+
+			if has_year_sheets:
+				# Ensure that load works
+				src.load_from_url(datasets.iloc[i]["Year"], datasets.iloc[i]["TableType"], pbar=False)
+			else:
+				excel._Excel__check_sheet(sheets)
+
 		
 	def test_source_download_limitable(self, csvfile, source, last, skip, loghtml):
-		if last == None:
-			last = float('inf')
 		datasets = get_datasets(csvfile)
 		num_stanford = 0
 		max_num_stanford = 1  # This data is standardized. Probably no need to test more than 1
 		caught_exceptions = []
 		caught_exceptions_warn = []
-		if skip != None:
-			skip = skip.split(",")
-			skip = [x.strip() for x in skip]
 			
 		for i in range(len(datasets)):
-			if skip != None and datasets.iloc[i]["SourceName"] in skip:
+			if user_request_skip(datasets, i, skip, last, source):
 				continue
-			if i < len(datasets) - last:
-				continue
-			if source != None and datasets.iloc[i]["SourceName"] != source:
-				continue
+
 			has_date_field = not pd.isnull(datasets.iloc[i]["date_field"])
 			if can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]) or has_date_field:
 				if is_stanford(datasets.iloc[i]["URL"]):
@@ -110,7 +152,13 @@ class TestData:
 				except:
 					raise
 
-				assert len(table.table)>0
+				if len(table.table)==0 and has_outages and \
+					(outages[["State","SourceName","Agency","TableType","Year"]] == datasets.iloc[i][["State","SourceName","Agency","TableType","Year"]]).all(axis=1).any():
+					caught_exceptions_warn.append(f'Outage continues for {str(datasets.iloc[i][["State","SourceName","Agency","TableType","Year"]])}')
+					continue
+				else:
+					assert len(table.table)>0
+
 				if not pd.isnull(datasets.iloc[i]["date_field"]):
 					assert datasets.iloc[i]["date_field"] in table.table
 					#assuming a Pandas string dtype('O').name = object is okay too
@@ -199,6 +247,15 @@ class TestData:
 		year = [2020,2022]
 		assert loader.get_count(year=year) == src.get_count(year=year, table_type=TableType.STOPS)
 
+	
+	def test_get_years_to_check(self, csvfile, source, last, skip, loghtml):
+		assert data._get_years_to_check([2020], cur_year=2023, force=True, isfile=False) == []
+		assert data._get_years_to_check([2022], cur_year=2023, force=False, isfile=True) == []
+		assert data._get_years_to_check([2022, 2020], cur_year=2023, force=False, isfile=False) == [2023]
+		assert data._get_years_to_check([2020, 2021], cur_year=2023, force=True, isfile=True) == [2022, 2023]
+		assert data._get_years_to_check([2020, 2021], cur_year=2023, force=True, isfile=False) == [2022, 2023]
+	
+	
 	def test_load_gen(self, csvfile, source, last, skip, loghtml):
 		datasets = [("Norristown",2016,"USE OF FORCE", 100),
 	      ("Denver", "MULTIPLE", "OFFICER-INVOLVED SHOOTINGS",50),
@@ -236,23 +293,13 @@ class TestData:
 			assert offset==len(df)
 
 def can_be_limited(data_type, url):
-	data_type = DataType(data_type)
 	if (data_type == DataType.CSV and ".zip" in url):
 		return False
 	elif data_type in [DataType.ArcGIS, DataType.SOCRATA, DataType.CSV, DataType.EXCEL, DataType.CARTO]:
 		return True
 	else:
 		raise ValueError("Unknown table type")
-
-
-def is_filterable(data_type):
-	data_type = DataType(data_type)
-	if data_type in [DataType.CSV, DataType.EXCEL]:
-		return False
-	elif data_type in [DataType.ArcGIS, DataType.SOCRATA, DataType.CARTO]:
-		return True
-	else:
-		raise ValueError("Unknown table type")
+	
 
 def is_stanford(url):
 	return "stanford.edu" in url
@@ -290,16 +337,19 @@ if __name__ == "__main__":
 	csvfile = None
 	csvfile = r"..\opd-data\opd_source_table.csv"
 	last = None
-	last = 873-290+1
+	last = 912-902+1
 	skip = None
-	skip = "Bloomington"
+	# skip = "Corona,Bloomington"
 	source = None
 	# source = "Mesa"
-	tp.check_table_type_warning(csvfile, source, last, skip, None) 
-	tp.test_offsets_and_nrows(csvfile, source, last, skip, None) 
-	tp.test_check_version(csvfile, None, last, skip, None) #
+
+	# tp.check_excel_sheets(csvfile, source, last, skip, None) 
+	# tp.test_get_years_to_check(csvfile, source, last, skip, None) 
+	# tp.check_table_type_warning(csvfile, source, last, skip, None) 
+	# tp.test_offsets_and_nrows(csvfile, source, last, skip, None) 
+	# tp.test_check_version(csvfile, None, last, skip, None) #
 	tp.test_source_download_limitable(csvfile, source, last, skip, None) 
 	
-	tp.test_get_count(csvfile, None, last, skip, None)
-	tp.test_load_gen(csvfile, source, last, skip, None) 
+	# tp.test_get_count(csvfile, None, last, skip, None)
+	# tp.test_load_gen(csvfile, source, last, skip, None) 
 	

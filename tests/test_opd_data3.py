@@ -23,6 +23,10 @@ sleep_time = 0.1
 log_filename = f"pytest_url_errors_{datetime.now().strftime('%Y%m%d_%H')}.txt"
 log_folder = os.path.join(".","data/test_logs")
 
+outages_file = os.path.join("..","opd-data","outages.csv")
+if has_outages:=os.path.exists(outages_file):
+	outages = pd.read_csv(outages_file)
+
 warn_errors = (OPD_DataUnavailableError, OPD_SocrataHTTPError, OPD_FutureError, OPD_MinVersionError)
 
 def get_datasets(csvfile):
@@ -131,19 +135,62 @@ class TestData:
 				else:
 					years = years[:1]
 
+			tables = []
+			future_error = False
 			for year in years:
-				print(f"Testing for year {year}")
-
-				table = src.load_from_url(year, datasets.iloc[i]["TableType"], 
-										agency=agency, pbar=False, nrows=max_count)
+				try:
+					table = src.load_from_url(year, datasets.iloc[i]["TableType"], 
+											agency=agency, pbar=False, 
+											nrows=max_count if datasets.iloc[i]["DataType"] not in ["CSV","Excel"] else None)
+				except OPD_FutureError as e:
+					future_error = True
+					break
+				except:
+					raise
 
 				sleep(sleep_time)
 
-				if table._date_field == None or datasets.iloc[i]["DataType"]==DataType.EXCEL.value or \
-					table._date_field.lower()=="year":
+				if len(table.table)==0:
+					# Ensure count should have been 0
+					count = src.get_count(year, datasets.iloc[i]["TableType"], agency=agency)
+					if count!=0:
+						raise ValueError(f"Expected data for year {year} but received none")
+					
+					# There may not be any data for the year requested.
+					for y in years_orig:
+						if y not in years:
+							count = src.get_count(y, datasets.iloc[i]["TableType"], agency=agency)
+							if count>0:
+								years = [x if x!=year else y for x in years]
+								table = src.load_from_url(y, datasets.iloc[i]["TableType"], 
+											agency=agency, pbar=False, 
+											nrows=max_count if datasets.iloc[i]["DataType"] not in ["CSV","Excel"] else None)
+								break
+					else:
+						raise ValueError("Unable to find data for any year")
+
+				tables.append(table)
+
+			if future_error:
+				continue
+
+			for year in years:
+				print(f"Testing for year {year}")
+
+				table = tables[years.index(year)]
+
+				if len(table.table)==0 and has_outages and \
+					(outages[["State","SourceName","Agency","TableType","Year"]] == datasets.iloc[i][["State","SourceName","Agency","TableType","Year"]]).all(axis=1).any():
+					caught_exceptions_warn.append(f'Outage continues for {str(datasets.iloc[i][["State","SourceName","Agency","TableType","Year"]])}')
+					continue
+				else:
+					assert len(table.table)>0
+
+				if table.date_field == None or datasets.iloc[i]["DataType"]==DataType.EXCEL.value or \
+					table.date_field.lower()=="year":
 					continue
 
-				dts = table.table[table._date_field]
+				dts = table.table[table.date_field]
 				# Remove all non-datestamps
 				dts = dts[dts.apply(lambda x: isinstance(x,pd._libs.tslibs.timestamps.Timestamp))].convert_dtypes()
 				dts = dts.sort_values(ignore_index=True)
@@ -167,7 +214,7 @@ class TestData:
 				if not multi_case:
 					continue
 
-				if "month" in table._date_field.lower():
+				if "month" in table.date_field.lower():
 					# Cannot currently filter only by month/year
 					continue
 				
@@ -187,7 +234,7 @@ class TestData:
 					raise
 
 				sleep(sleep_time)
-				dts_start = table_start.table[table._date_field]
+				dts_start = table_start.table[table.date_field]
 				dts_start = dts_start[dts_start.apply(lambda x: isinstance(x,pd._libs.tslibs.timestamps.Timestamp))].convert_dtypes()
 				dts_start = dts_start.sort_values(ignore_index=True, na_position="first")
 
@@ -200,7 +247,7 @@ class TestData:
 					assert dts.iloc[0] == dts_start.iloc[0]
 				except AssertionError as e:
 					# See comments in above try/except
-					assert dts.iloc[0] <= datetime.strptime(f"{year}-01-01 08:00:00", "%Y-%m-%d %H:%M:%S")
+					assert dts.iloc[0].tz_localize(None) <= datetime.strptime(f"{year}-01-01 08:00:00", "%Y-%m-%d %H:%M:%S")
 				except:
 					raise(e)
 				
@@ -214,8 +261,9 @@ class TestData:
 				table_stop = src.load_from_url([start_date, stop_date], datasets.iloc[i]["TableType"], 
 												agency=agency, pbar=False)
 				sleep(sleep_time)
-				dts_stop = table_stop.table[table._date_field]
+				dts_stop = table_stop.table[table.date_field]
 
+				dts_stop = dts_stop[dts_stop.apply(lambda x: not isinstance(x,str))]
 				dts_stop = dts_stop.sort_values(ignore_index=True)
 
 				# If this isn't true then the start date is too late
@@ -240,8 +288,6 @@ class TestData:
 				warnings.warn(str(e))
 
 
-
-	@pytest.mark.slow(reason="This is a slow test and should be run before a major commit.")
 	def test_source_download_not_limitable(self, csvfile, source, last, skip, loghtml):
 		if last == None:
 			last = float('inf')
@@ -274,15 +320,20 @@ class TestData:
 
 				now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
 				print(f"{now} Testing {i+1} of {len(datasets)}: {srcName}, {state} {table_type} table for {year}")
-				table = src.load_from_url(year, table_type, pbar=False)
+				try:
+					table = src.load_from_url(year, table_type, pbar=False)
+				except OPD_FutureError:
+					continue
+				except:
+					raise
 
 				sleep(sleep_time)
 
 				assert len(table.table)>1
-				if not pd.isnull(table._date_field):
-					assert table._date_field in table.table
+				if not pd.isnull(table.date_field):
+					assert table.date_field in table.table
 					#assuming a Pandas string dtype('O').name = object is okay too
-					assert (table.table[table._date_field].dtype.name in ['datetime64[ns]', 'datetime64[ms]'])
+					assert (table.table[table.date_field].dtype.name in ['datetime64[ns]', 'datetime64[ms]'])
 				if not pd.isnull(datasets.iloc[i]["agency_field"]):
 					assert datasets.iloc[i]["agency_field"] in table.table
 
@@ -342,10 +393,11 @@ if __name__ == "__main__":
 	csvfile = None
 	csvfile = r"..\opd-data\opd_source_table.csv"
 	last = None
-	# last = 860-392+1
+	last = 896-841+1
 	skip = None
-	skip = "Chicago, Mesa"
+	# skip = "Corona,Bloomington"
 	source = None
-	source = "Detroit"
+	# source = "Detroit"
 	tp.test_load_year(csvfile, source, last, skip, None)
-	# tp.test_source_download_not_limitable(csvfile, source, last, skip, None)
+	last = None
+	tp.test_source_download_not_limitable(csvfile, source, last, skip, None)
