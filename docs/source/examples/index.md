@@ -1,0 +1,57 @@
+---
+myst:
+  html_meta:
+    "description lang=en": |
+      Top-level documentation for OpenPoliceData.
+html_theme.sidebar_secondary.remove: true
+---
+
+```{toctree}
+:maxdepth: 2
+:hidden:
+
+getting_started/index.ipynb
+datasets/index.ipynb
+examples/index.md
+```
+
+# Example
+
+Welcome to the the OpenPoliceData examples.
+
+::::{grid} 3
+:gutter: 1 2 3 4
+
+:::{grid-item-card} {fas}`sort-amount-down;pst-color-primary` Summarizing OpenPoliceData data
+:link: opd-examples/summarize_opd_data.ipynb
+:link-alt: opd-examples/summarize_opd_data.ipynb
+ Summarizing available data in OpenPoliceData (OPD) and export data summaries.
+:::
+:::{grid-item-card} {fas}`search;pst-color-primary` Finding datasets
+:link: opd-examples/finding_datasets.ipynb
+:link-alt: opd-examples/finding_datasets.ipynb
+Find datasets for a state.
+:::
+:::{grid-item-card} {fas}`truck-loading;pst-color-primary` Loading datasets
+:link: opd-examples/loading_datasets.ipynb
+:link-alt: opd-examples/loading_datasets.ipynb
+Learn how to load a dataset once you have found it.
+:::
+:::{grid-item-card} {fas}`table;pst-color-primary` Export dataset to CSV
+:link: opd-examples/export_dataset_to_csv.ipynb
+:link-alt: opd-examples/export_dataset_to_csv.ipynb
+See how to export a dataset to a CSV file and how to load the CSV file.
+:::
+:::{grid-item-card} {fas}`diagnoses;pst-color-primary` A simple data analysis
+:link: opd-examples/analyze_datasets.ipynb
+:link-alt: opd-examples/analyze_datasets.ipynb
+Learn basic data analysis using traffic stop data.
+:::
+:::{grid-item-card} {fas}`door-open;pst-color-primary` Full example for Python beginners
+:link: opd-examples/analysis_examples/example_arrests_analysis_with_python_tutorial.ipynb
+:link-alt: opd-examples/analysis_examples/example_arrests_analysis_with_python_tutorial.ipynb
+Explore specific data analysis which will provide building blocks that can be reused for other analyses.
+:::
+::::
+
+

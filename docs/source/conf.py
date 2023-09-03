@@ -90,10 +90,10 @@ html_theme_options = {
 }
 
 source_suffix = {
-    '.rst': 'restructuredtext',
-    '.txt': 'restructuredtext',
     '.md': 'markdown',
 }
+
+source_parsers = {'.md': 'recommonmark.parser.CommonMarkParser'}
 
 # This removes execution counts when displaying Jupyter notebooks
 # https://nbsphinx.readthedocs.io/en/0.8.9/custom-css.html
@@ -107,5 +107,7 @@ nbsphinx_prolog = """
         }
     </style>
 """
+
+nbsphinx_execute = 'never'
 
 # TODO: https://pydata-sphinx-theme.readthedocs.io/en/stable/user_guide/version-dropdown.html
