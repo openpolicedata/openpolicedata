@@ -17,7 +17,7 @@ The standard installation will enable almost all datasets available in OpenPolic
 
 Install GeoPandas
 ----------------------------------
-If `GeoPandas <https://geopandas.org/en/stable/>`__ is installed, OpenPoliceData can load data that contains location information into `GeoDataFrames <https://geopandas.org/en/stable/docs/reference/geodataframe.html>`__ to aid geospatial analysis. Data without location inforation will still be loaded as a `pandas DataFrame <https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.html>`__. The easiest way to `install GeoPandas<https://geopandas.org/en/stable/getting_started/install.html>`__ is with conda:
+If `GeoPandas <https://geopandas.org/en/stable/>`__ is installed, OpenPoliceData can load data that contains location information into `GeoDataFrames <https://geopandas.org/en/stable/docs/reference/geodataframe.html>`__ to aid geospatial analysis. Data without location inforation will still be loaded as a `pandas DataFrame <https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.html>`__. The easiest way to `install GeoPandas <https://geopandas.org/en/stable/getting_started/install.html>`__ is with conda:
 
 .. code-block:: bash
 

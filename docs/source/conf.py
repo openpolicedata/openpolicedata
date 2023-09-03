@@ -90,6 +90,7 @@ html_theme_options = {
 }
 
 source_suffix = {
+    '.rst': 'restructuredtext',
     '.md': 'markdown',
 }
 
