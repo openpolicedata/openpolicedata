@@ -76,13 +76,7 @@ version_match = os.environ.get("READTHEDOCS_VERSION")
 # We want to keep the relative reference if we are in dev mode
 # but we want the whole url if we are effectively in a released version
 json_url = "_static/switcher.json" if version_match is None else json_url
-if not version_match or version_match.isdigit() or version_match == "latest":
-    # For local development, infer the version to match from the package.
-    release = openpolicedata.__version__
-    if "dev" in release or "rc" in release:
-        version_match = "dev"
-    else:
-        version_match = "v" + release
+version_match = 'dev' if not version_match or version_match=='latest' else version_match
 
 html_theme_options = {
     "logo": {
