@@ -1,0 +1,12 @@
+[
+    {
+      "version": "dev",
+      "url": "https://openpolicedata.readthedocs.io/en/latest/"
+    },
+    {
+      "name": "0.5.7 (stable)",
+      "version": "v0.5.7",
+      "url": "https://openpolicedata.readthedocs.io/en/stable/",
+      "preferred": true
+    }
+  ]

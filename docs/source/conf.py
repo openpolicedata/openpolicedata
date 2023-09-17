@@ -64,6 +64,26 @@ pypi_logo = "_static/pypi.svg"#os.path.join(docs_loc, "_static","pypi.svg")
 # https://icon-sets.iconify.design/simple-icons/streamlit/
 streamlit_logo = "_static/streamlit.svg"#os.path.join(docs_loc, "_static","pypi.svg")
 
+# Define the json_url for our version switcher.
+json_url = "https://openpolicedata.readthedocs.io/en/latest/_static/switcher.json"
+
+# https://github.com/pydata/pydata-sphinx-theme/blob/main/docs/conf.py
+# Define the version we use for matching in the version switcher.
+version_match = os.environ.get("READTHEDOCS_VERSION")
+# If READTHEDOCS_VERSION doesn't exist, we're not on RTD
+# If it is an integer, we're in a PR build and the version isn't correct.
+# If it's "latest" → change to "dev" (that's what we want the switcher to call it)
+# We want to keep the relative reference if we are in dev mode
+# but we want the whole url if we are effectively in a released version
+json_url = "_static/switcher.json" if version_match is None else json_url
+if not version_match or version_match.isdigit() or version_match == "latest":
+    # For local development, infer the version to match from the package.
+    release = openpolicedata.__version__
+    if "dev" in release or "rc" in release:
+        version_match = "dev"
+    else:
+        version_match = "v" + release
+
 html_theme_options = {
     "logo": {
         "text": "OpenPoliceData",
@@ -89,8 +109,13 @@ html_theme_options = {
             # The type of image to be used (see below for details)
             "type": "local",
         }
-   ]
+   ],
     # "navbar_end": ["version-switcher", "theme-switcher", "navbar-icon-links"],
+    "switcher": {
+        "json_url": json_url,
+        "version_match": version_match,
+    },
+    "navbar_center": ["version-switcher", "navbar-nav"],
 }
 
 source_suffix = {
@@ -114,5 +139,3 @@ nbsphinx_prolog = """
 """
 
 nbsphinx_execute = 'never'
-
-# TODO: https://pydata-sphinx-theme.readthedocs.io/en/stable/user_guide/version-dropdown.html
