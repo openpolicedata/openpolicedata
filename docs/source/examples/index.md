@@ -6,18 +6,7 @@ myst:
 html_theme.sidebar_secondary.remove: true
 ---
 
-```{toctree}
-:maxdepth: 2
-:hidden:
-
-getting_started/index.ipynb
-datasets/index.ipynb
-examples/index.md
-```
-
-# Example
-
-Welcome to the the OpenPoliceData examples.
+# Examples
 
 ::::{grid} 3
 :gutter: 1 2 3 4

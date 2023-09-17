@@ -1,0 +1,14 @@
+name: opd-docs
+dependencies:
+  - python=3.11
+  - conda-forge::pandoc=2.19.2
+  - conda-forge::pydata-sphinx-theme=0.13.3
+  - conda-forge::myst-parser=1.0.0
+  - conda-forge::nbsphinx=0.9.2
+  - conda-forge::sphinx=6.2.1
+  - pip
+  - pip:
+    - sphinx_design==0.4.1
+    - openpolicedata
+    - numpydoc
+    - ipython

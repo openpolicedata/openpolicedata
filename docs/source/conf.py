@@ -65,6 +65,10 @@ pypi_logo = "_static/pypi.svg"#os.path.join(docs_loc, "_static","pypi.svg")
 streamlit_logo = "_static/streamlit.svg"#os.path.join(docs_loc, "_static","pypi.svg")
 
 html_theme_options = {
+    "logo": {
+        "text": "OpenPoliceData",
+        "alt_text": "OpenPoliceData",
+    },
     "github_url": "https://github.com/openpolicedata/openpolicedata",
     "icon_links": [
         {
