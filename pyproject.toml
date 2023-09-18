@@ -1,12 +1,78 @@
 [build-system]
-requires = [
-    "setuptools>=42",
-    "wheel"
-]
+requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "openpolicedata"
+dynamic = ["version"]
+authors = [
+  { name="Matt Sowd", email="openpolicedata@gmail.com" },
+]
+description = "The OpenPoliceData (OPD) Python library is the most comprehensive centralized public access point for incident-level police data in the United States. OPD provides easy access to 383+ incident-level datasets for over 3500 police agencies. Types of data include traffic stops, use of force, officer-involved shootings, and complaints."
+readme = "README.md"
+license = {file = 'LICENSE'}
+requires-python = ">=3.7"
+classifiers = [
+    'Intended Audience :: Science/Research',
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
+    'Programming Language :: Python :: 3',
+    'Programming Language :: Python :: 3.7',
+    'Programming Language :: Python :: 3.8',
+    'Programming Language :: Python :: 3.9',
+    'Programming Language :: Python :: 3.10',
+    'Programming Language :: Python :: 3.11',
+]
+dependencies = [
+    "openpyxl",
+    "numpy",
+    "packaging",
+    "pandas",
+    "requests",
+    "sodapy",
+    "tqdm",
+    "xlrd"
+]
+keywords = [
+    "police data",
+    "use of force",
+    "traffic",
+    "stops",
+    "complaints",
+    "officer-involved",
+    "shootings",
+    "pandas",
+    "arcgis",
+    "socrata",
+    "police transparency",
+    "police accountability"
+]
+
+[project.urls]
+homepage = "https://openpolicedata.readthedocs.io/"
+documentation = "https://openpolicedata.readthedocs.io/en/stable/documentation.html"
+repository = "https://github.com/openpolicedata/openpolicedata"
+tracker = "https://github.com/openpolicedata/openpolicedata/issues"
+# TODO: Add changelog = 
+
+[project.optional-dependencies]
+optional = ['rapidfuzz', 'msoffcrypto-tool']
+
+[tool.setuptools.dynamic]
+version = {file = ".\\openpolicedata\\_version.txt"}
+# version = {attr = "openpolicedata.__version__"}
+
+# I think this is true by default...
+# [tool.setuptools]
+# include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["openpolicedata", "openpolicedata.*"]
+namespaces = false
 
 [tool.pytest.ini_options]
 filterwarnings = [
     "ignore:distutils Version classes are deprecated. Use packaging.version instead.*:DeprecationWarning::",
     "ignore:An exception was ignored while fetching the attribute `__array_interface__` from an object of type 'Polygon'*:DeprecationWarning:geopandas.*:"
 ]
+addopts = "--csvfile='C:\\Users\\matth\\repos\\opd-data\\opd_source_table.csv'"

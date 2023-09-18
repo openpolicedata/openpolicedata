@@ -63,18 +63,18 @@ class TestData:
 	def test_check_version(self, csvfile, source, last, skip, loghtml):
 		ds = get_datasets(csvfile).iloc[0]
 		# Set min_version to create error
-		ds["min_version"] = "-1"
+		ds.loc["min_version"] = "-1"
 		with pytest.raises(OPD_FutureError):
 			data._check_version(ds)
 
-		ds["min_version"] = "100000.0"
+		ds.loc["min_version"] = "100000.0"
 		with pytest.raises(OPD_MinVersionError):
 			data._check_version(ds)
 
 		# These should pass
-		ds["min_version"] = "0.0"
+		ds.loc["min_version"] = "0.0"
 		data._check_version(ds)
-		ds["min_version"] = pd.NA
+		ds.loc["min_version"] = pd.NA
 		data._check_version(ds)
 
 
@@ -341,7 +341,7 @@ if __name__ == "__main__":
 	last = None
 	# last = 912-902+1
 	skip = None
-	# skip = "Corona,Bloomington"
+	skip = "Greensboro"
 	source = None
 	# source = "Mesa"
 

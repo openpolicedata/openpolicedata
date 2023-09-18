@@ -466,7 +466,6 @@ class Excel(Data_Loader):
                 raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(self.url))
         except urllib.error.URLError as e:
             if "[SSL: UNSAFE_LEGACY_RENEGOTIATION_DISABLED] unsafe legacy renegotiation disabled" in str(e.args[0]):
-                headers = {'User-agent' : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_3) AppleWebKit/537.75.14 (KHTML, like Gecko) Version/7.0.3 Safari/7046A194A'}
                 with get_legacy_session() as session:
                     r = session.get(url)
                     

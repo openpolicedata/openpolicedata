@@ -1,6 +1,9 @@
+Run tests with min Python version
 Update version
-Update readme
-Update number of datasets and map
+Update readme including changelog
+Update switcher.json
+Update website including changelog and latest datasets
+Update number of datasets / agencies and map
 python -m pip install --upgrade pip
 python -m pip install --upgrade build
 python -m build
@@ -13,5 +16,7 @@ cd to that folder
 Run tests: python -m pytest
 python -m twine upload dist/*
 Add version to GitHub and attach whl and .tar.gz files
+
+COMMIT UPDATED SOURCES TABLE
 
 To delete env: conda remove --name myenv --all

@@ -486,6 +486,9 @@ class Source:
                 raise NotImplementedError(f"Unable to get agencies for {src['DataType']}")
             elif src['DataType'] ==defs.DataType.ArcGIS:
                 raise NotImplementedError(f"Unable to get agencies for {src['DataType']}")
+            elif src["DataType"] ==defs.DataType.EXCEL:
+                df = loader.load(year)
+                return df[src["agency_field"]].unique().tolist()
             elif src['DataType'] ==defs.DataType.SOCRATA:
                 if partial_name is not None:
                     opt_filter = src["agency_field"] + " LIKE '%" + partial_name + "%'"
