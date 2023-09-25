@@ -104,6 +104,7 @@ html_theme_options = {
             "type": "local",
         }
    ],
+   "show_version_warning_banner": True,
     # "navbar_end": ["version-switcher", "theme-switcher", "navbar-icon-links"],
     "switcher": {
         "json_url": json_url,
