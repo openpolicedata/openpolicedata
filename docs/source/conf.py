@@ -94,17 +94,17 @@ html_theme_options = {
             # The type of image to be used (see below for details)
             "type": "local",
         },
-        {
-            "name": "Streamlit",
-            # URL where the link will redirect
-            "url": "https://openpolicedata.streamlit.app/",  # required
-            # Icon class (if "type": "fontawesome"), or path to local image (if "type": "local")
-            "icon": streamlit_logo,
-            # The type of image to be used (see below for details)
-            "type": "local",
-        }
+        # {  # Temporarily moving as test
+        #     "name": "Streamlit",
+        #     # URL where the link will redirect
+        #     "url": "https://openpolicedata.streamlit.app/",  # required
+        #     # Icon class (if "type": "fontawesome"), or path to local image (if "type": "local")
+        #     "icon": streamlit_logo,
+        #     # The type of image to be used (see below for details)
+        #     "type": "local",
+        # }
    ],
-   "show_version_warning_banner": True,
+#    "show_version_warning_banner": True,
     # "navbar_end": ["version-switcher", "theme-switcher", "navbar-icon-links"],
     "switcher": {
         "json_url": json_url,
