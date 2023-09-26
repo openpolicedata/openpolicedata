@@ -1,3 +1,4 @@
+from io import BytesIO
 import pytest
 import requests
 if __name__ == "__main__":
@@ -472,9 +473,19 @@ class TestProduct:
 
 
     def test_excel_xls(self, csvfile, source, last, skip, loghtml):
-        url = "http://gouda.beloitwi.gov/WebLink/0/edoc/66423/3Use%20of%20Force%202017%20-%20last%20updated%201-12-18.xls"
+        url = r"http://gouda.beloitwi.gov/WebLink/0/edoc/66423/3Use%20of%20Force%202017%20-%20last%20updated%201-12-18.xls"
 
-        df_comp = pd.read_excel(url)
+        try:
+            df_comp = pd.read_excel(url)
+        except Exception as e:
+            if len(e.args) and e.args[0]=='Excel file format cannot be determined, you must specify an engine manually.':
+                r = requests.get(url)
+                r.raise_for_status()
+                text = r.content
+                file_like = BytesIO(text)
+                df_comp = pd.read_excel(file_like)
+            else:
+                raise e
         df_comp = df_comp.convert_dtypes()
         df_comp.columns = [x.strip() if isinstance(x, str) else x for x in df_comp.columns]
         df = data_loaders.Excel(url).load()
@@ -539,8 +550,8 @@ if __name__ == "__main__":
     # tp.test_socrata(None,None,None,None,None)
     # tp.test_socrata_geopandas(None,None,None,None,None)
     # tp.test_socrata_pandas(None,None,None,None,None)
-    tp.test_excel(None,None,None,None,None)
-    tp.test_excel_year_sheets(None,None,None,None,None)
-    tp.test_excel_header(None,None,None,None,None)
+    # tp.test_excel(None,None,None,None,None)
+    # tp.test_excel_year_sheets(None,None,None,None,None)
+    # tp.test_excel_header(None,None,None,None,None)
     tp.test_excel_xls(None,None,None,None,None)
     tp.test_excel_xls_protected(None,None,None,None,None)

@@ -169,7 +169,11 @@ class TestData:
 											nrows=max_count if datasets.iloc[i]["DataType"] not in ["CSV","Excel"] else None)
 								break
 					else:
-						raise ValueError("Unable to find data for any year")
+						if len(table.table)==0 and has_outages and \
+							(outages[["State","SourceName","Agency","TableType","Year"]] == datasets.iloc[i][["State","SourceName","Agency","TableType","Year"]]).all(axis=1).any():
+							pass
+						else:
+							raise ValueError("Unable to find data for any year")
 
 				tables.append(table)
 
@@ -395,11 +399,11 @@ if __name__ == "__main__":
 	csvfile = None
 	csvfile = r"..\opd-data\opd_source_table.csv"
 	last = None
-	last = 896-841+1
+	last = 912-847+1
 	skip = None
-	# skip = "Corona,Bloomington"
+	skip = "Greensboro"
 	source = None
 	# source = "Detroit"
-	tp.test_load_year(csvfile, source, last, skip, None)
+	# tp.test_load_year(csvfile, source, last, skip, None)
 	last = None
 	tp.test_source_download_not_limitable(csvfile, source, last, skip, None)

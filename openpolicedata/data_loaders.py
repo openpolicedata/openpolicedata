@@ -502,8 +502,8 @@ class Excel(Data_Loader):
                 self.excel_file = pd.ExcelFile(fp_decrypt)
             else:
                 raise
-        except:
-            raise
+        except Exception as e:
+            raise e
 
 
     def isfile(self):
@@ -1397,6 +1397,10 @@ class Carto(Data_Loader):
         if where != None:
             query+=" WHERE "+ where
 
+        if not return_count and count!=0:
+            # Order results to ensure data order remains constant if paging
+            query+=" ORDER BY cartodb_id"
+
         query+=f" OFFSET {offset}"
 
         if count!=None:
@@ -1718,7 +1722,7 @@ class Socrata(Data_Loader):
             # order guarantees data order remains the same when paging
             # Order by date if available otherwise the data ID. 
             # https://dev.socrata.com/docs/paging.html#2.1
-            order = ":id" if self.date_field==None else self.date_field
+            order = ":id"
 
         while N > 0:
             try:

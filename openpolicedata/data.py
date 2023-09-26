@@ -418,7 +418,12 @@ class Source:
         years = {x for x in all_years if isinstance(x,numbers.Number) or x==defs.NA}
         for k in [k for k,x in enumerate(all_years) if x==defs.MULTI]:
             df = dfs.iloc[k]
-            _check_version(df)
+            try:
+                _check_version(df)
+            except exceptions.OPD_FutureError:
+                continue
+            except:
+                raise
             url = df["URL"]
             date_field = df["date_field"] if pd.notnull(df["date_field"]) else None
             

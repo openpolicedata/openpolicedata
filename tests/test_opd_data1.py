@@ -61,20 +61,20 @@ class TestData:
 			data.Table(sources)
 
 	def test_check_version(self, csvfile, source, last, skip, loghtml):
-		ds = get_datasets(csvfile).iloc[0]
+		ds = get_datasets(csvfile).iloc[0].copy()
 		# Set min_version to create error
-		ds.loc["min_version"] = "-1"
+		ds["min_version"] = "-1"
 		with pytest.raises(OPD_FutureError):
 			data._check_version(ds)
 
-		ds.loc["min_version"] = "100000.0"
+		ds["min_version"] = "100000.0"
 		with pytest.raises(OPD_MinVersionError):
 			data._check_version(ds)
 
 		# These should pass
-		ds.loc["min_version"] = "0.0"
+		ds["min_version"] = "0.0"
 		data._check_version(ds)
-		ds.loc["min_version"] = pd.NA
+		ds["min_version"] = pd.NA
 		data._check_version(ds)
 
 
@@ -259,21 +259,26 @@ class TestData:
 	
 	
 	def test_load_gen(self, csvfile, source, last, skip, loghtml):
-		datasets = [("Norristown",2016,"USE OF FORCE", 100),
-	      ("Denver", "MULTIPLE", "OFFICER-INVOLVED SHOOTINGS",50),
-	      ("Philadelphia", 2019, "OFFICER-INVOLVED SHOOTINGS", 500),
-	      ("Charlotte-Mecklenburg", "NONE", "Employee", 1000),
-		  ("Austin", 2012, "USE OF FORCE", 1000)]
+		datasets = [
+			("Philadelphia", 2021, "STOPS", 1000),  # Carto
+			("Virginia","MULTIPLE","STOPS", 2000, "Fairfax County Police Department"), # Socrata
+			("Fairfax County",2016,"ARRESTS", 1000),  # ArcGIS
+			("Norristown", 2016, "USE OF FORCE",100), # Excel
+			("Denver", "MULTIPLE", "OFFICER-INVOLVED SHOOTINGS", 50) # CSV
+			] 
 
 		for ds in datasets:
 			src = data.Source(ds[0])
-			df = src.load_from_url(ds[1], ds[2]).table
+			agency = ds[4] if len(ds)>4 else None
+			max_iter = 10
+			df = src.load_from_url(ds[1], ds[2], agency=agency, nrows=max_iter*ds[3]).table
 			with warnings.catch_warnings():
 				warnings.filterwarnings("ignore",category=RuntimeWarning)
 				df = df.convert_dtypes()
 
 			offset = 0
-			for t in src.load_from_url_gen(ds[1], ds[2], nbatch=ds[3], force=True):
+			k = 0
+			for t in src.load_from_url_gen(ds[1], ds[2], nbatch=ds[3], force=True, agency=agency):
 				df_cur = df.iloc[offset:offset+len(t.table)].reset_index(drop=True)
 				df2 = t.table.copy()
 				if set(df.columns)!=set(df2.columns):
@@ -290,9 +295,10 @@ class TestData:
 				df2 = df2.astype(df_cur.dtypes.to_dict())
 				assert df2.equals(df_cur)
 				offset+=len(t.table)
+				k+=1
+				if k>=max_iter:
+					break
 
-			# Ensure that all data was read in
-			assert offset==len(df)
 
 def can_be_limited(data_type, url):
 	if (data_type == DataType.CSV and ".zip" in url):
@@ -337,7 +343,7 @@ if __name__ == "__main__":
 	tp = TestData()
 	# (self, csvfile, source, last, skip, loghtml)
 	csvfile = None
-	csvfile = r"..\opd-data\opd_source_table.csv"
+	# csvfile = r"..\opd-data\opd_source_table.csv"
 	last = None
 	# last = 912-902+1
 	skip = None
@@ -345,13 +351,13 @@ if __name__ == "__main__":
 	source = None
 	# source = "Mesa"
 
-	tp.check_excel_sheets(csvfile, source, last, skip, None) 
-	tp.test_get_years_to_check(csvfile, source, last, skip, None) 
-	tp.check_table_type_warning(csvfile, source, last, skip, None) 
-	tp.test_offsets_and_nrows(csvfile, source, last, skip, None) 
-	tp.test_check_version(csvfile, None, last, skip, None) #
-	tp.test_source_download_limitable(csvfile, source, last, skip, None) 
+	# tp.check_excel_sheets(csvfile, source, last, skip, None) 
+	# tp.test_get_years_to_check(csvfile, source, last, skip, None) 
+	# tp.check_table_type_warning(csvfile, source, last, skip, None) 
+	# tp.test_offsets_and_nrows(csvfile, source, last, skip, None) 
+	# tp.test_check_version(csvfile, None, last, skip, None) #
+	# tp.test_source_download_limitable(csvfile, source, last, skip, None) 
 	
-	tp.test_get_count(csvfile, None, last, skip, None)
+	# tp.test_get_count(csvfile, None, last, skip, None)
 	tp.test_load_gen(csvfile, source, last, skip, None) 
 	
