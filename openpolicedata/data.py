@@ -864,8 +864,10 @@ def _check_date(table, date_field):
                     except:
                         raise
                 
-                with warnings.catch_warnings():
-                    warnings.filterwarnings("ignore", message="Could not infer format", category=UserWarning)
+                try:
+                    # This way is much faster
+                    table[date_field] = to_datetime(table[date_field])
+                except ValueError as e:
                     table[date_field] = table[date_field].apply(to_datetime_local)
                 # table = table.astype({date_field: 'datetime64[ns]'})
             elif isinstance(one_date, numbers.Number) and ("year" in date_field.lower() or date_field.lower() == "yr" or ((dts>=1900) & (dts<2100)).all()):
