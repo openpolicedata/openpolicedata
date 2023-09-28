@@ -420,8 +420,12 @@ class Source:
             df = dfs.iloc[k]
             try:
                 _check_version(df)
-            except exceptions.OPD_FutureError:
-                continue
+            except (exceptions.OPD_FutureError,exceptions.OPD_MinVersionError) as e:
+                if len(years)>0:
+                    # Only throw error if this is on the only dataset so far
+                    continue
+                else:
+                    raise e
             except:
                 raise
             url = df["URL"]
@@ -844,7 +848,7 @@ class Source:
 
 
 def _check_date(table, date_field):
-    if date_field != None and table is not None and len(table)>0:
+    if date_field != None and table is not None and len(table)>0 and date_field in table:
         dts = table[date_field]
         dts = dts[dts.notnull()]
         if len(dts) > 0:
