@@ -53,10 +53,10 @@ homepage = "https://openpolicedata.readthedocs.io/"
 documentation = "https://openpolicedata.readthedocs.io/en/stable/documentation.html"
 repository = "https://github.com/openpolicedata/openpolicedata"
 tracker = "https://github.com/openpolicedata/openpolicedata/issues"
-# TODO: Add changelog = 
 
 [project.optional-dependencies]
 optional = ['rapidfuzz', 'msoffcrypto-tool']
+test = ['pytest']
 
 [tool.setuptools.dynamic]
 version = {file = ".\\openpolicedata\\_version.txt"}

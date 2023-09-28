@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
+## v0.5.8 - 2023-09-28
+### Added
+- Using User-Agent to enable inclusion of Chicago pedestrian stops data
+### Changed
+- Improved speed of datetime conversion
+### Fixed
+- Fixed issue when using load_from_url_gen with Socrata and Carto data where data needed to be sorted by data IDs in order to prevent loading a few repeated rows due to changing order of data on server
+- Fixed error thrown when dataset has date field but that column is not returned because the rows requested are all empty
+
 ## v0.5.7 - 2023-09-05
 ### Added
 - Subclassing pandas DataFrame and Series when appropriate to enable deprecation messaging of certain Table Type names
