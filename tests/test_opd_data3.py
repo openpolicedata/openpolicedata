@@ -28,7 +28,13 @@ outages_file = os.path.join("..","opd-data","outages.csv")
 has_outages=os.path.exists(outages_file)
 if has_outages:
 	outages = pd.read_csv(outages_file)
-
+else:
+	try:
+		outages = pd.read_csv('https://raw.githubusercontent.com/openpolicedata/opd-data/main/outages.csv')
+		has_outages = True
+	except:
+		pass
+	
 warn_errors = (OPD_DataUnavailableError, OPD_SocrataHTTPError, OPD_FutureError, OPD_MinVersionError)
 
 def get_datasets(csvfile):
@@ -353,16 +359,6 @@ def can_be_limited(data_type, url):
 	else:
 		raise ValueError("Unknown table type")
 
-
-def is_filterable(data_type):
-	data_type = DataType(data_type)
-	if data_type in [DataType.CSV, DataType.EXCEL]:
-		return False
-	elif data_type in [DataType.ArcGIS, DataType.SOCRATA, DataType.CARTO]:
-		return True
-	else:
-		raise ValueError("Unknown table type")
-
 def is_stanford(url):
 	return "stanford.edu" in url
 
@@ -399,11 +395,11 @@ if __name__ == "__main__":
 	csvfile = None
 	csvfile = r"..\opd-data\opd_source_table.csv"
 	last = None
-	last = 912-847+1
+	# last = 912-847+1
 	skip = None
 	skip = "Greensboro"
 	source = None
-	# source = "Detroit"
+	source = "Chicago"
 	# tp.test_load_year(csvfile, source, last, skip, None)
 	last = None
 	tp.test_source_download_not_limitable(csvfile, source, last, skip, None)

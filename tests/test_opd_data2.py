@@ -11,6 +11,7 @@ from datetime import datetime
 from time import sleep
 import warnings
 import os
+import pandas as pd
 
 sleep_time = 0.1
 log_filename = f"pytest_url_errors_{datetime.now().strftime('%Y%m%d_%H')}.txt"
@@ -19,6 +20,18 @@ log_folder = os.path.join(".","data/test_logs")
 # Set Arcgis data loader to validate queries with arcgis package if installed
 opd.data_loaders._verify_arcgis = True
 
+outages_file = os.path.join("..","opd-data","outages.csv")
+# if has_outages:=os.path.exists(outages_file):
+has_outages=os.path.exists(outages_file)
+if has_outages:
+	outages = pd.read_csv(outages_file)
+else:
+	try:
+		outages = pd.read_csv('https://raw.githubusercontent.com/openpolicedata/opd-data/main/outages.csv')
+		has_outages = True
+	except:
+		pass
+	
 warn_errors = (OPD_DataUnavailableError, OPD_SocrataHTTPError, OPD_FutureError, OPD_MinVersionError)
 
 def get_datasets(csvfile):
@@ -82,6 +95,11 @@ class TestData:
 					continue
 				except:
 					raise
+
+				if len(years)==0 and has_outages and \
+					(outages[["State","SourceName","Agency","TableType","Year"]] == datasets.iloc[i][["State","SourceName","Agency","TableType","Year"]]).all(axis=1).any():
+					caught_exceptions_warn.append(f'Outage continues for {str(datasets.iloc[i][["State","SourceName","Agency","TableType","Year"]])}')
+					continue
 
 				if datasets.iloc[i]["Year"] != MULTI:
 					assert datasets.iloc[i]["Year"] in years
@@ -184,16 +202,6 @@ class TestData:
 
 		os.remove(filename)
 
-	
-def can_be_limited(data_type, url):
-	data_type = DataType(data_type)
-	if (data_type == DataType.CSV and ".zip" in url):
-		return False
-	elif data_type in [DataType.ArcGIS, DataType.SOCRATA, DataType.CSV, DataType.EXCEL, DataType.CARTO]:
-		return True
-	else:
-		raise ValueError("Unknown table type")
-
 
 def is_filterable(data_type):
 	data_type = DataType(data_type)
@@ -242,11 +250,11 @@ if __name__ == "__main__":
 	last = None
 	# last = 875-234+1
 	source = None
-	# source = "Washington D.C."
+	source = "Bloomington"
 	skip = None
-	skip = "Corona,Bloomington"
+	skip = "Corona"
 	tp.test_get_years(csvfile, source, last, skip, None)
-	tp.test_get_agencies(csvfile, None, None, skip, None)
-	tp.test_get_agencies_name_match(csvfile, None, None, skip, None)
-	tp.test_agency_filter(csvfile, None, None, skip, None)
-	tp.test_to_csv(csvfile, None, None, skip, None)
+	# tp.test_get_agencies(csvfile, None, None, skip, None)
+	# tp.test_get_agencies_name_match(csvfile, None, None, skip, None)
+	# tp.test_agency_filter(csvfile, None, None, skip, None)
+	# tp.test_to_csv(csvfile, None, None, skip, None)

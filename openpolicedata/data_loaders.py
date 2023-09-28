@@ -305,7 +305,16 @@ class Csv(Data_Loader):
                 try:
                     table = pd.read_csv(self.url, encoding_errors='surrogateescape')
                 except urllib.error.HTTPError as e:
-                    raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(self.url))
+                    if e.msg=='Forbidden':
+                        storage_options = {'User-Agent': 'Mozilla/5.0'} 
+                        try:
+                            table = pd.read_csv(self.url, encoding_errors='surrogateescape', storage_options=storage_options)
+                        except urllib.error.HTTPError as e:
+                            raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(self.url))
+                        except:
+                            raise
+                    else:
+                        raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(self.url))
                 except Exception as e:
                     raise e
         else:

@@ -26,6 +26,12 @@ outages_file = os.path.join("..","opd-data","outages.csv")
 has_outages=os.path.exists(outages_file)
 if has_outages:
 	outages = pd.read_csv(outages_file)
+else:
+	try:
+		outages = pd.read_csv('https://raw.githubusercontent.com/openpolicedata/opd-data/main/outages.csv')
+		has_outages = True
+	except:
+		pass
 
 warn_errors = (OPD_DataUnavailableError, OPD_SocrataHTTPError, OPD_FutureError, OPD_MinVersionError)
 
@@ -162,6 +168,8 @@ class TestData:
 					assert len(table.table)>0
 
 				if not pd.isnull(datasets.iloc[i]["date_field"]):
+					if datasets.iloc[i]["date_field"] not in table.table:
+						table = src.load_from_url(datasets.iloc[i]["Year"], datasets.iloc[i]["TableType"], pbar=False, nrows=2000)
 					assert datasets.iloc[i]["date_field"] in table.table
 					#assuming a Pandas string dtype('O').name = object is okay too
 					assert (table.table[datasets.iloc[i]["date_field"]].dtype.name in ['datetime64[ns]', 'datetime64[ns, UTC]', 'datetime64[ms]'])
@@ -343,21 +351,21 @@ if __name__ == "__main__":
 	tp = TestData()
 	# (self, csvfile, source, last, skip, loghtml)
 	csvfile = None
-	# csvfile = r"..\opd-data\opd_source_table.csv"
+	csvfile = r"..\opd-data\opd_source_table.csv"
 	last = None
 	# last = 912-902+1
 	skip = None
-	skip = "Greensboro"
+	# skip = "Greensboro"
 	source = None
-	# source = "Mesa"
+	source = "Phoenix"
 
 	# tp.check_excel_sheets(csvfile, source, last, skip, None) 
 	# tp.test_get_years_to_check(csvfile, source, last, skip, None) 
 	# tp.check_table_type_warning(csvfile, source, last, skip, None) 
 	# tp.test_offsets_and_nrows(csvfile, source, last, skip, None) 
 	# tp.test_check_version(csvfile, None, last, skip, None) #
-	# tp.test_source_download_limitable(csvfile, source, last, skip, None) 
+	tp.test_source_download_limitable(csvfile, source, last, skip, None) 
 	
 	# tp.test_get_count(csvfile, None, last, skip, None)
-	tp.test_load_gen(csvfile, source, last, skip, None) 
+	# tp.test_load_gen(csvfile, source, last, skip, None) 
 	
