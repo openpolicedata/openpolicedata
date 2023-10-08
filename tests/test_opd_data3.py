@@ -149,6 +149,7 @@ class TestData:
 				try:
 					table = src.load_from_url(year, datasets.iloc[i]["TableType"], 
 											agency=agency, pbar=False, 
+											sortby="date",
 											nrows=max_count if datasets.iloc[i]["DataType"] not in ["CSV","Excel"] else None)
 				except OPD_FutureError as e:
 					future_error = True
@@ -172,6 +173,7 @@ class TestData:
 								years = [x if x!=year else y for x in years]
 								table = src.load_from_url(y, datasets.iloc[i]["TableType"], 
 											agency=agency, pbar=False, 
+											sortby="date",
 											nrows=max_count if datasets.iloc[i]["DataType"] not in ["CSV","Excel"] else None)
 								break
 					else:
@@ -393,13 +395,13 @@ if __name__ == "__main__":
 	tp = TestData()
 	# (self, csvfile, source, last, skip, loghtml)
 	csvfile = None
-	csvfile = r"..\opd-data\opd_source_table.csv"
+	# csvfile = r"..\opd-data\opd_source_table.csv"
 	last = None
-	# last = 912-847+1
+	last = 910-901+1
 	skip = None
-	skip = "Greensboro"
+	skip = "Northampton"
 	source = None
-	source = "Chicago"
-	# tp.test_load_year(csvfile, source, last, skip, None)
+	# source = "New York City"
+	tp.test_load_year(csvfile, source, last, skip, None)
 	last = None
 	tp.test_source_download_not_limitable(csvfile, source, last, skip, None)

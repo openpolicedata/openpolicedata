@@ -331,7 +331,7 @@ class Csv(Data_Loader):
                 raise
                 
             if not use_legacy:
-                if r.status_code==404:
+                if r.status_code in [400,404]:
                     # Try get instead
                     r = requests.get(self.url)
                 try:

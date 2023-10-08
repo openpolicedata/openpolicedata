@@ -81,6 +81,10 @@ class TestDatasets:
         assert pd.isnull(rem).sum() == 0
 
     def test_years_multi(self, csvfile, source, last, skip, loghtml):
+        if skip != None:
+            skip = skip.split(",")
+            skip = [x.strip() for x in skip]
+        
         datasets = get_datasets(csvfile)
         # Multi-year datasets should typically have a value in date_field
         datasets = datasets[datasets["Year"] == opd.defs.MULTI]
@@ -89,8 +93,10 @@ class TestDatasets:
         # This can only be allowed for certain Excel cases
         assert (df_null["DataType"] == opd.defs.DataType.EXCEL.value).all()
 
-        for url in df_null["URL"]:
-            loader = opd.data_loaders.Excel(url)
+        for k in range(len(df_null)):
+            if df_null.iloc[k]['SourceName'] in skip:
+                continue
+            loader = opd.data_loaders.Excel(df_null.iloc[k]["URL"])
             has_year_sheets = loader._Excel__get_sheets()[1]
             assert has_year_sheets
 
@@ -200,7 +206,7 @@ class TestDatasets:
 if __name__ == "__main__":
     csvfile = None
     # csvfile = "C:\\Users\\matth\\repos\\opd-data\\opd_source_table.csv"
-    TestDatasets().test_get_table_types(csvfile,None,None,None,None)
-    TestDatasets().test_table_for_nulls(csvfile,None,None,None,None)
-    # TestDatasets().test_years_multi(csvfile,None,None,None,None)
+    # TestDatasets().test_get_table_types(csvfile,None,None,None,None)
+    # TestDatasets().test_table_for_nulls(csvfile,None,None,None,None)
+    TestDatasets().test_years_multi(csvfile,None,None,None,None)
     # TestDatasets().test_table_types(csvfile,None,None,None,None)

@@ -409,6 +409,12 @@ class TestProduct:
 
 
     def test_excel_year_sheets(self, csvfile, source, last, skip, loghtml):
+        if skip != None:
+            skip = skip.split(",")
+            skip = [x.strip() for x in skip]
+            if "Northampton" in skip:
+                return
+
         url = "https://northamptonpd.com/images/ODP%20Spreadsheets/2014-2020_MV_Pursuits_incident_level_data.xlsx"
         loader = data_loaders.Excel(url, date_field="Date")
 
