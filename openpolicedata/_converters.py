@@ -399,7 +399,9 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
         return race_cats[defs._race_keys.OTHER]
     
     if agg_cat:
-        if has_latino and (("HISP" in x and "NONHISP" not in x.replace(" ","")) or ("LATINO" in x and "NONLATINO" not in x.replace(" ",""))):
+        if has_latino and (("HISP" in x and "NONHISP" not in x.replace(" ","")) or \
+                           ("LATINO" in x and "NONLATINO" not in x.replace(" ","")) or \
+                            x in ["MEXICAN"]):
             if has_black and "BLACK" in x:
                 return [race_cats[defs._race_keys.LATINO], race_cats[defs._race_keys.BLACK]]
             else:
@@ -433,7 +435,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
             if x in ["MALE","FEMALE","GIVING ANYTHING OF VALUE","REFUSED", "NA","M","F","OTHER/NOT REPORTED"] or \
                 (source_name in ["Chapel Hill","Lansing","Fayetteville"] and x in ["S","P"]) or \
                 (source_name=="Burlington" and x in ["EXPUNGED"]) or \
-                (source_name in ["Cincinnati","San Diego"] and x in ["F"]) or \
+                (source_name in ["Cincinnati","San Diego"] and x in ["F","S","P"]) or \
                 (source_name in ["Columbia"] and x in ["M","P"]) or \
                 (source_name in ["Urbana"] and x in ["BUSINESS OR OTHER"]) or \
                 (source_name in ["Bloomington","Beloit"] and x in ["M"]) or \
@@ -442,6 +444,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
                 (source_name in ["Rutland"] and x in ["M","R"]) or \
                 (source_name in ["Dallas"] and x in ["NA"]) or \
                 (source_name in ["Sacramento"] and x in ["CUBAN","CARRIBEAN"]) or \
+                (source_name in ["New York City"] and x in ["SOUTHWEST"]) or \
                 (source_name in ["New York City"] and x in ["SOUTHWEST"]) or \
                 (x=="UN" and source_name=="State Police") or \
                 (x=="P" and source_name=="Pittsfield") or \

@@ -1,3 +1,4 @@
+import copy
 import numbers
 import os.path as path
 import pandas as pd
@@ -16,7 +17,7 @@ import warnings
 from . import data_loaders
 from . import datasets
 from . import __version__
-# from . import preproc
+from . import preproc
 from . import defs
 from . import exceptions
 from .datetime_parser import to_datetime
@@ -188,137 +189,141 @@ class Table:
         return get_csv_filename(self.state, self.source_name, self.agency, self.table_type, self.year)
     
 
-    # def get_transform_map(self):
-    #     return self.__transforms
+    def get_transform_map(self, minimize=False):
+        result = copy.deepcopy(self.__transforms)
+        if minimize:
+            for r in result:
+                del r.orig_value_counts
+        return result
     
 
-    # def standardize(self, 
-    #     race_cats: Union[dict, str, None] = None,
-    #     agg_race_cat: bool = False,
-    #     eth_cats: Optional[dict] = None,
-    #     gender_cats: Optional[dict] = None,
-    #     keep_raw: bool =True,        
-    #     known_cols: Optional[dict] = None,
-    #     verbose: Union[bool,str] = False,
-    #     no_id: Literal["keep", "null", "error", "test"] = "keep",
-    #     race_eth_combo: Literal[False, "merge", "concat"] = "merge",
-    #     merge_date_time: bool =True,
-    #     empty_time: Literal["nat", "ignore"] = "NaT"
-    # ):
-    #     """_summary_
+    def standardize(self, 
+        race_cats: Union[dict, str, None] = None,
+        agg_race_cat: bool = False,
+        eth_cats: Optional[dict] = None,
+        gender_cats: Optional[dict] = None,
+        keep_raw: bool =True,        
+        known_cols: Optional[dict] = None,
+        verbose: Union[bool,str] = False,
+        no_id: Literal["keep", "null", "error", "test"] = "keep",
+        race_eth_combo: Literal[False, "merge", "concat"] = "merge",
+        merge_date_time: bool =True,
+        empty_time: Literal["nat", "ignore"] = "NaT"
+    ):
+        """_summary_
 
-    #     Parameters
-    #     ----------
-    #     race_cats : Union[dict, str, None], optional
-    #         Indicates data values to use for race standardization. If None, the dictionary returned by 
-    #         opd.defs.get_race_cats() is used. If a dictionary, the keys of the dictionary must be a subset
-    #         of the values returned by opd.defs.get_race_keys(). The corresponding values indicate, which
-    #         value to use for each category. If race_cats is 'expand', the dictionary returned by 
-    #         opd.defs.get_race_cats(expand=True) will be used.
-    #     agg_race_cat : bool, optional
-    #         If True, standardization of race will be more aggressive in converting raw values to standardized
-    #         ones. For example, if agg_race_cat is False, standardization will not convert 'East African' to 
-    #         the category for Black while it will if True, by default False
-    #     eth_cats : Optional[dict], optional
-    #         Indicates data values to use for ethnicity standardization. If None, the dictionary returned by 
-    #         opd.defs.get_eth_cats() is used. If a dictionary, the keys of the dictionary must be a subset
-    #         of the values returned by opd.defs.get_eth_keys(). The corresponding values indicate, which
-    #         value to use for each category. 
-    #     gender_cats : Optional[dict], optional
-    #         Indicates data values to use for gender standardization. If None, the dictionary returned by 
-    #         opd.defs.get_gender_cats() is used. If a dictionary, the keys of the dictionary must be a subset
-    #         of the values returned by opd.defs.get_gender_keys(). The corresponding values indicate, which
-    #         value to use for each category. 
-    #     keep_raw : bool, optional
-    #         If False, raw columns that are standardized will be removed. If True, they will be kept and 
-    #         renamed to indcate that they are the original raw columns, by default True
-    #     known_cols : Optional[dict], optional
-    #         Dictionary of known column mappings. If None, the dictionary defaults to 
-    #         any known columns for this dataset ({defs.columns.DATE:self.date_field, defs.columns.AGENCY:self.agency_field}).
-    #         If a dictionary, the keys of the dictionary must be available columns for standardization (defs.columns)
-    #         and the values must be columns in the table.
-    #     verbose : Union[bool,str], optional
-    #         If True, details of the standardization will be printed. If a filename, details of the standardization will
-    #         be logged to that file., by default False
-    #     no_id : Literal[&quot;keep&quot;, &quot;null&quot;, &quot;error&quot;, &quot;test&quot;], optional
-    #         Determines how unknown values are handled during standardization of demographics:
+        Parameters
+        ----------
+        race_cats : Union[dict, str, None], optional
+            Indicates data values to use for race standardization. If None, the dictionary returned by 
+            opd.defs.get_race_cats() is used. If a dictionary, the keys of the dictionary must be a subset
+            of the values returned by opd.defs.get_race_keys(). The corresponding values indicate, which
+            value to use for each category. If race_cats is 'expand', the dictionary returned by 
+            opd.defs.get_race_cats(expand=True) will be used.
+        agg_race_cat : bool, optional
+            If True, standardization of race will be more aggressive in converting raw values to standardized
+            ones. For example, if agg_race_cat is False, standardization will not convert 'East African' to 
+            the category for Black while it will if True, by default False
+        eth_cats : Optional[dict], optional
+            Indicates data values to use for ethnicity standardization. If None, the dictionary returned by 
+            opd.defs.get_eth_cats() is used. If a dictionary, the keys of the dictionary must be a subset
+            of the values returned by opd.defs.get_eth_keys(). The corresponding values indicate, which
+            value to use for each category. 
+        gender_cats : Optional[dict], optional
+            Indicates data values to use for gender standardization. If None, the dictionary returned by 
+            opd.defs.get_gender_cats() is used. If a dictionary, the keys of the dictionary must be a subset
+            of the values returned by opd.defs.get_gender_keys(). The corresponding values indicate, which
+            value to use for each category. 
+        keep_raw : bool, optional
+            If False, raw columns that are standardized will be removed. If True, they will be kept and 
+            renamed to indcate that they are the original raw columns, by default True
+        known_cols : Optional[dict], optional
+            Dictionary of known column mappings. If None, the dictionary defaults to 
+            any known columns for this dataset ({defs.columns.DATE:self.date_field, defs.columns.AGENCY:self.agency_field}).
+            If a dictionary, the keys of the dictionary must be available columns for standardization (defs.columns)
+            and the values must be columns in the table.
+        verbose : Union[bool,str], optional
+            If True, details of the standardization will be printed. If a filename, details of the standardization will
+            be logged to that file., by default False
+        no_id : Literal[&quot;keep&quot;, &quot;null&quot;, &quot;error&quot;, &quot;test&quot;], optional
+            Determines how unknown values are handled during standardization of demographics:
             
-    #         - 'keep' (default): Keep the original value
-    #         - 'null': Replace with a null value
-    #         - 'error': Throw an error
-    #         , by default "keep"
-    #     race_eth_combo : Literal[False, &quot;merge&quot;, &quot;concat&quot;], optional
-    #         Indicates whether and how combine race and ethnicity columns. If False, race and ethnicity columns
-    #         are not combined. If 'merge', the combined race and ethnicity column will be for Latino of all races 
-    #         and all race categories will be for non-Latino only. Functionally, the combined race and ethnicity 
-    #         column will be the ethnicity value if the ethnicity is Latino or unnown and the race otherwise. 
-    #         If 'concat', race and ethnicity values will be concatenated in the combined race and ethnicity column, 
-    #         by default "merge"
-    #     merge_date_time : bool, optional
-    #         If True, if standardized date and standardize time columns are identified, they will be merged into a 
-    #         combined datetime column, by default True
-    #     empty_time : Literal[&quot;nat&quot;, &quot;ignore&quot;], optional
-    #         Indicates how null times are treated in the standardized datetime column. If, 'NaT', the resulting 
-    #         datetime is a null value (NaT). If 'ignore', the resulting datetime will be the date value, by default "NaT"
+            - 'keep' (default): Keep the original value
+            - 'null': Replace with a null value
+            - 'error': Throw an error
+            , by default "keep"
+        race_eth_combo : Literal[False, &quot;merge&quot;, &quot;concat&quot;], optional
+            Indicates whether and how combine race and ethnicity columns. If False, race and ethnicity columns
+            are not combined. If 'merge', the combined race and ethnicity column will be for Latino of all races 
+            and all race categories will be for non-Latino only. Functionally, the combined race and ethnicity 
+            column will be the ethnicity value if the ethnicity is Latino or unnown and the race otherwise. 
+            If 'concat', race and ethnicity values will be concatenated in the combined race and ethnicity column, 
+            by default "merge"
+        merge_date_time : bool, optional
+            If True, if standardized date and standardize time columns are identified, they will be merged into a 
+            combined datetime column, by default True
+        empty_time : Literal[&quot;nat&quot;, &quot;ignore&quot;], optional
+            Indicates how null times are treated in the standardized datetime column. If, 'NaT', the resulting 
+            datetime is a null value (NaT). If 'ignore', the resulting datetime will be the date value, by default "NaT"
 
-    #     Returns
-    #     -------
-    #     None
-    #     """
-    #     if len(self.table)==0:
-    #         return
+        Returns
+        -------
+        None
+        """
+        if len(self.table)==0:
+            return
         
-    #     if not self.is_std:
-    #         if known_cols is None:
-    #             known_cols = {defs.columns.DATE:self.date_field, defs.columns.AGENCY:self.agency_field}
+        if not self.is_std:
+            if known_cols is None:
+                known_cols = {defs.columns.DATE:self.date_field, defs.columns.AGENCY:self.agency_field}
 
-    #         race_cats = defs.get_race_cats() if race_cats is None else race_cats
-    #         race_cats = defs.get_race_cats(expand=True) if race_cats=="expand" else race_cats
-    #         eth_cats = eth_cats if eth_cats is not None else defs.get_eth_cats()
-    #         gender_cats = gender_cats if gender_cats is not None else defs.get_gender_cats()
-    #         try:
-    #             if verbose:
-    #                 logger = logging.getLogger("opd-std")
-    #                 log_level = logger.level
-    #             if isinstance(verbose,str):
-    #                 # verbose is a filename
-    #                 fh = logging.FileHandler(verbose)
-    #                 logger.addHandler(fh)
-    #                 for handler in logger.handlers:
-    #                     if handler.name == "main":
-    #                         # Temporarily up level of stream handler so that only print to file
-    #                         handler.setLevel(logging.WARNING)
-    #             if verbose:
-    #                 # Set logger to info so log messages in preproc.standardize will be displayed
-    #                 logger.setLevel(logging.INFO)
+            race_cats = defs.get_race_cats() if race_cats is None else race_cats
+            race_cats = defs.get_race_cats(expand=True) if race_cats=="expand" else race_cats
+            eth_cats = eth_cats if eth_cats is not None else defs.get_eth_cats()
+            gender_cats = gender_cats if gender_cats is not None else defs.get_gender_cats()
+            try:
+                if verbose:
+                    logger = logging.getLogger("opd-std")
+                    log_level = logger.level
+                if isinstance(verbose,str):
+                    # verbose is a filename
+                    fh = logging.FileHandler(verbose)
+                    logger.addHandler(fh)
+                    for handler in logger.handlers:
+                        if handler.name == "main":
+                            # Temporarily up level of stream handler so that only print to file
+                            handler.setLevel(logging.WARNING)
+                if verbose:
+                    # Set logger to info so log messages in preproc.standardize will be displayed
+                    logger.setLevel(logging.INFO)
                     
-    #             self.table, self.__transforms = preproc.standardize(self.table, self.table_type, self.year,
-    #                 known_cols=known_cols, 
-    #                 source_name=self.source_name,
-    #                 keep_raw=keep_raw,
-    #                 agg_race_cat=agg_race_cat,
-    #                 race_cats=race_cats,
-    #                 eth_cats=eth_cats,
-    #                 gender_cats=gender_cats,
-    #                 no_id=no_id,
-    #                 race_eth_combo=race_eth_combo,
-    #                 merge_date_time=merge_date_time,
-    #                 empty_time=empty_time)
-    #         except Exception as e:
-    #             raise e
-    #         finally:
-    #             if verbose:
-    #                 logger.setLevel(log_level)
-    #             if isinstance(verbose,str):
-    #                 logger.removeHandler(fh)
-    #                 for handler in logger.handlers:
-    #                     if handler.name == "main":
-    #                         # Revert stream handler
-    #                         handler.setLevel(logging.NOTSET)
+                self.table, self.__transforms = preproc.standardize(self.table, self.table_type, self.year,
+                    known_cols=known_cols, 
+                    source_name=self.source_name,
+                    keep_raw=keep_raw,
+                    agg_race_cat=agg_race_cat,
+                    race_cats=race_cats,
+                    eth_cats=eth_cats,
+                    gender_cats=gender_cats,
+                    no_id=no_id,
+                    race_eth_combo=race_eth_combo,
+                    merge_date_time=merge_date_time,
+                    empty_time=empty_time)
+            except Exception as e:
+                raise e
+            finally:
+                if verbose:
+                    logger.setLevel(log_level)
+                if isinstance(verbose,str):
+                    logger.removeHandler(fh)
+                    for handler in logger.handlers:
+                        if handler.name == "main":
+                            # Revert stream handler
+                            handler.setLevel(logging.NOTSET)
 
-    #         self.is_std = True
-    #     else:
-    #         raise ValueError("Dataset has already been cleaned. Aborting cleaning.")
+            self.is_std = True
+        else:
+            raise ValueError("Dataset has already been cleaned. Aborting cleaning.")
 
 
 class Source:
