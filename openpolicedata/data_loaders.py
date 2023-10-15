@@ -1675,7 +1675,7 @@ class Socrata(Data_Loader):
         return count
 
 
-    def load(self, year=None, nrows=None, offset=0, *, pbar=True, opt_filter=None, select=None, output_type=None, **kwargs):
+    def load(self, year=None, nrows=None, offset=0, *, pbar=True, opt_filter=None, select=None, output_type=None, sortby=None, **kwargs):
         '''Download table from Socrata to pandas or geopandas DataFrame
         
         Parameters
@@ -1694,6 +1694,8 @@ class Socrata(Data_Loader):
             (Optional) select statement to REST API
         output_type : str
             (Optional) Data type for the output. Allowable values: GeoDataFrame, DataFrame, set, list. Default: GeoDataFrame or DataFrame
+        sortby : str
+            (Optional) Columns to sort by. Allowable values: None (defaults to id) or "date"
             
         Returns
         -------
@@ -1728,10 +1730,13 @@ class Socrata(Data_Loader):
 
         order = None
         if select == None:
-            # order guarantees data order remains the same when paging
-            # Order by date if available otherwise the data ID. 
-            # https://dev.socrata.com/docs/paging.html#2.1
-            order = ":id"
+            if self.date_field and isinstance(sortby,str) and sortby=="date":
+                order = self.date_field
+            else:
+                # order guarantees data order remains the same when paging
+                # Order by date if available otherwise the data ID. 
+                # https://dev.socrata.com/docs/paging.html#2.1
+                order = ":id"
 
         while N > 0:
             try:
@@ -1740,8 +1745,21 @@ class Socrata(Data_Loader):
             except requests.HTTPError as e:
                 raise OPD_SocrataHTTPError(self.url, self.data_set, *e.args, _url_error_msg.format(self.url))
             except Exception as e: 
-                if len(e.args)>0 and (e.args[0]=='Unknown response format: text/html' or \
-                    "Read timed out" in e.args[0]):
+                arg_str = None
+                err = e
+                while True:
+                    if len(err.args):
+                        if isinstance(err.args[0],str):
+                            arg_str = err.args[0]
+                            break
+                        elif isinstance(err.args[0],Exception):
+                            err = err.args[0]
+                        else:
+                            break
+                    else:
+                        break
+                if arg_str and (arg_str=='Unknown response format: text/html' or \
+                    "Read timed out" in arg_str):
                     raise OPD_SocrataHTTPError(self.url, self.data_set, *e.args, _url_error_msg.format(self.url))
                 else:
                     raise e

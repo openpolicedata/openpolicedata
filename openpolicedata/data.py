@@ -601,7 +601,8 @@ class Source:
                       agency: Optional[str] = None,
                       pbar: bool = True,
                       nrows: Optional[int] = None, 
-                      offset: int = 0
+                      offset: int = 0,
+                      sortby=None
                       ) -> Table:
         '''Load data from URL
 
@@ -631,7 +632,7 @@ class Source:
             Table object containing the requested data
         '''
 
-        return self.__load(year, table_type, agency, True, pbar, nrows=nrows, offset=offset)
+        return self.__load(year, table_type, agency, True, pbar, nrows=nrows, offset=offset, sortby=sortby)
 
     def __find_datasets(self, table_type):
         src = self.datasets.copy()
@@ -641,7 +642,7 @@ class Source:
         return src
 
 
-    def __load(self, year, table_type, agency, load_table, pbar=True, return_count=False, force=False, nrows=None, offset=0):
+    def __load(self, year, table_type, agency, load_table, pbar=True, return_count=False, force=False, nrows=None, offset=0, sortby=None):
         
         src = self.__find_datasets(table_type)
 
@@ -716,7 +717,7 @@ class Source:
             if return_count:
                 return loader.get_count(year=year_filter, agency=agency, opt_filter=opt_filter, force=force)
             else:
-                table = loader.load(year=year_filter, agency=agency, opt_filter=opt_filter, nrows=nrows, pbar=pbar, offset=offset)
+                table = loader.load(year=year_filter, agency=agency, opt_filter=opt_filter, nrows=nrows, pbar=pbar, offset=offset, sortby=sortby)
                 date_field = self.__fix_date_field(table, date_field, src.name)
                 table = _check_date(table, date_field)
         else:
