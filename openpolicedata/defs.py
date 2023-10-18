@@ -82,6 +82,8 @@ class TableType(str, Enum):
     CRASHES_VEHICLES = ("CRASHES - VEHICLES",
         "Crash data may be split into several tables due to the possibility that multiple "+
         "subjects and vehicles may be involved in an incident. This table contains data on vehicles.")
+    DISCIPLINARY_RECORDS = ("DISCIPLINARY RECORDS",
+        "Disciplinary reocrds of officers")
     EMPLOYEE = ("EMPLOYEE","Demographic data of the police workforce")
     DEATHS_IN_CUSTODY = ("DEATHS IN CUSTODY", "Deaths that occur in custody or during the process of arrest")
     FIELD_CONTACTS = ("FIELD CONTACTS", "Consensual contacts between officers and the community.")
