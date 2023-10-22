@@ -199,14 +199,14 @@ class _Columns(_ToDict_Mixin):
     TIME = "TIME"
     DATETIME = "DATETIME"
     RACE_SUBJECT = "SUBJECT_RACE"
-    RACE_ONLY_SUBJECT = "SUBJECT_RACE_ONLY"
+    RACE_ETHNICITY_SUBJECT = "SUBJECT_RACE/ETHNICITY"
     ETHNICITY_SUBJECT = "SUBJECT_ETHNICITY"
     RACE_OFFICER = "OFFICER_RACE"
-    RACE_ONLY_OFFICER = "OFFICER_RACE_ONLY"
+    RACE_ETHNICITY_OFFICER = "OFFICER_RACE/ETHNICITY"
     ETHNICITY_OFFICER = "OFFICER_ETHNICITY"
     ETHNICITY_OFFICER_SUBJECT = "OFFICER/SUBJECT_ETHNICITY"
     RACE_OFFICER_SUBJECT = "OFFICER/SUBJECT_RACE"
-    RACE_ONLY_OFFICER_SUBJECT = "OFFICER/SUBJECT_RACE_ONLY"
+    RACE_ETHNICITY_OFFICER_SUBJECT = "OFFICER/SUBJECT_RACE/ETHNICITY"
     AGENCY = "AGENCY"
     AGE_SUBJECT = "SUBJECT_AGE"
     AGE_OFFICER = "OFFICER_AGE"
@@ -217,6 +217,9 @@ class _Columns(_ToDict_Mixin):
     GENDER_SUBJECT = "SUBJECT_GENDER"
     GENDER_OFFICER = "OFFICER_GENDER"
     GENDER_OFFICER_SUBJECT = "OFFICER/SUBJECT_GENDER"
+    RE_GROUP_OFFICER = "OFFICER_RE_GROUP"
+    RE_GROUP_SUBJECT = "SUBJECT_RE_GROUP"
+    RE_GROUP_OFFICER_SUBJECT = "OFFICER/SUBJECT_RE_GROUP"
     SUBJECT_OR_OFFICER = "SUBJECT_OR_OFFICER"
 
     def _get_columns_as_df(self):
@@ -234,11 +237,7 @@ class _Columns(_ToDict_Mixin):
                 sort_by.append(v)
                 defs.append("Whether row describes an officer or an subject/civilian")
             elif match:
-                if match.group(2)=="RACE ONLY":
-                    addon = f". This is the standardized race column when both race and ethnicity are detected. "+\
-                            f"If present, {v.replace('_ONLY','')} is a combination of race and ethnicity."
-                else:
-                    addon = ''
+                addon = ''
                 if match.group(1)=="OFFICER/SUBJECT":
                     defs.append(f'{match.group(2).title()} of either an officer or subject (depending on column "{self.SUBJECT_OR_OFFICER}")'+addon)
                 else:
@@ -319,6 +318,7 @@ _race_cats_basic = {
     _race_keys.WHITE:"WHITE"
 }
 
+# TODO: Removed MIDDLE_EASTERN_SOUTH_ASIAN?
 _more_race_cats = {
     _race_keys.PACIFIC_ISLANDER : "HAWAIIAN / PACIFIC ISLANDER",
     _race_keys.MIDDLE_EASTERN:"MIDDLE EASTERN",

@@ -1175,13 +1175,26 @@ class Standardizer:
 
     
     def combine_race_ethnicity(self, combo_type):
-        for eth_col,race_col_orig, race_col in zip([defs.columns.ETHNICITY_SUBJECT, defs.columns.ETHNICITY_OFFICER, defs.columns.ETHNICITY_OFFICER_SUBJECT], 
-                        [defs.columns.RACE_ONLY_SUBJECT, defs.columns.RACE_ONLY_OFFICER, defs.columns.RACE_ONLY_OFFICER_SUBJECT], 
-                        [defs.columns.RACE_SUBJECT, defs.columns.RACE_OFFICER, defs.columns.RACE_OFFICER_SUBJECT]):
-            self._combine_race_ethnicity(race_col, eth_col, race_col_orig, combo_type)
+        for eth_col, re_group, race_col, race_eth_col in zip(
+                [defs.columns.ETHNICITY_SUBJECT, defs.columns.ETHNICITY_OFFICER, defs.columns.ETHNICITY_OFFICER_SUBJECT], 
+                [defs.columns.RE_GROUP_SUBJECT, defs.columns.RE_GROUP_OFFICER, defs.columns.RE_GROUP_OFFICER_SUBJECT], 
+                [defs.columns.RACE_SUBJECT, defs.columns.RACE_OFFICER, defs.columns.RACE_OFFICER_SUBJECT], 
+                [defs.columns.RACE_ETHNICITY_SUBJECT, defs.columns.RACE_ETHNICITY_OFFICER, defs.columns.RACE_ETHNICITY_OFFICER_SUBJECT]):
+            self._combine_race_ethnicity(race_col, eth_col, race_eth_col, combo_type)
+            # Create column for easily accessing merged race/ethnicity column (if available) or race column (if RE column not available)
+            if race_eth_col in self.df:
+                self.df[re_group] = self.df[race_eth_col]
+                self.data_maps.append(
+                    DataMapping(orig_column_name=race_eth_col, new_column_name=re_group)
+                )
+            elif race_col in self.df:
+                self.df[re_group] = self.df[race_col]
+                self.data_maps.append(
+                    DataMapping(orig_column_name=race_col, new_column_name=re_group)
+                )
 
 
-    def _combine_race_ethnicity(self, race_col, eth_col, race_col_orig, type):
+    def _combine_race_ethnicity(self, race_col, eth_col, race_eth_col, type):
         type_vals = [False, "merge", "concat"]
         if type not in [False, "merge", "concat"]:
             raise ValueError(f"type must be one of the following values: {type_vals}")
@@ -1189,53 +1202,50 @@ class Standardizer:
         if not type or race_col not in self.df or eth_col not in self.df:
             return
         
-        self.df[race_col_orig] = self.df[race_col]
         if defs._eth_keys.NONLATINO not in self.eth_cats:
             raise KeyError(f"Unable to combine race and ethnicity columns without a value for self.eth_cats[{defs._eth_keys.NONLATINO}]")
         if type=="concat":
             def concat(x):
-                if isinstance(x[race_col_orig],dict) and isinstance(x[eth_col],dict):
+                if isinstance(x[race_col],dict) and isinstance(x[eth_col],dict):
                     return {k:(r if e==self.eth_cats[defs._eth_keys.NONLATINO] else "{r} {e}") for k,r,e in 
-                            zip(x[race_col_orig].keys(), x[race_col_orig].values(), x[eth_col].values())}
-                elif isinstance(x[race_col_orig],dict):
+                            zip(x[race_col].keys(), x[race_col].values(), x[eth_col].values())}
+                elif isinstance(x[race_col],dict):
                     if isinstance(x[eth_col], str) and ("exempt" in x[eth_col].lower() or x[eth_col].lower()=="unspecified"):
                         return {k:
                                 v+" - Ethnicity " +x[eth_col] if "exempt" not in v.lower() else v 
-                                for k,v in x[race_col_orig].items()
+                                for k,v in x[race_col].items()
                                 }
                     else:
                         raise NotImplementedError()
                 elif isinstance(x[eth_col],dict):
                     raise NotImplementedError()
                 else:
-                    return x[race_col_orig] if x[eth_col]==self.eth_cats[defs._eth_keys.NONLATINO] else f"{x[race_col_orig]} {x[eth_col]}"
+                    return x[race_col] if x[eth_col]==self.eth_cats[defs._eth_keys.NONLATINO] else f"{x[race_col]} {x[eth_col]}"
                 
             f = concat
         elif type=="merge":
             def merge(x):
-                 if isinstance(x[race_col_orig],dict) and isinstance(x[eth_col],dict):
+                 if isinstance(x[race_col],dict) and isinstance(x[eth_col],dict):
                     return {k:(r if e==self.eth_cats[defs._eth_keys.NONLATINO] else e) for k,r,e in 
-                            zip(x[race_col_orig].keys(), x[race_col_orig].values(), x[eth_col].values())}
-                 elif isinstance(x[race_col_orig],dict):
+                            zip(x[race_col].keys(), x[race_col].values(), x[eth_col].values())}
+                 elif isinstance(x[race_col],dict):
                     if isinstance(x[eth_col], str) and ("exempt" in x[eth_col].lower() or x[eth_col].lower()=="unspecified"):
                         return {k:
                                 v+" - Ethnicity " +x[eth_col] if "exempt" not in v.lower() else v 
-                                for k,v in x[race_col_orig].items()
+                                for k,v in x[race_col].items()
                                 }
                     else:
                         raise NotImplementedError()
                  elif isinstance(x[eth_col],dict):
                      raise NotImplementedError()
                  else:
-                    return x[race_col_orig] if x[eth_col]==self.eth_cats[defs._eth_keys.NONLATINO] else x[eth_col]
+                    return x[race_col] if x[eth_col]==self.eth_cats[defs._eth_keys.NONLATINO] else x[eth_col]
 
             f = merge
 
-        self.df[race_col] = self.df[[race_col_orig, eth_col]].apply(f, axis=1)
-        idx_race = [k for k,x in enumerate(self.data_maps) if x.new_column_name==race_col][0]
-        self.data_maps[idx_race].new_column_name = race_col_orig
+        self.df[race_eth_col] = self.df[[race_col, eth_col]].apply(f, axis=1)
         self.data_maps.append(
-            DataMapping(orig_column_name=[race_col_orig, eth_col], new_column_name=race_col)
+            DataMapping(orig_column_name=[race_col, eth_col], new_column_name=race_eth_col)
         )
         
     
