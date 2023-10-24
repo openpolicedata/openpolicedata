@@ -1199,6 +1199,14 @@ class Standardizer:
         if type not in [False, "merge", "concat"]:
             raise ValueError(f"type must be one of the following values: {type_vals}")
         
+        if race_col in self.df and eth_col not in self.df and defs._race_keys.LATINO in self.race_cats and \
+            (self.df[race_col]==self.race_cats[defs._race_keys.LATINO]).any():
+            # This column contains ethnicity already
+            self.df = self.df.rename(columns={race_col:race_eth_col})
+            for dm in self.data_maps:
+                if dm.new_column_name==race_col:
+                    dm.new_column_name = race_eth_col
+            return
         if not type or race_col not in self.df or eth_col not in self.df:
             return
         
