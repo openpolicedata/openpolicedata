@@ -190,11 +190,33 @@ class Table:
         return get_csv_filename(self.state, self.source_name, self.agency, self.table_type, self.year)
     
 
-    def get_transform_map(self, minimize=False):
+    def get_transform_map(self, 
+                          orig: str | None=None, 
+                          new: str | None=None, 
+                          minimize: bool=False):
+        """Get details of standardization process
+
+        Parameters
+        ----------
+        minimize : bool, optional
+            If True removes original value counts from output, by default False
+
+        Returns
+        -------
+        Dictionary or list of dictionaries with column name and data value replacement information
+        """
+        
         result = copy.deepcopy(self.__transforms)
         if minimize:
             for r in result:
                 del r.orig_value_counts
+        
+        if orig is not None or new is not None:
+            for r in result:
+                if (orig is None or r.orig_column_name==orig) and \
+                    (new is None or r.new_column_name==new):
+                    return r
+            return None
         return result
     
 
