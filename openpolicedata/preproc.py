@@ -1115,12 +1115,6 @@ class Standardizer:
         # Reorder columns so standardized columns are first and any old columns are last
         old_cols = [x for x in self.df.columns if x.startswith(_OLD_COLUMN_INDICATOR)]
         reordered_cols = [x.new_column_name for x in self.data_maps if x.new_column_name in self.df.columns and x.new_column_name not in old_cols]
-        # Remove columns that were combined to form other columns
-        for map in self.data_maps:
-            if isinstance(map.orig_column_name, list):
-                for x in map.orig_column_name:
-                    if x in reordered_cols:
-                        reordered_cols.remove(x)
         reordered_cols.extend([x for x in self.df.columns if x not in old_cols and x not in reordered_cols])
         reordered_cols.extend([x for x in old_cols])
         self.df = self.df[reordered_cols]

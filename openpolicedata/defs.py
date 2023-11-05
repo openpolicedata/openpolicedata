@@ -240,10 +240,14 @@ class _Columns(_ToDict_Mixin):
                 defs.append("Whether row describes an officer or an subject/civilian")
             elif match:
                 addon = ''
-                if match.group(1)=="OFFICER/SUBJECT":
-                    defs.append(f'{match.group(2).title()} of either an officer or subject (depending on column "{self.SUBJECT_OR_OFFICER}")'+addon)
+                if match.group(2)=="RE GROUP":
+                    desc = "Convenience column identical to Race/Ethnicity (if there is a merged Race/Ethncity column) or Race (otherwise)"
                 else:
-                    defs.append(f"{match.group(2).title()} of {match.group(1).lower()}"+addon)
+                    desc = match.group(2).title()
+                if match.group(1)=="OFFICER/SUBJECT":
+                    defs.append(f'{desc} of either an officer or subject (depending on column "{self.SUBJECT_OR_OFFICER}")'+addon)
+                else:
+                    defs.append(f"{desc} of {match.group(1).lower()}"+addon)
                 sort_by.append(match.group(2).title())
             else:
                 if a=="DATETIME":
@@ -297,35 +301,39 @@ class _Ethnicities(_ToDict_Mixin):
 
 _eth_keys = _Ethnicities()
 
+class _Label:
+    def __init__(self, full, compact=None) -> None:
+        self.full = full
+        self.compact = compact if compact else full[0]
 
 _eth_cats_basic = {
-    _eth_keys.LATINO:"HISPANIC/LATINO",
-    _eth_keys.MIDDLE_EASTERN:"MIDDLE EASTERN",
-    _eth_keys.NONLATINO:"NON-HISPANIC/NON-LATINO",
-    _eth_keys.UNKNOWN:"UNKNOWN",
-    _eth_keys.UNSPECIFIED:"UNSPECIFIED",
+    _eth_keys.LATINO:_Label("HISPANIC/LATINO"),
+    _eth_keys.MIDDLE_EASTERN:_Label("MIDDLE EASTERN",'ME'),
+    _eth_keys.NONLATINO:_Label("NON-HISPANIC/NON-LATINO",'NH'),
+    _eth_keys.UNKNOWN:_Label("UNKNOWN","UNKNOWN"),
+    _eth_keys.UNSPECIFIED:_Label("UNSPECIFIED","UNSPECIFIED"),
 }
 
 _race_cats_basic = {
-    _race_keys.AAPI:"ASIAN / PACIFIC ISLANDER",
-    _race_keys.ASIAN:"ASIAN",
-    _race_keys.BLACK:"BLACK",
-    _race_keys.LATINO:"HISPANIC / LATINO",
-    _race_keys.MULTIPLE:"MULTIPLE",
-    _race_keys.INDIGENOUS:"INDIGENOUS",
-    _race_keys.OTHER:"OTHER",
-    _race_keys.OTHER_UNKNOWN:"OTHER OR UNKNOWN",
-    _race_keys.UNKNOWN:"UNKNOWN",
-    _race_keys.UNSPECIFIED:"UNSPECIFIED",
-    _race_keys.WHITE:"WHITE"
+    _race_keys.AAPI:_Label("ASIAN/PACIFIC ISLANDER",'AAPI'),
+    _race_keys.ASIAN:_Label("ASIAN"),
+    _race_keys.BLACK:_Label("BLACK"),
+    _race_keys.LATINO:_Label("HISPANIC/LATINO"),
+    _race_keys.MULTIPLE:_Label("MULTIPLE","MULTIPLE"),
+    _race_keys.INDIGENOUS:_Label("INDIGENOUS"),
+    _race_keys.OTHER:_Label("OTHER"),
+    _race_keys.OTHER_UNKNOWN:_Label("OTHER OR UNKNOWN",'OTHER OR UNKNOWN'),
+    _race_keys.UNKNOWN:_Label("UNKNOWN","UNKNOWN"),
+    _race_keys.UNSPECIFIED:_Label("UNSPECIFIED","UNSPECIFIED"),
+    _race_keys.WHITE:_Label("WHITE","W")
 }
 
-# TODO: Removed MIDDLE_EASTERN_SOUTH_ASIAN?
 _more_race_cats = {
-    _race_keys.PACIFIC_ISLANDER : "HAWAIIAN / PACIFIC ISLANDER",
-    _race_keys.MIDDLE_EASTERN:"MIDDLE EASTERN",
-    _race_keys.MIDDLE_EASTERN_SOUTH_ASIAN:"MIDDLE EASTERN / SOUTH ASIAN",
-    _race_keys.SOUTH_ASIAN:"SOUTH ASIAN",
+    _race_keys.PACIFIC_ISLANDER : _Label("HAWAIIAN/PACIFIC ISLANDER","H/PI"),
+    _race_keys.MIDDLE_EASTERN:_Label("MIDDLE EASTERN","ME"),
+    # Use in CA stops data: https://data-openjustice.doj.ca.gov/sites/default/files/dataset/2023-01/RIPA%20Dataset%20Read%20Me%202021%20Final%20rev%20011223.pdf
+    _race_keys.MIDDLE_EASTERN_SOUTH_ASIAN:_Label("MIDDLE EASTERN/SOUTH ASIAN","ME/SA"),
+    _race_keys.SOUTH_ASIAN:_Label("SOUTH ASIAN","SA"),
 }
 
 # Combine to form _agg_race_cats
@@ -350,17 +358,17 @@ class _Genders(_ToDict_Mixin):
 _gender_keys = _Genders()
 
 _genders = {
-    _gender_keys.MALE:"MALE",
-    _gender_keys.FEMALE:"FEMALE",
-    _gender_keys.TRANSGENDER_MALE:"TRANSGENDER MALE",
-    _gender_keys.TRANSGENDER_FEMALE:"TRANSGENDER FEMALE",
-    _gender_keys.TRANSGENDER:"TRANSGENDER",
-    _gender_keys.GENDER_NONCONFORMING:"GENDER NON-CONFORMING",
-    _gender_keys.TRANSGENDER_OR_GENDER_NONCONFORMING:"TRANSGENDER OR GENDER NON-CONFORMING",
-    _gender_keys.GENDER_NONBINARY:"GENDER NON-BINARY",
-    _gender_keys.OTHER:"OTHER",
-    _gender_keys.UNKNOWN:"UNKNOWN",
-    _gender_keys.UNSPECIFIED:"UNSPECIFIED"
+    _gender_keys.MALE:_Label("MALE"),
+    _gender_keys.FEMALE:_Label("FEMALE"),
+    _gender_keys.TRANSGENDER_MALE:_Label("TRANSGENDER MALE","TM"),
+    _gender_keys.TRANSGENDER_FEMALE:_Label("TRANSGENDER FEMALE","TF"),
+    _gender_keys.TRANSGENDER:_Label("TRANSGENDER","T"),
+    _gender_keys.GENDER_NONCONFORMING:_Label("GENDER NON-CONFORMING","GNC"),
+    _gender_keys.TRANSGENDER_OR_GENDER_NONCONFORMING:_Label("TRANSGENDER OR GENDER NON-CONFORMING","T/GNC"),
+    _gender_keys.GENDER_NONBINARY:_Label("GENDER NON-BINARY","GNB"),
+    _gender_keys.OTHER:_Label("OTHER"),
+    _gender_keys.UNKNOWN:_Label("UNKNOWN","UNKNOWN"),
+    _gender_keys.UNSPECIFIED:_Label("UNSPECIFIED","UNSPECIFIED"),
 }
 
 class _PersonTypes(_ToDict_Mixin):
@@ -379,14 +387,21 @@ def get_race_keys():
 def get_eth_keys():
     return deepcopy(_eth_keys)
 
-def get_race_cats(expand=False):
-    return _race_cats_expanded.copy() if expand else _race_cats_basic.copy()
+def get_race_cats(expand=False, compact=False):
+    cats = _race_cats_expanded if expand else _race_cats_basic
+    cats = {k: (v.compact if compact else v.full) for k,v in cats.items()}
+    assert len(cats) == len(set(cats.values()))
+    return cats
 
-def get_eth_cats():
-    return _eth_cats_basic.copy()
+def get_eth_cats(compact=False):
+    cats = {k: (v.compact if compact else v.full) for k,v in _eth_cats_basic.items()}
+    assert len(cats) == len(set(cats.values()))
+    return cats
 
 def get_gender_keys():
     return deepcopy(_gender_keys)
 
-def get_gender_cats():
-    return _genders.copy()
+def get_gender_cats(compact=False):
+    cats = {k: (v.compact if compact else v.full) for k,v in _genders.items()}
+    assert len(cats) == len(set(cats.values()))
+    return cats

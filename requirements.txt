@@ -6,4 +6,5 @@ requests
 packaging
 tqdm
 openpyxl
+typing-extensions
 xlrd
