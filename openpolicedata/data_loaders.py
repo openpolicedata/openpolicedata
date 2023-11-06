@@ -348,7 +348,7 @@ class Csv(Data_Loader):
                 else:
                     return requests.get(url, params=None, stream=True)
 
-            is_mass_employee = self.url="https://www.mass.gov/doc/consolidated-list-of-officer-status-csv-file-as-of-october-5-2023/download" 
+            is_mass_employee = self.url=="https://www.mass.gov/doc/consolidated-list-of-officer-status-csv-file-as-of-october-5-2023/download" 
             header = None if is_mass_employee else 'infer'   
 
             with get(self.url, use_legacy) as resp:
@@ -364,7 +364,7 @@ class Csv(Data_Loader):
                     raise e
 
             if is_mass_employee:
-                df.columns = ['Officer','Agency','Expiration Date', 'Reason','ID','Certification #','Status']
+                table.columns = ['Officer','Agency','Expiration Date', 'Reason','ID','Certification #','Status']
 
         if offset>0:
             rows_limit = offset+nrows if nrows is not None and offset+nrows<len(table) else len(table)
