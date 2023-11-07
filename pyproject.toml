@@ -11,13 +11,12 @@ authors = [
 description = "The OpenPoliceData (OPD) Python library is the most comprehensive centralized public access point for incident-level police data in the United States. OPD provides easy access to 383+ incident-level datasets for over 3500 police agencies. Types of data include traffic stops, use of force, officer-involved shootings, and complaints."
 readme = "README.md"
 license = {file = 'LICENSE'}
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 classifiers = [
     'Intended Audience :: Science/Research',
     "License :: OSI Approved :: BSD License",
     "Operating System :: OS Independent",
     'Programming Language :: Python :: 3',
-    'Programming Language :: Python :: 3.7',
     'Programming Language :: Python :: 3.8',
     'Programming Language :: Python :: 3.9',
     'Programming Language :: Python :: 3.10',
