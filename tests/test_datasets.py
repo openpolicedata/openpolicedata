@@ -16,8 +16,19 @@ def get_datasets(csvfile):
 
     return opd.datasets.query()
 
+csv_file = "..\\opd-data\\opd_source_table.csv"
 
 class TestDatasets:
+    @pytest.mark.parametrize("file", [(), (csv_file,)])
+    def test_reload(self, csvfile, source, last, skip, loghtml, file):
+        orig = opd.datasets.datasets
+        opd.datasets.datasets = None
+        assert opd.datasets.datasets is None
+        opd.datasets.reload(*file)
+        assert isinstance(opd.datasets.datasets, pd.DataFrame)
+        opd.datasets.datasets = orig
+
+
     def test_duplicates(self, csvfile, source, last, skip, loghtml):
         datasets = get_datasets(csvfile)
         assert not datasets.duplicated(subset=['State', 'SourceName', 'Agency', 'TableType','Year']).any()
@@ -84,6 +95,8 @@ class TestDatasets:
         if skip != None:
             skip = skip.split(",")
             skip = [x.strip() for x in skip]
+        else:
+            skip = []
         
         datasets = get_datasets(csvfile)
         # Multi-year datasets should typically have a value in date_field
@@ -205,8 +218,9 @@ class TestDatasets:
 
 if __name__ == "__main__":
     csvfile = None
-    # csvfile = "C:\\Users\\matth\\repos\\opd-data\\opd_source_table.csv"
+    csvfile = "C:\\Users\\matth\\repos\\opd-data\\opd_source_table.csv"
     # TestDatasets().test_get_table_types(csvfile,None,None,None,None)
     # TestDatasets().test_table_for_nulls(csvfile,None,None,None,None)
-    TestDatasets().test_years_multi(csvfile,None,None,None,None)
+    # TestDatasets().test_years_multi(csvfile,None,None,None,None)
     # TestDatasets().test_table_types(csvfile,None,None,None,None)
+    TestDatasets().test_agencies_multi(csvfile,None,None,None,None)

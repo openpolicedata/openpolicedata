@@ -1,3 +1,4 @@
+from __future__ import annotations  # This should not be necessary once Python 3.7 is no longer supported
 import pandas as pd
 import numpy as np
 import re
@@ -80,6 +81,20 @@ def _build(csv_file):
 
 
 datasets = _build(csv_file)
+
+
+def reload(csvfile: str = csv_file):
+    """Reload default datasets CSV file or load datasets CSV from local file. Useful if datasets file may have been updated.
+
+    Parameters
+    ----------
+    csvfile : str, optional
+        OPTIONAL CSV file location, by default the default OPD CSV file will be loaded from GitHub
+    """
+
+    from .import datasets
+    datasets.datasets = _build(csvfile)
+    
 
 def query(
     source_name: Optional[str] = None, 
