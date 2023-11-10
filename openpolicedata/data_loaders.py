@@ -96,6 +96,31 @@ def get_legacy_session():
     session.mount('https://', CustomHttpAdapter(ctx))
     return session
 
+def read_zipped_csv(url, pbar=True, block_size=2**20):
+    r = requests.get(url, stream=True)
+    r.raise_for_status()
+    total_size = int(r.headers.get("Content-Length", 0))
+    pbar = pbar and total_size > block_size
+    if pbar:
+        bar = tqdm(
+            desc=f"Downloading zip file: {url}",
+            total=total_size,
+            unit="iB",
+            unit_scale=True,
+            unit_divisor=1024,
+            leave=False
+        )
+    b = BytesIO()
+    for data in r.iter_content(block_size):
+        b.write(data)
+        if pbar:
+            bar.update(len(data))
+    if pbar:
+        bar.close()
+    b.seek(0)
+    z = ZipFile(b, 'r')
+    return pd.read_csv(BytesIO(z.read(z.namelist()[0])), encoding_errors='surrogateescape')
+
 
 class Data_Loader(ABC):
     """Base class for data loaders
@@ -300,12 +325,11 @@ class Csv(Data_Loader):
         
         if ".zip" in self.url:
             with warnings.catch_warnings():
-                # Perhaps use requests iter_content/iter_lines as below to read large CSVs so progress can be shown
                 warnings.simplefilter("ignore", category=pd.errors.DtypeWarning)
                 try:
-                    table = pd.read_csv(self.url, encoding_errors='surrogateescape')
-                except urllib.error.HTTPError as e:
-                    if e.msg=='Forbidden':
+                    table = read_zipped_csv(self.url, pbar=pbar)
+                except requests.exceptions.HTTPError as e:
+                    if len(e.args) and 'Forbidden' in e.args[0]:
                         storage_options = {'User-Agent': 'Mozilla/5.0'} 
                         try:
                             table = pd.read_csv(self.url, encoding_errors='surrogateescape', storage_options=storage_options)
@@ -1119,6 +1143,7 @@ class Arcgis(Data_Loader):
             "{} = {}",                # yyyy
             double_format("{} LIKE '[0-9][0-9]-{}' OR {} LIKE '[0-9]-{}'"),   # mm-yyyy or m-yyyy
             "{} = '{}'",                # 'yyyy'
+            "{} LIKE '%[0-9][0-9]-[0-9][0-9]-{}%'",   # mm-dd-yyyy
         ]
         # Make year iterable
         year = [year] if isinstance(year, numbers.Number) else year
