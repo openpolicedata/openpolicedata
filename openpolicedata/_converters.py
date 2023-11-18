@@ -45,6 +45,9 @@ def convert(converter, col, source_name="", cats=None, std_map=None, delim=None,
     else:
         for x in vals:
             std_map[x] = converter(x, no_id, source_name, cats, agg_cat)
+            if isinstance(std_map[x], list):
+                std_map[x].sort()
+                std_map[x] = ", ".join(std_map[x])
         return col.map(std_map)
     
 
@@ -462,7 +465,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
                 (x=="W\nW" and source_name=="Sparks") or \
                 ("DOG" in x) or \
                 (source_name in ["New Orleans"] and "NOT APPLICABLE (NON" in x) or \
-                (source_name in ["Detroit", "Fairfax County"] and x in ["N","SELECT","UNVERIFIED"]) or \
+                (source_name in ["Detroit", "Fairfax County"] and x in ["N","SELECT","UNVERIFIED",'240','160','180','P','120']) or \
                 x in ["OTHER / MIXED RACE", "UNDISCLOSED", "OR SPANISH ORIGIN","PREFER NOT TO SAY","OTHERBLEND","UNDECLARED"] or \
                 len(orig)>100:
                 # This is meant to be temporary for testing
@@ -589,6 +592,7 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
             (source_name=="Greensboro" and x in ["ASIAN"]) or \
             (source_name=="Columbia" and x in ["B"]) or \
             (source_name=="Burlington" and x in ["EXPUNGED"]) or \
+            (source_name=="Fairfax County" and x in ["X",'O']) or \
             (source_name in ["Seattle","New Orleans","Menlo Park","Rutland"] and x in ["D","N"]) or \
             (source_name=="Los Angeles County" and x=="0") or \
             (x in ["W","NA"] and source_name in ["Cincinnati","Beloit"]) or \
