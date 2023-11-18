@@ -888,7 +888,7 @@ def _check_date(table, date_field):
         if len(dts) > 0:
             one_date = dts.iloc[0]  
             if type(one_date) == pd._libs.tslibs.timestamps.Timestamp:
-                table.loc[:, date_field] = pd.to_datetime(table[date_field], errors='ignore')
+                table[date_field] = pd.to_datetime(table[date_field], errors='ignore')
             elif type(one_date) == str:
                 p = re.compile(r'^Unknown string format: \d{4}-(\d{2}|__)-(\d{2}|__) present at position \d+$')
                 def to_datetime_local(x):
@@ -912,7 +912,7 @@ def _check_date(table, date_field):
                 table[date_field] = table[date_field].apply(lambda x: datetime(x,1,1))
                 
             # Replace bad dates with NaT
-            table[date_field].replace(datetime.strptime('1900-01-01 00:00:00', '%Y-%m-%d %H:%M:%S'), pd.NaT, inplace=True)
+            table[date_field] = table[date_field].replace(datetime.strptime('1900-01-01 00:00:00', '%Y-%m-%d %H:%M:%S'), pd.NaT)
 
 
     return table

@@ -297,7 +297,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
         x = x.strip()
 
         if source_name in ["Austin", "Bloomington", "New York City", "St. John", "Louisville", "Charleston", 
-                           "Los Angeles", "Dallas"]:
+                           "Los Angeles", "Dallas","Chicago"]:
             # Handling dataset-specific letter codes
             if source_name=="Austin":
                 # Per email with Kruemcke, Adrian <Adrian.Kruemcke@austintexas.gov> on 2022-06-17
@@ -327,6 +327,19 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
             elif source_name=="Dallas":
                 # Based on Bloomington and St. John usage as well as names associated with usage
                 map_dict = {"L":"Caucasian, Hispanic"}
+            elif source_name=="Chicago":
+                # https://home.chicagopolice.org/wp-content/uploads/2020/08/ISR-Data-Dictionary.csv
+                map_dict = {
+                    'BLK' : 'BLACK',
+                    'WHI' : 'WHITE',
+                    'API' : 'ASIAN/PACIFIC ISLANDER',
+                    'WBH' : 'BLACK HISPANIC',
+                    'WWH' : 'WHITE HISPANIC',
+                    'I' : 'AMER IND/ALASKAN NATIVE',
+                    'U' : 'UNKNOWN',
+                    'P' : 'NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER',
+                    'WHT' : 'WHITE'
+                }
 
             if x.upper() in map_dict:
                 x = map_dict[x.upper()].upper()
@@ -387,7 +400,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
         return race_cats[defs._race_keys.PACIFIC_ISLANDER] if has_pi else race_cats[defs._race_keys.AAPI]
     if has_latino and x in ["H", "WH", "HISPANIC", "LATINO", "HISPANIC OR LATINO", "LATINO OR HISPANIC", "HISPANIC/LATINO", "LATINO/HISPANIC",'HISPANIC/LATIN/MEXICAN']:
         return race_cats[defs._race_keys.LATINO] 
-    if has_indigenous and (x in ["I", "INDIAN", "ALASKAN NATIVE", "AN", "AI", "AL NATIVE","A/INDIAN"] or "AMERICAN IND" in x.replace("II","I") or \
+    if has_indigenous and (x in ["I", "INDIAN", "ALASKAN NATIVE", "AN", "AI", "AL NATIVE","A/INDIAN", "NAT AM"] or "AMERICAN IND" in x.replace("II","I") or \
         "NATIVE AM" in x or  "AMERIND" in x.replace(" ","") or "ALASK" in x or "AMIND" in x.replace(" ","") or \
         "NAT AMER" in x):
         return race_cats[defs._race_keys.INDIGENOUS] 
@@ -445,6 +458,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
                 (x=="UN" and source_name=="State Police") or \
                 (x=="P" and source_name=="Pittsfield") or \
                 (x=="PENDING RELEASE" and source_name=="Portland") or \
+                (x=="IRAK" and source_name=="Chattanooga") or \
                 (x=="W\nW" and source_name=="Sparks") or \
                 ("DOG" in x) or \
                 (source_name in ["New Orleans"] and "NOT APPLICABLE (NON" in x) or \
@@ -502,13 +516,14 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
             x = [x for x in abbrev_full_match.groups() if len(x)>1][0].strip()
         x = x.upper().replace("-","").replace("_","").replace(" ","").replace("'","")
 
-        if source_name in ["New York City", "Los Angeles"]:
+        if source_name in ["New York City", "Los Angeles", "Chicago"]:
             # Handling dataset-specific codes
             if source_name == "New York City":
                 # https://www.nyc.gov/assets/nypd/downloads/zip/analysis_and_planning/stop-question-frisk/SQF-File-Documentation.zip
                 map_dict = {"Z":"Unknown"}
-            elif source_name=="Los Angeles":
+            elif source_name in ["Los Angeles",'Chicago']:
                 # https://data.lacity.org/Public-Safety/Traffic-Collision-Data-from-2010-to-Present/d5tf-ez2w
+                # https://home.chicagopolice.org/wp-content/uploads/2020/08/ISR-Data-Dictionary.csv
                 map_dict = {"X":"Unknown"}
 
             if x.upper() in map_dict:
@@ -580,6 +595,7 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
             (x=="MA" and source_name in ["Lincoln"]) or \
             (x=="P" and source_name=="Fayetteville") or \
             (x=="5" and source_name=="Lincoln") or \
+            (x in ["MALE,MALE"] and source_name=="Chattanooga") or \
             (x=="PENDINGRELEASE" and source_name=="Portland") or \
             (x in ["N","H"] and source_name=="Los Angeles") or \
             (x=="X" and source_name in ["Sacramento", "State Police", "Washington D.C.","Northampton"]) or \

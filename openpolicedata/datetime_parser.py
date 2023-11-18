@@ -117,7 +117,7 @@ def parse_date_to_datetime(date_col):
                 if new_col.dtype == "string":
                     p = re.compile(r"\d{1,2}[/-]\d{1,2}[/-]\d{2,4}")
                     p2 = re.compile(r"\d{4}[/-]\d{1,2}[/-]\d{1,2}")
-                    p3 = re.compile(r"\d{2}-[A-Z][a-z][a-z]-\d{2}")
+                    p3 = re.compile(r"\d{2}-[A-Z][a-z][a-z]-\d{2,4}", re.IGNORECASE)
                     p_not_match = re.compile(r"\d{1,2}[:\.]?\d\d[:\.]?\d?\d?")
                     num_match = 0
                     num_not_match = 0
@@ -234,6 +234,10 @@ def validate_date(df, match_cols_test):
 def validate_time(df, match_cols_test, date_col=None):
     score = None
     match_cols = []
+    max_len = 100000
+    if len(df) > max_len:
+        df = df.head(max_len)  # No need to validate everything
+        date_col = date_col.head(max_len) if date_col is not None else date_col
     for col_name in match_cols_test:
         try:
             time_col = df[col_name]
