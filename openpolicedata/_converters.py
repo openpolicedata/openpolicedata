@@ -5,10 +5,12 @@ import pandas as pd
 
 try:
     from . import defs
+    from . import utils
     from._preproc_utils import MultType
 except:
     import defs
     from _preproc_utils import MultType
+    import utils
 
 
 # Age range XX - YY
@@ -614,6 +616,52 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
         raise ValueError(f"Unknown value in gender column: {orig}")
     else:
         return orig if no_id=="keep" else ""
+    
+
+def _create_injury_lut(x, no_id, source_name, cats, *args, **kwargs):
+    if pd.isnull(x):
+        return "UNSPECIFIED"
+    orig = x
+    x = x.upper()
+    if x in ["FATAL","KILLED",'DECEASED',"DEATH"]:
+        return "FATAL"
+    elif x in ["INJURED"] or any([y in x for y in ['WOUND','PAIN', 'LACERATION','SCRAPE']]):
+        return "INJURED"
+    elif x in ["NO INJURY", "NOT INJURED",'NEITHER'] or x.startswith("NO INJUR"):
+        return "NO INJURY"
+    elif x=='SELF-INFLICTED FATAL':
+        return 'SELF-INFLICTED FATAL'
+    elif no_id=='test':
+        raise ValueError(f"Unknown value in injury column: {orig}")
+    elif no_id=='error':
+        raise ValueError(f"Unknown value in injury column: {orig}")
+    else:
+        return orig if no_id=="keep" else ""
+    
+def _create_fatal_lut(x, no_id, source_name, cats, *args, **kwargs):
+    if pd.isnull(x):
+        return "UNSPECIFIED"
+    elif isinstance(x,Number) or x.isdigit():
+        x = int(x)
+        if x<0:
+            return x
+        else:
+            return "YES" if x>0 else "NO"
+    orig = x
+    x = x.upper().strip()
+    if x in ["FATAL","YES", "Y"]:
+        return "YES"
+    elif x in ["NON-FATAL","NON FATAL", "NO","N"]:
+        return "NO"
+    elif x in ["SELF-INFLICTED"]:
+        return "SELF-INFLICTED FATAL"
+    elif no_id=='test':
+        raise ValueError(f"Unknown value in injury column: {orig}")
+    elif no_id=='error':
+        raise ValueError(f"Unknown value in injury column: {orig}")
+    else:
+        return orig if no_id=="keep" else ""
+    
 
 
 def std_dict(col, std_map, converter, *args):
