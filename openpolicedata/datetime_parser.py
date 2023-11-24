@@ -362,6 +362,8 @@ def parse_time(time_col):
     elif time_col.dtype == 'O':
         new_col = time_col.convert_dtypes()
         if new_col.dtype == "string" or time_col.apply(lambda x: isinstance(x,str) or isinstance(x,int)).all():
+            # Cleanup split AM or PM, which causes a warning from pandas
+            new_col = new_col.apply(lambda x: x.replace("P M","PM").replace("A M","AM"))
             try:
                 new_col = to_datetime(new_col)
                 return new_col.dt.time
@@ -451,4 +453,7 @@ def parse_time(time_col):
 def to_datetime(col, *args, **kwargs):
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=UserWarning, message="Could not infer format")
-        return pd.to_datetime(col, *args, **kwargs)
+        try:
+            return pd.to_datetime(col, *args, **kwargs)
+        except ValueError as e:
+            return pd.to_datetime(col, *args, format='mixed', **kwargs)

@@ -81,7 +81,7 @@ class Table:
     __transforms = None
 
     def __init__(self, 
-        source: pd.DataFrame | pd.Series, 
+        source: pd.DataFrame | pd.Series | dict, 
         table: pd.DataFrame | None = None, 
         year_filter: str | int | list[int] = None, 
         agency: str | None = None
@@ -96,10 +96,7 @@ class Table:
         table : pandas or geopandas 
             Name of state where agencies in table are
         '''
-        if not isinstance(source, pd.core.frame.DataFrame) and \
-            not isinstance(source, pd.core.series.Series):
-            raise TypeError("data must be an ID, DataFrame or Series")
-        elif isinstance(source, pd.core.frame.DataFrame):
+        if isinstance(source, pd.DataFrame):
             if len(source) == 0:
                 raise LookupError("DataFrame is empty")
             elif len(source) > 1:
@@ -116,7 +113,7 @@ class Table:
         if agency != None:
             self.agency = agency
         else:
-            self.agency = source["Agency"]
+            self.agency = source["Agency"] if "Agency" in source else None
 
         try:
             self.table_type = defs.TableType(source["TableType"])  # Convert to Enum
@@ -129,23 +126,23 @@ class Table:
         else:
             self.year = source["Year"]
 
-        self.description = source["Description"]
-        self.url = source["URL"]
-        self._data_type = defs.DataType(source["DataType"])  # Convert to Enum
+        self.description = source["Description"] if "Description" in source else None
+        self.url = source["URL"] if "URL" in source else None
+        self._data_type = defs.DataType(source["DataType"]) if "DataType" in source else None  # Convert to Enum
 
-        if not pd.isnull(source["dataset_id"]):
+        if "dataset_id" in source and not pd.isnull(source["dataset_id"]):
             self._dataset_id = source["dataset_id"]
 
-        if not pd.isnull(source["date_field"]):
+        if "date_field" in source and not pd.isnull(source["date_field"]):
             self.date_field = source["date_field"]
         
-        if not pd.isnull(source["agency_field"]):
+        if "agency_field" in source and not pd.isnull(source["agency_field"]):
             self.agency_field = source["agency_field"]
 
-        if not pd.isnull(source["source_url"]):
+        if "source_url" in source and not pd.isnull(source["source_url"]):
             self.source_url = source["source_url"]
 
-        if not pd.isnull(source["readme"]):
+        if "readme" in source and not pd.isnull(source["readme"]):
             self.readme = source["readme"]
 
 
@@ -194,7 +191,7 @@ class Table:
                           orig: str | None=None, 
                           new: str | None=None, 
                           minimize: bool=False):
-        """Get details of standardization process
+        """Get details of standardization process if standardization has been run
 
         Parameters
         ----------
@@ -220,6 +217,43 @@ class Table:
         return result
     
 
+    def expand(self, person_type: Literal["subject", "officer"]="subject"):
+        """Expand demographics data into multiple row for datasets that have been standardized
+         and that contain demographic and other data for more than one subject or officer per row.
+
+        Parameters
+        ----------
+        person_type : Literal[&quot;subject&quot;, &quot;officer&quot;], optional
+            Whether to expand subject or officer data, by default "subject"
+        """
+        
+        if self.is_std:
+            is_subject = person_type.lower()=='subject'
+            expand_cols = []
+            for t in self.__transforms:
+                expand = (is_subject and ("SUBJECT" in t.new_column_name or t.new_column_name==defs.columns.FATAL_SUBJECT)) or \
+                          (not is_subject and "OFFICER" in t.new_column_name)
+                if expand:
+                    if self.table[t.new_column_name].apply(lambda x: isinstance(x,dict)).any():
+                        expand_cols.append(t.new_column_name)
+
+            if len(expand_cols)>0:
+                new_df = self.table.copy()
+                for c in expand_cols:
+                    new_df[c] = new_df[c].apply(lambda x: x.values() if isinstance(x,dict) else x)
+
+                try:
+                    self.table = new_df.explode(expand_cols, ignore_index=True)
+                except AttributeError as e:
+                    # This is an issue with geopandas when exploding lists of columns
+                    if len(expand_cols)==1:
+                        self.table = new_df.explode(expand_cols[0], ignore_index=True)
+                    else:
+                        warnings.warn("Original table is a geopandas DataFrame, which has a known bug when expanding. "+
+                                      "Converting to pandas DataFrame.")
+                        self.table = pd.DataFrame(new_df).explode(expand_cols, ignore_index=True)
+    
+
     def standardize(self, 
         race_cats: dict | str | None = None,
         agg_race_cat: bool = False,
@@ -233,7 +267,7 @@ class Table:
         merge_date_time: bool =True,
         empty_time: Literal["nat", "ignore"] = "NaT"
     ):
-        """_summary_
+        """Standardize column names and data values for loaded data in self.table.
 
         Parameters
         ----------

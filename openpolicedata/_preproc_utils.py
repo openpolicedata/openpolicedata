@@ -167,4 +167,4 @@ class _MultData:
     item_eth = None
 
     def __repr__(self, ) -> str:
-        return ',\n'.join("%s: %s" % item for item in vars(self).items())
+        return '\n'.join("%s: %s" % (name, getattr(self,name)) for name in dir(self) if not name.startswith("__"))

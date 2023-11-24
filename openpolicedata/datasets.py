@@ -12,7 +12,7 @@ from .deprecated.messages import CIV_DEPRECATION_MESSAGE, CIV_REPLACEMENT_MESSAG
 # Location of table where datasets available in opd are stored
 csv_file = "https://raw.github.com/openpolicedata/opd-data/main/opd_source_table.csv"
 
-def _build(csv_file):
+def _build(csv_file, error=False):
     # Check columns
     columns = {
         'State' : pd.StringDtype(),
@@ -33,6 +33,8 @@ def _build(csv_file):
     try:
         df = pd.read_csv(csv_file, dtype=columns)
     except:
+        if error:
+            raise
         warnings.warn(f"Unable to load CSV file from {csv_file}. " +
             "This may be due to a bad internet connection or bad filename/URL.")
         return None
@@ -93,7 +95,7 @@ def reload(csvfile: str = csv_file):
     """
 
     from .import datasets
-    datasets.datasets = _build(csvfile)
+    datasets.datasets = _build(csvfile, error=True)
     
 
 def query(
