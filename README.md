@@ -6,6 +6,11 @@ The OpenPoliceData (OPD) Python library is the most comprehensive centralized pu
 
 Users request data by department name and type of data, and the data is returned as a [pandas DataFrame](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.html). There is no need to manually find the data online or to know how to work with open data APIs (ArcGIS, Socrata, etc.).
 
+OpenPoliceData can be installed from the Python Package Index (PyPI):
+```
+pip install openpolicedata
+``` 
+
 OpenPoliceData provides access to police data with 2 simple lines of code:
 ```
 > import openpolicedata as opd
@@ -16,7 +21,6 @@ OpenPoliceData provides access to police data with 2 simple lines of code:
 - Documentation: https://openpolicedata.readthedocs.io/
 - Source Code: https://github.com/openpolicedata/openpolicedata
 - Bug Tracker: https://github.com/openpolicedata/openpolicedata/issues
-- [Basic Installation](#installation)
 - [Latest Datasets](#latest-datasets-added)
 - [Release Notes](#release-notes-for-version-057-2023-09-05)
 - [Contributing](#contributing)
@@ -24,26 +28,17 @@ OpenPoliceData provides access to police data with 2 simple lines of code:
 
 ![alt text](https://github.com/openpolicedata/opd-data/blob/main/OPD_Datasets_Map.png?raw=true)
 
-## Installation
-OpenPoliceData can be installed from the Python Package Index (PyPI):
-```
-pip install openpolicedata
-``` 
-
 ## Latest Datasets Added to OPD
-- Albany, NY: Arrests, Calls for Service, Field Contacts, Indcidents, Traffic Citations, and Use of Force
-- Asheville, NC: 2022 Calls For Service
-- Boulder, CO: Arrests, Crashes,and Incidents
-- California: Deaths in Custody
-- Chandler, AZ: Arrests, Incidents, and Calls for Service
-- Chattanooga, TN: Complaints
+- Massachusetts (All Agencies): Employee and Disciplinary Records data
+- Alameda County, CA: Incidents
+- Marin County, CA: Incidents
+- Riverside, CA: Incidents
+- Albany, NY: Arrests, Calls for Service, Field Contacts, Incidents, Traffic Citations, and Use of Force
 - Chicago, IL: Pedestrian Stops
-- Lincoln, NE: 2023 datasets
 - New York City, NY: 2022 Pedestrian Stops
 - Oakland, CA: 2022 Use of Force
 - San Diego, CA: 2022 Complaints
-- San Jose, CA: 2022 and 2023 Calls for Service
-- Tacoma, WA: Complaints, Incidents, and Officer-Involved Shootings
+- Tacoma, WA: Calls for Service, Complaints, Incidents, and Officer-Involved Shootings
 
 ## Release Notes for Version 0.5.8 - 2023-09-28
 ### Added

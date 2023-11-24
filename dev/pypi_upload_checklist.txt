@@ -1,6 +1,7 @@
 Run tests with min Python version
 Update version
-Update readme including changelog
+Test code with min and max Python versions and Ubuntu
+Update readme including changelog and latest datasets
 Update switcher.json
 Update website including changelog and latest datasets
 Update number of datasets / agencies and map
