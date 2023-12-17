@@ -217,7 +217,9 @@ class Table:
         return result
     
 
-    def expand(self, person_type: Literal["subject", "officer"]="subject"):
+    def expand(self, 
+               person_type: Literal["subject", "officer"]="subject",
+               mismatch: Literal['error','nan','splitsingle']='error'):
         """Expand demographics data into multiple row for datasets that have been standardized
          and that contain demographic and other data for more than one subject or officer per row.
 
@@ -225,6 +227,16 @@ class Table:
         ----------
         person_type : Literal[&quot;subject&quot;, &quot;officer&quot;], optional
             Whether to expand subject or officer data, by default "subject"
+        mismatch : Literal[&quot;error&quot;, &quot;nan&quot;, &quot;splitsingle&quot;], optional
+            How to handle cases where the number of elements to be expanded is not equal across
+            each column to expand. If 'error', an error will be thrown. If 'nan', columns that do not
+            have enough values will be set to nan. If 'splitsingle', if the mismatched columns have a
+            single value, that single value will be used for each resulting row. For example, if the
+            the 2 columns of a row to be expanded are [ ['a',b'] , ['c'] ], there is a mismatch because
+            the first column has 2 values and the 2nd has 1 when all columns to expand should have the
+            same number. If mismatch='nan', the result will be [ 'a' , nan ] for the first column and 
+            [ 'b', nan ] for the second column. If mismatch='splitsingle', the result will be 
+            [ 'a' , 'c' ] for the first column and [ 'b', 'c' ] for the second column., by default "error"
         """
         
         if self.is_std:
@@ -252,6 +264,35 @@ class Table:
                         warnings.warn("Original table is a geopandas DataFrame, which has a known bug when expanding. "+
                                       "Converting to pandas DataFrame.")
                         self.table = pd.DataFrame(new_df).explode(expand_cols, ignore_index=True)
+                except ValueError as e:
+                    mismatch = mismatch.lower()
+                    assert mismatch in ['error','nan','splitsingle']
+                    if len(e.args)>0 and e.args[0]=='columns must have matching element counts':
+                        if mismatch=='error':
+                            raise
+                        dict_values = type({}.values())
+                        num_vals = pd.DataFrame(0, index=new_df.index, columns=expand_cols)
+                        # Try replacing length 1 arrays with their values
+                        for c in expand_cols:
+                            num_vals[c] = new_df[c].apply(lambda x: len(x) if isinstance(x, dict_values) else 1)
+                        mismatches = num_vals.apply(lambda x: (x!=x.iloc[0]).any(), axis=1)
+                        for m in mismatches[mismatches].index:
+                            max_count = num_vals.loc[m].max()
+                            row = new_df.loc[m, expand_cols]
+                            if mismatch=='nan':
+                                fill = [pd.NA for _ in range(max_count)]
+                                for k in row.index:
+                                    if num_vals.loc[m,k] < max_count:
+                                        row[k] = fill
+                            else:
+                                for k in row.index:
+                                    if num_vals.loc[m,k] ==1:
+                                        row[k] = [list(row[k])[0] for _ in range(max_count)]
+                            new_df.loc[m,expand_cols] = row
+
+                        self.table = pd.DataFrame(new_df).explode(expand_cols, ignore_index=True)
+                    else:
+                        raise
     
 
     def standardize(self, 
@@ -498,7 +539,7 @@ class Source:
             url = df["URL"]
             date_field = df["date_field"] if pd.notnull(df["date_field"]) else None
             
-            loader = self.__get_loader(df["DataType"], url, dataset_id=df["dataset_id"], date_field=date_field)
+            loader = self.__get_loader(df["DataType"], url, df['query'], dataset_id=df["dataset_id"], date_field=date_field)
 
             if not manual and pd.notnull(df["coverage_start"]) and pd.notnull(df["coverage_end"]) and \
                 hasattr(df["coverage_start"], 'year') and hasattr(df["coverage_end"], 'year'):
@@ -557,7 +598,8 @@ class Source:
         # Otherwise return self.agency
         if src["Agency"] == defs.MULTI:
             _check_version(src)
-            loader = self.__get_loader(src["DataType"], src["URL"], dataset_id=src["dataset_id"], date_field=src["date_field"], agency_field=src["agency_field"])
+            loader = self.__get_loader(src["DataType"], src["URL"], src['query'], dataset_id=src["dataset_id"], 
+                                       date_field=src["date_field"], agency_field=src["agency_field"])
             if src["DataType"] ==defs.DataType.CSV:
                 raise NotImplementedError(f"Unable to get agencies for {src['DataType']}")
             elif src['DataType'] ==defs.DataType.ArcGIS:
@@ -773,7 +815,8 @@ class Source:
         #It is assumed that each data loader method will return data with the proper data type so date type etc...
         if load_table:
             _check_version(src)
-            loader = self.__get_loader(src['DataType'], url, dataset_id=dataset_id, date_field=date_field, agency_field=agency_field)
+            loader = self.__get_loader(src['DataType'], url, src['query'], dataset_id=dataset_id, 
+                                       date_field=date_field, agency_field=agency_field)
 
             opt_filter = None
             if agency != None and agency_field != None:
@@ -879,7 +922,7 @@ class Source:
 
         return filename
 
-    def __get_loader(self, data_type, url, dataset_id=None, date_field=None, agency_field=None):
+    def __get_loader(self, data_type, url, query, dataset_id=None, date_field=None, agency_field=None):
         if pd.isnull(dataset_id):
             dataset_id = None
         params = (data_type, url, dataset_id, date_field, agency_field)
@@ -895,7 +938,7 @@ class Source:
         elif data_type ==defs.DataType.SOCRATA:
             loader = data_loaders.Socrata(url, dataset_id, date_field=date_field)
         elif data_type ==defs.DataType.CARTO:
-            loader = data_loaders.Carto(url, dataset_id, date_field=date_field)
+            loader = data_loaders.Carto(url, dataset_id, date_field=date_field, query=query)
         else:
             raise ValueError(f"Unknown data type: {data_type}")
 
@@ -943,7 +986,7 @@ def _check_date(table, date_field):
                     table[date_field] = table[date_field].apply(to_datetime_local)
                 # table = table.astype({date_field: 'datetime64[ns]'})
             elif isinstance(one_date, numbers.Number) and ("year" in date_field.lower() or date_field.lower() == "yr" or ((dts>=1900) & (dts<2100)).all()):
-                table[date_field] = table[date_field].apply(lambda x: datetime(x,1,1))
+                table[date_field] = table[date_field].apply(pd.Period, args=('Y'))
                 
             # Replace bad dates with NaT
             table[date_field] = table[date_field].replace(datetime.strptime('1900-01-01 00:00:00', '%Y-%m-%d %H:%M:%S'), pd.NaT)
