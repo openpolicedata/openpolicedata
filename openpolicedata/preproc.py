@@ -104,7 +104,7 @@ def standardize(df, table_type, year,
 
     std.standardize_columns(convert._create_fatal_lut, col_cat="FATAL", mult_data="ALL",
                             exclude_mult_type=[MultType.DEMO_COL])
-    std.standardize_columns(convert._create_injury_lut, col_cat="INJURY")
+    std.standardize_columns(convert._create_injury_lut, col_cat="INJURY", mult_data='ALL')
     
     # standardize_age needs to go before standardize_age_range as it can detect if what was ID'ed as 
     # an age column is actually an age range
@@ -744,15 +744,6 @@ class Standardizer:
         injury_tables = [defs.TableType.USE_OF_FORCE, defs.TableType.USE_OF_FORCE_OFFICERS, defs.TableType.USE_OF_FORCE_SUBJECTS, 
                                                               defs.TableType.USE_OF_FORCE_SUBJECTS_OFFICERS, defs.TableType.SHOOTINGS, defs.TableType.SHOOTINGS_OFFICERS, 
                                                               defs.TableType.SHOOTINGS_SUBJECTS]
-        match_cols = self._find_col_matches("injury", ['injury', 'affecttype','wounded_or_killed', 'cond_type'], 
-                                            exclude_col_names=[("does not contain", ["causedby"])],
-                                            validator=_injury_validator,
-                                            only_table_types=injury_tables,
-                                            always_validate=True)
-        
-        self._id_demographic_column(match_cols,
-                defs.columns.INJURY_SUBJECT, defs.columns.INJURY_OFFICER, 
-                defs.columns.INJURY_OFFICER_SUBJECT)
         
         match_cols = self._find_col_matches("fatal", ['fatal','fatality','deceased'], 
                                             exclude_col_names=[v for k,v in self.col_map.items() if "INJURY" in k],
@@ -762,7 +753,20 @@ class Standardizer:
         
         self._id_demographic_column(match_cols,
                 defs.columns.FATAL_SUBJECT, defs.columns.FATAL_OFFICER, 
-                defs.columns.FATAL_OFFICER_SUBJECT)
+                defs.columns.FATAL_OFFICER_SUBJECT,
+                specific_cases=[_case("Philadelphia", defs.TableType.SHOOTINGS, "offender_deceased", defs.columns.FATAL_SUBJECT)])
+
+        exclude_cols = match_cols
+        exclude_cols.append(("does not contain", ["causedby"]))
+        match_cols = self._find_col_matches("injury", ['injury', 'injuries', 'affecttype','wounded_or_killed', 'cond_type','injured'], 
+                                            exclude_col_names=exclude_cols,
+                                            validator=_injury_validator,
+                                            only_table_types=injury_tables,
+                                            always_validate=True)
+        
+        self._id_demographic_column(match_cols,
+                defs.columns.INJURY_SUBJECT, defs.columns.INJURY_OFFICER, 
+                defs.columns.INJURY_OFFICER_SUBJECT)
 
         match_cols = self._find_col_matches("agency", [], known_col_names=self.known_cols[defs.columns.AGENCY])
         if len(match_cols) > 1:
@@ -1311,10 +1315,16 @@ class Standardizer:
                 raise NotImplementedError("One or more but not all demographics columns are dictionaries")
             
         if self.source_name=="Dallas" and self.table_type==defs.TableType.SHOOTINGS and "officer_s" in self.df.columns:
-            logger.info("officer_s column has race and gender in it and will be parsed and split into standardized officer race and gender columns")
-            mult_data.type = MultType.WITH_NAME
-            mult_data.item_race = 0
-            mult_data.item_gender = 1
+            if race_col==defs.columns.RACE_OFFICER:
+                logger.info("officer_s column has race and gender in it and will be parsed and split into standardized officer race and gender columns")
+                mult_data.type = MultType.WITH_NAME
+                mult_data.item_race = 0
+                mult_data.item_gender = 1
+            elif race_col==defs.columns.RACE_SUBJECT:
+                logger.info("The suspect_deceased_injured_or_shoot_and_miss column has injury information for multiple subjects and will be parsed.")
+                mult_data.type = MultType.WITH_COUNTS
+                mult_data.delim_race = ' '
+
             return
 
         if self.table_type not in [defs.TableType.SHOOTINGS, defs.TableType.USE_OF_FORCE, defs.TableType.COMPLAINTS,
@@ -1647,8 +1657,8 @@ class Standardizer:
                     contains_range = False
                     contains_na = False
 
-                    loop_over = [x] if isinstance(x,Number) else enumerate(x.split(mult_info.delim_age))
-                    for k,y in loop_over:
+                    loop_over = [x] if isinstance(x,Number) else x.split(mult_info.delim_age)
+                    for k,y in enumerate(loop_over):
                         if k>0:
                             multi_found = True
                         if pd.notnull(y) and (isinstance(x,Number) or (y.strip().isdigit() and 0<int(y)<=max_age)):
@@ -1918,6 +1928,9 @@ def _gender_validator(df, match_cols_test, source_name):
 def _injury_validator(df, cols_test):
     match_cols = []
     for col_name in cols_test:
+        if check_column(col_name, ["injury","injuries", 'injured']):
+            match_cols.append(col_name)
+            continue
         try:
             col = convert.convert(convert._create_injury_lut, df[col_name], no_id='error')
             match_cols.append(col_name)

@@ -44,6 +44,8 @@ def convert(converter, col, source_name="", cats=None, std_map=None, delim=None,
         return std_list(col, vals, std_map, delim, converter, no_id, source_name, cats, agg_cat, known_single=True)
     elif mult_type == MultType.WITH_NAME:
         return std_with_names(col, vals, std_map, item_num, converter, no_id, source_name, cats, agg_cat)
+    elif mult_type == MultType.WITH_COUNTS:
+        return std_with_counts(col, vals, std_map, delim, converter, no_id, source_name, cats, agg_cat)
     else:
         for x in vals:
             std_map[x] = converter(x, no_id, source_name, cats, agg_cat)
@@ -55,7 +57,7 @@ def convert(converter, col, source_name="", cats=None, std_map=None, delim=None,
 
 def convert_off_or_civ(x, no_id, *args, **kwargs):
     orig = x
-    if type(x) == str:
+    if isinstance(x,str):
         x = x.upper()
 
     if pd.isnull(x) or x in ["MISSING"]:
@@ -94,24 +96,24 @@ def _create_age_range_lut(x, no_id, source_name, *args, **kwargs):
     orig=x
     if type(x)==str:
         x = x.upper().strip()
-    if type(x) == str and _p_age_range.search(x)!=None:
+    if isinstance(x,str) and _p_age_range.search(x)!=None:
         return _p_age_range.sub(r"\1-\3", x)
-    elif type(x) == str and p_over.search(x)!=None:
+    elif isinstance(x,str) and p_over.search(x)!=None:
         return p_over.sub(r"\2-120", x)
-    elif type(x) == str and p_plus.search(x)!=None:
+    elif isinstance(x,str) and p_plus.search(x)!=None:
         return p_plus.sub(r"\1-120", x)
-    elif type(x) == str and p_plus2.search(x)!=None:
+    elif isinstance(x,str) and p_plus2.search(x)!=None:
         return p_plus2.sub(r"\1-120", x)
-    elif type(x) == str and p_above.search(x)!=None:
+    elif isinstance(x,str) and p_above.search(x)!=None:
         return p_above.sub(r"\1-120", x)
-    elif type(x) == str and p_under.search(x)!=None:
+    elif isinstance(x,str) and p_under.search(x)!=None:
         return p_under.sub(r"0-\2", x)
-    elif type(x) == str and p_under2.search(x)!=None:
+    elif isinstance(x,str) and p_under2.search(x)!=None:
         return p_under2.sub(r"0-\1", x)
-    elif type(x) == str and p_decade.search(x)!=None:
+    elif isinstance(x,str) and p_decade.search(x)!=None:
         decade = int(p_decade.search(x).group(1))
         return f"{decade}-{decade+9}"
-    elif type(x) == str and p_range.search(x)!=None:
+    elif isinstance(x,str) and p_range.search(x)!=None:
         results = p_range.search(x).groups()
         start = int(results[0]) if results[1]=="=" else int(results[0])+1
         stop = int(results[3]) if results[2]=="=" else int(results[3])-1
@@ -144,7 +146,7 @@ def _create_ethnicity_lut(x, no_id, source_name, eth_cats, *args, **kwargs):
     # case which includes if officer is Hispanic
     ferndale_eth_vals = ['NR', 'FRENCH/GERMAN', 'MEXICAN', 'HUNGARIAN', 'LEBANESE', 'POLISH/SCOTTISH', 'IRISH', 'SYRIAN', 'POLISH']
     orig = x
-    if type(x) == str:
+    if isinstance(x,str):
         # Look for {Full name} {- or =} {Abbreviation_Initial}
         abbrev_full_match = re.search(r"^([\w\s/\.-]+)\s?[-]\s?([\w\s/\.])$",x)
         if abbrev_full_match and any([len(x)==1 for x in abbrev_full_match.groups()]):
@@ -245,7 +247,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
             # Replace numerical code with default value
             x = map_dict[x]
 
-    if type(x) == str:
+    if isinstance(x,str):
         # Look for code: {Race_Abbreviation_Initial} {- or =} {Full name}
         abbrev_full_match = re.search(r"^([\w\s/\.]+)\s?[-=]\s?([\w\s/\.]+)$",x)
         if abbrev_full_match and any([len(x)==1 for x in abbrev_full_match.groups()]):
@@ -514,7 +516,7 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
             x = map_dict[x]
 
 
-    if type(x) == str:
+    if isinstance(x,str):
         # Look for {Abbreviation_Initial} {- or =} {Full name}
         abbrev_full_match = re.search(r"^([\w\s/\.]+)\s?[-=]\s?([\w\s/\.]+)$",x)
         if abbrev_full_match and any([len(x)==1 for x in abbrev_full_match.groups()]):
@@ -625,12 +627,18 @@ def _create_injury_lut(x, no_id, source_name, cats, *args, **kwargs):
     x = x.upper()
     if x in ["FATAL","KILLED",'DECEASED',"DEATH"]:
         return "FATAL"
-    elif x in ["INJURED"] or any([y in x for y in ['WOUND','PAIN', 'LACERATION','SCRAPE']]):
+    elif x in ["INJURED", 'NON-FATAL', 'NON FATAL','YES','Y'] or any([y in x for y in ['WOUND','PAIN', 'LACERATION','SCRAPE']]):
         return "INJURED"
-    elif x in ["NO INJURY", "NOT INJURED",'NEITHER'] or x.startswith("NO INJUR"):
+    elif x in ["NO INJURY", "NOT INJURED",'NEITHER','NONE','NO','N'] or x.startswith("NO INJUR"):
         return "NO INJURY"
-    elif x=='SELF-INFLICTED FATAL':
+    elif x in ['SHOOT AND MISS']:
+        return "SHOOT AND MISS"
+    elif x.replace("-"," ") in ['SELF INFLICTED FATAL', 'DECEASED (SELF INFLICTED)']:
         return 'SELF-INFLICTED FATAL'
+    elif x=='UNKNOWN':
+        return 'UNKNOWN'
+    elif x=='OTHER':
+        return 'OTHER'
     elif no_id=='test':
         raise ValueError(f"Unknown value in injury column: {orig}")
     elif no_id=='error':
@@ -663,7 +671,6 @@ def _create_fatal_lut(x, no_id, source_name, cats, *args, **kwargs):
         return orig if no_id=="keep" else ""
     
 
-
 def std_dict(col, std_map, converter, *args):
     # Standardize column containing dictionaries containing the races of multiple people
     new_vals = []
@@ -689,7 +696,7 @@ def std_demo_col(col, vals, map_dict, item_num, converter, *args):
     delims = ["(", ","]
     multi_found = False
     for x in vals:
-        if type(x) == str:
+        if isinstance(x,str):
             items = [x]
             for d in delims:
                 if d in x:
@@ -770,7 +777,7 @@ def std_with_names(col, vals, map_dict, item_num, converter, *args, **kwargs):
     multi_found = False
     p = re.compile(r"[\sÊ](\w{1,2}/\w)")
     for x in vals:
-        if type(x) == str:
+        if isinstance(x,str):
             items = p.findall(x)
             
             new_val = {}
@@ -807,7 +814,7 @@ def std_list(col, vals, map_dict, delim, converter, *args, **kwargs):
     re_mult = re.compile(r"([A-Za-z])\s?[Xx]\s?(\d+)")
     re_mult_reverse = re.compile(r"(\d+)\s?[Xx]\s?([A-Za-z])")
     for x in vals:
-        if type(x) == str:
+        if isinstance(x,str):
             for m in re_mult.finditer(x):
                 new_str = delim.join([m.group(1) for _ in range(int(m.group(2)))])
                 x = x.replace(m.group(0), new_str)
@@ -830,6 +837,62 @@ def std_list(col, vals, map_dict, delim, converter, *args, **kwargs):
                     multi_found = True
 
             map[x] = new_val
+        else:
+            if x not in map_dict:
+                map_dict[x] = converter(x, *args, **kwargs)
+                map[x] = map_dict[x]
+
+    if multi_found:
+        # Convert non-dicts to dict
+        map = {k:(v if (isinstance(v,dict) or pd.isnull(v)) else {0:v}) for k,v in map.items()}
+
+    return col.map(map)
+
+
+def std_with_counts(col, vals, map_dict, delim, converter, no_id, *args, **kwargs):
+    map = {}
+    multi_found = False
+    no_id_error = 'error'
+    for x in vals:
+        if isinstance(x,str):
+            x = x.strip()
+            try:
+                map_dict[x] = converter(x, no_id_error, *args, **kwargs)
+                map[x] = map_dict[x]
+            except:
+                # This needs parsed. Strings can be injuries to multiple delimited by spaces (i.e. 'Deceased Injured')
+                # and/or counts of an injury (i.e. '2 Injured')
+                items = x.split(delim)
+                subject_count = 0
+                count = 1
+                cur_item = ''
+                new_val = {}
+                for i in items:
+                    if i.isdigit():
+                        count = int(i)
+                    else:
+                        cur_item = cur_item + " " + i.strip() if len(cur_item)>0 else i.strip()
+                        try:
+                            if cur_item not in map_dict:
+                                map_dict[cur_item] = converter(cur_item, no_id_error, *args, **kwargs)
+                        except:
+                            continue
+                        
+                        for j in range(0, count):
+                            new_val[subject_count+j] = map_dict[cur_item]
+                        subject_count+=count
+                        count = 1
+                        cur_item = ''
+                        multi_found = True
+
+                if len(cur_item)>0:
+                    if no_id in ['error','test']:
+                        raise ValueError("Unable to parse subject injury")
+                    elif no_id=='null':
+                        new_val = ""
+                    else:
+                        new_val = x
+                map[x] = new_val
         else:
             if x not in map_dict:
                 map_dict[x] = converter(x, *args, **kwargs)

@@ -129,6 +129,7 @@ class TableType(str, Enum):
 # Constants used in dataset parameters
 MULTI = "MULTIPLE"    # For data sets that put multiple years or agencies in 1 dataset
 NA = "NONE"         # None = not applicable (pandas converts "N/A" to NaN)
+UNSPECIFIED = "UNSPECIFIED"
 
 states = {
     "Alabama": "AL",
@@ -317,7 +318,7 @@ _eth_cats_basic = {
     _eth_keys.MIDDLE_EASTERN:_Label("MIDDLE EASTERN",'ME'),
     _eth_keys.NONLATINO:_Label("NON-HISPANIC/NON-LATINO",'NH'),
     _eth_keys.UNKNOWN:_Label("UNKNOWN","UNKNOWN"),
-    _eth_keys.UNSPECIFIED:_Label("UNSPECIFIED","UNSPECIFIED"),
+    _eth_keys.UNSPECIFIED:_Label(UNSPECIFIED,UNSPECIFIED),
 }
 
 _race_cats_basic = {
@@ -330,7 +331,7 @@ _race_cats_basic = {
     _race_keys.OTHER:_Label("OTHER"),
     _race_keys.OTHER_UNKNOWN:_Label("OTHER OR UNKNOWN",'OTHER OR UNKNOWN'),
     _race_keys.UNKNOWN:_Label("UNKNOWN","UNKNOWN"),
-    _race_keys.UNSPECIFIED:_Label("UNSPECIFIED","UNSPECIFIED"),
+    _race_keys.UNSPECIFIED:_Label(UNSPECIFIED, UNSPECIFIED),
     _race_keys.WHITE:_Label("WHITE","W")
 }
 
@@ -374,7 +375,7 @@ _genders = {
     _gender_keys.GENDER_NONBINARY:_Label("GENDER NON-BINARY","GNB"),
     _gender_keys.OTHER:_Label("OTHER"),
     _gender_keys.UNKNOWN:_Label("UNKNOWN","UNKNOWN"),
-    _gender_keys.UNSPECIFIED:_Label("UNSPECIFIED","UNSPECIFIED"),
+    _gender_keys.UNSPECIFIED:_Label(UNSPECIFIED,UNSPECIFIED),
 }
 
 class _PersonTypes(_ToDict_Mixin):

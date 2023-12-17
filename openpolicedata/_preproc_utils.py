@@ -154,6 +154,7 @@ class MultType(Enum):
     COUNTS = 3
     DELIMITED = 4
     WITH_NAME = 5
+    WITH_COUNTS = 6
 
 class _MultData:
     type = MultType.SINGLE
