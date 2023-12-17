@@ -1,4 +1,5 @@
 from io import BytesIO
+import json
 import numbers
 import os
 import tempfile
@@ -1346,6 +1347,8 @@ class Carto(Data_Loader):
         Dataset ID
     date_field : str
         Name of the column that contains the date
+    query : str
+        Query that will be perfored for each request
 
     Methods
     -------
@@ -1357,7 +1360,7 @@ class Carto(Data_Loader):
         Get years contained in data set
     """
     
-    def __init__(self, url, data_set, date_field=None):
+    def __init__(self, url, data_set, date_field=None, query=None):
         '''Create Carto object
 
         Parameters
@@ -1368,6 +1371,8 @@ class Carto(Data_Loader):
             Dataset ID
         date_field : str
             (Optional) Name of the column that contains the date
+        query : str
+            (Optional) Additional query that will be added to each request
         '''
 
         # https://carto.com/developers/sql-api/guides/making-calls/
@@ -1386,6 +1391,7 @@ class Carto(Data_Loader):
         self.url = url_clean
         self.data_set = data_set
         self.date_field = date_field
+        self.query = str2json(query)
 
     
     def isfile(self):
@@ -1438,6 +1444,18 @@ class Carto(Data_Loader):
 
         if where != None:
             query+=" WHERE "+ where
+
+        default_where = ''
+        for k,v in self.query.items():
+            if isinstance(v,str):
+                v = f"'{v}'"
+            default_where += f"&{k}={v}"
+
+        if len(default_where):
+            if where != None:
+                query+=default_where
+            else:
+                query+=" WHERE "+ default_where[1:]
 
         if not return_count and count!=0:
             # Order results to ensure data order remains constant if paging
@@ -1519,7 +1537,7 @@ class Carto(Data_Loader):
         if pbar:
             bar = tqdm(desc=self.url, total=nrows, leave=False)
 
-        # When requesting data as GeoJSON, no type information is return so request it now
+        # When requesting data as GeoJSON, no type information is returned so request it now
         type_info = self.__request(count=0, out_type="JSON")
             
         features = []
@@ -1956,6 +1974,14 @@ def filter_dataframe(df, date_field=None, year_filter=None, agency_field=None, a
         df = df.query(agency_field + " = '" + agency + "'")
 
     return df
+
+
+def str2json(json_str):
+    if pd.isnull(json_str):
+        return {}
+    # Remove any curly quotes
+    json_str = json_str.replace('“','"').replace('”','"')
+    return json.loads(json_str)
 
 
 # https://stackoverflow.com/questions/73093656/progress-in-bytes-when-reading-csv-from-url-with-pandas
