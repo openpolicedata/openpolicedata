@@ -146,8 +146,11 @@ def find_id_column(df1, df2, std_id, keep_raw):
     df2 = df2.copy()
     default_result = (None, None, df1, df2, None)
 
-    inc_id_matches1 = [x for x in df1.columns if re.search(r'^incident(_|\s)?(id|num|number|code)$',x, re.IGNORECASE)]
-    inc_id_matches2 = [x for x in df2.columns if re.search(r'^incident(_|\s)?(id|num|number|code)$',x, re.IGNORECASE)]
+    p_inc_id = r'incident(_|\s)?(id|num|number|code)$'
+    inc_id_matches1 = [x for x in df1.columns if re.search('^'+p_inc_id,x, re.IGNORECASE)]
+    inc_id_matches1 = inc_id_matches1 if len(inc_id_matches1) else [x for x in df1.columns if re.search(p_inc_id,x, re.IGNORECASE)]
+    inc_id_matches2 = [x for x in df2.columns if re.search('^'+p_inc_id,x, re.IGNORECASE)]
+    inc_id_matches2 = inc_id_matches2 if len(inc_id_matches2) else [x for x in df2.columns if re.search(p_inc_id,x, re.IGNORECASE)]
 
     if len(inc_id_matches1)>1 or len(inc_id_matches2)>1:
         raise NotImplementedError()
@@ -840,8 +843,8 @@ class Standardizer:
                 specific_cases=[_case("Indianapolis", defs.TableType.USE_OF_FORCE, ['CIT_COND_TYPE','OFF_COND_TYPE'], [defs.columns.INJURY_SUBJECT, defs.columns.INJURY_OFFICER])])
         
         uof_tables = [defs.TableType.USE_OF_FORCE, defs.TableType.USE_OF_FORCE_OFFICERS, defs.TableType.USE_OF_FORCE_SUBJECTS, 
-                                                              defs.TableType.USE_OF_FORCE_SUBJECTS_OFFICERS]
-        match_cols = self._find_col_matches("firearm", ['firearm'],
+                    defs.TableType.USE_OF_FORCE_SUBJECTS_OFFICERS, defs.TableType.USE_OF_FORCE_INCIDENTS]
+        match_cols = self._find_col_matches("firearm", ['firearm','forcetype','force','resistance'],
                                             only_table_types=uof_tables,
                                             exclude_col_names=[("does not contain", ["incident"])],
                                             validator=_firearm_validator,
@@ -1029,13 +1032,16 @@ class Standardizer:
         else:     
             is_officer_table = self.table_type == defs.TableType.EMPLOYEE.value or \
                 ("- OFFICERS" in self.table_type and "SUBJECTS" not in self.table_type)
-            off_words = ["off", "deputy", "employee", "ofc", "empl", 'emp']
-            civilian_terms = ["citizen","subject","suspect","civilian", "cit", "offender"]
+            is_subject_table = ("- SUBJECTS" in self.table_type and "OFFICERS" not in self.table_type)
+            # mos = Member of Service
+            off_words = ["off", "deputy", "employee", "ofc", "empl", 'emp','mos']
+            civilian_terms = ["citizen","subject","suspect","civilian", "cit", "offender",]
             not_off_words = ["offender"]
 
             types = []
             for k in range(len(col_names)):
                 words = split_words(col_names[k])
+                last_against = False
                 for w in words:
                     if is_subject_default and (
                         (any([x in w.lower() for x in off_words]) and not any([x in w.lower() for x in not_off_words])) or \
@@ -1043,9 +1049,19 @@ class Standardizer:
                         ):
                         types.append(officer_col_name)
                         break
-                    elif not is_subject_default and any([x in w.lower() for x in civilian_terms]):
+                    elif not is_subject_default and (
+                            any([x in w.lower() for x in civilian_terms]) or \
+                            (is_subject_table and w.lower()=='resistance')
+                        ):
                         types.append(civilian_col_name)
                         break
+                    elif not is_subject_default and is_subject_table and w.lower()=='against':
+                        last_against = True
+                    elif not is_subject_default and is_subject_table and last_against and w.lower() in off_words and w.lower() not in not_off_words:
+                        types.append(civilian_col_name)
+                        break
+                    else:
+                        last_against = False
                 else:
                     types.append(civilian_col_name if is_subject_default else officer_col_name)
 
@@ -2078,6 +2094,10 @@ def _firearm_validator(df, cols_test):
     match_cols = []
     for col_name in cols_test:
         try:
+            if 'firearm' not in col_name:
+                # This should not be a yes/no column
+                if df[col_name].apply(lambda x: x.lower() in ['yes','y','no','n'] if isinstance(x,str) else False).mean()>0:
+                    raise ValueError()
             col = convert.convert(convert._create_firearm_lut, df[col_name], no_id='error')
             match_cols.append(col_name)
         except:
