@@ -1,4 +1,4 @@
-from __future__ import annotations  # This should not be necessary once Python 3.7 is no longer supported
+from __future__ import annotations
 import copy
 import numbers
 import os.path as path
@@ -146,6 +146,177 @@ class Table:
             self.readme = source["readme"]
 
 
+    def get_race_col(self, role:Literal['SUBJECT','OFFICER']='SUBJECT'):
+        """Get name of race column
+
+        Parameters
+        ----------
+        role : Literal[&#39;SUBJECT&#39;,&#39;OFFICER&#39;], optional
+            Whether to return officer or subject column name, by default 'SUBJECT'
+
+        Returns
+        -------
+        defs.columns
+            Name of column
+        """
+        assert(role.upper() in ['OFFICER','SUBJECT'])
+        if role.upper()=='OFFICER':
+            if defs.columns.RE_GROUP_OFFICER in self.table:
+                return defs.columns.RE_GROUP_OFFICER
+            elif defs.columns.RE_GROUP_OFFICER_SUBJECT in self.table:
+                return defs.columns.RE_GROUP_OFFICER_SUBJECT 
+            else:
+                return None
+        else:
+            if defs.columns.RE_GROUP_SUBJECT in self.table:
+                return defs.columns.RE_GROUP_SUBJECT
+            elif defs.columns.RE_GROUP_OFFICER_SUBJECT in self.table:
+                return defs.columns.RE_GROUP_OFFICER_SUBJECT 
+            else:
+                return None
+            
+
+    def get_gender_col(self, role:Literal['SUBJECT','OFFICER']='SUBJECT'):
+        """Get name of gender column
+
+        Parameters
+        ----------
+        role : Literal[&#39;SUBJECT&#39;,&#39;OFFICER&#39;], optional
+            Whether to return officer or subject column name, by default 'SUBJECT'
+
+        Returns
+        -------
+        defs.columns
+            Name of column
+        """
+        assert(role.upper() in ['OFFICER','SUBJECT'])
+        if role.upper()=='OFFICER':
+            if defs.columns.GENDER_OFFICER in self.table:
+                return defs.columns.GENDER_OFFICER
+            elif defs.columns.GENDER_OFFICER_SUBJECT in self.table:
+                return defs.columns.GENDER_OFFICER_SUBJECT 
+            else:
+                return None
+        else:
+            if defs.columns.GENDER_SUBJECT in self.table:
+                return defs.columns.GENDER_SUBJECT
+            elif defs.columns.GENDER_OFFICER_SUBJECT in self.table:
+                return defs.columns.GENDER_OFFICER_SUBJECT 
+            else:
+                return None
+
+    def get_age_col(self, role:Literal['SUBJECT','OFFICER']='SUBJECT'):
+        """Get name of age column
+
+        Parameters
+        ----------
+        role : Literal[&#39;SUBJECT&#39;,&#39;OFFICER&#39;], optional
+            Whether to return officer or subject column name, by default 'SUBJECT'
+
+        Returns
+        -------
+        defs.columns
+            Name of column
+        """
+        assert(role.upper() in ['OFFICER','SUBJECT'])
+        if role.upper()=='OFFICER':
+            if defs.columns.AGE_OFFICER in self.table:
+                return defs.columns.AGE_OFFICER
+            elif defs.columns.AGE_OFFICER_SUBJECT in self.table:
+                return defs.columns.AGE_OFFICER_SUBJECT
+            elif defs.columns.AGE_RANGE_OFFICER in self.table:
+                return defs.columns.AGE_RANGE_OFFICER
+            elif defs.columns.AGE_RANGE_OFFICER_SUBJECT in self.table:
+                return defs.columns.AGE_RANGE_OFFICER_SUBJECT
+            else:
+                return None
+        else:
+            if defs.columns.AGE_SUBJECT in self.table:
+                return defs.columns.AGE_SUBJECT
+            elif defs.columns.AGE_OFFICER_SUBJECT in self.table:
+                return defs.columns.AGE_OFFICER_SUBJECT
+            elif defs.columns.AGE_RANGE_SUBJECT in self.table:
+                return defs.columns.AGE_RANGE_SUBJECT
+            elif defs.columns.AGE_RANGE_OFFICER_SUBJECT in self.table:
+                return defs.columns.AGE_RANGE_OFFICER_SUBJECT
+            else:
+                return None
+
+
+    def merge(self, 
+              right: pd.DataFrame | pd.Series | Table, 
+              std_id: bool = False,
+              keep_raw: bool =True,
+              on: str | pd.Index | None = None, 
+              how: Literal['inner', 'outer', 'left', 'right', 'cross'] = 'inner', 
+              left_on: str | pd.Index | None = None, 
+              right_on: str | pd.Index | None = None, 
+              **kwargs) -> Table:
+        """Merge 2 Tables together or a Table with a pandas DataFrame or Series
+
+        Parameters
+        ----------
+        right : pd.DataFrame | pd.Series | Table
+            Table, DataFrame, or Series to merge
+        std_id : bool, optional
+            If True, name of incident ID column will be standardized in the merged table. by default False    
+        keep_raw: bool, optional
+            If std_id is True, determines whether to keep original column if incident ID column found
+        on : str | pd.Index | None, optional
+            Column(s) to join on. They must be found in both left and right.
+            If None and left_on and right_on are None, merge will attempt to find an incident ID column to use. by default None
+        how : Literal[&#39;inner&#39;, &#39;outer&#39;, &#39;left&#39;, &#39;right&#39;, &#39;cross&#39;], optional
+            Type of merge to be performed. See pandas DataFrame.merge for details 
+            (https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.merge.html), by default 'inner'
+        left_on : str | pd.Index | None, optional
+            Column(s) to join on in the left DataFrame. , by default None
+        right_on : str | pd.Index | None, optional
+            Column(s) to join on in the right DataFrame., by default None
+
+        Returns
+        -------
+        Table
+            Merged table
+        """
+        # Returns a new Table that is the merger of 2 tables
+        if right_is_table:=isinstance(right, Table):
+            df2 = right.table
+        elif isinstance(right, pd.Series):
+            df2 = right.to_frame()
+        else:
+            df2 = right
+
+        if not self.is_std and std_id:
+            raise ValueError("ID standardization is currently only possible for left tables where Table.standardize has been applied")
+
+        use_id = not on and not left_on and not right_on
+        df1 = self.table
+        if use_id or std_id:
+            id_col1, id_col2, df1_new, df2_new, mapping = preproc.find_id_column(self.table, df2, std_id, keep_raw)
+            if use_id:
+                if id_col1:
+                    left_on = defs.columns.INCIDENT_ID if std_id else id_col1
+                    right_on = defs.columns.INCIDENT_ID if std_id else id_col2
+                else:
+                    raise ValueError("No incident ID column found")
+            if std_id and id_col1:
+                df1 = df1_new
+                df2 = df2_new
+                self.__transforms.append(mapping)
+
+        df = pd.merge(df1, df2, on=on, how=how, left_on=left_on, right_on=right_on, suffixes=(None, '_FromMerged'), **kwargs)
+        new_table = copy.deepcopy(self)
+        new_table.table = df
+        if right_is_table:
+            new_table._Table__transforms.extend(right.get_transform_map())
+        for k,v in new_table.__dict__.items():
+            if k not in ['table', '_Table__transforms']:
+                setattr(new_table, k, [v, getattr(right, k) if right_is_table else None])
+
+        return new_table
+
+
+
     def __repr__(self) -> str:
         skip = ["details", "table"]
         return ',\n'.join("%s: %s" % item for item in vars(self).items() if (item[0] not in skip and item[0][0] != "_"))
@@ -239,60 +410,63 @@ class Table:
             [ 'a' , 'c' ] for the first column and [ 'b', 'c' ] for the second column., by default "error"
         """
         
-        if self.is_std:
-            is_subject = person_type.lower()=='subject'
-            expand_cols = []
-            for t in self.__transforms:
-                expand = (is_subject and ("SUBJECT" in t.new_column_name or t.new_column_name==defs.columns.FATAL_SUBJECT)) or \
-                          (not is_subject and "OFFICER" in t.new_column_name)
-                if expand:
-                    if self.table[t.new_column_name].apply(lambda x: isinstance(x,dict)).any():
-                        expand_cols.append(t.new_column_name)
+        if not self.is_std:
+            raise ValueError("standardize must be run on a table to apply expand")
+        
+        is_subject = person_type.lower()=='subject'
+        expand_cols = []
+        for t in self.__transforms:
+            expand = (is_subject and ("SUBJECT" in t.new_column_name or t.new_column_name==defs.columns.FATAL_SUBJECT)) or \
+                        (not is_subject and "OFFICER" in t.new_column_name)
+            if expand:
+                if self.table[t.new_column_name].apply(lambda x: isinstance(x,dict)).any():
+                    expand_cols.append(t.new_column_name)
 
-            if len(expand_cols)>0:
-                new_df = self.table.copy()
-                for c in expand_cols:
-                    new_df[c] = new_df[c].apply(lambda x: x.values() if isinstance(x,dict) else x)
+        if len(expand_cols)>0:
+            new_df = self.table.copy()
+            for c in expand_cols:
+                new_df[c] = new_df[c].apply(lambda x: x.values() if isinstance(x,dict) else x)
 
-                try:
-                    self.table = new_df.explode(expand_cols, ignore_index=True)
-                except AttributeError as e:
-                    # This is an issue with geopandas when exploding lists of columns
-                    if len(expand_cols)==1:
-                        self.table = new_df.explode(expand_cols[0], ignore_index=True)
-                    else:
-                        warnings.warn("Original table is a geopandas DataFrame, which has a known bug when expanding. "+
-                                      "Converting to pandas DataFrame.")
-                        self.table = pd.DataFrame(new_df).explode(expand_cols, ignore_index=True)
-                except ValueError as e:
-                    mismatch = mismatch.lower()
-                    assert mismatch in ['error','nan','splitsingle']
-                    if len(e.args)>0 and e.args[0]=='columns must have matching element counts':
-                        if mismatch=='error':
-                            raise
-                        dict_values = type({}.values())
-                        num_vals = pd.DataFrame(0, index=new_df.index, columns=expand_cols)
-                        # Try replacing length 1 arrays with their values
-                        for c in expand_cols:
-                            num_vals[c] = new_df[c].apply(lambda x: len(x) if isinstance(x, dict_values) else 1)
-                        mismatches = num_vals.apply(lambda x: (x!=x.iloc[0]).any(), axis=1)
-                        for m in mismatches[mismatches].index:
-                            max_count = num_vals.loc[m].max()
-                            row = new_df.loc[m, expand_cols]
-                            if mismatch=='nan':
-                                fill = [pd.NA for _ in range(max_count)]
-                                for k in row.index:
-                                    if num_vals.loc[m,k] < max_count:
-                                        row[k] = fill
-                            else:
-                                for k in row.index:
-                                    if num_vals.loc[m,k] ==1:
+            try:
+                self.table = new_df.explode(expand_cols, ignore_index=True)
+            except AttributeError as e:
+                # This is an issue with geopandas when exploding lists of columns
+                if len(expand_cols)==1:
+                    self.table = new_df.explode(expand_cols[0], ignore_index=True)
+                else:
+                    warnings.warn("Original table is a geopandas DataFrame, which has a known bug when expanding. "+
+                                    "Converting to pandas DataFrame.")
+                    self.table = pd.DataFrame(new_df).explode(expand_cols, ignore_index=True)
+            except ValueError as e:
+                mismatch = mismatch.lower()
+                assert mismatch in ['error','nan','splitsingle']
+                if mismatch!='error' and len(e.args)>0 and e.args[0]=='columns must have matching element counts':
+                    dict_values = type({}.values())
+                    num_vals = pd.DataFrame(0, index=new_df.index, columns=expand_cols)
+                    # Try replacing length 1 arrays with their values
+                    for c in expand_cols:
+                        num_vals[c] = new_df[c].apply(lambda x: len(x) if isinstance(x, dict_values) else 1)
+                    mismatches = num_vals.apply(lambda x: (x!=x.iloc[0]).any(), axis=1)
+                    for m in mismatches[mismatches].index:
+                        max_count = num_vals.loc[m].max()
+                        row = new_df.loc[m, expand_cols]
+                        if mismatch=='nan':
+                            fill = [pd.NA for _ in range(max_count)]
+                            for k in row.index:
+                                if num_vals.loc[m,k] < max_count:
+                                    row[k] = fill
+                        else:
+                            for k in row.index:
+                                if num_vals.loc[m,k] ==1:
+                                    try:
                                         row[k] = [list(row[k])[0] for _ in range(max_count)]
-                            new_df.loc[m,expand_cols] = row
+                                    except:
+                                        row[k] = [row[k] for _ in range(max_count)]
+                        new_df.loc[m,expand_cols] = row
 
-                        self.table = pd.DataFrame(new_df).explode(expand_cols, ignore_index=True)
-                    else:
-                        raise
+                    self.table = pd.DataFrame(new_df).explode(expand_cols, ignore_index=True)
+                else:
+                    raise
     
 
     def standardize(self, 
@@ -300,7 +474,7 @@ class Table:
         agg_race_cat: bool = False,
         eth_cats: dict | None = None,
         gender_cats: dict | None = None,
-        keep_raw: bool =True,        
+        keep_raw: bool =True,
         known_cols: dict | None = None,
         verbose: bool | str = False,
         no_id: Literal["keep", "null", "error", "test"] = "keep",
@@ -884,6 +1058,52 @@ class Source:
         table.table = _check_date(table.table, table.date_field)  
 
         return table
+    
+
+    def find_related_tables(self,
+                            table_type: str | defs.TableType | None,
+                            year: str | int,
+                            sub_type: Literal['INCIDENTS','SUBJECTS',"OFFICERS","SUBJECTS/OFFICERS", None] = None,
+                            exact_match: bool =False) -> tuple[str]:
+        """For cases where information is split across tables (i.e. 'USE OF FORCE - INCIDENTS', 'USE OF FORCE - SUBJECTS', 'USE OF FORCE - OFFICERS'),
+        find related tables for different subtypes. 'USE OF FORCE - INCIDENTS' will return 'USE OF FORCE - SUBJECTS' and 'USE OF FORCE - OFFICERS' 
+        without sub_type specified and 'USE OF FORCE - SUBJECTS' if sub_type='SUBJECTS'
+
+        Parameters
+        ----------
+        table_type : str | defs.TableType | None
+            Type of table to find related tables for
+        year - int or the strings opd.defs.MULTI or opd.defs.NONE.
+            Year of datasets to find related tables for
+        sub_type : Literal[&#39;INCIDENTS&#39;,&#39;SUBJECTS&#39;,&quot;OFFICERS&quot;,&quot;SUBJECTS/OFFICERS&quot;,None], optional
+            If specified, only return table containing data for the requested sub_type by default None
+        exact_match : bool, optional
+            If False, return tables that contain the specified sub_type (subtype="SUBJECTS" will return 'SUBJECTS' and SUBJECTS/OFFICERS tables).
+            If True, return only return exact sub_type match  (subtype="SUBJECTS" will return 'SUBJECTS' table only). by default False
+
+        Returns
+        -------
+        tuple[str]
+            Tuple of related table types
+        tuple[str]
+            Tuple of year values corresponding to each table type
+        """
+        if m:=re.search(r"^(?P<table_type>.+) - (?P<subtype>(INCIDENTS|SUBJECTS|OFFICERS|SUBJECTS/OFFICERS))$", table_type, re.IGNORECASE):
+            p = re.compile(rf"^{m.groupdict()['table_type']} - (?P<subtype>(INCIDENTS|SUBJECTS|OFFICERS|SUBJECTS/OFFICERS))$", re.IGNORECASE)
+            related = [(str(x),y) for x,y in zip(self.datasets['TableType'], self.datasets['Year']) if p.search(x) and x!=table_type]
+            if sub_type:
+                types = [p.search(x[0]).groupdict()['subtype'] for x in related]
+                if exact_match:
+                    related = [x for x,y in zip(related, types) if y==sub_type]
+                else:
+                    related = [x for x,y in zip(related, types) if sub_type in y]
+
+            related = [x for x in related if x[1]==year or x[1]==defs.NA]
+            return tuple(x for x,_ in related), tuple(x for _,x in related)
+        else:
+            # This table_type has no subtypes
+            return (), ()
+
 
     def get_csv_filename(self, 
                          year: str | int | list[int],
@@ -966,7 +1186,7 @@ def _check_date(table, date_field):
             one_date = dts.iloc[0]  
             if type(one_date) == pd._libs.tslibs.timestamps.Timestamp:
                 table[date_field] = pd.to_datetime(table[date_field], errors='ignore')
-            elif type(one_date) == str:
+            elif isinstance(one_date, str) and not re.match(r'^20\d{2}\-\d{2}$','2023-11'):
                 p = re.compile(r'^Unknown string format: \d{4}-(\d{2}|__)-(\d{2}|__) present at position \d+$')
                 def to_datetime_local(x):
                     try:
@@ -984,7 +1204,26 @@ def _check_date(table, date_field):
                     table[date_field] = to_datetime(table[date_field])
                 except ValueError as e:
                     table[date_field] = table[date_field].apply(to_datetime_local)
-                # table = table.astype({date_field: 'datetime64[ns]'})
+
+                if pd.api.types.is_object_dtype(table[date_field]):
+                    try:
+                        # Attempt to convert
+                        table = table.astype({date_field: 'datetime64[ns]'})
+                    except ValueError as e:
+                        if len(e.args)>0 and e.args[0].startswith('Cannot mix tz-aware with tz-naive values') and \
+                            table[date_field].apply(lambda x: x.hour==0 and x.minute==0).all() and \
+                            len(s:=set([x.tzinfo for x in table[date_field] if x.tzinfo is not None]))==1:
+                            warnings.warn("Some date values have timezone and some do not. Setting timezone unware objects to have the same timezone as the rest.")
+                            tz = s.pop()
+                            is_not_aware = table[date_field].apply(lambda x: x.tzinfo is None or x.tzinfo.utcoffset(x) is None)
+                            table.loc[is_not_aware, date_field] = table.loc[is_not_aware, date_field].apply(lambda x: x.replace(tzinfo=tz))
+                            table[date_field] = table[date_field].convert_dtypes()
+                        else:
+                            raise
+                    except:
+                        raise
+            elif isinstance(one_date, str) and re.match(r'^20\d{2}\-\d{2}$',one_date):
+                table[date_field] = table[date_field].apply(pd.Period, args=('M'))
             elif isinstance(one_date, numbers.Number) and ("year" in date_field.lower() or date_field.lower() == "yr" or ((dts>=1900) & (dts<2100)).all()):
                 table[date_field] = table[date_field].apply(pd.Period, args=('Y'))
                 
