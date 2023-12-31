@@ -108,10 +108,7 @@ def standardize(df, table_type, year,
     std.standardize_columns(convert._create_fatal_lut, col_cat="FATAL", mult_data="ALL",
                             exclude_mult_type=[MultType.DEMO_COL])
     std.standardize_columns(convert._create_injury_lut, col_cat="INJURY", mult_data='ALL',
-                            exclude_mult_type=[MultType.DEMO_COL])
-    
-    std.standardize_columns(convert._create_firearm_lut, col_cat="FIREARM_USED", mult_data='ALL',
-                            exclude_mult_type=[MultType.DEMO_COL])    
+                            exclude_mult_type=[MultType.DEMO_COL])  
     
     # standardize_age needs to go before standardize_age_range as it can detect if what was ID'ed as 
     # an age column is actually an age range
@@ -168,14 +165,15 @@ def find_id_column(df1, df2, std_id, keep_raw):
                 id_col1 = col1
                 id_col2 = col2
                 break
-            words = split_words(c.lower())
+            words = split_words(c, case='lower')
             if len(words)==2:
                 if 'incident'.startswith(words[0]) and words[1] in ['num','id', 'number']:
                     id_col1 = col1
                     id_col2 = col2
                     break
-                else:
-                    raise NotImplementedError()
+            elif 'master' in words and 'id' in words:
+                id_col1 = id_col2 = c
+                break
         else:
             return default_result
     
@@ -814,8 +812,8 @@ class Standardizer:
                 adv_type_match=_find_gender_col_type_advanced)
             
         injury_tables = [defs.TableType.USE_OF_FORCE, defs.TableType.USE_OF_FORCE_OFFICERS, defs.TableType.USE_OF_FORCE_SUBJECTS, 
-                                                              defs.TableType.USE_OF_FORCE_SUBJECTS_OFFICERS, defs.TableType.SHOOTINGS, defs.TableType.SHOOTINGS_OFFICERS, 
-                                                              defs.TableType.SHOOTINGS_SUBJECTS]
+                        defs.TableType.USE_OF_FORCE_SUBJECTS_OFFICERS, defs.TableType.SHOOTINGS, defs.TableType.SHOOTINGS_OFFICERS, 
+                        defs.TableType.SHOOTINGS_SUBJECTS]
         
         match_cols = self._find_col_matches("fatal", ['fatal','fatality','deceased','died'], 
                                             exclude_col_names=[v for k,v in self.col_map.items() if "INJURY" in k],
@@ -841,18 +839,6 @@ class Standardizer:
                 defs.columns.INJURY_SUBJECT, defs.columns.INJURY_OFFICER, 
                 defs.columns.INJURY_OFFICER_SUBJECT,
                 specific_cases=[_case("Indianapolis", defs.TableType.USE_OF_FORCE, ['CIT_COND_TYPE','OFF_COND_TYPE'], [defs.columns.INJURY_SUBJECT, defs.columns.INJURY_OFFICER])])
-        
-        uof_tables = [defs.TableType.USE_OF_FORCE, defs.TableType.USE_OF_FORCE_OFFICERS, defs.TableType.USE_OF_FORCE_SUBJECTS, 
-                    defs.TableType.USE_OF_FORCE_SUBJECTS_OFFICERS, defs.TableType.USE_OF_FORCE_INCIDENTS]
-        match_cols = self._find_col_matches("firearm", ['firearm','forcetype','force','resistance'],
-                                            only_table_types=uof_tables,
-                                            exclude_col_names=[("does not contain", ["incident"])],
-                                            validator=_firearm_validator,
-                                            always_validate=True)
-        self._id_demographic_column(match_cols,
-                defs.columns.FIREARM_USED_SUBJECT, defs.columns.FIREARM_USED_OFFICER, 
-                defs.columns.FIREARM_USED_OFFICER_SUBJECT,
-                default_type='OFFICER')
 
         match_cols = self._find_col_matches("agency", [], known_col_names=self.known_cols[defs.columns.AGENCY])
         if len(match_cols) > 1:
