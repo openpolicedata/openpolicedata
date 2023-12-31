@@ -9,7 +9,10 @@ def parse_date_to_datetime(date_col):
         if date_col.shape[1] > 1:
             dts = date_col.iloc[:,0][date_col.iloc[:,0].notnull()]
             if hasattr(dts.iloc[0], "year"):
-                un_vals = to_datetime(dts.unique())
+                if isinstance(dts.dtype, pd.api.types.PeriodDtype):
+                    un_vals = to_datetime([x.to_timestamp() for x in dts.unique()])
+                else:
+                    un_vals = to_datetime(dts.unique())
                 if (un_vals.month != 1).any() or (un_vals.day != 1).any() or (un_vals.hour != 0).any() or \
                     (un_vals.minute != 0).any() or (un_vals.second != 0).any():
                     raise ValueError("Expected year data to not contain any month, day, or time info")
@@ -28,7 +31,10 @@ def parse_date_to_datetime(date_col):
 
                 d.iloc[:,1] = date_col.iloc[:,1].apply(month_name_to_num)
 
-                return to_datetime(d)
+                if d.shape[1]==2:
+                    return d.apply(lambda x: pd.Period(to_datetime(f"{x.iloc[1]}/1/{x.iloc[0]}"), 'M'), axis=1)
+                else:
+                    return to_datetime(d)
         else:
             date_col = date_col.iloc[:,0]
 
@@ -122,10 +128,10 @@ def parse_date_to_datetime(date_col):
                     num_match = 0
                     num_not_match = 0
                     k = 0
-                    num_check = 5
+                    num_check = min(5, len(new_col))
                     for m in range(len(new_col)):
                         if pd.notnull(new_col[m]) and len(new_col[m].strip())!=0:
-                            if p.search(new_col[m])!=None or p2.search(new_col[m])!=None or p3.search(new_col[m])!=None:
+                            if p.search(new_col[m]) or p2.search(new_col[m]) or p3.search(new_col[m]):
                                 num_match+=1
                             elif p_not_match.match(new_col[m])==None:
                                 pass
