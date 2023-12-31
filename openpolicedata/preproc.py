@@ -1,11 +1,14 @@
+from io import BytesIO
 import logging
 import pandas as pd
 import re
 from collections import Counter, defaultdict
 import numpy as np
 from numbers import Number
+import urllib
 import warnings
 
+from . import data_loaders
 from . import datetime_parser
 from . import defs
 from . import _converters as convert
@@ -104,7 +107,11 @@ def standardize(df, table_type, year,
 
     std.standardize_columns(convert._create_fatal_lut, col_cat="FATAL", mult_data="ALL",
                             exclude_mult_type=[MultType.DEMO_COL])
-    std.standardize_columns(convert._create_injury_lut, col_cat="INJURY", mult_data='ALL')
+    std.standardize_columns(convert._create_injury_lut, col_cat="INJURY", mult_data='ALL',
+                            exclude_mult_type=[MultType.DEMO_COL])
+    
+    std.standardize_columns(convert._create_firearm_lut, col_cat="FIREARM_USED", mult_data='ALL',
+                            exclude_mult_type=[MultType.DEMO_COL])    
     
     # standardize_age needs to go before standardize_age_range as it can detect if what was ID'ed as 
     # an age column is actually an age range
@@ -117,6 +124,7 @@ def standardize(df, table_type, year,
                         delim_name="delim_gender",
                         item_num="item_gender")
     std.standardize_agency()
+    std.standardize_zip_code()
     std.cleanup()
     std.sort_columns()
 
@@ -131,6 +139,68 @@ def standardize(df, table_type, year,
         logger.info("\n")
     
     return std.df, std.data_maps
+
+
+def find_id_column(df1, df2, std_id, keep_raw):
+    df1 = df1.copy()
+    df2 = df2.copy()
+    default_result = (None, None, df1, df2, None)
+
+    inc_id_matches1 = [x for x in df1.columns if re.search(r'^incident(_|\s)?(id|num|number|code)$',x, re.IGNORECASE)]
+    inc_id_matches2 = [x for x in df2.columns if re.search(r'^incident(_|\s)?(id|num|number|code)$',x, re.IGNORECASE)]
+
+    if len(inc_id_matches1)>1 or len(inc_id_matches2)>1:
+        raise NotImplementedError()
+    elif len(inc_id_matches1)==len(inc_id_matches2)==1:
+        id_col1 = inc_id_matches1[0]
+        id_col2 = inc_id_matches2[0]
+    else:
+        possible_cols = set([x.lower() for x in df1.columns]).intersection(set([x.lower() for x in df2.columns]))    
+        
+        logger.info(f"Common columns found: {possible_cols}")
+        for c in possible_cols:
+            col1 = [x for x in df1.columns if x.lower()==c][0]
+            col2 = [x for x in df2.columns if x.lower()==c][0]
+            if c.lower()=='case':
+                id_col1 = col1
+                id_col2 = col2
+                break
+            words = split_words(c.lower())
+            if len(words)==2:
+                if 'incident'.startswith(words[0]) and words[1] in ['num','id', 'number']:
+                    id_col1 = col1
+                    id_col2 = col2
+                    break
+                else:
+                    raise NotImplementedError()
+        else:
+            return default_result
+    
+    mapping = None
+    if std_id:
+        # Save column off rather than creating it before cleanup in case original column name matches new column name
+        col1 = df1[id_col1]
+        col2 = df2[id_col2]
+        raw_name1 = cleanup_column(df1, id_col1, keep_raw)
+        raw_name2 = cleanup_column(df2, id_col2, keep_raw)
+        df1[defs.columns.INCIDENT_ID] = col1
+        df2[defs.columns.INCIDENT_ID] = col2
+
+        mapping = DataMapping(orig_column_name=id_col1, new_column_name=defs.columns.INCIDENT_ID)
+        # Move new column name to front and old column name to back
+        reordered_cols = [defs.columns.INCIDENT_ID]
+        reordered_cols.extend([x for x in df1.columns if x not in [defs.columns.INCIDENT_ID, raw_name1]])
+        if raw_name1:
+            reordered_cols.append(raw_name1)
+        df1 = df1[reordered_cols]
+
+        reordered_cols = [defs.columns.INCIDENT_ID]
+        reordered_cols.extend([x for x in df2.columns if x not in [defs.columns.INCIDENT_ID, raw_name2]])
+        if raw_name2:
+            reordered_cols.append(raw_name2)
+        df2 = df2[reordered_cols]
+
+    return id_col1, id_col2, df1, df2, mapping
 
 def _count_values(col, known_delim=None):
     if known_delim is None:
@@ -412,7 +482,7 @@ class Standardizer:
                         words = split_words(new_matches[m])
                         if len(words)>1 and s.lower() != new_matches[m].lower(): # Skip cases where column name is all lower or upper case
                             # Require match to be found in individual words to avoid cases where substring is found in part of a longer word
-                            if not any([s.lower()==x.lower() for x in words]):
+                            if not any([s.lower()==x.lower() or s.lower()+'s'==x.lower() for x in words]):
                                 new_matches.pop(m)
                             else:
                                 m+=1
@@ -576,7 +646,6 @@ class Standardizer:
                             date_data = self.df[date_cols]
                         else:
                             date_data = self.df[date_cols].copy()
-                            date_data["day"] = [1 for _ in range(len(self.df))]
                                         
                 date_data = datetime_parser.parse_date_to_datetime(date_data)
                 validator_args.append(date_data)
@@ -745,7 +814,7 @@ class Standardizer:
                                                               defs.TableType.USE_OF_FORCE_SUBJECTS_OFFICERS, defs.TableType.SHOOTINGS, defs.TableType.SHOOTINGS_OFFICERS, 
                                                               defs.TableType.SHOOTINGS_SUBJECTS]
         
-        match_cols = self._find_col_matches("fatal", ['fatal','fatality','deceased'], 
+        match_cols = self._find_col_matches("fatal", ['fatal','fatality','deceased','died'], 
                                             exclude_col_names=[v for k,v in self.col_map.items() if "INJURY" in k],
                                             validator=_fatal_validator,
                                             only_table_types=injury_tables,
@@ -757,8 +826,9 @@ class Standardizer:
                 specific_cases=[_case("Philadelphia", defs.TableType.SHOOTINGS, "offender_deceased", defs.columns.FATAL_SUBJECT)])
 
         exclude_cols = match_cols
-        exclude_cols.append(("does not contain", ["causedby"]))
-        match_cols = self._find_col_matches("injury", ['injury', 'injuries', 'affecttype','wounded_or_killed', 'cond_type','injured'], 
+        exclude_cols.append(("does not contain", ["causedby",'preexisting']))
+        match_cols = self._find_col_matches("injury", ['injury', 'injuries','affecttype','wounded_or_killed', 
+                                                       'cond_type','injured','injdec', 'wounded','inj','injure', 'effect'], 
                                             exclude_col_names=exclude_cols,
                                             validator=_injury_validator,
                                             only_table_types=injury_tables,
@@ -766,7 +836,20 @@ class Standardizer:
         
         self._id_demographic_column(match_cols,
                 defs.columns.INJURY_SUBJECT, defs.columns.INJURY_OFFICER, 
-                defs.columns.INJURY_OFFICER_SUBJECT)
+                defs.columns.INJURY_OFFICER_SUBJECT,
+                specific_cases=[_case("Indianapolis", defs.TableType.USE_OF_FORCE, ['CIT_COND_TYPE','OFF_COND_TYPE'], [defs.columns.INJURY_SUBJECT, defs.columns.INJURY_OFFICER])])
+        
+        uof_tables = [defs.TableType.USE_OF_FORCE, defs.TableType.USE_OF_FORCE_OFFICERS, defs.TableType.USE_OF_FORCE_SUBJECTS, 
+                                                              defs.TableType.USE_OF_FORCE_SUBJECTS_OFFICERS]
+        match_cols = self._find_col_matches("firearm", ['firearm'],
+                                            only_table_types=uof_tables,
+                                            exclude_col_names=[("does not contain", ["incident"])],
+                                            validator=_firearm_validator,
+                                            always_validate=True)
+        self._id_demographic_column(match_cols,
+                defs.columns.FIREARM_USED_SUBJECT, defs.columns.FIREARM_USED_OFFICER, 
+                defs.columns.FIREARM_USED_OFFICER_SUBJECT,
+                default_type='OFFICER')
 
         match_cols = self._find_col_matches("agency", [], known_col_names=self.known_cols[defs.columns.AGENCY])
         if len(match_cols) > 1:
@@ -774,6 +857,15 @@ class Standardizer:
         elif len(match_cols) == 1:
             logger.info(f"Column {match_cols[0]} identified as a {defs.columns.AGENCY} column")
             self.col_map[defs.columns.AGENCY] = match_cols[0]
+
+        match_cols = self._find_col_matches("zip_code", ['zip','zipcode'],
+                                            validator=_zip_code_validator,
+                                            always_validate=True)
+        if len(match_cols) > 1:
+            raise NotImplementedError()
+        elif len(match_cols) == 1:
+            logger.info(f"Column {match_cols[0]} identified as a {defs.columns.ZIP_CODE} column")
+            self.col_map[defs.columns.ZIP_CODE] = match_cols[0]
 
         for key, value in self.col_map.items():
             if key == value:
@@ -889,7 +981,11 @@ class Standardizer:
         civilian_col_name, officer_col_name, civ_officer_col_name,
         required=False,
         specific_cases=[],
-        adv_type_match=None):
+        adv_type_match=None,
+        default_type="SUBJECT"):
+
+        assert(default_type in ['SUBJECT','OFFICER'])
+        is_subject_default = default_type=='SUBJECT'
 
         known_col_names = []
         known_col_types = []
@@ -933,19 +1029,25 @@ class Standardizer:
         else:     
             is_officer_table = self.table_type == defs.TableType.EMPLOYEE.value or \
                 ("- OFFICERS" in self.table_type and "SUBJECTS" not in self.table_type)
-            off_words = ["off", "deputy", "employee", "ofc", "empl"]
+            off_words = ["off", "deputy", "employee", "ofc", "empl", 'emp']
+            civilian_terms = ["citizen","subject","suspect","civilian", "cit", "offender"]
             not_off_words = ["offender"]
 
             types = []
             for k in range(len(col_names)):
                 words = split_words(col_names[k])
                 for w in words:
-                    if (any([x in w.lower() for x in off_words]) and not any([x in w.lower() for x in not_off_words])) or \
-                        (is_officer_table and "suspect" not in w.lower() and "supsect" not in w.lower()):
+                    if is_subject_default and (
+                        (any([x in w.lower() for x in off_words]) and not any([x in w.lower() for x in not_off_words])) or \
+                        (is_officer_table and "suspect" not in w.lower() and "supsect" not in w.lower())
+                        ):
                         types.append(officer_col_name)
                         break
+                    elif not is_subject_default and any([x in w.lower() for x in civilian_terms]):
+                        types.append(civilian_col_name)
+                        break
                 else:
-                    types.append(civilian_col_name)
+                    types.append(civilian_col_name if is_subject_default else officer_col_name)
 
                 logger.info(f"Column {col_names[k]} associated with {types[k]}")
 
@@ -1065,18 +1167,7 @@ class Standardizer:
     
     def _cleanup_old_column(self, col_name, keep_raw=None):
         keep_raw = self.keep_raw if keep_raw is None else keep_raw
-        if keep_raw:
-            if not col_name.startswith(_OLD_COLUMN_INDICATOR):
-                new_name = _OLD_COLUMN_INDICATOR+"_"+col_name
-                logger.info(f"Renaming raw column {col_name} to {new_name}")
-                self.df.rename(columns={col_name : new_name}, inplace=True)
-            else:
-                new_name = col_name
-            return new_name
-        else:
-            logger.info(f"Removing raw column {col_name}")
-            self.df.drop(col_name, axis=1, inplace=True)
-            return None
+        return cleanup_column(self.df, col_name, keep_raw)
         
 
     def standardize_date(self):
@@ -1130,10 +1221,18 @@ class Standardizer:
         #     if not keeporig:
         #         self.table.drop(columns=[defs.columns.DATE], inplace=True)
 
+    def standardize_zip_code(self):
+        if defs.columns.ZIP_CODE in self.col_map:
+            self.df[defs.columns.ZIP_CODE] = self.df[self.col_map[defs.columns.ZIP_CODE]]
+            self.data_maps.append(DataMapping(orig_column_name=self.col_map.get_original(defs.columns.ZIP_CODE), new_column_name=defs.columns.ZIP_CODE,
+                                    orig_column=self.df[self.col_map[defs.columns.ZIP_CODE]]))
+
 
     def standardize_agency(self):
         if defs.columns.AGENCY in self.col_map:
             self.df[defs.columns.AGENCY] = self.df[self.col_map[defs.columns.AGENCY]]
+            if self.source_name=='California':
+                self.df[defs.columns.AGENCY] = california_ori2agency(self.df[defs.columns.AGENCY], self.year)
             self.data_maps.append(DataMapping(orig_column_name=self.col_map.get_original(defs.columns.AGENCY), new_column_name=defs.columns.AGENCY,
                                     orig_column=self.df[self.col_map[defs.columns.AGENCY]]))
 
@@ -1927,15 +2026,31 @@ def _gender_validator(df, match_cols_test, source_name):
 
 def _injury_validator(df, cols_test):
     match_cols = []
+    all_empty = []
     for col_name in cols_test:
         if check_column(col_name, ["injury","injuries", 'injured']):
             match_cols.append(col_name)
+            all_empty.append(False)
             continue
         try:
             col = convert.convert(convert._create_injury_lut, df[col_name], no_id='error')
+            all_empty.append((col.isnull() | (col=='UNSPECIFIED')).all())
             match_cols.append(col_name)
         except:
             pass
+
+    if len(match_cols)>1:
+        keep = [not x for x in all_empty]  # Keep all that are not empty
+        is_off = []
+        off_words = ["off", "deputy", "employee", "ofc", "empl", 'emp']
+        for k in range(len(match_cols)):
+            words = split_words(match_cols[k])
+            is_off.append(any([x.lower() in off_words for x in words]))
+        for k in range(len(match_cols)):
+            # This column has no data. Keep only if a column of the same type has not already been kept
+            if not keep[k] and not any([x and y==is_off[k] for x,y in zip(keep, is_off)]):
+                keep[k] = True
+        match_cols = [x for x,y in zip(match_cols, keep) if y]
 
     return match_cols
 
@@ -1958,3 +2073,83 @@ def _fatal_validator(df, cols_test):
             pass
 
     return match_cols
+
+def _firearm_validator(df, cols_test):
+    match_cols = []
+    for col_name in cols_test:
+        try:
+            col = convert.convert(convert._create_firearm_lut, df[col_name], no_id='error')
+            match_cols.append(col_name)
+        except:
+            pass
+
+    return match_cols
+
+def _zip_code_validator(df, cols_test):
+    match_cols = []
+    for col_name in cols_test:
+        try:
+            possible_zips = df[col_name].apply(lambda x: isinstance(x, Number) and pd.notnull(x) and x>=1e4 and x<1e5)
+            if possible_zips.mean()>0.9:
+                match_cols.append(col_name)
+            else:
+                raise ValueError("Column is not recognized as a zip code column")
+        except:
+            pass
+
+    return match_cols
+
+def cleanup_column(df, col_name, keep_raw):
+    if keep_raw:
+        if not col_name.startswith(_OLD_COLUMN_INDICATOR):
+            new_name = _OLD_COLUMN_INDICATOR+"_"+col_name
+            logger.info(f"Renaming raw column {col_name} to {new_name}")
+            df.rename(columns={col_name : new_name}, inplace=True)
+        else:
+            new_name = col_name
+        return new_name
+    else:
+        logger.info(f"Removing raw column {col_name}")
+        df.drop(col_name, axis=1, inplace=True)
+        return None
+    
+def california_ori2agency(col, year, unknown='ignore'):
+    assert(unknown in ['ignore','error'])
+    if year<=2020:
+        data = (r"https://data-openjustice.doj.ca.gov/sites/default/files/dataset/2022-08/URSUS_ORI-Agency_Names_20210902.xlsx",
+                "Agency","ORI_Number")
+    elif year==2021:
+        data = (r"https://data-openjustice.doj.ca.gov/sites/default/files/dataset/2022-08/UseofForce_ORI-Agency_Names_2021.csv",
+                "AGENCY_NAME","ORI")
+    elif year==2022:
+        data = (r"https://data-openjustice.doj.ca.gov/sites/default/files/dataset/2023-06/UseofForce_ORI-Agency_Names_2022f.csv",
+                "AGENCY_NAME","ORI")
+    else:
+        if unknown=='ignore':
+            return col
+        else:
+            raise ValueError(f"Unable to look up ORI to agency name spreadsheet for year {year}")
+        
+    if data[0].endswith('.csv'):
+        reader = pd.read_csv
+    else:
+        reader = pd.read_excel
+    try:
+        ori_df = reader(data[0], index_col=data[2])
+    except urllib.error.URLError:
+        with data_loaders.get_legacy_session() as session:
+            r = session.get(data[0])
+            
+        r.raise_for_status()
+        file_like = BytesIO(r.content)
+        ori_df = reader(file_like, index_col=data[2])
+    except:
+        if unknown=='ignore':
+            return col
+        else:
+            raise
+
+    try:
+        return col.map(ori_df[data[1]])
+    except:
+        return col

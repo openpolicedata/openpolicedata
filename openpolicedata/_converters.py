@@ -623,20 +623,47 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
 def _create_injury_lut(x, no_id, source_name, cats, *args, **kwargs):
     if pd.isnull(x):
         return "UNSPECIFIED"
+    elif isinstance(x,Number) or pd.api.types.is_bool(x) or x.isdigit():  # is_bool handles numpy.bool_ type
+        x = int(x)
+        if x<0:
+            return x
+        else:
+            return "INJURED" if x>0 else "NO INJURY"
     orig = x
-    x = x.upper()
-    if x in ["FATAL","KILLED",'DECEASED',"DEATH"]:
+    x = x.upper().replace('-',' ').strip()
+
+    if len(x)==0:
+        return "UNSPECIFIED"
+
+    contains_yes = x.replace(',',' ').startswith('YES ')
+    nonfatal_words = ["INJURED", 'NON FATAL', 'NON FATAL','NON FATAL INJURY', 'INJURY'] 
+    contains_nonfatal = any([y in x for y in nonfatal_words])
+    fatal_words = ["FATAL","KILLED",'DECEASED',"DEATH", 'FATAL INJURY']
+    contains_fatal = any([y in x for y in fatal_words])
+    is_fatal = contains_yes and contains_fatal and not contains_nonfatal
+
+    if is_fatal or x in fatal_words:
         return "FATAL"
-    elif x in ["INJURED", 'NON-FATAL', 'NON FATAL','YES','Y'] or any([y in x for y in ['WOUND','PAIN', 'LACERATION','SCRAPE']]):
-        return "INJURED"
-    elif x in ["NO INJURY", "NOT INJURED",'NEITHER','NONE','NO','N'] or x.startswith("NO INJUR"):
+    elif x.startswith('NO INJUR') or x.startswith('NONE') or x in ["NOT INJURED",'NEITHER','NO','N', "MISS", 'SHOOT AND MISS','FALSE']:
         return "NO INJURY"
-    elif x in ['SHOOT AND MISS']:
-        return "SHOOT AND MISS"
-    elif x.replace("-"," ") in ['SELF INFLICTED FATAL', 'DECEASED (SELF INFLICTED)']:
+    elif contains_yes or x in nonfatal_words or x in ['Y','YES','TRUE'] or \
+        any([x.startswith(y) for y in ['COMPLAINED OF','COMPLAINT OF']]) or \
+        any([y in x for y in ['WOUND','PAIN', "BLEEDING",'SWELLING','SCRAPE','PUNCTURE','LACERATION','BRUIS',
+                              'BROKEN','UNCONSCIOUS', 'FIRST AID', 'SHOT (INJURED ONLY)', 'INJURED   INCIDENTALLY',
+                              'DISLOCATED','FRACTURED','ABBRASION','ABRASION','ABRAISON','ABRASSION','BUSTED','PULLED OUT','REDNESS','LOSS','RASH',
+                              'SCRATCH','NUMBNESS','BREATHING','CUT','STUN', 'MARKS', 'EYE', 'PEELING', 'HURT', 'ELBOW', 'KNEE',
+                              'SOFT TISSUE','BLOOD','HEAD','SORE','SHOULDER', 'MINOR INJUR', 'FINGER', 'IMPACT', 'FACE', 'ARM',
+                              'MOUTH', 'BACK','RIB', 'THUMB','SHIN',' EAR', 'ACHILLES', 'STRUCK', 'LEG', 'SERIOUS',
+                              'CONCUSSION','FRACTURE']]):
+        return "INJURED"
+    elif 'NALOXONE' in x:
+        return orig
+    elif x in ['SELF INFLICTED FATAL', 'DECEASED (SELF INFLICTED)','KILLED (SELF INFLICTED)']:
         return 'SELF-INFLICTED FATAL'
-    elif x=='UNKNOWN':
+    elif x in ['UNKNOWN','UNKNWON']:
         return 'UNKNOWN'
+    elif x in ['UNSPECIFIED', "NOT AVAILABLE"]:
+        return 'UNSPECIFIED'
     elif x=='OTHER':
         return 'OTHER'
     elif no_id=='test':
@@ -663,6 +690,29 @@ def _create_fatal_lut(x, no_id, source_name, cats, *args, **kwargs):
         return "NO"
     elif x in ["SELF-INFLICTED"]:
         return "SELF-INFLICTED FATAL"
+    elif no_id=='test':
+        raise ValueError(f"Unknown value in injury column: {orig}")
+    elif no_id=='error':
+        raise ValueError(f"Unknown value in injury column: {orig}")
+    else:
+        return orig if no_id=="keep" else ""
+    
+
+def _create_firearm_lut(x, no_id, source_name, cats, *args, **kwargs):
+    if pd.isnull(x):
+        return "UNSPECIFIED"
+    elif isinstance(x,Number) or x.isdigit():
+        x = int(x)
+        if x<0:
+            return x
+        else:
+            return "YES" if x>0 else "NO"
+    orig = x
+    x = x.upper().strip()
+    if x in ["YES", "Y",'TRUE']:
+        return "YES"
+    elif x in ["NO","N",'FALSE']:
+        return "NO"
     elif no_id=='test':
         raise ValueError(f"Unknown value in injury column: {orig}")
     elif no_id=='error':

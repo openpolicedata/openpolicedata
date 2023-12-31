@@ -37,6 +37,9 @@ class TableType(str, Enum):
     def __str__(self):
         return self.value
     
+
+    def __repr__(self):
+        a = 1
     
     @classmethod
     def _missing_(cls, value):
@@ -227,9 +230,14 @@ class _Columns(_ToDict_Mixin):
     FATAL_SUBJECT = "SUBJECT_FATAL"
     FATAL_OFFICER = "OFFICER_FATAL"
     FATAL_OFFICER_SUBJECT = "OFFICER/SUBJECT_FATAL"
+    FIREARM_USED_SUBJECT = "SUBJECT_FIREARM_USED"
+    FIREARM_USED_OFFICER = "OFFICER_FIREARM_USED"
+    FIREARM_USED_OFFICER_SUBJECT = "OFFICER/SUBJECT_FIREARM_USED"
+    INCIDENT_ID = "INCIDENT_ID"
     INJURY_SUBJECT = "SUBJECT_INJURY"
     INJURY_OFFICER = "OFFICER_INJURY"
     INJURY_OFFICER_SUBJECT = "OFFICER/SUBJECT_INJURY"
+    ZIP_CODE = 'ZIP_CODE'
 
     def _get_columns_as_df(self):
         attributes = self.to_dict()
@@ -261,6 +269,8 @@ class _Columns(_ToDict_Mixin):
                     defs.append("Combination of date and time when both columns are found (not generated when detected date column contains datetime values)")
                 elif a=="DATE":
                     defs.append("Date. Some agencies only provide the period. In these cases, the date will be the 1st date of the period (i.e. Jan. 1 for years and the 1st of the month for months).")
+                elif a=='INCIDENT_ID':
+                    defs.append("A unique incident ID given to an incident (arrest, use of force, etc.). It can be used to connect information across tables. Only standardized in Table.merge.")
                 else:
                     defs.append(v.title())
                 sort_by.append(v.title())
