@@ -558,22 +558,21 @@ class Table:
             eth_cats = defs.get_eth_cats(compact=True) if eth_cats=="compact" else eth_cats
             gender_cats = gender_cats if gender_cats is not None else defs.get_gender_cats()
             gender_cats = defs.get_gender_cats(compact=True) if gender_cats=="compact" else gender_cats
-            try:
-                if verbose:
-                    logger = logging.getLogger("opd-std")
-                    log_level = logger.level
-                if isinstance(verbose,str):
-                    # verbose is a filename
-                    fh = logging.FileHandler(verbose)
-                    logger.addHandler(fh)
-                    for handler in logger.handlers:
-                        if handler.name == "main":
-                            # Temporarily up level of stream handler so that only print to file
-                            handler.setLevel(logging.WARNING)
-                if verbose:
-                    # Set logger to info so log messages in preproc.standardize will be displayed
-                    logger.setLevel(logging.INFO)
-                    
+            if verbose:
+                logger = logging.getLogger("opd-std")
+                log_level = logger.level
+            if isinstance(verbose,str):
+                # verbose is a filename
+                fh = logging.FileHandler(verbose)
+                logger.addHandler(fh)
+                for handler in logger.handlers:
+                    if handler.name == "main":
+                        # Temporarily up level of stream handler so that only print to file
+                        handler.setLevel(logging.WARNING)
+            if verbose:
+                # Set logger to info so log messages in preproc.standardize will be displayed
+                logger.setLevel(logging.INFO)
+            try:                    
                 self.table, self.__transforms = preproc.standardize(self.table, self.table_type, self.year,
                     known_cols=known_cols, 
                     source_name=self.source_name,
@@ -803,7 +802,8 @@ class Source:
                   year: str | int | list[int] | None = None,
                   table_type: str | defs.TableType | None = None, 
                   agency: str | None = None, 
-                  force: bool = False
+                  force: bool = False,
+                  verbose: bool | str = False
                   ) -> int:
         '''Get number of records for a data request
 
@@ -823,6 +823,9 @@ class Source:
             (Optional) For file-based data, an exception will be thrown unless force 
             is true. It may be more efficient to load the data and extract the years
             manually
+        verbose : bool | str, optional
+            If True, details of data loading will be logged. If a filename, details will
+            be logged to that file., by default False
 
         Returns
         -------
@@ -830,7 +833,7 @@ class Source:
             Table object containing the requested data
         '''
 
-        return self.__load(year, table_type, agency, True, pbar=False, return_count=True, force=force)
+        return self.__load(year, table_type, agency, True, pbar=False, return_count=True, force=force, verbose=verbose)
     
     
     def load_from_url_gen(self, 
@@ -840,7 +843,8 @@ class Source:
                           pbar: bool = False, 
                           nbatch: int = 10000, 
                           offset: int = 0, 
-                          force: bool =False
+                          force: bool =False,
+                          verbose: bool | str = False
                           ) -> Iterator[Table]:
         '''Get generator to load data from URL in batches
 
@@ -866,6 +870,9 @@ class Source:
         force - bool
             (Optional) For file-based data, an exception will be thrown unless force 
             is true. It will be more efficient to read the entire dataset all at once
+        verbose : bool | str, optional
+            If True, details of data loading will be logged. If a filename, details will
+            be logged to that file., by default False
 
         Returns
         -------
@@ -873,9 +880,9 @@ class Source:
             generates Table objects containing the requested data
         '''
 
-        count = self.get_count(year, table_type, agency, force)
+        count = self.get_count(year, table_type, agency, force, verbose=verbose)
         for k in range(offset, count, nbatch):
-            yield self.__load(year, table_type, agency, True, pbar, nrows=min(nbatch, count-k), offset=k)
+            yield self.__load(year, table_type, agency, True, pbar, nrows=min(nbatch, count-k), offset=k, verbose=verbose)
     
         
     def load_from_url(self, 
@@ -885,7 +892,8 @@ class Source:
                       pbar: bool = True,
                       nrows: int | None = None, 
                       offset: int = 0,
-                      sortby=None
+                      sortby=None,
+                      verbose: bool | str = False
                       ) -> Table:
         '''Load data from URL
 
@@ -908,6 +916,9 @@ class Source:
         offset - int
             (Optional) Number of records to offset from first record. Default is 0 
             to return records starting from the first.
+        verbose : bool | str, optional
+            If True, details of data loading will be logged. If a filename, details will
+            be logged to that file., by default False
 
         Returns
         -------
@@ -915,7 +926,7 @@ class Source:
             Table object containing the requested data
         '''
 
-        return self.__load(year, table_type, agency, True, pbar, nrows=nrows, offset=offset, sortby=sortby)
+        return self.__load(year, table_type, agency, True, pbar, nrows=nrows, offset=offset, sortby=sortby, verbose=verbose)
 
     def __find_datasets(self, table_type):
         src = self.datasets.copy()
@@ -925,7 +936,8 @@ class Source:
         return src
 
 
-    def __load(self, year, table_type, agency, load_table, pbar=True, return_count=False, force=False, nrows=None, offset=0, sortby=None):
+    def __load(self, year, table_type, agency, load_table, pbar=True, return_count=False, force=False, 
+               nrows=None, offset=0, sortby=None, verbose=False):
         
         src = self.__find_datasets(table_type)
 
@@ -997,13 +1009,41 @@ class Source:
                 # Double up any apostrophes for SQL query
                 agency = agency.replace("'","''")
                 opt_filter = agency_field + " = '" + agency + "'"
+
+            if verbose:
+                logger = logging.getLogger("opd-load")
+                log_level = logger.level
+            if isinstance(verbose,str):
+                # verbose is a filename
+                fh = logging.FileHandler(verbose)
+                logger.addHandler(fh)
+                for handler in logger.handlers:
+                    if handler.name == "main":
+                        # Temporarily up level of stream handler so that only print to file
+                        handler.setLevel(logging.WARNING)
+            if verbose:
+                # Set logger to info so log messages in preproc.standardize will be displayed
+                logger.setLevel(logging.INFO)
             
-            if return_count:
-                return loader.get_count(year=year_filter, agency=agency, opt_filter=opt_filter, force=force)
-            else:
-                table = loader.load(year=year_filter, agency=agency, opt_filter=opt_filter, nrows=nrows, pbar=pbar, offset=offset, sortby=sortby)
-                date_field = self.__fix_date_field(table, date_field, src.name)
-                table = _check_date(table, date_field)
+            try:
+                if return_count:
+                    return loader.get_count(year=year_filter, agency=agency, opt_filter=opt_filter, force=force)
+                else:
+                    table = loader.load(year=year_filter, agency=agency, opt_filter=opt_filter, nrows=nrows, pbar=pbar, offset=offset, sortby=sortby)
+                    date_field = self.__fix_date_field(table, date_field, src.name)
+                    table = _check_date(table, date_field)
+            except:
+                raise
+            finally:
+                if verbose:
+                    logger.setLevel(log_level)
+                if isinstance(verbose,str):
+                    logger.removeHandler(fh)
+                    for handler in logger.handlers:
+                        if handler.name == "main":
+                            # Revert stream handler
+                            handler.setLevel(logging.NOTSET)
+
         else:
             table = None
 
@@ -1179,14 +1219,25 @@ class Source:
 
 
 def _check_date(table, date_field):
+    logger = logging.getLogger("opd-load")
     if date_field != None and table is not None and len(table)>0 and date_field in table:
         dts = table[date_field]
         dts = dts[dts.notnull()]
         if len(dts) > 0:
             one_date = dts.iloc[0]  
             if type(one_date) == pd._libs.tslibs.timestamps.Timestamp:
+                if logger:
+                    logger.debug(f"Converting values in column {date_field} to datetime objects")
                 table[date_field] = pd.to_datetime(table[date_field], errors='ignore')
-            elif isinstance(one_date, str) and not re.match(r'^20\d{2}\-\d{2}$','2023-11'):
+            elif isinstance(one_date, str) and re.match(r'^20\d{2}\-\d{2}$',one_date):
+                if logger:
+                    logger.debug(f"Converting values in column {date_field} to monthly Period objects")
+                table[date_field] = table[date_field].apply(pd.Period, args=('M'))
+            elif isinstance(one_date, numbers.Number) and ("year" in date_field.lower() or date_field.lower() == "yr" or ((dts>=1900) & (dts<2100)).all()):
+                if logger:
+                    logger.debug(f"Converting values in column {date_field} to annual Period objects")
+                table[date_field] = table[date_field].apply(pd.Period, args=('Y'))
+            elif isinstance(one_date, str) and not re.match(r'^20\d{2}\-\d{2}$',one_date):
                 p = re.compile(r'^Unknown string format: \d{4}-(\d{2}|__)-(\d{2}|__) present at position \d+$')
                 def to_datetime_local(x):
                     try:
@@ -1198,6 +1249,9 @@ def _check_date(table, date_field):
                             raise
                     except:
                         raise
+
+                if logger:
+                    logger.debug(f"Converting values in column {date_field} to datetime objects")
                 
                 try:
                     # This way is much faster
@@ -1218,16 +1272,23 @@ def _check_date(table, date_field):
                             is_not_aware = table[date_field].apply(lambda x: x.tzinfo is None or x.tzinfo.utcoffset(x) is None)
                             table.loc[is_not_aware, date_field] = table.loc[is_not_aware, date_field].apply(lambda x: x.replace(tzinfo=tz))
                             table[date_field] = table[date_field].convert_dtypes()
+                        elif 'DateParseError' in str(type(e)) and '__-__' in str(e):
+                            # Ignore case where month and day are underscores (i.e. 2023-__-__)
+                            pass
                         else:
                             raise
                     except:
                         raise
-            elif isinstance(one_date, str) and re.match(r'^20\d{2}\-\d{2}$',one_date):
-                table[date_field] = table[date_field].apply(pd.Period, args=('M'))
-            elif isinstance(one_date, numbers.Number) and ("year" in date_field.lower() or date_field.lower() == "yr" or ((dts>=1900) & (dts<2100)).all()):
-                table[date_field] = table[date_field].apply(pd.Period, args=('Y'))
+                elif date_field.lower()=="year" and (table[date_field].dt.month==1).all() and \
+                    (table[date_field].dt.day==1).all():
+                    if logger:
+                        logger.debug(f"Converting values in column {date_field} to annual Period objects")
+                    table[date_field] = table[date_field].apply(pd.Period, args=('Y'))
+
                 
             # Replace bad dates with NaT
+            if logger:
+                logger.debug(f"Replacing any values of 1900-01-01 00:00:00 in column {date_field} with null")
             table[date_field] = table[date_field].replace(datetime.strptime('1900-01-01 00:00:00', '%Y-%m-%d %H:%M:%S'), pd.NaT)
 
 

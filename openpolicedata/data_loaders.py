@@ -1,5 +1,6 @@
 from io import BytesIO
 import json
+import logging
 import numbers
 import os
 import tempfile
@@ -34,6 +35,8 @@ try:
 except:
     from datetime_parser import to_datetime
     from exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError
+
+logger = logging.getLogger("opd-load")
 
 sleep_time = 0.1
 
@@ -276,10 +279,13 @@ class Csv(Data_Loader):
             Record count or number of rows in data request
         '''
 
+        logger.debug(f"Calculating row count for {self.url}")
         if self._last_count is not None and self._last_count[0] == (self.url, year, agency):
+            logger.debug("Request matches previous count request. Returning saved count.")
             return self._last_count[1]
         if ".zip" not in self.url and year==None and agency==None:
             count = 0
+            logger.debug(f"Loading file from {self.url}")
             with requests.get(self.url, stream=True) as r:
                 for chunk in r.iter_content(chunk_size=2**16):
                     count += chunk.count(b"\n")
@@ -324,6 +330,7 @@ class Csv(Data_Loader):
             DataFrame containing table imported from CSV
         '''
         
+        logger.debug(f"Loading file from {self.url}")
         if ".zip" in self.url:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", category=pd.errors.DtypeWarning)
@@ -390,11 +397,14 @@ class Csv(Data_Loader):
 
             if is_mass_employee:
                 table.columns = ['Officer','Agency','Expiration Date', 'Reason','ID','Certification #','Status']
+                logger.debug(f"This file does not contain headers. The following headers will be used {table.columns}")
 
         if offset>0:
             rows_limit = offset+nrows if nrows is not None and offset+nrows<len(table) else len(table)
+            logger.debug(f"Extracting {rows_limit} rows starting at {offset}")
             table = table.iloc[offset:rows_limit].reset_index(drop=True)
         if nrows is not None and len(table)>nrows:
+            logger.debug(f"Extracting the first {nrows} rows")
             table = table.head(nrows)
 
         table = filter_dataframe(table, date_field=self.date_field, year_filter=year, 
@@ -576,7 +586,9 @@ class Excel(Data_Loader):
             Record count or number of rows in data request
         '''
 
+        logger.debug(f"Calculating row count for {self.url}")
         if self._last_count is not None and self._last_count[0]==(self.url, year, agency):
+            logger.debug("Request matches previous count request. Returning saved count.")
             return self._last_count[1]
         elif force:
             count = len(self.load(year=year, agency=agency))
@@ -591,6 +603,7 @@ class Excel(Data_Loader):
     def __get_sheets(self):
         names = self.excel_file.sheet_names
         if all([x.isdigit() for x in names]):
+            logger.debug("Different years of data may be stored in separate Excel sheets. Evaluating...")
             possible_years = [int(x) for x in names]
             # possible_years.sort()
 
@@ -606,8 +619,7 @@ class Excel(Data_Loader):
                 if is_year(year):
                     if last_year!=None and year!=last_year+1:
                         raise ValueError("Unable to parse sheet names")
-                        years_found = False
-                        break
+                    logger.debug(f"Identified likely year sheet: {names[k]}")
                     year_dict[year] = names[k]
                 elif len(names[k])==4:
                     # Check for typo
@@ -622,21 +634,19 @@ class Excel(Data_Loader):
                         if is_year(new_year) and new_year==last_year+1:
                             year = new_year
                             year_dict[new_year] = names[k]
+                            logger.debug(f"Identified likely year sheet with typo: {names[k]}")
                             success = True
                             break
 
                     if not success:
                         raise ValueError("Unable to parse sheet names")
-                        years_found = False
-                        break
                 else:
                     raise ValueError("Unable to parse sheet names")
-                    years_found = False
-                    break
 
                 last_year = year
 
             if years_found:
+                logger.debug("Treating Excel file as aifferent years stored in separate Excel sheets.")
                 return year_dict, True
 
         return names, False
@@ -664,6 +674,7 @@ class Excel(Data_Loader):
         Note: Older Excel files (.xls) and OpenDocument file formats (.odf, .ods, .odt) are not supported. Please submit an issue if this is needed.
         '''
 
+        logger.debug(f"Loading file from {self.url}")
         nrows_read = offset+nrows if nrows is not None else None
         sheets, has_year_sheets = self.__get_sheets()
 
@@ -682,6 +693,7 @@ class Excel(Data_Loader):
                 cols_added = 0
                 for y in range(year[0], year[1]+1):
                     if y in sheets:
+                        logger.debug(f"Loading data from sheet {sheets[y]}")
                         df = pd.read_excel(self.excel_file, nrows=nrows_read, sheet_name=sheets[y])
 
                         df = self.__clean(df)
@@ -719,6 +731,7 @@ class Excel(Data_Loader):
                                             # raise ValueError(f"Column {table.columns[k]} in table does not match {df.columns[k]} in df")
                                 else:
                                     raise ValueError("Columns don't match")
+                            logger.debug("Concatenating data from multiple year sheets")
                             table = pd.concat([table, df], ignore_index=True)
 
                         if nrows_read!=None and len(table)>=nrows_read:
@@ -729,13 +742,16 @@ class Excel(Data_Loader):
             else:
                 self.__check_sheet(sheets)
                 sheet_name = 0 if self.sheet is None else self.sheet
+                logger.debug(f"Loading sheet: {sheet_name}")
                 table = pd.read_excel(self.excel_file, nrows=nrows_read, sheet_name=sheet_name)
                 table = self.__clean(table)               
 
         if offset>0:
             rows_limit = nrows_read if nrows_read is not None and nrows_read<len(table) else len(table)
+            logger.debug(f"Extracting {rows_limit} rows starting at {offset}")
             table = table.iloc[offset:rows_limit].reset_index(drop=True)
         if nrows is not None and len(table)>nrows:
+            logger.debug(f"Extracting the first {nrows} rows")
             table = table.head(nrows)
 
         # Check for empty rows at the bottom
@@ -746,6 +762,7 @@ class Excel(Data_Loader):
             empty_rows = empty_rows[empty_rows]
             num_empty = num_empty.loc[empty_rows.index[0]:]
             if ((num_empty / len(table.columns)) > 0.75).all():
+                logger.debug(f"Detected empty rows at the bottom of the table. Keeping the first {empty_rows.index[0]} rows")
                 table = table.head(empty_rows.index[0])
 
         # Clean up column names
@@ -773,6 +790,8 @@ class Excel(Data_Loader):
         while sum([(pd.isnull(x) or "Unnamed" in x) for x in df.columns]) / len(df.columns) > 0.5:
             new_cols = [x for x in df.iloc[0]]
             if all([isinstance(x, str) or pd.isnull(x) for x in new_cols]):
+                logger.debug(f"Detect that first row does not contain column headers: {df.columns}")
+                logger.debug(f"Making the  second row the column headers: {new_cols}")
                 df.columns = new_cols
                 df.drop(index=df.index[0], inplace=True)
                 df.reset_index(drop=True, inplace=True)
@@ -783,8 +802,9 @@ class Excel(Data_Loader):
 
         df = df.convert_dtypes()
 
-        # Check for 1st row being row numbers
+        # Check for 1st column being row numbers
         if pd.isnull(df.columns[0]) and list(df.iloc[:,0]) in [[k+1 for k in range(0, len(df))], [k for k in range(0, len(df))]]:
+            logger.debug("Removing the 1st column which is just the row number")
             df = df.iloc[:, 1:]
 
         return df
@@ -978,6 +998,7 @@ class Arcgis(Data_Loader):
         '''
         
         if self._last_count is not None and self._last_count[0]==(year,where):
+            logger.debug("Request matches previous count request. Returning saved count.")
             record_count = self._last_count[1]
             where_query = self._last_count[2]
         elif where==None:
@@ -1028,6 +1049,10 @@ class Arcgis(Data_Loader):
 
         params["f"] = out_type
         params["cacheHint"] = False
+
+        logger.debug(f"Request data from {url}")
+        for k,v in params.items():
+            logger.debug(f"\t{k} = {v}")
 
         try:
             r = requests.get(url, params=params)
@@ -1290,6 +1315,7 @@ class Arcgis(Data_Loader):
 
         df = pd.DataFrame.from_records([x["attributes"] for x in features])
         for col in date_cols:
+            logger.debug(f"Column {col} had a data type of esriFieldTypeDate. Converting values to datetime objects.")
             df[col] = to_datetime(df[col], unit="ms", errors='coerce')
 
         if len(df) > 0:
@@ -1316,6 +1342,7 @@ class Arcgis(Data_Loader):
                         else:
                             geometry.append(Point(feat["geometry"]["x"], feat["geometry"]["y"]))
 
+                    logger.debug("Geometry found. Contructing geopandas GeoDataFrame")
                     try:
                         df = gpd.GeoDataFrame(df, crs=wkid, geometry=geometry)
                     except CRSError:
@@ -1328,6 +1355,7 @@ class Arcgis(Data_Loader):
                     geometry = [feat["geometry"] if "geometry" in feat else None for feat in features]
 
                     if "geolocation" not in df:
+                        logger.debug("Adding geometry column generated from spatial data provided by request.")
                         df["geolocation"] = geometry
 
             return df
@@ -1419,6 +1447,7 @@ class Carto(Data_Loader):
         '''
 
         if self._last_count is not None and self._last_count[0]==year:
+            logger.debug("Request matches previous count request. Returning saved count.")
             return self._last_count[1]
         else:
             where = self.__construct_where(year)
@@ -1467,6 +1496,10 @@ class Carto(Data_Loader):
             query+=f" LIMIT {count}"
 
         params["q"] = query
+
+        logger.debug(f"Request data from {self.url}")
+        for k,v in params.items():
+            logger.debug(f"\t{k} = {v}")
 
         r = requests.get(self.url, params=params)
 
@@ -1569,6 +1602,7 @@ class Carto(Data_Loader):
 
         df = pd.DataFrame.from_records([x["properties"] for x in features])
         for col in date_cols:
+            logger.debug(f"Column {col} had a data type of date. Converting values to datetime objects.")
             df[col] = to_datetime(df[col])
 
         if len(df) > 0:
@@ -1589,11 +1623,13 @@ class Carto(Data_Loader):
                         else:
                             geometry.append(Point(feat["geometry"]["coordinates"][0], feat["geometry"]["coordinates"][1]))
 
+                    logger.debug("Geometry found. Contructing geopandas GeoDataFrame")
                     df = gpd.GeoDataFrame(df, crs=4326, geometry=geometry)
                 else:
                     geometry = [feat["geometry"] if "geometry" in feat else None for feat in features]
 
                     if "geolocation" not in df:
+                        logger.debug("Adding geometry column generated from spatial data provided by request.")
                         df["geolocation"] = geometry
                     else:
                         raise KeyError("geolocation already exists in DataFrame")
@@ -1702,7 +1738,12 @@ class Socrata(Data_Loader):
             where = self.__construct_where(year, opt_filter)
 
         if self._last_count is not None and self._last_count[0]==(year, opt_filter, where):
+            logger.debug("Request matches previous count request. Returning saved count.")
             return self._last_count[1]
+        
+        logger.debug(f"Request dataset {self.data_set} from {self.url}")
+        logger.debug(f"\twhere={where}")
+        logger.debug(f"\tselect=count(*)")
 
         try:
             results = self.client.get(self.data_set, where=where, select="count(*)")
@@ -1790,6 +1831,12 @@ class Socrata(Data_Loader):
                 order = ":id"
 
         while N > 0:
+            logger.debug(f"Request dataset {self.data_set} from {self.url}")
+            logger.debug(f"\twhere={where}")
+            logger.debug(f"\tselect={select}")
+            logger.debug(f"\limit={batch_size}")
+            logger.debug(f"\offset={offset}")
+            logger.debug(f"\order={order}")
             try:
                 results = self.client.get(self.data_set, where=where,
                     limit=batch_size,offset=offset, select=select, order=order)
@@ -1861,6 +1908,7 @@ class Socrata(Data_Loader):
                     geojson["features"].append(feature)
 
                 if len(results)>0:
+                    logger.debug("Geometry found. Contructing geopandas GeoDataFrame")
                     new_gdf = gpd.GeoDataFrame.from_features(geojson, crs=4326)
                         
                     if offset==start_offset:
@@ -1951,6 +1999,7 @@ def filter_dataframe(df, date_field=None, year_filter=None, agency_field=None, a
                 # In a future version, `df.iloc[:, i] = newvals` will attempt to set the values inplace instead of always setting a new array. 
                 # To retain the old behavior, use either `df[df.columns[i]] = newvals` or, if columns are non-unique, `df.isetitem(i, newvals)`
                 warnings.simplefilter("ignore", category=FutureWarning)
+                logger.debug(f"Converting values in column {date_field} to datetime objects")
                 df[date_field] = to_datetime(df[date_field])
     
         if year_filter != None:
@@ -1962,15 +2011,22 @@ def filter_dataframe(df, date_field=None, year_filter=None, agency_field=None, a
                         year_filter[0] = f"{year_filter[0]}-01-01"
                     if isinstance(year_filter[-1],int):
                         year_filter[-1] = f"{year_filter[-1]}-12-31"
+                    logger.debug(f"Keeping values of column {date_field} between {year_filter[0]} and {year_filter[-1]}")
                     df = df[(df[date_field] >= year_filter[0]) & (df[date_field] <= year_filter[-1])]
                 else:
+                    logger.debug(f"Column {date_field} has been identfied as a year column")
+                    logger.debug(f"Keeping values of column {date_field} between {year_filter[0]} and {year_filter[-1]}")
                     df = df[df[date_field].isin(range(year_filter[0], year_filter[-1]+1))]
             elif not is_year:
+                logger.debug(f"Keeping values of column {date_field} for year={year_filter}")
                 df = df[df[date_field].dt.year == year_filter]
             else:
+                logger.debug(f"Column {date_field} has been identfied as a year column")
+                logger.debug(f"Keeping values of column {date_field} for year={year_filter}")
                 df = df[df[date_field] == year_filter]
 
     if agency != None and agency_field != None:
+        logger.debug(f"Keeping values of column {agency_field} that are equal to {agency}")
         df = df.query(agency_field + " = '" + agency + "'")
 
     return df
