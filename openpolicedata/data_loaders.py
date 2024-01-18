@@ -1478,13 +1478,13 @@ class Carto(Data_Loader):
         for k,v in self.query.items():
             if isinstance(v,str):
                 v = f"'{v}'"
-            default_where += f"&{k}={v}"
+            default_where += f" AND {k}={v}"
 
         if len(default_where):
             if where != None:
                 query+=default_where
             else:
-                query+=" WHERE "+ default_where[1:]
+                query+=" WHERE"+ default_where[4:]
 
         if not return_count and count!=0:
             # Order results to ensure data order remains constant if paging
@@ -1834,9 +1834,9 @@ class Socrata(Data_Loader):
             logger.debug(f"Request dataset {self.data_set} from {self.url}")
             logger.debug(f"\twhere={where}")
             logger.debug(f"\tselect={select}")
-            logger.debug(f"\limit={batch_size}")
-            logger.debug(f"\offset={offset}")
-            logger.debug(f"\order={order}")
+            logger.debug(f"\tlimit={batch_size}")
+            logger.debug(f"\toffset={offset}")
+            logger.debug(f"\torder={order}")
             try:
                 results = self.client.get(self.data_set, where=where,
                     limit=batch_size,offset=offset, select=select, order=order)
