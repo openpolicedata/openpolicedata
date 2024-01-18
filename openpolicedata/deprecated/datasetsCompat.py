@@ -1,5 +1,5 @@
 from ..datasets import query as _query
-from ._typing import deprecated
+from ._decorators import deprecated
 
 # For back compatibility, preferred usage is datasets.query
 @deprecated("opd.datasets_query is deprecated and will be removed in a future version. "

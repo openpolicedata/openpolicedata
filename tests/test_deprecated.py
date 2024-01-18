@@ -5,9 +5,12 @@ import pandas as pd
 import warnings
 import openpolicedata as opd
 from openpolicedata.defs import TableType
+from openpolicedata.deprecated._decorators import deprecated, input_swap
 from openpolicedata.deprecated.datasetsCompat import datasets_query
 from openpolicedata.deprecated._pandas import DeprecationHandlerDataFrame, DeprecationHandlerSeries
 import pytest
+
+# TODO: test input_swap 
 
 def get_datasets(csvfile):
     if csvfile != None:
@@ -15,24 +18,70 @@ def get_datasets(csvfile):
 
     return opd.datasets.datasets
 
-def test_deprecated_enums(csvfile, source, last, skip, loghtml):
-	t = TableType("COMPLAINTS - SUBJECTS")
+@input_swap([0,1], ['table_type','year'], [TableType, {'values':[opd.defs.NA, opd.defs.MULTI], 'types':[list, int]}], new_opt1=None)
+def fswap(table_type,year):
+	if table_type:
+		TableType(table_type)
+	assert year in [opd.defs.NA, opd.defs.MULTI] or isinstance(year,int) or isinstance(year,list)
 
+@input_swap([0,1], ['table_type','year'], [TableType, {'values':[opd.defs.NA, opd.defs.MULTI], 'types':[list, int]}], error=True, new_opt1=None)
+def fswap_error(table_type,year):
+	fswap(table_type,year)
+
+@pytest.mark.parametrize("year", [2019, [2019, 2020], opd.defs.NA, opd.defs.MULTI])
+@pytest.mark.parametrize("table_type", [TableType.ARRESTS, str(TableType.ARRESTS)])
+def test_no_inputswap(csvfile, source, last, skip, loghtml, year, table_type):
+	with warnings.catch_warnings():
+		warnings.simplefilter("error")
+		fswap(table_type, year)
+
+
+@pytest.mark.parametrize("year", [2019, [2019, 2020], opd.defs.NA, opd.defs.MULTI])
+@pytest.mark.parametrize("table_type", [TableType.ARRESTS, str(TableType.ARRESTS)])
+def test_inputswap_warning(csvfile, source, last, skip, loghtml, year, table_type):
 	with pytest.warns(DeprecationWarning):
-		assert TableType('COMPLAINTS - CIVILIANS') == t
+		fswap(year, table_type)
 
-	t = TableType("USE OF FORCE - SUBJECTS/OFFICERS")
 
+@pytest.mark.parametrize("year", [2019, [2019, 2020], opd.defs.NA, opd.defs.MULTI])
+@pytest.mark.parametrize("table_type", [TableType.ARRESTS, str(TableType.ARRESTS)])
+def test_inputswap_keyword_warning(csvfile, source, last, skip, loghtml, year, table_type):
 	with pytest.warns(DeprecationWarning):
-		assert TableType('USE OF FORCE - CIVILIANS/OFFICERS') == t
+		fswap(year, table_type=table_type)
 
 
-def test_datasets_query(csvfile, source, last, skip, loghtml):
+@pytest.mark.parametrize("year", [2019, [2019, 2020], opd.defs.NA, opd.defs.MULTI])
+@pytest.mark.parametrize("table_type", [TableType.ARRESTS, str(TableType.ARRESTS)])
+def test_inputswap_singleinput_warning(csvfile, source, last, skip, loghtml, year, table_type):
 	with pytest.warns(DeprecationWarning):
-		datasets_query()
+		fswap(year)
 
 
-def test_datasets(csvfile, source, last, skip, loghtml):
+@pytest.mark.parametrize("year", [2019, [2019, 2020], opd.defs.NA, opd.defs.MULTI])
+@pytest.mark.parametrize("table_type", [TableType.ARRESTS, str(TableType.ARRESTS)])
+def test_inputswap_error(csvfile, source, last, skip, loghtml, year, table_type):
+	with pytest.raises(ValueError, match='have been swapped'):
+		fswap_error(year, table_type)
+
+
+@deprecated("MSG")
+def fdep():
+	pass
+
+@pytest.mark.parametrize("func", [fdep, datasets_query])
+def test_deprecated_decorator(csvfile, source, last, skip, loghtml, func):
+	with pytest.warns(DeprecationWarning):
+		func()
+
+
+@pytest.mark.parametrize("type1, type2", [("COMPLAINTS - SUBJECTS", 'COMPLAINTS - CIVILIANS'),
+										  ("USE OF FORCE - SUBJECTS/OFFICERS", 'USE OF FORCE - CIVILIANS/OFFICERS')])
+def test_deprecated_enums(csvfile, source, last, skip, loghtml, type1, type2):
+	with pytest.warns(DeprecationWarning):
+		assert TableType(type1) == TableType(type2)
+
+
+def test_datasets_no_civilian_tabletypes(csvfile, source, last, skip, loghtml):
 	get_datasets(csvfile)
 	df = opd.datasets.query()
 	assert not df["TableType"].str.contains("CIVILIAN").any()
