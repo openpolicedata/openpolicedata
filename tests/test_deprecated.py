@@ -18,13 +18,13 @@ def get_datasets(csvfile):
 
     return opd.datasets.datasets
 
-@input_swap([0,1], ['table_type','year'], [TableType, {'values':[opd.defs.NA, opd.defs.MULTI], 'types':[list, int]}], new_opt1=None)
+@input_swap([0,1], ['table_type','year'], [TableType, {'values':[opd.defs.NA, opd.defs.MULTI], 'types':[list, int]}], opt1=None)
 def fswap(table_type,year):
 	if table_type:
 		TableType(table_type)
 	assert year in [opd.defs.NA, opd.defs.MULTI] or isinstance(year,int) or isinstance(year,list)
 
-@input_swap([0,1], ['table_type','year'], [TableType, {'values':[opd.defs.NA, opd.defs.MULTI], 'types':[list, int]}], error=True, new_opt1=None)
+@input_swap([0,1], ['table_type','year'], [TableType, {'values':[opd.defs.NA, opd.defs.MULTI], 'types':[list, int]}], error=True, opt1=None)
 def fswap_error(table_type,year):
 	fswap(table_type,year)
 

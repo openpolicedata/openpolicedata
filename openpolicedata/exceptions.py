@@ -59,5 +59,8 @@ class OPD_FutureError(OPD_GeneralError):
 class OPD_MinVersionError(OPD_GeneralError):
     pass
 
+class AutoMergeError(OPD_GeneralError):
+    pass
+
 class BadCategoryDict(OPD_GeneralError):
     pass

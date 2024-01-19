@@ -87,10 +87,10 @@ class TestData:
 	def test_offsets_and_nrows(self, csvfile, source, last, skip, loghtml):
 		get_datasets(csvfile)
 		src = data.Source("Philadelphia")
-		df = src.load_from_url(year=2019, table_type="Officer-Involved Shootings").table
+		df = src.load(year=2019, table_type="Officer-Involved Shootings").table
 		offset = 1
 		nrows = len(df)-2
-		df_offset = src.load_from_url(year=2019, table_type="Officer-Involved Shootings", offset=offset, nrows=nrows).table
+		df_offset = src.load(year=2019, table_type="Officer-Involved Shootings", offset=offset, nrows=nrows).table
 		assert df_offset.equals(df.iloc[offset:offset+nrows].reset_index(drop=True))
 
 	def check_excel_sheets(self, csvfile, source, last, skip, loghtml):
@@ -116,7 +116,7 @@ class TestData:
 
 			if has_year_sheets:
 				# Ensure that load works
-				src.load_from_url(datasets.iloc[i]["Year"], datasets.iloc[i]["TableType"], pbar=False)
+				src.load(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], pbar=False)
 			else:
 				excel._Excel__check_sheet(sheets)
 
@@ -147,7 +147,7 @@ class TestData:
 				print(f"{now} Testing {i+1} of {len(datasets)}: {srcName} {table_print} table")
 
 				try:
-					table = src.load_from_url(datasets.iloc[i]["Year"], datasets.iloc[i]["TableType"], pbar=False, nrows=20)
+					table = src.load(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], pbar=False, nrows=20)
 				except warn_errors as e:
 					e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"])
 					caught_exceptions_warn.append(e)
@@ -169,7 +169,7 @@ class TestData:
 
 				if not pd.isnull(datasets.iloc[i]["date_field"]):
 					if datasets.iloc[i]["date_field"] not in table.table:
-						table = src.load_from_url(datasets.iloc[i]["Year"], datasets.iloc[i]["TableType"], pbar=False, nrows=2000)
+						table = src.load(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], pbar=False, nrows=2000)
 					assert datasets.iloc[i]["date_field"] in table.table
 					#assuming a Pandas string dtype('O').name = object is okay too
 					assert (table.table[datasets.iloc[i]["date_field"]].dtype.name in ['datetime64[ns]', 'datetime64[ns, UTC]', 'datetime64[ms]'])
@@ -279,14 +279,14 @@ class TestData:
 			src = data.Source(ds[0])
 			agency = ds[4] if len(ds)>4 else None
 			max_iter = 10
-			df = src.load_from_url(ds[1], ds[2], agency=agency, nrows=max_iter*ds[3]).table
+			df = src.load(ds[2], ds[1], agency=agency, nrows=max_iter*ds[3]).table
 			with warnings.catch_warnings():
 				warnings.filterwarnings("ignore",category=RuntimeWarning)
 				df = df.convert_dtypes()
 
 			offset = 0
 			k = 0
-			for t in src.load_from_url_gen(ds[1], ds[2], nbatch=ds[3], force=True, agency=agency):
+			for t in src.load_iter(ds[2], ds[1], nbatch=ds[3], force=True, agency=agency):
 				df_cur = df.iloc[offset:offset+len(t.table)].reset_index(drop=True)
 				df2 = t.table.copy()
 				if set(df.columns)!=set(df2.columns):

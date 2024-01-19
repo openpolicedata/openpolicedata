@@ -45,7 +45,7 @@ def _isinstance(x, type_class):
     return False
 
 
-def input_swap(idx, names, types, new_opt1="NO_INPUT", error=False):
+def input_swap(idx, names, types, opt1="NO_INPUT", error=False):
     def input_swap_decorator(func):
         @functools.wraps(func)
         def new_func(*args, **kwargs):
@@ -79,11 +79,11 @@ def input_swap(idx, names, types, new_opt1="NO_INPUT", error=False):
                     args = list(args)
                     args[0] = kwargs.pop(names[0])
                     args = tuple(args)
-                elif new_opt1!="NO_INPUT" and idx[1]>=len(args):
+                elif opt1!="NO_INPUT" and idx[1]>=len(args):
                     swapped = True
                     kwargs[names[1]] = args[0]
                     args = list(args)
-                    args[0] = new_opt1
+                    args[0] = opt1
                     args = tuple(args)
 
             if swapped:

@@ -179,7 +179,7 @@ class TestData:
 		src = data.Source("Virginia")
 		agency="Fairfax County Police Department"
 		# For speed, set private limit parameter so that only a single entry is requested
-		table = src.load_from_url(2021, agency=agency, pbar=False, nrows=100)
+		table = src.load('STOPS', 2021, agency=agency, pbar=False, nrows=100)
 		
 		assert len(table.table)==100
 		assert table.table[table.agency_field].nunique()==1
@@ -190,7 +190,7 @@ class TestData:
 		get_datasets(csvfile)
 		agency="Fairfax County Police Department"
 		year = 2021
-		table = src.load_from_url(2021, agency=agency, pbar=False, nrows=100)
+		table = src.load('STOPS', 2021, agency=agency, pbar=False, nrows=100)
 
 		table.to_csv()
 

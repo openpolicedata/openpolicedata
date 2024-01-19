@@ -101,7 +101,7 @@ class TestData:
 				except ValueError as e:
 					if len(e.args)>0 and "Extracting the years" in e.args[0]:
 						# Just test reading in the table and continue
-						table = src.load_from_url(datasets.iloc[i]["Year"], datasets.iloc[i]["TableType"], 
+						table = src.load(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], 
 										agency=agency, pbar=False)
 						continue
 					else:
@@ -147,7 +147,7 @@ class TestData:
 			future_error = False
 			for year in years:
 				try:
-					table = src.load_from_url(year, datasets.iloc[i]["TableType"], 
+					table = src.load(datasets.iloc[i]["TableType"], year, 
 											agency=agency, pbar=False, 
 											sortby="date",
 											nrows=max_count if datasets.iloc[i]["DataType"] not in ["CSV","Excel"] else None)
@@ -161,17 +161,17 @@ class TestData:
 
 				if len(table.table)==0:
 					# Ensure count should have been 0
-					count = src.get_count(year, datasets.iloc[i]["TableType"], agency=agency)
+					count = src.get_count(datasets.iloc[i]["TableType"], year, agency=agency)
 					if count!=0:
 						raise ValueError(f"Expected data for year {year} but received none")
 					
 					# There may not be any data for the year requested.
 					for y in years_orig:
 						if y not in years:
-							count = src.get_count(y, datasets.iloc[i]["TableType"], agency=agency)
+							count = src.get_count(datasets.iloc[i]["TableType"], y, agency=agency)
 							if count>0:
 								years = [x if x!=year else y for x in years]
-								table = src.load_from_url(y, datasets.iloc[i]["TableType"], 
+								table = src.load(datasets.iloc[i]["TableType"], y, 
 											agency=agency, pbar=False, 
 											sortby="date",
 											nrows=max_count if datasets.iloc[i]["DataType"] not in ["CSV","Excel"] else None)
@@ -236,7 +236,7 @@ class TestData:
 				stop_date = datetime.strftime(dts.iloc[0]+timedelta(days=1), "%Y-%m-%d")
 
 				try:
-					table_start = src.load_from_url([start_date, stop_date], datasets.iloc[i]["TableType"], 
+					table_start = src.load(datasets.iloc[i]["TableType"], [start_date, stop_date], 
 													agency=agency, pbar=False)
 				except ValueError as e:
 					if len(e.args)>0 and e.args[0]=="Currently unable to handle non-year inputs":
@@ -272,7 +272,7 @@ class TestData:
 				start_date = datetime.strftime(dts.iloc[-1]-timedelta(days=1), "%Y-%m-%d")
 				stop_date  = str(year+1) + "-01-10"  
 
-				table_stop = src.load_from_url([start_date, stop_date], datasets.iloc[i]["TableType"], 
+				table_stop = src.load(datasets.iloc[i]["TableType"], [start_date, stop_date], 
 												agency=agency, pbar=False)
 				sleep(sleep_time)
 				dts_stop = table_stop.table[table.date_field]
@@ -335,7 +335,7 @@ class TestData:
 				now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
 				print(f"{now} Testing {i+1} of {len(datasets)}: {srcName}, {state} {table_type} table for {year}")
 				try:
-					table = src.load_from_url(year, table_type, pbar=False)
+					table = src.load(table_type, year, pbar=False)
 				except OPD_FutureError:
 					continue
 				except:

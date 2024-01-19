@@ -21,6 +21,7 @@ from . import __version__
 from . import preproc
 from . import defs
 from . import exceptions
+from .deprecated._decorators import deprecated, input_swap
 from .datetime_parser import to_datetime
 
 class Table:
@@ -676,7 +677,7 @@ class Source:
         Get years available for 1 or more datasets
     get_agencies()
         Get agencies available for 1 or more datasets
-    load_from_url()
+    load()
         Load data from URL
     load_from_csv()
         Load data from a previously saved CSV file
@@ -853,9 +854,10 @@ class Source:
             return [src["Agency"]]
 
 
+    @input_swap([0,1], ['table_type','year'], [defs.TableType, {'values':[defs.NA, defs.MULTI], 'types':[list, int]}], opt1=None)
     def get_count(self, 
-                  year: str | int | list[int] | None = None,
-                  table_type: str | defs.TableType | None = None, 
+                  table_type: str | defs.TableType | None = None,
+                  year: str | int | list[int] | None = None, 
                   agency: str | None = None, 
                   force: bool = False,
                   verbose: bool | str = False
@@ -864,13 +866,13 @@ class Source:
 
         Parameters
         ----------
+        table_type - str or TableType enum
+            (Optional) If set, requested dataset will be of this type
         year (Optional) - int or length 2 list or the string opd.defs.MULTI or opd.defs.NONE
             Used to identify the requested dataset if equal to its year value
             Otherwise, for datasets containing multiple years, this filters 
             the return data for a specific year (int input) or a range of years
             [X,Y] to return data for years X to Y
-        table_type - str or TableType enum
-            (Optional) If set, requested dataset will be of this type
         agency - str
             (Optional) If set, for datasets containing multiple agencies, data will
             only be returned for this agency
@@ -888,30 +890,30 @@ class Source:
             Table object containing the requested data
         '''
 
-        return self.__load(year, table_type, agency, True, pbar=False, return_count=True, force=force, verbose=verbose)
+        return self.__load(table_type, year, agency, True, pbar=False, return_count=True, force=force, verbose=verbose)
     
-    
-    def load_from_url_gen(self, 
-                          year: str | int | list[int], 
-                          table_type: str | defs.TableType | None = None, 
-                          agency: str | None = None, 
-                          pbar: bool = False, 
-                          nbatch: int = 10000, 
-                          offset: int = 0, 
-                          force: bool =False,
-                          verbose: bool | str = False
-                          ) -> Iterator[Table]:
+    @input_swap([0,1], ['table_type','year'], [defs.TableType, {'values':[defs.NA, defs.MULTI], 'types':[list, int]}], error=True, opt1=None)
+    def load_iter(self,
+                table_type: str | defs.TableType,
+                year: str | int | list[int],  
+                agency: str | None = None, 
+                pbar: bool = False, 
+                nbatch: int = 10000, 
+                offset: int = 0, 
+                force: bool =False,
+                verbose: bool | str = False
+                ) -> Iterator[Table]:
         '''Get generator to load data from URL in batches
 
         Parameters
         ----------
+        table_type - str or TableType enum
+            Table type to load
         year - int or length 2 list or the string opd.defs.MULTI or opd.defs.NONE
             Used to identify the requested dataset if equal to its year value
             Otherwise, for datasets containing multiple years, this filters 
             the return data for a specific year (int input) or a range of years
             [X,Y] to return data for years X to Y
-        table_type - str or TableType enum
-            (Optional) If set, requested dataset will be of this type
         agency - str
             (Optional) If set, for datasets containing multiple agencies, data will
             only be returned for this agency
@@ -935,32 +937,52 @@ class Source:
             generates Table objects containing the requested data
         '''
 
-        count = self.get_count(year, table_type, agency, force, verbose=verbose)
+        count = self.get_count(table_type, year, agency, force, verbose=verbose)
         for k in range(offset, count, nbatch):
-            yield self.__load(year, table_type, agency, True, pbar, nrows=min(nbatch, count-k), offset=k, verbose=verbose)
+            yield self.__load(table_type, year, agency, True, pbar, nrows=min(nbatch, count-k), offset=k, verbose=verbose)
     
-        
-    def load_from_url(self, 
-                      year: str | int | list[int], 
-                      table_type: str | defs.TableType | None = None, 
-                      agency: str | None = None,
-                      pbar: bool = True,
-                      nrows: int | None = None, 
-                      offset: int = 0,
-                      sortby=None,
-                      verbose: bool | str = False
-                      ) -> Table:
+    @deprecated("load_from_url_gen is deprecated and will be removed in a future release. Please use load_iter instead. "+
+                "load_iter uses the same inputs except table_type now comes before year.")
+    def load_from_url_gen(self, 
+                          year: str | int | list[int], 
+                          table_type: str | defs.TableType | None = None, 
+                          agency: str | None = None, 
+                          pbar: bool = False, 
+                          nbatch: int = 10000, 
+                          offset: int = 0, 
+                          force: bool =False,
+                          verbose: bool | str = False
+                          ) -> Iterator[Table]:
+        '''load_from_url_gen is deprecated. Please use load_iter instead.
+        '''
+
+        count = self.get_count(table_type, year, agency, force, verbose=verbose)
+        for k in range(offset, count, nbatch):
+            yield self.__load(table_type, year, agency, True, pbar, nrows=min(nbatch, count-k), offset=k, verbose=verbose)
+
+    
+    @input_swap([0,1], ['table_type','year'], [defs.TableType, {'values':[defs.NA, defs.MULTI], 'types':[list, int]}], error=True, opt1=None)
+    def load(self, 
+            table_type: str | defs.TableType, 
+            year: str | int | list[int], 
+            agency: str | None = None,
+            pbar: bool = True,
+            nrows: int | None = None, 
+            offset: int = 0,
+            sortby=None,
+            verbose: bool | str = False
+            ) -> Table:
         '''Load data from URL
 
         Parameters
         ----------
+        table_type - str or TableType enum
+            Table type to load
         year - int or length 2 list or the string opd.defs.MULTI or opd.defs.NONE
             Used to identify the requested dataset if equal to its year value
             Otherwise, for datasets containing multiple years, this filters 
             the return data for a specific year (int input) or a range of years
             [X,Y] to return data for years X to Y
-        table_type - str or TableType enum
-            (Optional) If set, requested dataset will be of this type
         agency - str
             (Optional) If set, for datasets containing multiple agencies, data will
             only be returned for this agency
@@ -981,7 +1003,25 @@ class Source:
             Table object containing the requested data
         '''
 
-        return self.__load(year, table_type, agency, True, pbar, nrows=nrows, offset=offset, sortby=sortby, verbose=verbose)
+        return self.__load(table_type, year, agency, True, pbar, nrows=nrows, offset=offset, sortby=sortby, verbose=verbose)
+
+    
+    @deprecated("load_from_url is deprecated and will be removed in a future release. Please use load instead. "+
+                "load uses the same inputs except table_type now comes before year.")
+    def load_from_url(self, 
+                      year: str | int | list[int], 
+                      table_type: str | defs.TableType | None = None, 
+                      agency: str | None = None,
+                      pbar: bool = True,
+                      nrows: int | None = None, 
+                      offset: int = 0,
+                      sortby=None,
+                      verbose: bool | str = False
+                      ) -> Table:
+        '''load_from_url is deprecated and will be removed in a future release. Please use load instead.
+        '''
+
+        return self.__load(table_type, year, agency, True, pbar, nrows=nrows, offset=offset, sortby=sortby, verbose=verbose)
 
     def __find_datasets(self, table_type):
         src = self.datasets.copy()
@@ -991,7 +1031,7 @@ class Source:
         return src
 
 
-    def __load(self, year, table_type, agency, load_table, pbar=True, return_count=False, force=False, 
+    def __load(self, table_type, year, agency, load_table, pbar=True, return_count=False, force=False, 
                nrows=None, offset=0, sortby=None, verbose=False):
         
         src = self.__find_datasets(table_type)
@@ -1065,8 +1105,8 @@ class Source:
                 agency = agency.replace("'","''")
                 opt_filter = agency_field + " = '" + agency + "'"
 
+            logger = logging.getLogger("opd-load")
             if verbose:
-                logger = logging.getLogger("opd-load")
                 log_level = logger.level
             if isinstance(verbose,str):
                 # verbose is a filename
@@ -1085,7 +1125,7 @@ class Source:
             if dataset_id:
                 logger.debug(f"]tDataset: {dataset_id}")
             logger.debug(f"Data URL: {src['DataType']}")
-            if src["readme"]:
+            if isinstance(src["readme"], str) and len(src["readme"].strip())>0:
                 logger.debug(f"Data URL: {src['readme']}")
             
             try:
@@ -1145,7 +1185,7 @@ class Source:
             Table object containing the requested data
         '''
 
-        table = self.__load(year, table_type, agency, False)
+        table = self.__load(table_type, year, agency, False)
 
         filename = table.get_csv_filename()
         if output_dir != None:
@@ -1246,7 +1286,7 @@ class Source:
             Auto-generated CSV filename
         '''
 
-        table = self.__load(year, table_type, agency, False)
+        table = self.__load(table_type, year, agency, False)
 
         filename = table.get_csv_filename()
         if output_dir != None:
