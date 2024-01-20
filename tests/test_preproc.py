@@ -11,8 +11,9 @@ import time
 if __name__ == "__main__":
 	import sys
 	sys.path.append('../openpolicedata')
-from openpolicedata import datasets, data, preproc
+from openpolicedata import data, preproc
 from openpolicedata import defs
+from openpolicedata import Column, TableType
 from openpolicedata._preproc_utils import DataMapping
 from openpolicedata.exceptions import BadCategoryDict
 
@@ -84,7 +85,7 @@ def table():
 def table_w_role(table):
     new_table = deepcopy(table)
     new_table.table[role_col] = [random.choice(["OFFICER", "Subject"]) for _ in range(len(table.table))]
-    new_table.table_type = defs.TableType.SHOOTINGS
+    new_table.table_type = TableType.SHOOTINGS
     return new_table
 
 @pytest.fixture(scope="module")
@@ -117,19 +118,19 @@ def test_transform_map(csvfile, source, last, skip, loghtml, std_table):
     assert isinstance(std_table.get_transform_map()[0], DataMapping)
 
 
-@pytest.mark.parametrize("col", [defs.columns.DATE, defs.columns.TIME, defs.columns.DATETIME,
-                                 defs.columns.RACE_ETHNICITY_SUBJECT, defs.columns.ETHNICITY_SUBJECT,
-                                 defs.columns.RACE_SUBJECT, defs.columns.RE_GROUP_SUBJECT, defs.columns.AGE_SUBJECT,
-                                 defs.columns.AGE_RANGE_SUBJECT, defs.columns.GENDER_SUBJECT,
-                                 defs.columns.AGENCY])
+@pytest.mark.parametrize("col", [Column.DATE, Column.TIME, Column.DATETIME,
+                                 Column.RACE_ETHNICITY_SUBJECT, Column.ETHNICITY_SUBJECT,
+                                 Column.RACE_SUBJECT, Column.RE_GROUP_SUBJECT, Column.AGE_SUBJECT,
+                                 Column.AGE_RANGE_SUBJECT, Column.GENDER_SUBJECT,
+                                 Column.AGENCY])
 def test_col_in_table(csvfile, source, last, skip, loghtml, std_table, col):
     assert col in std_table.table
 
 
-@pytest.mark.parametrize("col", [defs.columns.RACE_ETHNICITY_OFFICER_SUBJECT, defs.columns.ETHNICITY_OFFICER_SUBJECT,
-                                 defs.columns.RACE_OFFICER_SUBJECT, defs.columns.RE_GROUP_OFFICER_SUBJECT, defs.columns.AGE_OFFICER_SUBJECT,
-                                 defs.columns.AGE_RANGE_OFFICER_SUBJECT, defs.columns.GENDER_OFFICER_SUBJECT,
-                                 defs.columns.SUBJECT_OR_OFFICER])
+@pytest.mark.parametrize("col", [Column.RACE_ETHNICITY_OFFICER_SUBJECT, Column.ETHNICITY_OFFICER_SUBJECT,
+                                 Column.RACE_OFFICER_SUBJECT, Column.RE_GROUP_OFFICER_SUBJECT, Column.AGE_OFFICER_SUBJECT,
+                                 Column.AGE_RANGE_OFFICER_SUBJECT, Column.GENDER_OFFICER_SUBJECT,
+                                 Column.SUBJECT_OR_OFFICER])
 def test_col_in_table_w_role(csvfile, source, last, skip, loghtml, std_table_w_role, col):    
     assert col in std_table_w_role.table
 
@@ -145,8 +146,8 @@ def test_race_cats(csvfile, source, last, skip, loghtml, table, std_table):
     race_cats[keys.WHITE] = "TEST"
     table = standardize(table, race_cats=race_cats)
 
-    orig = std_table.table[defs.columns.RACE_SUBJECT]
-    renamed = table.table[defs.columns.RACE_SUBJECT]
+    orig = std_table.table[Column.RACE_SUBJECT]
+    renamed = table.table[Column.RACE_SUBJECT]
 
     assert ((orig==white) == (renamed=="TEST")).all()
 
@@ -178,8 +179,8 @@ def test_eth_cats(csvfile, source, last, skip, loghtml, table, std_table):
     eth_cats[keys.LATINO] = "TEST"
     table = standardize(table, eth_cats=eth_cats)
 
-    orig = std_table.table[defs.columns.ETHNICITY_SUBJECT]
-    renamed = table.table[defs.columns.ETHNICITY_SUBJECT]
+    orig = std_table.table[Column.ETHNICITY_SUBJECT]
+    renamed = table.table[Column.ETHNICITY_SUBJECT]
 
     assert ((orig==latino) == (renamed=="TEST")).all()
 
@@ -191,17 +192,17 @@ def test_gender_cats(csvfile, source, last, skip, loghtml, table, std_table):
     cats[keys.MALE] = "TEST"
     table = standardize(table, gender_cats=cats)
 
-    orig = std_table.table[defs.columns.GENDER_SUBJECT]
-    renamed = table.table[defs.columns.GENDER_SUBJECT]
+    orig = std_table.table[Column.GENDER_SUBJECT]
+    renamed = table.table[Column.GENDER_SUBJECT]
 
     assert ((orig==orig_label) == (renamed=="TEST")).all()
 
 @pytest.mark.parametrize("old_column, new_column",
-                         [(race_col, defs.columns.RACE_OFFICER_SUBJECT),
-                          (gender_col, defs.columns.GENDER_OFFICER_SUBJECT),
-                          (eth_col, defs.columns.ETHNICITY_OFFICER_SUBJECT),
-                          (role_col, defs.columns.SUBJECT_OR_OFFICER),
-                          (age_group_col, defs.columns.AGE_RANGE_OFFICER_SUBJECT)
+                         [(race_col, Column.RACE_OFFICER_SUBJECT),
+                          (gender_col, Column.GENDER_OFFICER_SUBJECT),
+                          (eth_col, Column.ETHNICITY_OFFICER_SUBJECT),
+                          (role_col, Column.SUBJECT_OR_OFFICER),
+                          (age_group_col, Column.AGE_RANGE_OFFICER_SUBJECT)
                           ])
 def test_no_id_keep(csvfile, source, last, skip, loghtml, table_w_role, old_column, new_column):
     orig_label = bad_data
@@ -212,11 +213,11 @@ def test_no_id_keep(csvfile, source, last, skip, loghtml, table_w_role, old_colu
     assert (table_w_role.table.loc[:5, new_column] == orig_label).all()
 
 @pytest.mark.parametrize("old_column, new_column",
-                         [(race_col, defs.columns.RACE_OFFICER_SUBJECT),
-                          (gender_col, defs.columns.GENDER_OFFICER_SUBJECT),
-                          (eth_col, defs.columns.ETHNICITY_OFFICER_SUBJECT),
-                          (role_col, defs.columns.SUBJECT_OR_OFFICER),
-                          (age_group_col, defs.columns.AGE_RANGE_OFFICER_SUBJECT)
+                         [(race_col, Column.RACE_OFFICER_SUBJECT),
+                          (gender_col, Column.GENDER_OFFICER_SUBJECT),
+                          (eth_col, Column.ETHNICITY_OFFICER_SUBJECT),
+                          (role_col, Column.SUBJECT_OR_OFFICER),
+                          (age_group_col, Column.AGE_RANGE_OFFICER_SUBJECT)
                           ])
 def test_no_id_null(csvfile, source, last, skip, loghtml, table_w_role, old_column, new_column):
     orig_label = bad_data
@@ -242,7 +243,7 @@ def test_agg_cat(csvfile, source, last, skip, loghtml, table, std_table):
 
     table = standardize(table, agg_race_cat=True)
 
-    assert (table.table.loc[:5, defs.columns.RACE_SUBJECT] == defs.get_race_cats()[defs.get_race_keys().BLACK]).all()
+    assert (table.table.loc[:5, Column.RACE_SUBJECT] == defs.get_race_cats()[defs.get_race_keys().BLACK]).all()
 
 def test_keep_raw(csvfile, source, last, skip, loghtml, std_table):
     assert any([x.startswith(preproc._OLD_COLUMN_INDICATOR+"_") for x in std_table.table.columns])
@@ -252,7 +253,7 @@ def test_not_keep_raw(csvfile, source, last, skip, loghtml, table):
     table = standardize(table, keep_raw=False)
     assert not any([x.startswith(preproc._OLD_COLUMN_INDICATOR+"_") for x in table.table.columns])
 
-@pytest.mark.parametrize("column", [defs.columns.DATE, defs.columns.RACE_OFFICER])
+@pytest.mark.parametrize("column", [Column.DATE, Column.RACE_OFFICER])
 def test_known_col_not_in_table(csvfile, source, last, skip, loghtml, table, column):
     with pytest.raises(ValueError, match="Known column .+ is not in the DataFrame"):
         table = standardize(table, known_cols={column:"TEST"})
@@ -262,24 +263,24 @@ def test_known_col_bad_key(csvfile, source, last, skip, loghtml, table):
         table = standardize(table, known_cols={"BAD":"TEST"})
 
 @pytest.mark.parametrize("old_column, new_column", 
-                         [(date_col, defs.columns.DATE),
-                          (race_col, defs.columns.RACE_SUBJECT),
-                          (race_col, defs.columns.RACE_OFFICER),
-                          (race_col, defs.columns.RACE_OFFICER_SUBJECT),
-                          (age_col, defs.columns.AGE_OFFICER),
-                          (age_col, defs.columns.AGE_OFFICER_SUBJECT),
-                          (age_col, defs.columns.AGE_SUBJECT),
-                          (gender_col, defs.columns.GENDER_OFFICER),
-                          (gender_col, defs.columns.GENDER_OFFICER_SUBJECT),
-                          (gender_col, defs.columns.GENDER_SUBJECT),
-                          (agency_col, defs.columns.AGENCY),
-                          (eth_col, defs.columns.ETHNICITY_OFFICER),
-                          (eth_col, defs.columns.ETHNICITY_OFFICER_SUBJECT),
-                          (eth_col, defs.columns.ETHNICITY_SUBJECT),
-                          (age_group_col, defs.columns.AGE_RANGE_OFFICER),
-                          (age_group_col, defs.columns.AGE_RANGE_OFFICER_SUBJECT),
-                          (age_group_col, defs.columns.AGE_RANGE_SUBJECT),
-                          (time_col, defs.columns.TIME)
+                         [(date_col, Column.DATE),
+                          (race_col, Column.RACE_SUBJECT),
+                          (race_col, Column.RACE_OFFICER),
+                          (race_col, Column.RACE_OFFICER_SUBJECT),
+                          (age_col, Column.AGE_OFFICER),
+                          (age_col, Column.AGE_OFFICER_SUBJECT),
+                          (age_col, Column.AGE_SUBJECT),
+                          (gender_col, Column.GENDER_OFFICER),
+                          (gender_col, Column.GENDER_OFFICER_SUBJECT),
+                          (gender_col, Column.GENDER_SUBJECT),
+                          (agency_col, Column.AGENCY),
+                          (eth_col, Column.ETHNICITY_OFFICER),
+                          (eth_col, Column.ETHNICITY_OFFICER_SUBJECT),
+                          (eth_col, Column.ETHNICITY_SUBJECT),
+                          (age_group_col, Column.AGE_RANGE_OFFICER),
+                          (age_group_col, Column.AGE_RANGE_OFFICER_SUBJECT),
+                          (age_group_col, Column.AGE_RANGE_SUBJECT),
+                          (time_col, Column.TIME)
                          ]
                         )
 def test_known_col(csvfile, source, last, skip, loghtml, table, old_column, new_column):
@@ -292,18 +293,18 @@ def test_known_col(csvfile, source, last, skip, loghtml, table, old_column, new_
 def test_known_col_role(csvfile, source, last, skip, loghtml, table_w_role):
     assert role_col in table_w_role.table
     table_w_role.table["TEST"] = table_w_role.table[role_col]
-    table_w_role = standardize(table_w_role, known_cols={defs.columns.SUBJECT_OR_OFFICER:"TEST"})
-    assert defs.columns.SUBJECT_OR_OFFICER in table_w_role.table
+    table_w_role = standardize(table_w_role, known_cols={Column.SUBJECT_OR_OFFICER:"TEST"})
+    assert Column.SUBJECT_OR_OFFICER in table_w_role.table
     assert "RAW_TEST" in table_w_role.table
 
 def test_known_col_exists_multiple(csvfile, source, last, skip, loghtml, table):
     assert race_col in table.table
     table.table["TEST1"] = table.table[race_col].copy()
     table.table["TEST2"] = table.table[race_col].copy()
-    table = standardize(table, known_cols={defs.columns.RACE_OFFICER:"TEST1",defs.columns.RACE_SUBJECT:"TEST2"})
-    assert defs.columns.RACE_OFFICER in table.table
+    table = standardize(table, known_cols={Column.RACE_OFFICER:"TEST1",Column.RACE_SUBJECT:"TEST2"})
+    assert Column.RACE_OFFICER in table.table
     assert "RAW_TEST1" in table.table
-    assert defs.columns.RACE_SUBJECT in table.table
+    assert Column.RACE_SUBJECT in table.table
     assert "RAW_TEST2" in table.table
 
 def test_not_verbose(csvfile, source, last, skip, loghtml, table):
@@ -357,10 +358,10 @@ def test_verbose_to_file_cleanup_with_error(csvfile, source, last, skip, loghtml
 
 
 def test_race_eth_combo_merge(csvfile, source, last, skip, loghtml, std_table):
-    assert defs.columns.RACE_SUBJECT in std_table.table
-    assert defs.columns.RACE_ETHNICITY_SUBJECT in std_table.table
-    assert defs.columns.RE_GROUP_SUBJECT in std_table.table
-    assert all([isinstance(x,str) for x in std_table.table[defs.columns.RACE_ETHNICITY_SUBJECT].unique()])
+    assert Column.RACE_SUBJECT in std_table.table
+    assert Column.RACE_ETHNICITY_SUBJECT in std_table.table
+    assert Column.RE_GROUP_SUBJECT in std_table.table
+    assert all([isinstance(x,str) for x in std_table.table[Column.RACE_ETHNICITY_SUBJECT].unique()])
 
 def test_race_eth_combo_concat(csvfile, source, last, skip, loghtml, table):
     table = standardize(table, race_eth_combo="concat")
@@ -368,31 +369,31 @@ def test_race_eth_combo_concat(csvfile, source, last, skip, loghtml, table):
     r = defs.get_race_cats()
     e = defs.get_eth_cats()
 
-    assert defs.columns.RACE_SUBJECT in table.table
-    assert defs.columns.RACE_ETHNICITY_SUBJECT in table.table
-    assert f"{r[defs.get_race_keys().BLACK]} {e[defs.get_eth_keys().LATINO]}" in table.table[defs.columns.RACE_ETHNICITY_SUBJECT].unique()
+    assert Column.RACE_SUBJECT in table.table
+    assert Column.RACE_ETHNICITY_SUBJECT in table.table
+    assert f"{r[defs.get_race_keys().BLACK]} {e[defs.get_eth_keys().LATINO]}" in table.table[Column.RACE_ETHNICITY_SUBJECT].unique()
 
 
 def test_race_eth_combo_false(csvfile, source, last, skip, loghtml, table):
     table = standardize(table, race_eth_combo=False)
-    assert defs.columns.RACE_ETHNICITY_SUBJECT not in table.table
+    assert Column.RACE_ETHNICITY_SUBJECT not in table.table
 
 def test_merge_datetime_true(csvfile, source, last, skip, loghtml, std_table):
-    assert defs.columns.DATETIME in std_table.table
+    assert Column.DATETIME in std_table.table
 
 def test_merge_datetime_false(csvfile, source, last, skip, loghtml, table):
     table = standardize(table, merge_date_time=False)
-    assert defs.columns.DATETIME not in table.table
+    assert Column.DATETIME not in table.table
 
 def test_empty_time_nat(csvfile, source, last, skip, loghtml, table, std_table):
     idx = table.table[time_col]==bad_time
     assert idx.sum()>0
-    assert defs.columns.DATETIME in std_table.table
-    assert std_table.table[defs.columns.DATETIME][idx].isnull().all()
+    assert Column.DATETIME in std_table.table
+    assert std_table.table[Column.DATETIME][idx].isnull().all()
 
 def test_empty_time_ignore(csvfile, source, last, skip, loghtml, table):
     idx = table.table[time_col]==bad_time
     table = standardize(table, empty_time='ignore')
     assert idx.sum()>0
-    assert defs.columns.DATETIME in table.table
-    assert (table.table[defs.columns.DATETIME][idx]==table.table[defs.columns.DATE][idx]).all()
+    assert Column.DATETIME in table.table
+    assert (table.table[Column.DATETIME][idx]==table.table[Column.DATE][idx]).all()
