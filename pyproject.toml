@@ -73,7 +73,9 @@ namespaces = false
 
 [tool.pytest.ini_options]
 filterwarnings = [
-    "ignore:distutils Version classes are deprecated. Use packaging.version instead.*:DeprecationWarning::",
-    "ignore:An exception was ignored while fetching the attribute `__array_interface__` from an object of type 'Polygon'*:DeprecationWarning:geopandas.*:"
+    "ignore:datetime.datetime.utcfromtimestamp():DeprecationWarning:tqdm:",
+    "ignore:datetime.datetime:DeprecationWarning:.*openpyxl:",
+    "ignore:datetime.datetime.utcfromtimestamp():DeprecationWarning:.*tz:",
+    # "ignore:distutils Version classes are deprecated. Use packaging.version instead.*:DeprecationWarning::",
+    # "ignore:An exception was ignored while fetching the attribute `__array_interface__` from an object of type 'Polygon'*:DeprecationWarning:geopandas.*:"
 ]
-addopts = "--csvfile='C:\\Users\\matth\\repos\\opd-data\\opd_source_table.csv'"
