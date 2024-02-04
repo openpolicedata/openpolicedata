@@ -1689,8 +1689,25 @@ class Socrata(Data_Loader):
     def __construct_where(self, year, opt_filter):
         where = ""
         if self.date_field!=None and year!=None:
-            start_date, stop_date = _process_date(year, date_field=self.date_field)
-            where = self.date_field + " between '" + start_date + "' and '" + stop_date +"'"
+            assume_date = False
+            try:
+                # Get metadata to ensure that date is not formatted as text
+                meta = self.client.get_metadata(self.data_set)
+                column = [x for x in meta['columns'] if x['fieldName']==self.date_field]
+            except:
+                assume_date = True
+            if not assume_date and len(column)==0:
+                raise ValueError(f"Date field {self.date_field} not found in dataset")
+            if not assume_date and 'dataTypeName' in column[0] and column[0]['dataTypeName']=='text':
+                start_date, stop_date = _process_date(year, date_field=self.date_field, force_year=True)
+                where = ''
+                for y in range(int(start_date),int(stop_date)+1):
+                    # %25 is % wildcard symbol
+                    where+=self.date_field + rf" LIKE '%{y}%' OR "
+                where = where[:-4]
+            else:
+                start_date, stop_date = _process_date(year, date_field=self.date_field)
+                where = self.date_field + " between '" + start_date + "' and '" + stop_date +"'"
 
         if opt_filter is not None:
             if not isinstance(opt_filter, list):
@@ -1939,21 +1956,29 @@ class Socrata(Data_Loader):
             df = df.head(nrows)
         return df
 
+def _check_year(year):
+    return isinstance(year, int) or (isinstance(year, str) and len(year)==4 and year.isdigit())
 
-def _process_date(date, date_field=None):
+
+def _process_date(date, date_field=None, force_year=False):
     if not isinstance(date, list):
         date = [date, date]
 
-    if len(date) !=2:
+    if len(date)!=2:
         raise ValueError("date should be a list of length 2: [startYear, stopYear]")
 
     if date[0] > date[1]:
         raise ValueError('date[0] needs to be smaller than or equal to date[1]')
+    
+    is_year = force_year or (date_field != None and 'year' in date_field.lower())
+    for d in date:
+        if is_year and not _check_year(date[0]):
+            raise ValueError(f"Column {date_field} appears to contain year information not dates. The input {d} appears to not be a year.")
 
     if type(date[0]) == str:
         # This should already be in date format
         start_date = date[0]
-    elif date_field != None and 'year' in date_field.lower():
+    elif is_year:
         # Assuming this as actually a string or numeric field for the year rather than a datestamp
         start_date = str(date[0])
     else:
@@ -1962,7 +1987,7 @@ def _process_date(date, date_field=None):
     if type(date[1]) == str:
         # This should already be in date format
         stop_date = date[1]
-    elif date_field != None and 'year' in date_field.lower():
+    elif is_year:
         # Assuming this as actually a string or numeric field for the year rather than a datestamp
         stop_date = str(date[1])
     else:
@@ -2000,7 +2025,10 @@ def filter_dataframe(df, date_field=None, year_filter=None, agency_field=None, a
                 # To retain the old behavior, use either `df[df.columns[i]] = newvals` or, if columns are non-unique, `df.isetitem(i, newvals)`
                 warnings.simplefilter("ignore", category=FutureWarning)
                 logger.debug(f"Converting values in column {date_field} to datetime objects")
-                df[date_field] = to_datetime(df[date_field])
+                try:
+                    df[date_field] = to_datetime(df[date_field], ignore_errors=True)
+                except:
+                    return df
     
         if year_filter != None:
             if isinstance(year_filter, list):
