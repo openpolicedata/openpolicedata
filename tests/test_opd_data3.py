@@ -161,14 +161,14 @@ class TestData:
 
 				if len(table.table)==0:
 					# Ensure count should have been 0
-					count = src.get_count(datasets.iloc[i]["TableType"], year, agency=agency)
+					count = src.get_count(datasets.iloc[i]["TableType"], year, agency=agency, force=True)
 					if count!=0:
 						raise ValueError(f"Expected data for year {year} but received none")
 					
 					# There may not be any data for the year requested.
 					for y in years_orig:
 						if y not in years:
-							count = src.get_count(datasets.iloc[i]["TableType"], y, agency=agency)
+							count = src.get_count(datasets.iloc[i]["TableType"], y, agency=agency, force=True)
 							if count>0:
 								years = [x if x!=year else y for x in years]
 								table = src.load(datasets.iloc[i]["TableType"], y, 
@@ -206,8 +206,15 @@ class TestData:
 
 				dts = table.table[table.date_field]
 				# Remove all non-datestamps
-				dts = dts[dts.apply(lambda x: isinstance(x,pd._libs.tslibs.timestamps.Timestamp))].convert_dtypes()
-				dts = dts.sort_values(ignore_index=True)
+				dts = dts[dts.apply(lambda x: isinstance(x,pd.Timestamp) or isinstance(x,pd.Period))].convert_dtypes()
+				try:
+					dts = dts.sort_values(ignore_index=True)
+				except TypeError as e:
+					if "not supported between instances of 'Period' and 'Timestamp'" in str(e):
+						dts = dts[dts.apply(lambda x: isinstance(x,pd.Timestamp))]
+						dts = dts.sort_values(ignore_index=True)
+					else:
+						raise
 
 				all_years = dts.dt.year.unique().tolist()
 				
@@ -228,7 +235,7 @@ class TestData:
 				if not multi_case:
 					continue
 
-				if "month" in table.date_field.lower():
+				if "month" in table.date_field.lower() or "year" in table.date_field.lower() or "yr" in table.date_field.lower():
 					# Cannot currently filter only by month/year
 					continue
 				
@@ -395,11 +402,11 @@ if __name__ == "__main__":
 	tp = TestData()
 	# (self, csvfile, source, last, skip, loghtml)
 	csvfile = None
-	# csvfile = r"..\opd-data\opd_source_table.csv"
+	csvfile = r"..\opd-data\opd_source_table.csv"
 	last = None
-	last = 910-901+1
+	last = 922-862+1
 	skip = None
-	skip = "Northampton"
+	skip = "Sacramento"
 	source = None
 	# source = "New York City"
 	tp.test_load_year(csvfile, source, last, skip, None)

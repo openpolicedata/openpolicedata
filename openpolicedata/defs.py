@@ -37,9 +37,6 @@ class TableType(str, Enum):
     def __str__(self):
         return self.value
     
-
-    def __repr__(self):
-        a = 1
     
     @classmethod
     def _missing_(cls, value):
@@ -250,6 +247,12 @@ class _Columns(_ToDict_Mixin):
             if v=='SUBJECT_OR_OFFICER':
                 sort_by.append(v)
                 defs.append("Whether row describes an officer or an subject/civilian")
+            elif match and match.group(2)=="FATAL":
+                defs.append(f"Whether {match.group(1).lower()} was fatally injured in an officer-involved shooting or use of force")
+                sort_by.append(match.group(2).title())
+            elif match and match.group(2)=="INJURY":
+                defs.append(f"Whether {match.group(1).lower()} was injured in an officer-involved shooting or use of force")
+                sort_by.append(match.group(2).title())
             elif match:
                 addon = ''
                 if match.group(2)=="RE GROUP":
@@ -264,12 +267,11 @@ class _Columns(_ToDict_Mixin):
             else:
                 if a=="DATETIME":
                     defs.append("Combination of date and time when both columns are found (not generated when detected date column contains datetime values)")
-                elif a=="DATE":
-                    defs.append("Date. Some agencies only provide the period. In these cases, the date will be the 1st date of the period (i.e. Jan. 1 for years and the 1st of the month for months).")
                 elif a=='INCIDENT_ID':
-                    defs.append("A unique incident ID given to an incident (arrest, use of force, etc.). It can be used to connect information across tables. Only standardized in Table.merge.")
+                    defs.append("A unique incident ID given to an incident (arrest, use of force, etc.). "+
+                                "It can be used to relate information across tables. Only standardized by Table.merge function.")
                 else:
-                    defs.append(v.title())
+                    defs.append(v.replace("_"," ").title())
                 sort_by.append(v.title())
 
         df = pd.DataFrame({"Attribute":props, "Column Name":columns, "Definition":defs, 'sort_by':sort_by})

@@ -172,12 +172,15 @@ class TestData:
 						table = src.load(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], pbar=False, nrows=2000)
 					assert datasets.iloc[i]["date_field"] in table.table
 					#assuming a Pandas string dtype('O').name = object is okay too
-					assert (table.table[datasets.iloc[i]["date_field"]].dtype.name in ['datetime64[ns]', 'datetime64[ns, UTC]', 'datetime64[ms]'])
+					assert (table.table[datasets.iloc[i]["date_field"]].dtype.name in ['datetime64[ns]', 'datetime64[ns, UTC]', 
+																		'datetime64[ms]','period[A-DEC]','period[Y-DEC]',
+																		'period[M]'])
 					dts = table.table[datasets.iloc[i]["date_field"]]
 					dts = dts[dts.notnull()]
 					# New Orleans complaints dataset has many empty dates
-					# "Seattle starts with bad date data"
-					if len(dts)>0 or srcName not in ["Seattle","New Orleans"] or datasets.iloc[i]["TableType"]!=TableType.COMPLAINTS.value:
+					# "Seattle and Minneapolis starts with bad date data"
+					if len(dts)>0 or srcName not in ["Seattle","New Orleans",'Minneapolis'] or \
+						datasets.iloc[i]["TableType"] not in [TableType.COMPLAINTS, TableType.INCIDENTS]:
 						assert len(dts) > 0   # If not, either all dates are bad or number of rows requested needs increased
 						assert dts.iloc[0].year <= datetime.now().year
 				if not pd.isnull(datasets.iloc[i]["agency_field"]):
@@ -353,11 +356,11 @@ if __name__ == "__main__":
 	csvfile = None
 	csvfile = r"..\opd-data\opd_source_table.csv"
 	last = None
-	# last = 912-902+1
+	last = 922-868+1
 	skip = None
 	# skip = "Greensboro"
 	source = None
-	source = "Phoenix"
+	# source = "Tucson"
 
 	# tp.check_excel_sheets(csvfile, source, last, skip, None) 
 	# tp.test_get_years_to_check(csvfile, source, last, skip, None) 

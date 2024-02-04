@@ -351,7 +351,7 @@ class Table:
         df = pd.merge(df1, df2, on=on, how=how, left_on=left_on, right_on=right_on, suffixes=(None, '_FromMerged'), **kwargs)
         new_table = copy.deepcopy(self)
         new_table.table = df
-        if right_is_table:
+        if right_is_table and right.is_std:
             new_table._Table__transforms.extend(right.get_transform_map())
         for k,v in new_table.__dict__.items():
             if k not in ['table', '_Table__transforms']:
@@ -516,6 +516,13 @@ class Table:
                                     can_expand = False
                                     break
                         new_df.loc[m,expand_cols] = row
+
+                    null_locs = new_df[expand_cols].isnull().any(axis=1)
+                    for m in null_locs[null_locs].index:
+                        max_count = num_vals.loc[m].max()
+                        row = new_df.loc[m, expand_cols]
+                        if row.apply(lambda x: isinstance(x, dict_values)).any():
+                            new_df.loc[m,expand_cols] = row.apply(lambda x: [x for _ in range(0,max_count)] if pd.isnull(x) else x)
 
                     if can_expand:
                         self.table = pd.DataFrame(new_df).explode(expand_cols, ignore_index=True)
@@ -1340,20 +1347,26 @@ def _check_date(table, date_field):
             if type(one_date) == pd._libs.tslibs.timestamps.Timestamp:
                 if logger:
                     logger.debug(f"Converting values in column {date_field} to datetime objects")
-                table[date_field] = pd.to_datetime(table[date_field], errors='ignore')
+                table[date_field] = to_datetime(table[date_field], ignore_errors=True)
             elif isinstance(one_date, str) and re.match(r'^20\d{2}\-\d{2}$',one_date):
                 if logger:
                     logger.debug(f"Converting values in column {date_field} to monthly Period objects")
                 table[date_field] = table[date_field].apply(pd.Period, args=('M'))
-            elif isinstance(one_date, numbers.Number) and ("year" in date_field.lower() or date_field.lower() == "yr" or ((dts>=1900) & (dts<2100)).all()):
+            elif (isinstance(one_date, numbers.Number) or isinstance(one_date,str)) and \
+                ("year" in date_field.lower() or date_field.lower() == "yr" or \
+                 (isinstance(one_date, numbers.Number) and ((dts>=1900) & (dts<2100)).all())):
                 if logger:
                     logger.debug(f"Converting values in column {date_field} to annual Period objects")
-                table[date_field] = table[date_field].apply(pd.Period, args=('Y'))
+                if isinstance(one_date, str) and re.search(r'\d{4}\sQ\d', one_date):
+                    table[date_field] = table[date_field].str.replace(r'(\d{4}) (Q\d)', r'\1\2', regex=True)
+                    table[date_field] = table[date_field].apply(pd.Period, args=('Q'))
+                else:
+                    table[date_field] = table[date_field].apply(pd.Period, args=('Y'))
             elif isinstance(one_date, str) and not re.match(r'^20\d{2}\-\d{2}$',one_date):
                 p = re.compile(r'^Unknown string format: \d{4}-(\d{2}|__)-(\d{2}|__) present at position \d+$')
                 def to_datetime_local(x):
                     try:
-                        return to_datetime(x, errors='ignore')
+                        return to_datetime(x, ignore_errors=True)
                     except ParserError as e:
                         if len(e.args)>0 and p.match(e.args[0]) != None:
                             return pd.NaT
@@ -1384,12 +1397,18 @@ def _check_date(table, date_field):
                             is_not_aware = table[date_field].apply(lambda x: x.tzinfo is None or x.tzinfo.utcoffset(x) is None)
                             table.loc[is_not_aware, date_field] = table.loc[is_not_aware, date_field].apply(lambda x: x.replace(tzinfo=tz))
                             table[date_field] = table[date_field].convert_dtypes()
-                        elif 'DateParseError' in str(type(e)) and '__-__' in str(e):
+                        elif 'DateParseError' in str(type(e)) and '-__' in str(e):
                             # Ignore case where month and day are underscores (i.e. 2023-__-__)
                             pass
                         else:
                             raise
-                    except:
+                    except TypeError as e:
+                        if "Period'> is not convertible to datetime" in str(e):
+                            # Mixture of datetimes and periods
+                            pass
+                        else:
+                            raise
+                    except Exception as e:
                         raise
                 elif date_field.lower()=="year" and (table[date_field].dt.month==1).all() and \
                     (table[date_field].dt.day==1).all():

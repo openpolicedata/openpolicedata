@@ -29,10 +29,12 @@ def parse_date_to_datetime(date_col):
                     else:
                         return int(x) if pd.notnull(x) else x
 
-                d.iloc[:,1] = date_col.iloc[:,1].apply(month_name_to_num)
+                d[d.columns[1]] = date_col.iloc[:,1].apply(month_name_to_num)
 
                 if d.shape[1]==2:
-                    return d.apply(lambda x: pd.Period(to_datetime(f"{x.iloc[1]}/1/{x.iloc[0]}"), 'M'), axis=1)
+                    return d.apply(lambda x: pd.Period(to_datetime(f"{int(x.iloc[1])}/1/{int(x.iloc[0])}"), 'M') 
+                                   if pd.notnull(x.iloc[1])
+                                   else pd.Period(to_datetime(f"{int(x.iloc[0])}"), 'Y'), axis=1)
                 else:
                     return to_datetime(d)
         else:
@@ -49,7 +51,7 @@ def parse_date_to_datetime(date_col):
                 with warnings.catch_warnings():
                     warnings.filterwarnings("ignore", category=RuntimeWarning, message="invalid value encountered in cast")
                     new_col = date_col.convert_dtypes()
-                if new_col.dtype in ["object", "string"] and \
+                if new_col.dtype in ["object", "string", "string[python]"] and \
                     new_col.apply(lambda x: pd.isnull(x) or isinstance(x,int) or x.isdigit() or x.strip()=="").all():
                     date_col = new_col.apply(lambda x: int(x) if (pd.notnull(x) and (isinstance(x,int) or x.isdigit())) else np.nan)
                     dts = date_col[date_col.notnull()]
@@ -118,9 +120,9 @@ def parse_date_to_datetime(date_col):
 
                     return new_date_col
                     
-            elif date_col.dtype == "O":
+            elif date_col.dtype in ["O", "object", "string", "string[python]"]:
                 new_col = date_col.convert_dtypes()
-                if new_col.dtype == "string":
+                if new_col.dtype in ["string", "string[python]"]:
                     p = re.compile(r"\d{1,2}[/-]\d{1,2}[/-]\d{2,4}")
                     p2 = re.compile(r"\d{4}[/-]\d{1,2}[/-]\d{1,2}")
                     p3 = re.compile(r"\d{2}-[A-Z][a-z][a-z]-\d{2,4}", re.IGNORECASE)
@@ -205,10 +207,7 @@ def validate_date(df, match_cols_test):
 
             one_date = dts.iloc[0]
             max_val = 6
-            same_sec = (dts.dt.second == one_date.second).all()
             new_score = None
-            if not same_sec: 
-                new_score = max_val
             same_min = (dts.dt.minute == one_date.minute).all()
             if new_score is None and not same_min: 
                 new_score = max_val-1
@@ -365,11 +364,13 @@ def parse_time(time_col):
                 raise NotImplementedError()
 
         return pd.Series([dt.time(hour=int(x),minute=int(y)) if (pd.notnull(x) and pd.notnull(y)) else pd.NaT for x,y in zip(hour,min)])
-    elif time_col.dtype == 'O':
+    elif time_col.dtype in ['O','string[python]']:
         new_col = time_col.convert_dtypes()
-        if new_col.dtype == "string" or time_col.apply(lambda x: isinstance(x,str) or isinstance(x,int)).all():
+        if new_col.dtype in ["string",'string[python]'] or \
+            time_col.apply(lambda x: isinstance(x,str) or isinstance(x,int) or pd.isnull(x) or isinstance(x,dt.time)).all():
             # Cleanup split AM or PM, which causes a warning from pandas
-            new_col = new_col.apply(lambda x: x.replace("P M","PM").replace("A M","AM"))
+            new_col = new_col.apply(lambda x: x.replace("P M","PM").replace("A M","AM") if isinstance(x,str) else x)
+            new_col = new_col.apply(lambda x: x.strftime('%H:%M') if isinstance(x,dt.time) else x)
             try:
                 new_col = to_datetime(new_col)
                 return new_col.dt.time
@@ -403,7 +404,7 @@ def parse_time(time_col):
                     if x.strip() in ["","-"]:
                         return pd.NaT
                     elif len(x) == 0 or len(x) > 4 or not x.isdigit():
-                        if x in ["#NAME?",'#VALUE!', 'TIME'] or x.startswith('C2') or \
+                        if x in ["#NAME?",'#VALUE!', 'TIME','NULL'] or re.search('^C\d+',x) or \
                             any([y.search(x) for y in p_date]):  # Date accidently entered in time column
                             # C2 values were observed in 1 dataset
                             return pd.NaT
@@ -411,12 +412,15 @@ def parse_time(time_col):
                             raise ValueError("Expected HHMM format")
 
                     min = float(x[-2:])
+                    if min > 59:
+                        return pd.NaT
+                    
                     if len(x) > 2:
                         hour = float(x[:-2])
                     else:
                         hour = 0
 
-                    if min > 59:
+                    if hour > 23:
                         return pd.NaT
 
                     return dt.time(hour=int(hour),minute=int(min))
@@ -456,10 +460,36 @@ def parse_time(time_col):
         raise NotImplementedError()
     
 
-def to_datetime(col, *args, **kwargs):
+def to_datetime(col, ignore_errors=False, *args, **kwargs):
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=UserWarning, message="Could not infer format")
         try:
             return pd.to_datetime(col, *args, **kwargs)
+        except UnicodeEncodeError as e:
+            if ignore_errors and isinstance(col, pd.Series):
+                def to_datetime_local(x, *args, **kwargs):
+                    try:
+                        return pd.to_datetime(x, *args, **kwargs)
+                    except:
+                        return x
+                return col.apply(to_datetime_local)
+            else:
+                raise
         except ValueError as e:
-            return pd.to_datetime(col, *args, format='mixed', **kwargs)
+            if ignore_errors and "Given date string" in str(e) and "not likely a datetime" in str(e) and \
+                (len(args)>0 or 'errors' not in kwargs or kwargs['errors']!='coerce'):
+                new_kwargs = kwargs.copy()
+                new_kwargs['errors'] = 'coerce'
+                dts = pd.to_datetime(col, *args, **new_kwargs)
+                raise NotImplementedError()
+            elif ignore_errors and isinstance(col,str) and \
+                ((m:=re.search(r'^(?P<year>\d{4})\-(?P<month>[\d\_]{2})\-\_\_', col)) or \
+                 (m:=re.search(r'^(?P<year>\d{4})\-(?P<month>[\_]{2})\-\d{2}', col))):
+                if m.groupdict()['month'].isdigit():
+                    return pd.Period(freq='M', year=int(m.groupdict()['year']), month=int(m.groupdict()['month']))
+                else:
+                    return pd.Period(freq='Y', year=int(m.groupdict()['year']))
+            else:
+                return pd.to_datetime(col, *args, format='mixed', **kwargs)
+        except Exception as e:
+            raise

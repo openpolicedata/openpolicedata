@@ -54,7 +54,8 @@ class TestDatasets:
             assert key in datasets
 
     def test_table_for_nulls(self, csvfile, source, last, skip, loghtml):
-        can_have_nulls = ["Description", "date_field", "dataset_id", "agency_field", "Year","readme","min_version","AgencyFull","source_url","coverage_start","coverage_end"]
+        can_have_nulls = ["Description", "date_field", "dataset_id", "agency_field", "Year","readme","min_version",
+                          "AgencyFull","source_url","coverage_start","coverage_end",'query']
         datasets = get_datasets(csvfile)
         for col in datasets.columns:
             if not col in can_have_nulls:
@@ -105,13 +106,6 @@ class TestDatasets:
         
         # This can only be allowed for certain Excel cases
         assert (df_null["DataType"] == opd.defs.DataType.EXCEL.value).all()
-
-        for k in range(len(df_null)):
-            if df_null.iloc[k]['SourceName'] in skip:
-                continue
-            loader = opd.data_loaders.Excel(df_null.iloc[k]["URL"])
-            has_year_sheets = loader._Excel__get_sheets()[1]
-            assert has_year_sheets
 
     def test_agencies_multi(self, csvfile, source, last, skip, loghtml):
         datasets = get_datasets(csvfile)

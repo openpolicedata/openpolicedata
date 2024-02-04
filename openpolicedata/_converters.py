@@ -257,7 +257,8 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
         delim = [d for d in delims if d in x]
         # Look for delimited multi-race data
         if not known_single and len(delim)>0 and \
-            x.lower().replace(" ","") not in ["hawaiian/pacific", "middleeastern/southasian",
+            not x.lower().startswith("some other") and \
+            x.lower().replace(" ","") not in ["hawaiian/pacific", "middleeastern/southasian", 'n/a',
                                               'asian/pacis','unk/oth','oth/unk', 'black/africanamerican','hispanic/latino',
                                               "americanindian/alaskanative",'a/indian'] and \
             not any([x.lower() in ['unknown','other'] for x in x.split(delim[0])]):
@@ -265,7 +266,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
             delim = delim[0]
             race_list = []
             for v in x.split(delim):
-                if v=="INDIAN" and "BURMESE" in x:
+                if (v=="INDIAN" and "BURMESE" in x):
                     # Handle special case to prevent setting someone from country of India to Indigenous
                     continue
                 new_val = _create_race_lut(v, no_id, source_name, race_cats, agg_cat, known_single=True)
@@ -391,7 +392,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
              return race_cats[defs._race_keys.SOUTH_ASIAN]
         else:
             return race_cats[defs._race_keys.MIDDLE_EASTERN_SOUTH_ASIAN] 
-    if has_me and (x in ["ME","ARABIC"] or "MIDDLE EAST" in x):
+    if has_me and (x in ["ME","ARABIC"] or "MIDDLE EAST" in x) and "AFRICA" not in x:  # Ignore Middle Eastern or North African
         if "SOUTH ASIAN" in x:
             if has_me_or_sa:
                 return race_cats[defs._race_keys.MIDDLE_EASTERN_SOUTH_ASIAN]
@@ -412,7 +413,8 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
         "NAT AMER" in x):
         return race_cats[defs._race_keys.INDIGENOUS] 
     if has_multiple and ("OR MORE" in x or "MULTI" in x or \
-        x.replace(" ","") in ["MIXED","BIRACIAL","MIXEDRACE","MORE THAN TWO RACES".replace(" ","")]):
+        x.replace(" ","") in ["MIXED","BIRACIAL","MIXEDRACE","MORE THAN TWO RACES".replace(" ",""),
+                              "MORE THAN 2 RACES".replace(" ","")]):
         return race_cats[defs._race_keys.MULTIPLE]
     if defs._race_keys.OTHER_UNKNOWN in race_cats and "UNK" in x and "OTH" in x:
         return race_cats[defs._race_keys.OTHER_UNKNOWN]
@@ -448,11 +450,12 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
         elif no_id=="error":
             raise ValueError(f"Unknown value in race column: {orig}")
         elif no_id=="test":
-            if x in ["MALE","FEMALE","GIVING ANYTHING OF VALUE","REFUSED", "NA","M","F","OTHER/NOT REPORTED"] or \
+            if x in ["MALE","FEMALE","GIVING ANYTHING OF VALUE","REFUSED", "NA","M","F","OTHER/NOT REPORTED", 
+                     'UNOCCUPIED VEHICLE','MIDDLE EASTERN OR NORTH AFRICAN','P','PAKISTANI','DUPLICATE'] or \
                 (source_name in ["Chapel Hill","Lansing","Fayetteville"] and x in ["S","P"]) or \
                 (source_name=="Burlington" and x in ["EXPUNGED"]) or \
                 (source_name in ["Cincinnati","San Diego"] and x in ["F","S","P"]) or \
-                (source_name in ["Columbia"] and x in ["M","P"]) or \
+                (source_name in ["Columbia"] and x in ["M","P",'34']) or \
                 (source_name in ["Urbana"] and x in ["BUSINESS OR OTHER"]) or \
                 (source_name in ["Bloomington","Beloit"] and x in ["M"]) or \
                 (source_name in ["Beloit"] and x in ["L"]) or \
@@ -467,6 +470,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
                 (x=="PENDING RELEASE" and source_name=="Portland") or \
                 (x=="IRAK" and source_name=="Chattanooga") or \
                 (x=="W\nW" and source_name=="Sparks") or \
+                (x in ['E','P'] and source_name=="Tucson") or \
                 ("DOG" in x) or \
                 (source_name in ["New Orleans"] and "NOT APPLICABLE (NON" in x) or \
                 (source_name in ["Detroit", "Fairfax County"] and x in ["N","SELECT","UNVERIFIED",'240','160','180','P','120']) or \
@@ -523,11 +527,14 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
             x = [x for x in abbrev_full_match.groups() if len(x)>1][0].strip()
         x = x.upper().replace("-","").replace("_","").replace(" ","").replace("'","")
 
-        if source_name in ["New York City", "Los Angeles", "Chicago"]:
+        if source_name in ["New York City", "Los Angeles", "Chicago",'New York']:
             # Handling dataset-specific codes
             if source_name == "New York City":
                 # https://www.nyc.gov/assets/nypd/downloads/zip/analysis_and_planning/stop-question-frisk/SQF-File-Documentation.zip
                 map_dict = {"Z":"Unknown"}
+            elif source_name == "New York":
+                # https://data.ny.gov/Transportation/Traffic-Tickets-Issued-Four-Year-Window/q4hy-kbtf/about_data
+                map_dict = {"C":"Organization"}
             elif source_name in ["Los Angeles",'Chicago']:
                 # https://data.lacity.org/Public-Safety/Traffic-Collision-Data-from-2010-to-Present/d5tf-ez2w
                 # https://home.chicagopolice.org/wp-content/uploads/2020/08/ISR-Data-Dictionary.csv
@@ -586,11 +593,12 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
         return gender_cats[defs._gender_keys.UNKNOWN]
     
     if no_id=="test":
-        bad_data = ["BLACK","WHITE"]
-        if "EXEMPT" in x or x in ["DATAPENDING", "NOTAPPLICABLE","N/A"] or ("BUSINESS" in x and source_name=="Cincinnati"):
+        bad_data = ["BLACK","WHITE",'HISPANIC','ASIAN','FEMALE10','DUPLICATE']
+        if "EXEMPT" in x or x in ["DATAPENDING", "NOTAPPLICABLE","N/A",'NA'] or ("BUSINESS" in x and source_name=="Cincinnati"):
             return orig
         elif x in bad_data or \
             (source_name=="New York City" and (x=="Z" or x.isdigit())) or \
+            (source_name=="New York" and x in ["Organization".upper(), "X"]) or \
             (source_name=="Baltimore" and x in ["Y","Z"]) or \
             (source_name=="Urbana" and x in ["."]) or \
             (source_name=="Greensboro" and x in ["ASIAN"]) or \
@@ -609,7 +617,7 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
             (x=="X" and source_name in ["Sacramento", "State Police", "Washington D.C.","Northampton"]) or \
             "DOG" in x or \
             x in ["UNDISCLOSE","UNDISCLOSED","PREFER TO SELF DESCRIBE".replace(" ",""),'NONBINARY/THIRDGENDER',
-                  "PREFER NOT TO SAY".replace(" ",""),"TGNC/OTHER","REFUSED",'UNVERIFIED','NONBINARY/OTHERX'] or \
+                  "PREFER NOT TO SAY".replace(" ",""),"TGNC/OTHER","REFUSED",'UNVERIFIED','NONBINARY/OTHERX','UNOCCUPIEDVEHICLE'] or \
             source_name == "Buffalo":
             return orig
         else:
@@ -630,10 +638,15 @@ def _create_injury_lut(x, no_id, source_name, cats, *args, **kwargs):
         else:
             return "INJURED" if x>0 else "NO INJURY"
     orig = x
-    x = x.upper().replace('-',' ').strip()
+    x = x.upper().replace('-',' ').replace('*','').strip()
 
     if len(x)==0:
         return "UNSPECIFIED"
+    elif len(words:=x.split('\n'))>1:
+        words = [_create_injury_lut(y, no_id, source_name, cats) for y in words]
+        for m in ['FATAL','INJURED']:
+            if m in words:
+                return m
 
     contains_yes = x.replace(',',' ').startswith('YES ')
     nonfatal_words = ["INJURED", 'NON FATAL', 'NON FATAL','NON FATAL INJURY', 'INJURY'] 
@@ -644,7 +657,8 @@ def _create_injury_lut(x, no_id, source_name, cats, *args, **kwargs):
 
     if is_fatal or x in fatal_words:
         return "FATAL"
-    elif x.startswith('NO INJUR') or x.startswith('NONE') or x in ["NOT INJURED",'NEITHER','NO','N', "MISS", 'SHOOT AND MISS','FALSE']:
+    elif x.startswith('NO INJUR') or x.startswith('NONE') or x.startswith('NO COMPLAINT') or\
+        x in ["NOT INJURED",'NEITHER','NO','N', "MISS", 'SHOOT AND MISS','FALSE','NO VISIBLE INJURY','UNINJURED']:
         return "NO INJURY"
     elif contains_yes or x in nonfatal_words or x in ['Y','YES','TRUE'] or \
         any([x.startswith(y) for y in ['COMPLAINED OF','COMPLAINT OF']]) or \
@@ -654,7 +668,7 @@ def _create_injury_lut(x, no_id, source_name, cats, *args, **kwargs):
                               'SCRATCH','NUMBNESS','BREATHING','CUT','STUN', 'MARKS', 'EYE', 'PEELING', 'HURT', 'ELBOW', 'KNEE',
                               'SOFT TISSUE','BLOOD','HEAD','SORE','SHOULDER', 'MINOR INJUR', 'FINGER', 'IMPACT', 'FACE', 'ARM',
                               'MOUTH', 'BACK','RIB', 'THUMB','SHIN',' EAR', 'ACHILLES', 'STRUCK', 'LEG', 'SERIOUS',
-                              'CONCUSSION','FRACTURE']]):
+                              'CONCUSSION','FRACTURE','CANINE BITE', 'MARK','BURN', 'MINOR', 'DISABL', 'PHYSICAL INJURY']]):
         return "INJURED"
     elif 'NALOXONE' in x:
         return orig
@@ -662,12 +676,13 @@ def _create_injury_lut(x, no_id, source_name, cats, *args, **kwargs):
         return 'SELF-INFLICTED FATAL'
     elif x in ['UNKNOWN','UNKNWON']:
         return 'UNKNOWN'
-    elif x in ['UNSPECIFIED', "NOT AVAILABLE"]:
+    elif x in ['UNSPECIFIED', "NOT AVAILABLE", 'NOT SPECIFIED','(MISSING)','NA']:
         return 'UNSPECIFIED'
     elif x=='OTHER':
         return 'OTHER'
     elif no_id=='test':
-        raise ValueError(f"Unknown value in injury column: {orig}")
+        if source_name not in ['Indianapolis', 'Northampton','Minneapolis','Rutland']:
+            raise ValueError(f"Unknown value in injury column: {orig}")
     elif no_id=='error':
         raise ValueError(f"Unknown value in injury column: {orig}")
     else:
@@ -686,7 +701,7 @@ def _create_fatal_lut(x, no_id, source_name, cats, *args, **kwargs):
     x = x.upper().strip()
     if x in ["FATAL","YES", "Y"]:
         return "YES"
-    elif x in ["NON-FATAL","NON FATAL", "NO","N"]:
+    elif x in ["NON-FATAL","NON FATAL", "NO","N",'NO CONTACT']:
         return "NO"
     elif x in ["SELF-INFLICTED"]:
         return "SELF-INFLICTED FATAL"
@@ -709,9 +724,10 @@ def _create_firearm_lut(x, no_id, source_name, cats, *args, **kwargs):
             return "YES" if x>0 else "NO"
     orig = x
     x = x.upper().strip()
-    if x in ["YES", "Y",'TRUE']:
+    if x in ["YES", "Y",'TRUE','FIREARM']:
         return "YES"
-    elif x in ["NO","N",'FALSE']:
+    elif x in ["NO","N",'FALSE','PHYSICAL FORCE','ELECTRICAL WEAPON','OC SPRAY','IMPACT WEAPON', 'NO FORCE'] or \
+        any([y in x for y in ['CANINE','BLANKET','DISPLAYED','CUTTING']]):
         return "NO"
     elif no_id=='test':
         raise ValueError(f"Unknown value in injury column: {orig}")
@@ -865,10 +881,13 @@ def std_list(col, vals, map_dict, delim, converter, *args, **kwargs):
     re_mult_reverse = re.compile(r"(\d+)\s?[Xx]\s?([A-Za-z])")
     for x in vals:
         if isinstance(x,str):
+            xorig = x
             for m in re_mult.finditer(x):
+                multi_found = True
                 new_str = delim.join([m.group(1) for _ in range(int(m.group(2)))])
                 x = x.replace(m.group(0), new_str)
             for m in re_mult_reverse.finditer(x):
+                multi_found = True
                 new_str = delim.join([m.group(2) for _ in range(int(m.group(1)))])
                 x = x.replace(m.group(0), new_str)
 
@@ -886,7 +905,7 @@ def std_list(col, vals, map_dict, delim, converter, *args, **kwargs):
                     new_val[k] = map_dict[i]
                     multi_found = True
 
-            map[x] = new_val
+            map[xorig] = new_val
         else:
             if x not in map_dict:
                 map_dict[x] = converter(x, *args, **kwargs)

@@ -1293,7 +1293,7 @@ class Arcgis(Data_Loader):
                         raise ValueError(f"DataFrames do not match for {self.url}")
 
                 if batch==0:
-                    date_cols = [x["name"] for x in data["fields"] if x["type"]=='esriFieldTypeDate']
+                    date_cols = [x["name"] for x in data["fields"] if x["type"]=='esriFieldTypeDate' and x['name'].lower()!='time']
                     if not self.is_table:
                         wkid = data["spatialReference"]["wkid"]
                     if len(data["features"]) not in [batch_size, nrows]:
@@ -1953,7 +1953,7 @@ def _process_date(date, date_field=None):
     if type(date[0]) == str:
         # This should already be in date format
         start_date = date[0]
-    elif date_field != None and date_field.lower() == "year":
+    elif date_field != None and 'year' in date_field.lower():
         # Assuming this as actually a string or numeric field for the year rather than a datestamp
         start_date = str(date[0])
     else:
@@ -1962,7 +1962,7 @@ def _process_date(date, date_field=None):
     if type(date[1]) == str:
         # This should already be in date format
         stop_date = date[1]
-    elif date_field != None and date_field.lower() == "year":
+    elif date_field != None and 'year' in date_field.lower():
         # Assuming this as actually a string or numeric field for the year rather than a datestamp
         stop_date = str(date[1])
     else:
