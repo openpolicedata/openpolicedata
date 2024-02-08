@@ -404,7 +404,7 @@ def parse_time(time_col):
                     if x.strip() in ["","-"]:
                         return pd.NaT
                     elif len(x) == 0 or len(x) > 4 or not x.isdigit():
-                        if x in ["#NAME?",'#VALUE!', 'TIME','NULL'] or re.search('^C\d+',x) or \
+                        if x in ["#NAME?",'#VALUE!', 'TIME','NULL'] or re.search(r'^C\d+',x) or \
                             any([y.search(x) for y in p_date]):  # Date accidently entered in time column
                             # C2 values were observed in 1 dataset
                             return pd.NaT
@@ -474,7 +474,7 @@ def to_datetime(col, ignore_errors=False, *args, **kwargs):
                         return x
                 return col.apply(to_datetime_local)
             else:
-                raise
+                return col
         except ValueError as e:
             if ignore_errors and "Given date string" in str(e) and "not likely a datetime" in str(e) and \
                 (len(args)>0 or 'errors' not in kwargs or kwargs['errors']!='coerce'):
