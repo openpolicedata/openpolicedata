@@ -69,16 +69,15 @@ class TestData:
 
 				src = data.Source(srcName, state=state)
 
+				table_print = datasets.iloc[i]["TableType"]
+				now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
+				print(f"{now} Testing {i+1} of {len(datasets)}: {srcName} {table_print} table")
+
 				if datasets.iloc[i]["DataType"] == DataType.EXCEL.value:
 					loader = opd.data_loaders.Excel(datasets.iloc[i]["URL"])
 					has_year_sheets = loader._Excel__get_sheets()[1]
 					if not has_year_sheets:
-						continue
-
-
-				table_print = datasets.iloc[i]["TableType"]
-				now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
-				print(f"{now} Testing {i+1} of {len(datasets)}: {srcName} {table_print} table")
+						continue				
 
 				already_ran.append((srcName, state, datasets.iloc[i]["TableType"]))
 
@@ -246,13 +245,13 @@ if __name__ == "__main__":
 	tp = TestData()
 	# (self, csvfile, source, last, skip, loghtml)
 	csvfile = None
-	csvfile = os.path.join("..","opd-data","opd_source_table.csv")
+	# csvfile = os.path.join("..","opd-data","opd_source_table.csv")
 	last = None
-	# last = 875-234+1
+	last = 922-541+1
 	source = None
-	source = "Bloomington"
+	# source = "Bloomington"
 	skip = None
-	skip = "Corona"
+	# skip = "Corona"
 	tp.test_get_years(csvfile, source, last, skip, None)
 	# tp.test_get_agencies(csvfile, None, None, skip, None)
 	# tp.test_get_agencies_name_match(csvfile, None, None, skip, None)

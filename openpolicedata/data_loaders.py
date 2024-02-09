@@ -31,10 +31,10 @@ except:
 
 try:
     from .datetime_parser import to_datetime
-    from .exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError
+    from .exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError, DateFilterException
 except:
     from datetime_parser import to_datetime
-    from exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError
+    from exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError, DateFilterException
 
 logger = logging.getLogger("opd-load")
 
@@ -1689,16 +1689,26 @@ class Socrata(Data_Loader):
     def __construct_where(self, year, opt_filter):
         where = ""
         if self.date_field!=None and year!=None:
+            filter_year = False
             assume_date = False
             try:
                 # Get metadata to ensure that date is not formatted as text
                 meta = self.client.get_metadata(self.data_set)
                 column = [x for x in meta['columns'] if x['fieldName']==self.date_field]
+                if len(column)>0 and 'dataTypeName' in column[0] and column[0]['dataTypeName']=='text':
+                    # The date column is text. It may have some metadata about it's largest value which 
+                    # will tell us if it's in YYYY-MM-DD format in which case our filtering will still work.
+                    # If not, we can only filter by year with a text search.
+                    if not ('cachedContents' in column[0] and 'largest' in column[0]['cachedContents'] and \
+                        isinstance(column[0]['cachedContents']['largest'], str) and \
+                            re.search(r'^\d{4}\-\d{2}\-\d{2}', column[0]['cachedContents']['largest'])):
+                        filter_year = True
             except:
                 assume_date = True
+
             if not assume_date and len(column)==0:
                 raise ValueError(f"Date field {self.date_field} not found in dataset")
-            if not assume_date and 'dataTypeName' in column[0] and column[0]['dataTypeName']=='text':
+            if filter_year:
                 start_date, stop_date = _process_date(year, date_field=self.date_field, force_year=True)
                 where = ''
                 for y in range(int(start_date),int(stop_date)+1):
@@ -1972,8 +1982,9 @@ def _process_date(date, date_field=None, force_year=False):
     
     is_year = force_year or (date_field != None and 'year' in date_field.lower())
     for d in date:
-        if is_year and not _check_year(date[0]):
-            raise ValueError(f"Column {date_field} appears to contain year information not dates. The input {d} appears to not be a year.")
+        if is_year and not _check_year(d):
+            raise DateFilterException(f"Column {date_field} is not a date column. It either contains a year or is a date but in a text format. "+
+                             "Currently, only a year filter is allowed for this case, but the input {d} appears to not be a year.")
 
     if type(date[0]) == str:
         # This should already be in date format

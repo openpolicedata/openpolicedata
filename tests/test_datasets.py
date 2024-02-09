@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import os
 import re
 from packaging import version
 import pytest
@@ -16,7 +17,7 @@ def get_datasets(csvfile):
 
     return opd.datasets.query()
 
-csv_file = "..\\opd-data\\opd_source_table.csv"
+csv_file = os.path.join("..",'opd-data','opd_source_table.csv')
 
 class TestDatasets:
     @pytest.mark.parametrize("file", [(), (csv_file,)])
@@ -24,9 +25,15 @@ class TestDatasets:
         orig = opd.datasets.datasets
         opd.datasets.datasets = None
         assert opd.datasets.datasets is None
-        opd.datasets.reload(*file)
-        assert isinstance(opd.datasets.datasets, pd.DataFrame)
-        opd.datasets.datasets = orig
+        try:
+            if len(file)>0:
+                assert os.path.exists(*file)
+            opd.datasets.reload(*file)
+            assert isinstance(opd.datasets.datasets, pd.DataFrame)
+        except:
+            raise
+        finally:
+            opd.datasets.datasets = orig
 
 
     def test_duplicates(self, csvfile, source, last, skip, loghtml):

@@ -64,3 +64,6 @@ class AutoMergeError(OPD_GeneralError):
 
 class BadCategoryDict(OPD_GeneralError):
     pass
+
+class DateFilterException(OPD_GeneralError):
+    pass

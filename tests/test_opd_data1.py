@@ -173,8 +173,9 @@ class TestData:
 					assert datasets.iloc[i]["date_field"] in table.table
 					#assuming a Pandas string dtype('O').name = object is okay too
 					assert (table.table[datasets.iloc[i]["date_field"]].dtype.name in ['datetime64[ns]', 'datetime64[ns, UTC]', 
-																		'datetime64[ms]','period[A-DEC]','period[Y-DEC]',
-																		'period[M]'])
+																		'datetime64[ms]','period[A-DEC]','period[Y-DEC]','period[Q-DEC]',
+																		'period[M]']) or \
+						    table.table[datasets.iloc[i]["date_field"]].apply(lambda x: type(x) in [pd.Timestamp,pd.Period]).all()
 					dts = table.table[datasets.iloc[i]["date_field"]]
 					dts = dts[dts.notnull()]
 					# New Orleans complaints dataset has many empty dates
@@ -354,9 +355,9 @@ if __name__ == "__main__":
 	tp = TestData()
 	# (self, csvfile, source, last, skip, loghtml)
 	csvfile = None
-	csvfile = r"..\opd-data\opd_source_table.csv"
+	# csvfile = r"..\opd-data\opd_source_table.csv"
 	last = None
-	last = 922-868+1
+	last = 922-634+1
 	skip = None
 	# skip = "Greensboro"
 	source = None

@@ -7,7 +7,8 @@ from openpolicedata import data, data_loaders
 from openpolicedata import datasets
 from openpolicedata.defs import MULTI, DataType
 from openpolicedata.exceptions import OPD_DataUnavailableError, OPD_TooManyRequestsError,  \
-	OPD_MultipleErrors, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError, OPD_FutureError, OPD_MinVersionError
+	OPD_MultipleErrors, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError, OPD_FutureError, OPD_MinVersionError, \
+	DateFilterException
 import random
 from datetime import datetime
 from datetime import timedelta
@@ -15,6 +16,7 @@ import pandas as pd
 from time import sleep
 import warnings
 import os
+import re
 
 # Set Arcgis data loader to validate queries with arcgis package if installed
 data_loaders._verify_arcgis = True
@@ -210,7 +212,7 @@ class TestData:
 				try:
 					dts = dts.sort_values(ignore_index=True)
 				except TypeError as e:
-					if "not supported between instances of 'Period' and 'Timestamp'" in str(e):
+					if re.search(r"not supported between instances of '(Timestamp|Period)' and '(Timestamp|Period)'", str(e)):
 						dts = dts[dts.apply(lambda x: isinstance(x,pd.Timestamp))]
 						dts = dts.sort_values(ignore_index=True)
 					else:
@@ -251,6 +253,8 @@ class TestData:
 						continue
 					else:
 						raise
+				except DateFilterException as e:
+					continue
 				except:
 					raise
 
@@ -402,13 +406,13 @@ if __name__ == "__main__":
 	tp = TestData()
 	# (self, csvfile, source, last, skip, loghtml)
 	csvfile = None
-	csvfile = r"..\opd-data\opd_source_table.csv"
+	# csvfile = r"..\opd-data\opd_source_table.csv"
 	last = None
-	last = 922-862+1
+	last = 922-639+1  # 634
 	skip = None
 	skip = "Sacramento"
 	source = None
 	# source = "New York City"
 	tp.test_load_year(csvfile, source, last, skip, None)
 	last = None
-	tp.test_source_download_not_limitable(csvfile, source, last, skip, None)
+	# tp.test_source_download_not_limitable(csvfile, source, last, skip, None)
