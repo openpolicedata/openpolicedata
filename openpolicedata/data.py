@@ -1388,6 +1388,8 @@ def _check_date(table, date_field):
                     try:
                         # Attempt to convert
                         table = table.astype({date_field: 'datetime64[ns]'})
+                    except UnicodeEncodeError:
+                        pass
                     except ValueError as e:
                         if len(e.args)>0 and e.args[0].startswith('Cannot mix tz-aware with tz-naive values') and \
                             table[date_field].apply(lambda x: x.hour==0 and x.minute==0).all() and \
