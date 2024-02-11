@@ -190,14 +190,15 @@ class TestData:
 		if last == None:
 			last = float('inf')
 		get_datasets(csvfile)
-		src = data.Source("Virginia")
-		agency="Fairfax County Police Department"
+		src = data.Source("New York")
+		agency="BUFFALO POLICE DEPT"
 		# For speed, set private limit parameter so that only a single entry is requested
-		table = src.load('STOPS', 2021, agency=agency, pbar=False, nrows=100)
+		table = src.load('TRAFFIC CITATIONS', 2021, agency=agency, pbar=False, nrows=100)
 		
 		assert len(table.table)==100
 		assert table.table[table.agency_field].nunique()==1
 		assert table.table.iloc[0][table.agency_field] == agency
+
 
 	def test_to_csv(self, csvfile, source, last, skip, loghtml):
 		src = data.Source("Virginia")
