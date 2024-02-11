@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed support for Python 3.7 which has reached end of life: https://www.python.org/downloads/release/python-370/
 ### Fixed
 - Improved speed and feedback when reading large CSV files contained in zip files
+- Source.get_agencies with a partial_name is now case-insensitive
 ### Security
 
 ## v0.5.8 - 2023-09-28

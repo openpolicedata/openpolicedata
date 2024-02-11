@@ -65,6 +65,7 @@ OpenPoliceData provides access to police data with 2 simple lines of code:
 - Removed support for Python 3.7 which has reached end of life: https://www.python.org/downloads/release/python-370/
 ### Fixed
 - Improved speed and feedback when reading large CSV files contained in zip files
+- Source.get_agencies with a partial_name is now case-insensitive
 
 Complete change log available at: https://github.com/openpolicedata/openpolicedata/blob/main/CHANGELOG.md
 

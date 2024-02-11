@@ -12,6 +12,7 @@ from time import sleep
 import warnings
 import os
 import pandas as pd
+import pytest
 
 sleep_time = 0.1
 log_filename = f"pytest_url_errors_{datetime.now().strftime('%Y%m%d_%H')}.txt"
@@ -33,6 +34,11 @@ else:
 		pass
 	
 warn_errors = (OPD_DataUnavailableError, OPD_SocrataHTTPError, OPD_FutureError, OPD_MinVersionError)
+
+multi_states = ['Connecticut','New York','Virginia']
+multi_tables = ['TRAFFIC STOPS','TRAFFIC CITATIONS','STOPS']
+multi_years = [MULTI,MULTI,MULTI]
+multi_partial = ["Hartford",'Buffalo',"Arlington"]
 
 def get_datasets(csvfile):
     if csvfile != None:
@@ -159,16 +165,25 @@ class TestData:
 				sleep(sleep_time)
 
 
-	def test_get_agencies_name_match(self, csvfile, source, last, skip, loghtml):
-		if last == None:
-			last = float('inf')
-		get_datasets(csvfile)
+	def test_multi_agency_list(self, csvfile, source, last, skip, loghtml):
+		datasets = get_datasets(csvfile)
+		for i in range(len(datasets)):
+			if is_filterable(datasets.iloc[i]["DataType"]) and datasets.iloc[i]["Agency"] == MULTI:
+				assert any([datasets.iloc[i]['State']==x and datasets.iloc[i]['TableType']==y and datasets.iloc[i]['Year']==z for 
+							x,y,z in zip(multi_states, multi_tables,multi_years)])
 
-		src = data.Source("Virginia")
 
-		agencies = src.get_agencies(partial_name="Arlington")
+	@pytest.mark.parametrize('state,table_type,year,partial',[(x,y,z,a) for x,y,z,a in zip(multi_states, multi_tables,multi_years,multi_partial)])
+	def test_get_agencies_name_match(self, csvfile, source, last, skip, loghtml, state, table_type, year, partial):
+		src = data.Source(state)
+		try:
+			agencies = src.get_agencies(partial_name=partial, table_type=table_type, year=year)
+		except OPD_MinVersionError:
+			return
+		except Exception as e:
+			raise
 
-		assert len(agencies) == 2
+		assert len(agencies) > 1
 				
 				
 	def test_agency_filter(self, csvfile, source, last, skip, loghtml):

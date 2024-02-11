@@ -844,10 +844,7 @@ class Source:
                 df = loader.load(year)
                 return df[src["agency_field"]].unique().tolist()
             elif src['DataType'] ==defs.DataType.SOCRATA:
-                if partial_name is not None:
-                    opt_filter = src["agency_field"] + " LIKE '%" + partial_name + "%'"
-                else:
-                    opt_filter = None
+                opt_filter = 'lower('+ src["agency_field"] + ") LIKE '%" + partial_name.lower() + "%'" if partial_name else None
 
                 select = "DISTINCT " + src["agency_field"]
                 if year == defs.MULTI:
