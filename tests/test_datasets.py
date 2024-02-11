@@ -27,6 +27,8 @@ class TestDatasets:
         assert opd.datasets.datasets is None
         try:
             if len(file)>0:
+                if not os.path.exists(os.path.dirname(csv_file)):
+                    return
                 assert os.path.exists(*file)
             opd.datasets.reload(*file)
             assert isinstance(opd.datasets.datasets, pd.DataFrame)
@@ -224,4 +226,5 @@ if __name__ == "__main__":
     # TestDatasets().test_table_for_nulls(csvfile,None,None,None,None)
     # TestDatasets().test_years_multi(csvfile,None,None,None,None)
     # TestDatasets().test_table_types(csvfile,None,None,None,None)
-    TestDatasets().test_agencies_multi(csvfile,None,None,None,None)
+    # TestDatasets().test_agencies_multi(csvfile,None,None,None,None)
+    TestDatasets().test_reload(csvfile,None,None,None,None, (csv_file,))

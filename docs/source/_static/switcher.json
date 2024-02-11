@@ -4,10 +4,15 @@
       "url": "https://openpolicedata.readthedocs.io/en/latest/"
     },
     {
-      "name": "0.5.8 (stable)",
-      "version": "v0.5.8",
+      "name": "0.6.0 (stable)",
+      "version": "v0.6.0",
       "url": "https://openpolicedata.readthedocs.io/en/stable/",
       "preferred": true
+    },
+    {
+      "name": "0.5.8",
+      "version": "v0.5.8",
+      "url": "https://openpolicedata.readthedocs.io/en/v0.5.8/"
     },
     {
       "name": "0.5.7",

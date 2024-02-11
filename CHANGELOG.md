@@ -6,11 +6,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 ### Added
-- Data standardization: Added function for standardizing some column names and data values
-### Changed
 ### Deprecated
 ### Removed
 ### Fixed
+
+## v0.6 - 2024-02-10
+### Added
+- Data standardization: Added function for standardizing some column names and data values
+- Added reload function to datasets module to allow reloading the datasets table (in case of an update) or loading a datasets table from a custom location
+- Added functions for getting race, gender, and age columns after standardization
+- Added merge function for merging 2 table together
+- Added function for finding related tables
+- Added a function for expanding rows that contain information on multiple officers or subjects into multiple row
+- Made opd.defs.TableType and opd.defs.columns available as opd.TableType and opd.Column
+- Added Table.urls to enable quick retrieval of URLs associated with a dataset
+- Added verbose mode to enable transparency when loading data with get_count, load_data_from_url, and load_from_url_gen
+- Added Source.load_iter to be used instead of Source.load_from_url_gen
+- Added Source.load to be used instead of Source.load_from_url
+### Deprecated
+- Deprecated Source.load_from_url_gen. Will be removed in Version 1.0
+- Deprecated Source.load_from_url. Will be removed in Version 1.0
+### Removed
+- Removed support for Python 3.7 which has reached end of life: https://www.python.org/downloads/release/python-370/
+### Fixed
+- Improved speed and feedback when reading large CSV files contained in zip files
 ### Security
 
 ## v0.5.8 - 2023-09-28

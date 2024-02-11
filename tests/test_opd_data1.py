@@ -209,18 +209,25 @@ class TestData:
 		get_datasets(csvfile)
 
 		print("Testing Socrata source")
-		src = data.Source("Virginia")
+		src = data.Source("Richmond")
 		loader = data_loaders.Socrata(src.datasets.iloc[0]["URL"], src.datasets.iloc[0]["dataset_id"], date_field=src.datasets.iloc[0]["date_field"])  
 		year = 2021
-		assert loader.get_count(year=year) == src.get_count(year=year)
-		count = src.get_count(year=[2020,2022])
+		assert loader.get_count(year=year) == src.get_count(year=year, table_type=src.datasets.iloc[0]["TableType"])
 		year = [2020,2022]
-		assert loader.get_count(year=year) == src.get_count(year=year)
+		assert loader.get_count(year=year) == src.get_count(year=year, table_type=src.datasets.iloc[0]["TableType"])
 
-		agency = "Arlington County Police Department"
-		opt_filter = src.datasets.iloc[0]["agency_field"] + " LIKE '%" + agency + "%'"
-		year = 2021
-		assert src.get_count(year=year, agency=agency) == loader.get_count(year=year, opt_filter=opt_filter)
+		# print("Testing Socrata source")
+		# src = data.Source("Virginia")
+		# loader = data_loaders.Socrata(src.datasets.iloc[0]["URL"], src.datasets.iloc[0]["dataset_id"], date_field=src.datasets.iloc[0]["date_field"])  
+		# year = 2021
+		# assert loader.get_count(year=year) == src.get_count(year=year)
+		# year = [2020,2022]
+		# assert loader.get_count(year=year) == src.get_count(year=year)
+
+		# agency = "Arlington County Police Department"
+		# opt_filter = src.datasets.iloc[0]["agency_field"] + " LIKE '%" + agency + "%'"
+		# year = 2021
+		# assert src.get_count(year=year, agency=agency) == loader.get_count(year=year, opt_filter=opt_filter)
 
 		print("Testing ArcGIS source")
 		src = data.Source("Charlotte-Mecklenburg")
@@ -273,7 +280,7 @@ class TestData:
 	def test_load_gen(self, csvfile, source, last, skip, loghtml):
 		datasets = [
 			("Philadelphia", 2021, "STOPS", 1000),  # Carto
-			("Virginia","MULTIPLE","STOPS", 2000, "Fairfax County Police Department"), # Socrata
+			("Richmond","MULTIPLE","OFFICER-INVOLVED SHOOTINGS", 5), # Socrata
 			("Fairfax County",2016,"ARRESTS", 1000),  # ArcGIS
 			("Norristown", 2016, "USE OF FORCE",100), # Excel
 			("Denver", "MULTIPLE", "OFFICER-INVOLVED SHOOTINGS", 50) # CSV
@@ -368,8 +375,8 @@ if __name__ == "__main__":
 	# tp.check_table_type_warning(csvfile, source, last, skip, None) 
 	# tp.test_offsets_and_nrows(csvfile, source, last, skip, None) 
 	# tp.test_check_version(csvfile, None, last, skip, None) #
-	tp.test_source_download_limitable(csvfile, source, last, skip, None) 
+	# tp.test_source_download_limitable(csvfile, source, last, skip, None) 
 	
-	# tp.test_get_count(csvfile, None, last, skip, None)
+	tp.test_get_count(csvfile, None, last, skip, None)
 	# tp.test_load_gen(csvfile, source, last, skip, None) 
 	

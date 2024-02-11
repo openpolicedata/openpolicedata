@@ -8,7 +8,7 @@ dynamic = ["version"]
 authors = [
   { name="Matt Sowd", email="openpolicedata@gmail.com" },
 ]
-description = "The OpenPoliceData (OPD) Python library is the most comprehensive centralized public access point for incident-level police data in the United States. OPD provides easy access to 383+ incident-level datasets for over 3500 police agencies. Types of data include traffic stops, use of force, officer-involved shootings, and complaints."
+description = "The OpenPoliceData (OPD) Python library is the most comprehensive centralized public access point for incident-level police data in the United States. OPD provides easy access to 395+ incident-level datasets for about 4800 police agencies. Types of data include traffic stops, use of force, officer-involved shootings, and complaints."
 readme = "README.md"
 license = {file = 'LICENSE'}
 requires-python = ">=3.8"
@@ -27,7 +27,7 @@ dependencies = [
     "openpyxl",
     "numpy",
     "packaging",
-    "pandas",
+    "pandas<3.0.0",
     "requests",
     "sodapy",
     "tqdm",
