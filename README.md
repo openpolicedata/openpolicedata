@@ -58,6 +58,9 @@ OpenPoliceData provides access to police data with 2 simple lines of code:
 - Added verbose mode to enable transparency when loading data with get_count, load_data_from_url, and load_from_url_gen
 - Added Source.load_iter to be used instead of Source.load_from_url_gen
 - Added Source.load to be used instead of Source.load_from_url
+- Added data loader for CKAN API
+### Changed
+- Inputs to Source.get_count is now (table_type, year, ...) instead of (year, table_type, ...) so inputs go from general to specific. Original input order is deprecated and will be removed in Version 1.0.
 ### Deprecated
 - Deprecated Source.load_from_url_gen. Will be removed in Version 1.0
 - Deprecated Source.load_from_url. Will be removed in Version 1.0

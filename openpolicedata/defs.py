@@ -17,6 +17,7 @@ class DataType(str, Enum):
     ArcGIS = "ArcGIS"
     SOCRATA = "Socrata"
     CARTO = "Carto"
+    CKAN = 'CKAN'
 
 # These are the types of tables currently available in opd.
 # Add to this list when datasets do not correspond to the below data types

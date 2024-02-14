@@ -47,7 +47,7 @@ def get_datasets(csvfile):
 
 class TestData:
 	@pytest.mark.slow(reason="This is a slow test that should be run before a major commit.")
-	def test_load_year(self, csvfile, source, last, skip, loghtml):
+	def test_load_year(self, csvfile, source, last, skip, loghtml, query={}):
 		max_count = 1e5
 		if last == None:
 			last = float('inf')
@@ -74,6 +74,14 @@ class TestData:
 				rnd = random.uniform(0,1)
 				if rnd>0.05:
 					continue
+
+			match = True
+			for k,v in query.items():
+				if datasets.iloc[i][k]!=v:
+					match = False
+					break
+			if not match:
+				continue
 
 			srcName = datasets.iloc[i]["SourceName"]
 			state = datasets.iloc[i]["State"]
@@ -313,7 +321,7 @@ class TestData:
 				warnings.warn(str(e))
 
 
-	def test_source_download_not_limitable(self, csvfile, source, last, skip, loghtml):
+	def test_source_download_not_limitable(self, csvfile, source, last, skip, loghtml, query={}):
 		if last == None:
 			last = float('inf')
 		datasets = get_datasets(csvfile)
@@ -335,6 +343,14 @@ class TestData:
 					rnd = random.uniform(0,1)
 					if rnd>0.05:
 						continue
+
+				match = True
+				for k,v in query.items():
+					if datasets.iloc[i][k]!=v:
+						match = False
+						break
+				if not match:
+					continue
 
 				srcName = datasets.iloc[i]["SourceName"]
 				state = datasets.iloc[i]["State"]
@@ -367,7 +383,7 @@ def can_be_limited(data_type, url):
 	data_type = DataType(data_type)
 	if (data_type == DataType.CSV and ".zip" in url):
 		return False
-	elif data_type in [DataType.ArcGIS, DataType.SOCRATA, DataType.CSV, DataType.EXCEL, DataType.CARTO]:
+	elif data_type in [DataType.ArcGIS, DataType.SOCRATA, DataType.CSV, DataType.EXCEL, DataType.CARTO, DataType.CKAN]:
 		return True
 	else:
 		raise ValueError("Unknown table type")
@@ -408,11 +424,11 @@ if __name__ == "__main__":
 	csvfile = None
 	# csvfile = r"..\opd-data\opd_source_table.csv"
 	last = None
-	last = 922-639+1  # 634
+	last = 922-896+1
 	skip = None
-	skip = "Sacramento"
+	# skip = "Sacramento"
 	source = None
 	# source = "New York City"
-	tp.test_load_year(csvfile, source, last, skip, None)
-	last = None
-	# tp.test_source_download_not_limitable(csvfile, source, last, skip, None)
+	tp.test_load_year(csvfile, source, last, skip, None, query={'DataType':'CKAN'})
+	# last = None
+	tp.test_source_download_not_limitable(csvfile, source, last, skip, None, query={'DataType':'CKAN'})

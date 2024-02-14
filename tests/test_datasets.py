@@ -96,9 +96,10 @@ class TestDatasets:
         rem = datasets["Year"][[type(x)!=int for x in datasets["Year"]]]
         assert ((rem == opd.defs.MULTI) | (rem == opd.defs.NA)).all()
 
-    def test_socrata_id(self, csvfile, source, last, skip, loghtml):
+    @pytest.mark.parametrize('data_type', [opd.defs.DataType.SOCRATA, opd.defs.DataType.CARTO, opd.defs.DataType.CKAN])
+    def test_dataset_id(self, csvfile, source, last, skip, loghtml, data_type):
         datasets = get_datasets(csvfile)
-        rem = datasets["dataset_id"][datasets["DataType"] == opd.defs.DataType.SOCRATA.value]
+        rem = datasets["dataset_id"][datasets["DataType"] == data_type]
         assert pd.isnull(rem).sum() == 0
 
     def test_years_multi(self, csvfile, source, last, skip, loghtml):
@@ -191,7 +192,7 @@ class TestDatasets:
 
     def test_data_types(self, csvfile, source, last, skip, loghtml):
         datasets = get_datasets(csvfile)
-        for t in datasets["DataType"]:
+        for t in datasets["DataType"].unique():
             # Try to convert to an enum
             opd.defs.DataType(t)
 
@@ -221,10 +222,11 @@ class TestDatasets:
 
 if __name__ == "__main__":
     csvfile = None
-    csvfile = "C:\\Users\\matth\\repos\\opd-data\\opd_source_table.csv"
+    csvfile = os.path.join('..', 'opd-data', "opd_source_table.csv")
+    TestDatasets().test_dataset_id(csvfile,None,None,None,None)
     # TestDatasets().test_get_table_types(csvfile,None,None,None,None)
     # TestDatasets().test_table_for_nulls(csvfile,None,None,None,None)
     # TestDatasets().test_years_multi(csvfile,None,None,None,None)
     # TestDatasets().test_table_types(csvfile,None,None,None,None)
     # TestDatasets().test_agencies_multi(csvfile,None,None,None,None)
-    TestDatasets().test_reload(csvfile,None,None,None,None, (csv_file,))
+    # TestDatasets().test_reload(csvfile,None,None,None,None, (csv_file,))

@@ -30,6 +30,68 @@ class TestProduct:
         with pytest.raises(ValueError):
             data_loaders._process_date(year)
 
+    def test_ckan(self, csvfile, source, last, skip, loghtml):
+        lim = data_loaders._default_limit
+        data_loaders._default_limit = 500
+        url = "https://data.virginia.gov"
+        dataset = "60506bbb-685f-4360-8a8c-30e137ce3615"
+        date_field = "STOP_DATE"
+        agency_field = 'AGENCY NAME'
+        loader = data_loaders.Ckan(url, dataset, date_field)
+
+        assert not loader.isfile()
+
+        count = loader.get_count()
+
+        r = requests.get(f'https://data.virginia.gov/api/3/action/datastore_search_sql?sql=SELECT COUNT(*) FROM "{dataset}"')
+        r.raise_for_status()
+        assert count==r.json()['result']['records'][0]['count']>0
+
+        year = 2022
+        count = loader.get_count(year=year)
+
+        r = requests.get(f'https://data.virginia.gov/api/3/action/datastore_search_sql?sql=SELECT COUNT(*) FROM "{dataset}"' + 
+                         f""" WHERE "{date_field}" >= '{year}-01-01' AND "{date_field}" < '{year+1}-01-01'""")
+        r.raise_for_status()
+        assert count==r.json()['result']['records'][0]['count']>0
+
+        agency='William and Mary Police Department'
+        opt_filter = {'=':{agency_field:agency}}
+        opt_filter = 'LOWER("' + agency_field + '")' + " = '" + agency.lower() + "'"
+        count = loader.get_count(year=year, opt_filter=opt_filter)
+
+        r = requests.get(f'https://data.virginia.gov/api/3/action/datastore_search_sql?sql=SELECT COUNT(*) FROM "{dataset}"' + 
+                         f""" WHERE "{date_field}" >= '{year}-01-01' AND "{date_field}" < '{year+1}-01-01' AND """+
+                         opt_filter)
+        r.raise_for_status()
+        assert count==r.json()['result']['records'][0]['count']>0
+
+        loader._last_count = None
+        df = loader.load(year=year, pbar=False, opt_filter=opt_filter)
+
+        assert len(df)==count
+
+        offset = 1
+        nrows = count - 2
+        df_offset = loader.load(year=year, nrows=nrows, offset=1, pbar=False, opt_filter=opt_filter)
+
+        assert df_offset.equals(df.iloc[offset:offset+nrows].reset_index(drop=True))
+
+        df_offset = loader.load(year=year, offset=1, pbar=False, opt_filter=opt_filter)
+        assert df_offset.equals(df.iloc[offset:].reset_index(drop=True))
+
+        r = requests.get(f'https://data.virginia.gov/api/3/action/datastore_search_sql?sql=SELECT * FROM "{dataset}"' + 
+                         f""" WHERE "{date_field}" >= '{year}-01-01' AND "{date_field}" < '{year+1}-01-01' AND """+
+                         opt_filter + " ORDER BY _id")
+        df_comp= pd.DataFrame(r.json()['result']['records'])
+        df_comp[date_field] = pd.to_datetime(df_comp[date_field])
+        df_comp = df_comp.drop(columns=['_id','_full_text'])
+        
+        assert df.equals(df_comp)
+
+        data_loaders._default_limit = lim
+
+    
     def test_carto(self, csvfile, source, last, skip, loghtml):
         lim = data_loaders._default_limit
         data_loaders._default_limit = 500
@@ -44,14 +106,14 @@ class TestProduct:
 
         r = requests.get(f"https://phl.carto.com/api/v2/sql?q=SELECT count(*) FROM {dataset}")
         r.raise_for_status()
-        assert count==r.json()["rows"][0]["count"]
+        assert count==r.json()["rows"][0]["count"]>0
 
         year = 2019
         count = loader.get_count(year=year)
 
         r = requests.get(f"https://phl.carto.com/api/v2/sql?q=SELECT count(*) FROM {dataset} WHERE {date_field} >= '{year}-01-01' AND {date_field} < '{year+1}-01-01'")
         r.raise_for_status()
-        assert count==r.json()["rows"][0]["count"]
+        assert count==r.json()["rows"][0]["count"]>0
 
         df = loader.load(year=year, pbar=False)
 
@@ -544,6 +606,7 @@ class TestProduct:
 if __name__ == "__main__":
     tp = TestProduct()
 
+    tp.test_ckan(None,None,None,None,None)
     # tp.test_carto(None,None,None,None,None)
     # tp.test_arcgis(None,None,None,None,None)
     # tp.test_arcgis_geopandas(None,None,None,None,None)

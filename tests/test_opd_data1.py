@@ -121,7 +121,7 @@ class TestData:
 				excel._Excel__check_sheet(sheets)
 
 		
-	def test_source_download_limitable(self, csvfile, source, last, skip, loghtml):
+	def test_source_download_limitable(self, csvfile, source, last, skip, loghtml, query={}):
 		datasets = get_datasets(csvfile)
 		num_stanford = 0
 		max_num_stanford = 1  # This data is standardized. Probably no need to test more than 1
@@ -138,6 +138,14 @@ class TestData:
 					num_stanford += 1
 					if num_stanford > max_num_stanford:
 						continue
+				match = True
+				for k,v in query.items():
+					if datasets.iloc[i][k]!=v:
+						match = False
+						break
+				if not match:
+					continue
+
 				srcName = datasets.iloc[i]["SourceName"]
 				state = datasets.iloc[i]["State"]
 				src = data.Source(srcName, state=state)
@@ -204,7 +212,6 @@ class TestData:
 			for e in caught_exceptions_warn:
 				warnings.warn(str(e))
 
-
 	def test_get_count(self, csvfile, source, last, skip, loghtml):
 		get_datasets(csvfile)
 
@@ -216,18 +223,18 @@ class TestData:
 		year = [2020,2022]
 		assert loader.get_count(year=year) == src.get_count(year=year, table_type=src.datasets.iloc[0]["TableType"])
 
-		# print("Testing Socrata source")
-		# src = data.Source("Virginia")
-		# loader = data_loaders.Socrata(src.datasets.iloc[0]["URL"], src.datasets.iloc[0]["dataset_id"], date_field=src.datasets.iloc[0]["date_field"])  
-		# year = 2021
-		# assert loader.get_count(year=year) == src.get_count(year=year)
-		# year = [2020,2022]
-		# assert loader.get_count(year=year) == src.get_count(year=year)
+		print("Testing CKAN source")
+		src = data.Source("Virginia")
+		loader = data_loaders.Ckan(src.datasets.iloc[0]["URL"], src.datasets.iloc[0]["dataset_id"], date_field=src.datasets.iloc[0]["date_field"])  
+		year = 2021
+		assert loader.get_count(year=year) == src.get_count(year=year)
+		year = [2020,2022]
+		assert loader.get_count(year=year) == src.get_count(year=year)
 
-		# agency = "Arlington County Police Department"
-		# opt_filter = src.datasets.iloc[0]["agency_field"] + " LIKE '%" + agency + "%'"
-		# year = 2021
-		# assert src.get_count(year=year, agency=agency) == loader.get_count(year=year, opt_filter=opt_filter)
+		agency = "Arlington County Police Department"
+		opt_filter = '"' + src.datasets.iloc[0]["agency_field"] + '"' + " = '" + agency + "'"
+		year = 2021
+		assert src.get_count(year=year, agency=agency) == loader.get_count(year=year, opt_filter=opt_filter)
 
 		print("Testing ArcGIS source")
 		src = data.Source("Charlotte-Mecklenburg")
@@ -279,6 +286,7 @@ class TestData:
 	
 	def test_load_gen(self, csvfile, source, last, skip, loghtml):
 		datasets = [
+			("Virginia",2020,"STOPS", 2000, "Fairfax County Police Department"), # CKAN
 			("Philadelphia", 2021, "STOPS", 1000),  # Carto
 			("Richmond","MULTIPLE","OFFICER-INVOLVED SHOOTINGS", 5), # Socrata
 			("Fairfax County",2016,"ARRESTS", 1000),  # ArcGIS
@@ -322,7 +330,7 @@ class TestData:
 def can_be_limited(data_type, url):
 	if (data_type == DataType.CSV and ".zip" in url):
 		return False
-	elif data_type in [DataType.ArcGIS, DataType.SOCRATA, DataType.CSV, DataType.EXCEL, DataType.CARTO]:
+	elif data_type in [DataType.ArcGIS, DataType.SOCRATA, DataType.CSV, DataType.EXCEL, DataType.CARTO, DataType.CKAN]:
 		return True
 	else:
 		raise ValueError("Unknown table type")
@@ -364,7 +372,7 @@ if __name__ == "__main__":
 	csvfile = None
 	# csvfile = r"..\opd-data\opd_source_table.csv"
 	last = None
-	last = 922-634+1
+	# last = 922-634+1
 	skip = None
 	# skip = "Greensboro"
 	source = None
@@ -375,8 +383,8 @@ if __name__ == "__main__":
 	# tp.check_table_type_warning(csvfile, source, last, skip, None) 
 	# tp.test_offsets_and_nrows(csvfile, source, last, skip, None) 
 	# tp.test_check_version(csvfile, None, last, skip, None) #
-	# tp.test_source_download_limitable(csvfile, source, last, skip, None) 
+	tp.test_source_download_limitable(csvfile, source, last, skip, None, query={'DataType':'CKAN'}) 
 	
-	tp.test_get_count(csvfile, None, last, skip, None)
+	# tp.test_get_count(csvfile, None, last, skip, None)
 	# tp.test_load_gen(csvfile, source, last, skip, None) 
 	

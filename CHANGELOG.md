@@ -6,11 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 ### Added
+### Changed
 ### Deprecated
 ### Removed
 ### Fixed
+### Security
 
-## v0.6 - 2024-02-10
+## v0.6 - 2024-02-14
 ### Added
 - Data standardization: Added function for standardizing some column names and data values
 - Added reload function to datasets module to allow reloading the datasets table (in case of an update) or loading a datasets table from a custom location
@@ -23,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added verbose mode to enable transparency when loading data with get_count, load_data_from_url, and load_from_url_gen
 - Added Source.load_iter to be used instead of Source.load_from_url_gen
 - Added Source.load to be used instead of Source.load_from_url
+- Added data loader for CKAN API
+### Changed
+- Inputs to Source.get_count is now (table_type, year, ...) instead of (year, table_type, ...) so inputs go from general to specific. Original input order is deprecated and will be removed in Version 1.0.
 ### Deprecated
 - Deprecated Source.load_from_url_gen. Will be removed in Version 1.0
 - Deprecated Source.load_from_url. Will be removed in Version 1.0
@@ -31,7 +36,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Improved speed and feedback when reading large CSV files contained in zip files
 - Source.get_agencies with a partial_name is now case-insensitive
-### Security
 
 ## v0.5.8 - 2023-09-28
 ### Added

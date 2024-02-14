@@ -844,11 +844,18 @@ class Source:
                 df = loader.load(year)
                 return df[src["agency_field"]].unique().tolist()
             elif src['DataType'] ==defs.DataType.SOCRATA:
-                opt_filter = 'lower('+ src["agency_field"] + ") LIKE '%" + partial_name.lower() + "%'" if partial_name else None
+                opt_filter = 'LOWER('+ src["agency_field"] + ") LIKE '%" + partial_name.lower() + "%'" if partial_name else None
 
                 select = "DISTINCT " + src["agency_field"]
-                if year == defs.MULTI:
-                    year = None
+                year = None if year == defs.MULTI else year
+
+                agency_set = loader.load(year, opt_filter=opt_filter, select=select, output_type="set")
+                return list(agency_set)
+            elif src['DataType'] ==defs.DataType.CKAN:
+                opt_filter = 'LOWER("'+ src["agency_field"] + '")' + " LIKE '%" + partial_name.lower() + "%'" if partial_name else None
+
+                select = 'DISTINCT "' + src["agency_field"] + '"'
+                year = None if year == defs.MULTI else year
 
                 agency_set = loader.load(year, opt_filter=opt_filter, select=select, output_type="set")
                 return list(agency_set)
@@ -1107,7 +1114,10 @@ class Source:
             if agency != None and agency_field != None:
                 # Double up any apostrophes for SQL query
                 agency = agency.replace("'","''")
-                opt_filter = agency_field + " = '" + agency + "'"
+                if src['DataType']==defs.DataType.CKAN:
+                    opt_filter = 'LOWER("' + agency_field + '"' + ") = '" + agency.lower() + "'"
+                else:
+                    opt_filter = 'LOWER(' + agency_field + ") = '" + agency.lower() + "'"
 
             logger = logging.getLogger("opd-load")
             if verbose:
@@ -1315,6 +1325,8 @@ class Source:
             loader = data_loaders.Socrata(url, dataset_id, date_field=date_field)
         elif data_type ==defs.DataType.CARTO:
             loader = data_loaders.Carto(url, dataset_id, date_field=date_field, query=query)
+        elif data_type ==defs.DataType.CKAN:
+            loader = data_loaders.Ckan(url, dataset_id, date_field=date_field, query=query)
         else:
             raise ValueError(f"Unknown data type: {data_type}")
 

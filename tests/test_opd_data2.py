@@ -47,7 +47,7 @@ def get_datasets(csvfile):
     return datasets.datasets
 
 class TestData:
-	def test_get_years(self, csvfile, source, last, skip, loghtml):
+	def test_get_years(self, csvfile, source, last, skip, loghtml, query={}):
 		if last == None:
 			last = float('inf')
 		datasets = get_datasets(csvfile)
@@ -69,6 +69,14 @@ class TestData:
 				datasets.iloc[i]["DataType"] == DataType.EXCEL.value:  # If Excel, we can possibly check
 				srcName = datasets.iloc[i]["SourceName"]
 				state = datasets.iloc[i]["State"]
+
+				match = True
+				for k,v in query.items():
+					if datasets.iloc[i][k]!=v:
+						match = False
+						break
+				if not match:
+					continue
 
 				if (srcName, state, datasets.iloc[i]["TableType"]) in already_ran:
 					continue
@@ -154,7 +162,10 @@ class TestData:
 				now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
 				print(f"{now} Testing {i+1} of {len(datasets)}: {srcName} {table_print} table")
 
-				agencies = src.get_agencies(datasets.iloc[i]["TableType"], year=datasets.iloc[i]["Year"])
+				try:
+					agencies = src.get_agencies(datasets.iloc[i]["TableType"], year=datasets.iloc[i]["Year"])
+				except OPD_MinVersionError: continue
+				except: raise
 
 				if datasets.iloc[i]["Agency"] != MULTI:
 					assert [datasets.iloc[i]["Agency"]] == agencies
@@ -201,28 +212,31 @@ class TestData:
 
 
 	def test_to_csv(self, csvfile, source, last, skip, loghtml):
-		src = data.Source("Virginia")
+		src = data.Source("New York")
 		get_datasets(csvfile)
-		agency="Fairfax County Police Department"
+		agency="BUFFALO POLICE DEPT"
 		year = 2021
-		table = src.load('STOPS', 2021, agency=agency, pbar=False, nrows=100)
+		table = src.load('TRAFFIC CITATIONS', 2021, agency=agency, pbar=False, nrows=100)
 
 		table.to_csv()
 
 		filename = table.get_csv_filename()
 		assert os.path.exists(filename)
 
-		# Load table back in
-		src.load_from_csv(year, agency=agency)
-
-		os.remove(filename)
+		try:
+			# Load table back in
+			src.load_from_csv(year, agency=agency)
+		except:
+			raise
+		finally:
+			os.remove(filename)
 
 
 def is_filterable(data_type):
 	data_type = DataType(data_type)
 	if data_type in [DataType.CSV, DataType.EXCEL]:
 		return False
-	elif data_type in [DataType.ArcGIS, DataType.SOCRATA, DataType.CARTO]:
+	elif data_type in [DataType.ArcGIS, DataType.SOCRATA, DataType.CARTO, DataType.CKAN]:
 		return True
 	else:
 		raise ValueError("Unknown table type")
@@ -263,13 +277,13 @@ if __name__ == "__main__":
 	csvfile = None
 	# csvfile = os.path.join("..","opd-data","opd_source_table.csv")
 	last = None
-	last = 922-541+1
+	last = 922-896+1
 	source = None
 	# source = "Bloomington"
 	skip = None
 	# skip = "Corona"
-	tp.test_get_years(csvfile, source, last, skip, None)
 	# tp.test_get_agencies(csvfile, None, None, skip, None)
-	# tp.test_get_agencies_name_match(csvfile, None, None, skip, None)
+	# tp.test_get_agencies_name_match(csvfile, None, last, skip, None)
 	# tp.test_agency_filter(csvfile, None, None, skip, None)
 	# tp.test_to_csv(csvfile, None, None, skip, None)
+	tp.test_get_years(csvfile, source, last, skip, None, query={'DataType':'CKAN'})
