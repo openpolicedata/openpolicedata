@@ -8,13 +8,12 @@ import warnings
 from . import defs
 from .deprecated._pandas import DeprecationHandlerDataFrame
 from .deprecated.messages import CIV_DEPRECATION_MESSAGE, CIV_REPLACEMENT_MESSAGE
+from .deprecated.source_table_compat import check_compat_source_table
 
 # Location of table where datasets available in opd are stored
 csv_file = "https://raw.github.com/openpolicedata/opd-data/main/opd_source_table.csv"
 
-def _build(csv_file, error=False):
-    # Check columns
-    columns = {
+_column_types = {
         'State' : pd.StringDtype(),
         'SourceName' : pd.StringDtype(),
         'Agency': pd.StringDtype(),
@@ -30,14 +29,20 @@ def _build(csv_file, error=False):
         'min_version': pd.StringDtype()
     }
 
-    try:
-        df = pd.read_csv(csv_file, dtype=columns)
-    except:
-        if error:
-            raise
-        warnings.warn(f"Unable to load CSV file from {csv_file}. " +
-            "This may be due to a bad internet connection or bad filename/URL.")
-        return None
+
+def _build(csv_file, error=False):
+
+    loaded, df = check_compat_source_table(column_types=_column_types)
+
+    if not loaded:
+        try:
+            df = pd.read_csv(csv_file, dtype=_column_types)
+        except:
+            if error:
+                raise
+            warnings.warn(f"Unable to load CSV file from {csv_file}. " +
+                "This may be due to a bad internet connection or bad filename/URL.")
+            return None
 
     if "Jurisdiction" in df:
         df.rename(columns={

@@ -67,3 +67,6 @@ class BadCategoryDict(OPD_GeneralError):
 
 class DateFilterException(OPD_GeneralError):
     pass
+
+class CompatSourceTableLoadError(OPD_GeneralError):
+    pass

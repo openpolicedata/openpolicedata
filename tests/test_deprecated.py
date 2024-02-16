@@ -8,9 +8,13 @@ from openpolicedata.defs import TableType
 from openpolicedata.deprecated._decorators import deprecated, input_swap
 from openpolicedata.deprecated.datasetsCompat import datasets_query
 from openpolicedata.deprecated._pandas import DeprecationHandlerDataFrame, DeprecationHandlerSeries
+from openpolicedata.deprecated.source_table_compat import check_compat_source_table
 import pytest
 
-# TODO: test input_swap 
+@pytest.fixture(scope='module')
+def df_compat():
+	compat_versions_file = 'https://github.com/openpolicedata/opd-data/raw/main/compatibility/compat_versions.csv'
+	return pd.read_csv(compat_versions_file, dtype=str)
 
 def get_datasets(csvfile):
     if csvfile != None:
@@ -285,6 +289,32 @@ def test_tabletype_contains_no_subject(csvfile, source, last, skip, loghtml):
 		warnings.simplefilter("error")
 		t = opd.datasets.get_table_types(contains="- SUBJECTS")
 	assert len (t)>0
+
+def test_source_table_not_deprecated(csvfile, source, last, skip, loghtml):
+	assert not check_compat_source_table(cur_ver='100.0')[0]
+
+def test_source_table_bad_df_compat(csvfile, source, last, skip, loghtml):
+	assert not check_compat_source_table(df_compat=1)[0]
+
+def test_source_table_deprecated(csvfile, source, last, skip, loghtml):
+	with pytest.warns(DeprecationWarning):
+		loaded, df = check_compat_source_table(cur_ver='0.0')
+	assert loaded
+	assert len(df)==1  # Number of rows in 1st test source table
+
+def test_source_table_fail_not_req(csvfile, source, last, skip, loghtml, df_compat):
+	df_compat = df_compat.copy(deep=True)
+	df_compat.loc[0, 'csv_name'] = '?!~notafile.csv'
+	with pytest.warns(DeprecationWarning):
+		loaded, df = check_compat_source_table(df_compat=df_compat, cur_ver='0.0')
+	assert loaded
+	assert len(df)==2  # Number of rows in 2nd test source table
+
+def test_source_table_fail_req(csvfile, source, last, skip, loghtml, df_compat):
+	df_compat = df_compat.copy(deep=True)
+	df_compat.loc[1, 'csv_name'] = '?!~notafile.csv'
+	with pytest.raises(opd.exceptions.CompatSourceTableLoadError):
+		check_compat_source_table(df_compat=df_compat, cur_ver='0.0.1')
 
 
 if __name__ == "__main__":
