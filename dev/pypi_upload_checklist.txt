@@ -10,7 +10,7 @@ python -m pip install --upgrade build
 python -m build
 python -m pip install --upgrade twine
 Create and activate a new environment: conda create -n v{#}-test python=3.11
-python -m pip install '.\dist\openpolicedata-{version}-py3-none-any.whl[optional,test]'
+python -m pip install .\dist\openpolicedata-{version}-py3-none-any.whl[optional,test]
 Copy tests into a new folder outside openpolicedata folder
 cd to that folder
 Run tests: python -m pytest
