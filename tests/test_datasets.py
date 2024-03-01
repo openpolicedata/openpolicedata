@@ -10,7 +10,14 @@ if __name__ == "__main__":
 	sys.path.append('../openpolicedata')
 import openpolicedata as opd
 
-
+# if the --use-changed-rows is specified in the test 
+# make a table in the comments  with the columns --use-changed-rows and --csvfile with the true and false combinations for the rows
+# | --use-changed-rows  | --csvfile | Results                                        |
+# |---------------------|-----------|------------------------------------------------|
+# | True                | True      | Throw an error because it is ambiguous         |
+# | True                | False     | Use the added rows in the local ../opd-data/opd_source_table.csv that have not been committed |
+# | False               | True      | Use the user specified csv file for the opd_source_table |
+# | False               | False     | Use default github opd_source_table.csv        |
 def get_datasets(csvfile):
     if csvfile != None:
         opd.datasets.datasets = opd.datasets._build(csvfile)
