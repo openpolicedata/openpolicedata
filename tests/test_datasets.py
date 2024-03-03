@@ -10,19 +10,11 @@ if __name__ == "__main__":
 	sys.path.append('../openpolicedata')
 import openpolicedata as opd
 
-# if the --use-changed-rows is specified in the test 
-# make a table in the comments  with the columns --use-changed-rows and --csvfile with the true and false combinations for the rows
-# | --use-changed-rows  | --csvfile | Results                                        |
-# |---------------------|-----------|------------------------------------------------|
-# | True                | True      | Throw an error because it is ambiguous         |
-# | True                | False     | Use the added rows in the local ../opd-data/opd_source_table.csv that have not been committed |
-# | False               | True      | Use the user specified csv file for the opd_source_table |
-# | False               | False     | Use default github opd_source_table.csv        |
-def get_datasets(csvfile):
-    if csvfile != None:
-        opd.datasets.datasets = opd.datasets._build(csvfile)
+if __name__ == "__main__":
+    from test_utils import get_datasets
+else:
+    from .test_utils import get_datasets
 
-    return opd.datasets.query()
 
 csv_file = os.path.join("..",'opd-data','opd_source_table.csv')
 
@@ -45,11 +37,11 @@ class TestDatasets:
             opd.datasets.datasets = orig
 
 
-    def test_duplicates(self, csvfile, source, last, skip, loghtml):
-        datasets = get_datasets(csvfile)
+    def test_duplicates(self, csvfile, source, last, skip, loghtml,changed_rows_fixture):
+        datasets = get_datasets(csvfile,use_changed_rows=changed_rows_fixture)
         assert not datasets.duplicated(subset=['State', 'SourceName', 'Agency', 'TableType','Year']).any()
 
-    def test_check_columns(self, csvfile, source, last, skip, loghtml):
+    def test_check_columns(self, csvfile, source, last, skip, loghtml,changed_rows_fixture):
         columns = {
             'State' : pd.StringDtype(),
             'SourceName' : pd.StringDtype(),
@@ -64,21 +56,21 @@ class TestDatasets:
             'agency_field': pd.StringDtype()
         }
 
-        datasets = get_datasets(csvfile)
+        datasets = get_datasets(csvfile,use_changed_rows=changed_rows_fixture)
 
         for key in columns.keys():
             assert key in datasets
 
-    def test_table_for_nulls(self, csvfile, source, last, skip, loghtml):
+    def test_table_for_nulls(self, csvfile, source, last, skip, loghtml,changed_rows_fixture):
         can_have_nulls = ["Description", "date_field", "dataset_id", "agency_field", "Year","readme","min_version",
                           "AgencyFull","source_url","coverage_start","coverage_end",'query']
-        datasets = get_datasets(csvfile)
+        datasets = get_datasets(csvfile,use_changed_rows=changed_rows_fixture)
         for col in datasets.columns:
             if not col in can_have_nulls:
                 assert pd.isnull(datasets[col]).sum() == 0
 
     
-    def test_check_state_names(self, csvfile, source, last, skip, loghtml):
+    def test_check_state_names(self, csvfile, source, last, skip, loghtml,changed_rows_fixture):
         all_states = [
             'Alabama', 'Alaska', 'American Samoa', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware', 'District of Columbia',
             'Florida', 'Georgia', 'Guam', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky', 'Louisiana', 'Maine',
@@ -88,35 +80,35 @@ class TestDatasets:
             'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming'
         ]
 
-        datasets = get_datasets(csvfile)
+        datasets = get_datasets(csvfile,use_changed_rows=changed_rows_fixture)
         assert len([x for x in datasets["State"] if x not in all_states]) == 0
 
-    def test_agency_names(self, csvfile, source, last, skip, loghtml):
+    def test_agency_names(self, csvfile, source, last, skip, loghtml,changed_rows_fixture):
         # Agency names should either match source name or be MULTI
-        datasets = get_datasets(csvfile)
+        datasets = get_datasets(csvfile,use_changed_rows=changed_rows_fixture)
         rem = datasets["Agency"][datasets["Agency"] != datasets["SourceName"]]
         assert ((rem == opd.defs.MULTI) | (rem == opd.defs.NA)).all()
 
-    def test_year(self, csvfile, source, last, skip, loghtml):
+    def test_year(self, csvfile, source, last, skip, loghtml,changed_rows_fixture):
         # year should either be an int or MULTI or "None"
-        datasets = get_datasets(csvfile)
+        datasets = get_datasets(csvfile,use_changed_rows=changed_rows_fixture)
         rem = datasets["Year"][[type(x)!=int for x in datasets["Year"]]]
         assert ((rem == opd.defs.MULTI) | (rem == opd.defs.NA)).all()
 
     @pytest.mark.parametrize('data_type', [opd.defs.DataType.SOCRATA, opd.defs.DataType.CARTO, opd.defs.DataType.CKAN])
-    def test_dataset_id(self, csvfile, source, last, skip, loghtml, data_type):
-        datasets = get_datasets(csvfile)
+    def test_dataset_id(self, csvfile, source, last, skip, loghtml, data_type,changed_rows_fixture):
+        datasets = get_datasets(csvfile,use_changed_rows=changed_rows_fixture)
         rem = datasets["dataset_id"][datasets["DataType"] == data_type]
         assert pd.isnull(rem).sum() == 0
 
-    def test_years_multi(self, csvfile, source, last, skip, loghtml):
+    def test_years_multi(self, csvfile, source, last, skip, loghtml,changed_rows_fixture):
         if skip != None:
             skip = skip.split(",")
             skip = [x.strip() for x in skip]
         else:
             skip = []
         
-        datasets = get_datasets(csvfile)
+        datasets = get_datasets(csvfile,use_changed_rows=changed_rows_fixture)
         # Multi-year datasets should typically have a value in date_field
         datasets = datasets[datasets["Year"] == opd.defs.MULTI]
         df_null = datasets[pd.isnull(datasets["date_field"])]
@@ -124,13 +116,13 @@ class TestDatasets:
         # This can only be allowed for certain Excel cases
         assert (df_null["DataType"] == opd.defs.DataType.EXCEL.value).all()
 
-    def test_agencies_multi(self, csvfile, source, last, skip, loghtml):
-        datasets = get_datasets(csvfile)
+    def test_agencies_multi(self, csvfile, source, last, skip, loghtml, changed_rows_fixture):
+        datasets = get_datasets(csvfile,use_changed_rows=changed_rows_fixture)
         rem = datasets["agency_field"][datasets["Agency"] == opd.defs.MULTI]
         assert pd.isnull(rem).sum() == 0
 
-    def test_arcgis_urls(self, csvfile, source, last, skip, loghtml):
-        datasets = get_datasets(csvfile)
+    def test_arcgis_urls(self, csvfile, source, last, skip, loghtml, changed_rows_fixture):
+        datasets = get_datasets(csvfile,use_changed_rows=changed_rows_fixture)
         urls = datasets["URL"]
         p = re.compile(r"(MapServer|FeatureServer)/\d+")
         for i,url in enumerate(urls):
@@ -139,48 +131,48 @@ class TestDatasets:
                 assert result != None
                 assert len(url) == result.span()[1]
 
-    def test_source_list_by_state(self, csvfile, source, last, skip, loghtml):
-        datasets = get_datasets(csvfile)
+    def test_source_list_by_state(self, csvfile, source, last, skip, loghtml, changed_rows_fixture):
+        datasets = get_datasets(csvfile,use_changed_rows=changed_rows_fixture)
         state = "Virginia"
         df = opd.datasets.query(state=state)
         df_truth = datasets[datasets["State"]==state]
         assert len(df)>0
         assert df_truth.equals(df)
 
-    def test_source_list_by_source_name(self, csvfile, source, last, skip, loghtml):
-        datasets = get_datasets(csvfile)
+    def test_source_list_by_source_name(self, csvfile, source, last, skip, loghtml, changed_rows_fixture):
+        datasets = get_datasets(csvfile,use_changed_rows=changed_rows_fixture)
         source_name = "Fairfax County"
         df = opd.datasets.query(source_name=source_name)
         df_truth = datasets[datasets["SourceName"]==source_name]
         assert len(df)>0
         assert df_truth.equals(df)
 
-    def test_source_list_by_agency(self, csvfile, source, last, skip, loghtml):
-        datasets = get_datasets(csvfile)
+    def test_source_list_by_agency(self, csvfile, source, last, skip, loghtml, changed_rows_fixture):
+        datasets = get_datasets(csvfile,use_changed_rows=changed_rows_fixture)
         agency = "Fairfax County"
         df = opd.datasets.query(agency=agency)
         df_truth = datasets[datasets["Agency"]==agency]
         assert len(df)>0
         assert df_truth.equals(df)
 
-    def test_source_list_by_table_type(self, csvfile, source, last, skip, loghtml):
-        datasets = get_datasets(csvfile)
+    def test_source_list_by_table_type(self, csvfile, source, last, skip, loghtml, changed_rows_fixture):
+        datasets = get_datasets(csvfile,use_changed_rows=changed_rows_fixture)
         table_type = opd.defs.TableType.TRAFFIC
         df = opd.datasets.query(table_type=table_type)
         df_truth = datasets[datasets["TableType"]==table_type.value]
         assert len(df)>0
         assert df_truth.equals(df)
 
-    def test_source_list_by_table_type_value(self, csvfile, source, last, skip, loghtml):
-        datasets = get_datasets(csvfile)
+    def test_source_list_by_table_type_value(self, csvfile, source, last, skip, loghtml, changed_rows_fixture):
+        datasets = get_datasets(csvfile,use_changed_rows=changed_rows_fixture)
         table_type = opd.defs.TableType.TRAFFIC.value
         df = opd.datasets.query(table_type=table_type)
         df_truth = datasets[datasets["TableType"]==table_type]
         assert len(df)>0
         assert df_truth.equals(df)
 
-    def test_source_list_by_multi(self, csvfile, source, last, skip, loghtml):
-        datasets = get_datasets(csvfile)
+    def test_source_list_by_multi(self, csvfile, source, last, skip, loghtml, changed_rows_fixture):
+        datasets = get_datasets(csvfile,use_changed_rows=changed_rows_fixture)
         state = "Virginia"
         source_name = "Fairfax County"
         table_type = opd.defs.TableType.TRAFFIC_CITATIONS.value
@@ -191,25 +183,25 @@ class TestDatasets:
         assert len(df)>0
         assert df_truth.equals(df)
 
-    def test_table_types(self, csvfile, source, last, skip, loghtml):
-        datasets = get_datasets(csvfile)
+    def test_table_types(self, csvfile, source, last, skip, loghtml, changed_rows_fixture):
+        datasets = get_datasets(csvfile,use_changed_rows=changed_rows_fixture)
         for t in datasets["TableType"]:
             # Try to convert to an enum
             opd.defs.TableType(t)
 
-    def test_data_types(self, csvfile, source, last, skip, loghtml):
-        datasets = get_datasets(csvfile)
+    def test_data_types(self, csvfile, source, last, skip, loghtml, changed_rows_fixture):
+        datasets = get_datasets(csvfile,use_changed_rows=changed_rows_fixture)
         for t in datasets["DataType"].unique():
             # Try to convert to an enum
             opd.defs.DataType(t)
 
-    def test_min_versions(self, csvfile, source, last, skip, loghtml):
-        datasets = get_datasets(csvfile)
+    def test_min_versions(self, csvfile, source, last, skip, loghtml, changed_rows_fixture):
+        datasets = get_datasets(csvfile,use_changed_rows=changed_rows_fixture)
         for ver in datasets["min_version"][datasets["min_version"].notnull()]:
             if not (ver == "-1" or type(version.parse(ver)) == version.Version):
                 raise ValueError(f"{ver} is an invalid value for min_version")
             
-    def test_summary_functions(self, csvfile, source, last, skip, loghtml):
+    def test_summary_functions(self, csvfile, source, last, skip, loghtml, changed_rows_fixture):
         opd.datasets.num_unique()
         opd.datasets.num_sources()
         opd.datasets.num_sources(full_states_only=True)
@@ -223,7 +215,7 @@ class TestDatasets:
         with pytest.warns(UserWarning):
             opd.datasets.summary_by_table_type()
 
-    def test_get_table_types(self, csvfile, source, last, skip, loghtml):    
+    def test_get_table_types(self, csvfile, source, last, skip, loghtml, changed_rows_fixture):    
         opd.datasets.get_table_types()
         assert opd.datasets.get_table_types(contains="STOPS") == ["PEDESTRIAN STOPS","STOPS","TRAFFIC STOPS"]
 
