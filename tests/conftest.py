@@ -124,42 +124,59 @@ def pytest_collection_modifyitems(config, items):
         if "slow" in item.keywords:
             item.add_marker(skip_slow)
 
+# #TODO convert to fixture
+# def pytest_generate_tests(metafunc):
+#     option_value = metafunc.config.option.csvfile
+#     if 'csvfile' in metafunc.fixturenames and option_value is not None:
+#         metafunc.parametrize("csvfile", [option_value])
+#     else:
+#         metafunc.parametrize("csvfile", [None])
 
-def pytest_generate_tests(metafunc):
-    option_value = metafunc.config.option.csvfile
-    if 'csvfile' in metafunc.fixturenames and option_value is not None:
-        metafunc.parametrize("csvfile", [option_value])
-    else:
-        metafunc.parametrize("csvfile", [None])
+#     option_value = metafunc.config.option.source
+#     if 'source' in metafunc.fixturenames and option_value is not None:
+#         metafunc.parametrize("source", [option_value])
+#     else:
+#         metafunc.parametrize("source", [None])
 
-    option_value = metafunc.config.option.source
-    if 'source' in metafunc.fixturenames and option_value is not None:
-        metafunc.parametrize("source", [option_value])
-    else:
-        metafunc.parametrize("source", [None])
+#     option_value = metafunc.config.option.last
+#     if 'last' in metafunc.fixturenames and option_value is not None:
+#         metafunc.parametrize("last", [int(option_value)])
+#     else:
+#         metafunc.parametrize("last", [float('inf')])
 
-    option_value = metafunc.config.option.last
-    if 'last' in metafunc.fixturenames and option_value is not None:
-        metafunc.parametrize("last", [int(option_value)])
-    else:
-        metafunc.parametrize("last", [float('inf')])
+#     option_value = metafunc.config.option.skip
+#     if 'skip' in metafunc.fixturenames and option_value is not None:
+#         metafunc.parametrize("skip", [option_value])
+#     else:
+#         metafunc.parametrize("skip", [None])
 
-    option_value = metafunc.config.option.skip
-    if 'skip' in metafunc.fixturenames and option_value is not None:
-        metafunc.parametrize("skip", [option_value])
-    else:
-        metafunc.parametrize("skip", [None])
+#     option_value = metafunc.config.option.loghtml
+#     metafunc.parametrize("loghtml", [option_value])
+# import pytest
 
-    option_value = metafunc.config.option.loghtml
-    metafunc.parametrize("loghtml", [option_value])
-    
+# Define fixtures for each command line option
+@pytest.fixture
+def csvfile(request):
+    return request.config.option.csvfile
+
+@pytest.fixture
+def source(request):
+    return request.config.option.source
+
+@pytest.fixture
+def last(request):
+    return int(request.config.option.last) if request.config.option.last is not None else float('inf')
+
+@pytest.fixture
+def skip(request):
+    return request.config.option.skip
+
+@pytest.fixture
+def loghtml(request):
+    return request.config.option.loghtml    
     
 # Pytest fixture to provide changed row option
 @pytest.fixture
-def changed_rows_fixture(request):
-    return request.config.getoption("--use-changed-rows")
+def use_changed_rows(request):
+    return hasattr(request.config.option, 'use_changed_rows') and request.config.option.use_changed_rows
 
-# TODO decide if to keep this or the metafunc.parametrize("csvfile", [option_value]) version?
-@pytest.fixture
-def csvfile(request):
-    return request.config.getoption("--csvfile")

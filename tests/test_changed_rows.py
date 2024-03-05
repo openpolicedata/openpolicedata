@@ -16,12 +16,12 @@ else:
     from .test_utils import get_datasets
 
 # Add a command line option to pytest
-def test_some_functionality(changed_rows_fixture, csvfile, source, last, skip, loghtml):
-    ds=get_datasets(csvfile,use_changed_rows=changed_rows_fixture)
+def test_some_functionality(use_changed_rows, csvfile):
+    ds=get_datasets(csvfile,use_changed_rows=use_changed_rows)
     print("test_some_functionality datasets are:")
     print(ds)
 
 if __name__ == "__main__":
-    test_some_functionality(True,None,None,None,None,None)
+    test_some_functionality(True,None)
     
 # run with pytest -s tests/test_changed_rows.py --use-changed-rows

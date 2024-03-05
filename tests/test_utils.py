@@ -35,7 +35,6 @@ def get_datasets(csvfile=None,use_changed_rows=False):
         return opd.datasets.query()
     elif use_changed_rows==False and use_csvfile==False:
         # Use default github opd_source_table.csv
-        opd.datasets.datasets = opd.datasets._build('opd_source_table.csv')
         return opd.datasets.query()
     else:
         raise ValueError("There is a logic error in get_datasets. This line should never run.")
