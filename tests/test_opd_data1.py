@@ -110,7 +110,7 @@ class TestData:
 			now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
 			print(f"{now} Testing {i+1} of {len(datasets)}: {srcName} {table_print} table")
 
-			excel = src._Source__get_loader(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"], 
+			excel = src._Source__get_loader(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"], datasets.iloc[i]["query"],
 				   dataset_id=datasets.iloc[i]["dataset_id"])
 			sheets, has_year_sheets = excel._Excel__get_sheets()
 

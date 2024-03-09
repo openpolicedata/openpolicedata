@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_datetime64_any_dtype as is_datetime
 import datetime as dt
 import re
 import warnings
@@ -19,7 +20,7 @@ def parse_date_to_datetime(date_col):
 
                 # Making a copy to avoid warning
                 d = date_col.copy()
-                d.iloc[:,0] = date_col.iloc[:,0].dt.year
+                d[d.columns[0]] = date_col.iloc[:,0].dt.year
 
                 def month_name_to_num(x):
                     month_list = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"]
@@ -489,6 +490,8 @@ def to_datetime(col, ignore_errors=False, *args, **kwargs):
                     return pd.Period(freq='M', year=int(m.groupdict()['year']), month=int(m.groupdict()['month']))
                 else:
                     return pd.Period(freq='Y', year=int(m.groupdict()['year']))
+            elif 'doesn\'t match format "%Y-%m-%dT%H:%M:%S.%f%z"' in str(e):
+                return pd.to_datetime(col.apply(lambda x: x[:-1] if isinstance(x,str) and x[-1]=='Z' else x), format='mixed')
             else:
                 return pd.to_datetime(col, *args, format='mixed', **kwargs)
         except Exception as e:

@@ -86,6 +86,7 @@ class TableType(str, Enum):
     DISCIPLINARY_RECORDS = ("DISCIPLINARY RECORDS",
         "Disciplinary records of officers")
     EMPLOYEE = ("EMPLOYEE","Demographic data of the police workforce")
+    FIREARM_POINTING = ('FIREARM POINTING', "Instances of officers pointing a firearm at individuals.")
     DEATHS_IN_CUSTODY = ("DEATHS IN CUSTODY", "Deaths that occur in custody or during the process of arrest")
     FIELD_CONTACTS = ("FIELD CONTACTS", "Consensual contacts between officers and the community.")
     INCIDENTS = ("INCIDENTS", "Crime incident reports")

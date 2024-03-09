@@ -2052,7 +2052,10 @@ class Ckan(Data_Loader):
             logger.debug("Request matches previous count request. Returning saved count.")
             return self._last_count[2]
         else:
-            where = self.__construct_where(year, opt_filter)
+            data = self.__request(count=0)
+            date_cols = [x['id'] for x in data['result']["fields"] if x["type"] in ['timestamp','date']]
+
+            where = self.__construct_where(year, opt_filter, filter_year=self.date_field and self.date_field not in date_cols)
             json = self.__request(where=where, return_count=True)
             count = json['result']['records'][0]['count']
 
@@ -2068,8 +2071,8 @@ class Ckan(Data_Loader):
         elif not out_fields:
             out_fields = '*'
 
-        orderby = orderby if orderby else "_id"
         orderby = self.date_field if orderby=='date' else orderby
+        orderby = orderby if orderby else "_id"
 
         query = "SELECT "
         params = {}
@@ -2128,10 +2131,18 @@ class Ckan(Data_Loader):
         return r.json()
 
 
-    def __construct_where(self, year=None, opt_filter=None):
+    def __construct_where(self, year=None, opt_filter=None, filter_year=False):
         if self.date_field!=None and year!=None:
-            start_date, stop_date = _process_date(year, date_field=self.date_field)
-            where = f""""{self.date_field}" >= '{start_date}' AND "{self.date_field}" <= '{stop_date}'"""
+            if filter_year:
+                start_date, stop_date = _process_date(year, date_field=self.date_field, force_year=True)
+                where = ''
+                for y in range(int(start_date),int(stop_date)+1):
+                    # %25 is % wildcard symbol
+                    where+='"' + self.date_field + '"' + rf" LIKE '%{y}%' OR "
+                where = where[:-4]
+            else:
+                start_date, stop_date = _process_date(year, date_field=self.date_field)
+                where = f""""{self.date_field}" >= '{start_date}' AND "{self.date_field}" <= '{stop_date}'"""
         else:
             where = None
 
@@ -2177,12 +2188,15 @@ class Ckan(Data_Loader):
         pandas or geopandas DataFrame
             DataFrame containing downloaded
         '''
+
+        data = self.__request(count=0)
+        date_cols = [x['id'] for x in data['result']["fields"] if x["type"] in ['timestamp','date']]
         
         if self._last_count is not None and self._last_count[0]==year and self._last_count[1]==opt_filter:
             record_count = self._last_count[2]
             where_query = self._last_count[3]
         else:
-            where_query = self.__construct_where(year, opt_filter)
+            where_query = self.__construct_where(year, opt_filter, filter_year=self.date_field and self.date_field not in date_cols)
             json = self.__request(where=where_query, return_count=True, out_fields=select)
             record_count = json['result']['records'][0]['count']
             self._last_count = (year, opt_filter, record_count, where_query)
@@ -2201,8 +2215,6 @@ class Ckan(Data_Loader):
         if pbar:
             bar = tqdm(desc=self.url, total=nrows, leave=False)
 
-        data = self.__request(count=0)
-        date_cols = [x['id'] for x in data['result']["fields"] if x["type"]=='timestamp']
         if select:
             fields = select
         else:
