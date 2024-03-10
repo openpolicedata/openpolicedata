@@ -1,10 +1,10 @@
 # content of conftest.py
 # https://docs.pytest.org/en/latest/example/simple.html
+import pytest
 import os
-
+import shutil
 import subprocess
 import pandas as pd
-import numpy as np
 
 import sys
 sys.path.append('../openpolicedata')
@@ -21,37 +21,28 @@ import openpolicedata as opd
 # | False               | False       | Use default github opd_source_table.csv                                                       |
 # 
 def get_datasets(csvfile=None,use_changed_rows=False):
-    if csvfile is None:
-      use_csvfile = False
-    if use_changed_rows==True and use_csvfile==True:
+    if use_changed_rows==True and csvfile:
         raise ValueError("Both --use-changed-rows and --csvfile options were provided, which is ambiguous.")
-    elif use_changed_rows==True and use_csvfile==False:
+    elif use_changed_rows==True and not csvfile:
         # Use the added rows in the local ../opd-data/opd_source_table.csv that have not been committed
-        added_lines_datasets = get_changed_rows('../opd-data','opd_source_table.csv')
+        added_lines_datasets = get_changed_rows(os.path.join('..','opd-data'),'opd_source_table.csv')
         return added_lines_datasets
-    elif use_changed_rows==False and use_csvfile==True:
+    elif use_changed_rows==False and csvfile:
         # Use the user specified csv file for the opd_source_table
         opd.datasets.datasets = opd.datasets._build(csvfile)
         return opd.datasets.query()
-    elif use_changed_rows==False and use_csvfile==False:
+    elif use_changed_rows==False and not csvfile:
         # Use default github opd_source_table.csv
         return opd.datasets.query()
-    else:
-        raise ValueError("There is a logic error in get_datasets. This line should never run.")
     
     raise ValueError("There is a logic error in get_datasets. This line should never run.")
 
 
-# Function to get changed rows
-def get_changed_rows(repo_dir, file_name):
-    cmd = f"git -C {repo_dir} diff HEAD -- {file_name}"
-    result = subprocess.check_output(cmd, shell=True).decode('utf-8')
+def get_line_numbers(result):
     lines= result.split("\n")
-    
-    # Initialize variables
+
     added_lines_file_number = []
     current_new_file_line_number = None
-
     for line in lines:
         # Detect hunk headers
         if line.startswith('@@'):
@@ -67,18 +58,88 @@ def get_changed_rows(repo_dir, file_name):
             # For unchanged or removed lines, only increment if it's not a removal from the new file
             if not line.startswith('-'):
                 current_new_file_line_number += 1
+
+    # convert the added_lines_file_number to dataframe indexes by subtracting 2 from each element and call the variable added_lines_dataframe_index
+    added_lines_dataframe_index = [x-2 for x in added_lines_file_number]
+
+    return added_lines_dataframe_index
+
+
+# Function to get changed rows
+def get_changed_rows(repo_dir, file_name):
+    cmd = f"git -C {repo_dir} diff HEAD -- {file_name}"
+    result = subprocess.check_output(cmd, shell=True).decode('utf-8')
+
+    added_lines_dataframe_index = get_line_numbers(result)
     
     # extract the added lines from the csv file        
-    csv_file = os.path.join("..",'opd-data','opd_source_table.csv')
+    csv_file = os.path.join(repo_dir, file_name)
        
     opd.datasets.datasets = opd.datasets._build(csv_file)
     datasets=opd.datasets.query()
-    
-    # convert the added_lines_file_number to dataframe indexes by subtracting 2 from each element and call the variable added_lines_dataframe_index
-    added_lines_dataframe_index = [x-2 for x in added_lines_file_number]
     
     #return only the datasets that are in the added_lines_dataframe_index
     added_lines_datasets = datasets.iloc[added_lines_dataframe_index]
     
     return added_lines_datasets
 
+
+def test_get_line_numbers():
+    file = 'test_git_diff.txt' if os.path.exists('test_git_diff.txt') else os.path.join('tests','test_git_diff.txt')
+    with open(file,'r', encoding='utf-16-le') as f:
+        result = f.read()
+
+    added_lines_file_number = get_line_numbers(result)
+
+    assert added_lines_file_number==[64, 85, 86, 96, 112, 113]
+
+
+def test_changerows_and_csvfile():
+    with pytest.raises(ValueError, match='^Both --use-changed-rows'):
+        get_datasets("test", True)
+
+
+
+def test_changerows():
+    csvfile = os.path.join('..','opd-data','opd_source_table.csv')
+    tmp_file = csvfile.replace('.csv','_ORIGNAL_COPY.csv')  # Create modified file to ensure change can by reverted
+    shutil.copy2(csvfile, tmp_file)
+
+    with open(csvfile,'r') as f:  # Grab 1st row
+        f.readline()
+        line1 = f.readline()
+
+    # Add new line to create a change
+    line1 = line1.split(',')
+    line1[0] = 'Ohio' if line1[0]!='Ohio' else 'Utah'
+    with open(csvfile,'a') as f:
+        f.write(','.join(line1))
+
+    try:
+        num_lines = len(pd.read_csv(csvfile))
+        df = get_datasets(use_changed_rows=True)
+        assert len(df.index) < num_lines
+        assert df.index[-1]==num_lines-1
+    except:
+        raise
+    finally:
+        # Revert changes
+        os.remove(csvfile)
+        os.rename(tmp_file, csvfile)
+
+
+def test_csvfile():
+    csvfile = os.path.join('..','opd-data','opd_source_table.csv')
+    df_true = opd.datasets._build(csvfile)
+    df = get_datasets(csvfile=csvfile)
+    assert(df_true.equals(df))
+
+
+def test_default():
+    df_true = opd.datasets.query()
+    df = get_datasets()
+    assert(df_true.equals(df))
+
+
+if __name__ == "__main__":
+    test_changerows_and_csvfile()

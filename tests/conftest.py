@@ -178,5 +178,5 @@ def loghtml(request):
 # Pytest fixture to provide changed row option
 @pytest.fixture
 def use_changed_rows(request):
-    return hasattr(request.config.option, 'use_changed_rows') and request.config.option.use_changed_rows
+    return request.config.option.use_changed_rows
 
