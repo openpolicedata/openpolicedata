@@ -18,6 +18,8 @@ import warnings
 import os
 import re
 
+from test_utils import check_for_dataset
+
 # Set Arcgis data loader to validate queries with arcgis package if installed
 data_loaders._verify_arcgis = True
 
@@ -39,38 +41,310 @@ else:
 	
 warn_errors = (OPD_DataUnavailableError, OPD_SocrataHTTPError, OPD_FutureError, OPD_MinVersionError)
 
-def get_datasets(csvfile):
-    if csvfile != None:
-        datasets.datasets = datasets._build(csvfile)
+def test_bloomington_citations():
+	if check_for_dataset('Bloomington', 'CITATIONS'):
+		src = data.Source("Bloomington")
+		count = src.get_count('CITATIONS', MULTI)
 
-    return datasets.datasets
+		match = src.datasets['TableType']=='CITATIONS'
+		assert match.sum()==1
+		dataset = src.datasets[match].iloc[0]
+		loader = data_loaders.Socrata(dataset['URL'], dataset['dataset_id'])
+		df = loader.load()
+		assert len(df) == count
+		dates = df[dataset['date_field']]
 
-class TestData:
-	@pytest.mark.slow(reason="This is a slow test that should be run before a major commit.")
-	def test_load_year(self, csvfile, source, last, skip, loghtml, query={}):
-		max_count = 1e5
-		if last == None:
-			last = float('inf')
-		datasets = get_datasets(csvfile)
-		# Test that filtering for a year works at the boundaries
-		if skip != None:
-			skip = skip.split(",")
-			skip = [x.strip() for x in skip]
+		count_by_year = []
+		for y in range(2016, 2021):
+			count_by_year.append(src.get_count('CITATIONS', y))
+			matches_YYYY = dates.str.startswith(f"{y}-")
+			dates = dates.drop(index=matches_YYYY[matches_YYYY].index)
+			matches_YY = dates.str.match(r'\d{1,2}/\d{1,2}/'+str(y)[2:])
+			dates = dates.drop(index=matches_YY[matches_YY].index)
+			assert count_by_year[-1] == matches_YYYY.sum() + matches_YY.sum()
+
+		assert count==sum(count_by_year)
+
+@pytest.mark.slow(reason="This is a slow test that should be run before a major commit.")
+def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
+	max_count = 1e5
+		
+	caught_exceptions = []
+	caught_exceptions_warn = []
+	already_run = []
+	for i in range(len(datasets)):
+		if skip != None and datasets.iloc[i]["SourceName"] in skip:
+			continue
+		if i < start_idx:
+			continue
+		if source != None and datasets.iloc[i]["SourceName"] != source:
+			continue
+
+		if is_stanford(datasets.iloc[i]["URL"]):
+			# There are a lot of data sets from Stanford, no need to run them all
+			# Just run approximately a small percentage
+			rnd = random.uniform(0,1)
+			if rnd>0.05:
+				continue
+
+		match = True
+		for k,v in query.items():
+			if datasets.iloc[i][k]!=v:
+				match = False
+				break
+		if not match:
+			continue
+
+		srcName = datasets.iloc[i]["SourceName"]
+		state = datasets.iloc[i]["State"]
+
+		if datasets.iloc[i]["Agency"] == MULTI and \
+			srcName == "Virginia":
+			# Reduce size of data load by filtering by agency
+			agency = "Henrico Police Department"
+		else:
+			agency = None
+
+		table_print = datasets.iloc[i]["TableType"]
+
+		unique_id = [srcName, state, datasets.iloc[i]["Agency"], table_print]
+		if unique_id in already_run:
+			continue
+		already_run.append(unique_id)
+
+		now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
+		print(f"{now} Testing {i+1} of {len(datasets)}: {srcName} {table_print} table")
+
+		src = data.Source(srcName, state=state)
+
+		try:
+			try:
+				years = src.get_years(datasets.iloc[i]["TableType"])
+			except ValueError as e:
+				if len(e.args)>0 and "Extracting the years" in e.args[0]:
+					# Just test reading in the table and continue
+					table = src.load(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], 
+									agency=agency, pbar=False)
+					continue
+				else:
+					raise
+			except:
+				raise
+		except warn_errors as e:
+			e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"])
+			caught_exceptions_warn.append(e)
+			continue
+		except (OPD_TooManyRequestsError, OPD_arcgisAuthInfoError) as e:
+			# Catch exceptions related to URLs not functioning
+			e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"])
+			caught_exceptions.append(e)
+			continue
+		except:
+			raise
+
+		# Adding a pause here to prevent issues with requesting from site too frequently
+		sleep(sleep_time)
+
+		years_orig = years.copy()
+		for y in src.datasets[src.datasets["TableType"] == datasets.iloc[i]["TableType"]]["Year"]:
+			if y != MULTI:
+				years.remove(y)
+
+		if len(years)==0:
+			# Each datasets is annual
+			# Run 1st and last year
+			multi_case = False
+			years = [min(years_orig)]
+			if len(years_orig)>1:
+				years.append(max(years_orig))
+		else:
+			multi_case = True
+			if len(years)>1:
+				# It is preferred to to not use first or last year that start and stop of year are correct
+				years = years[-2:-1]
+			else:
+				years = years[:1]
+
+		tables = []
+		future_error = False
+		for year in years:
+			try:
+				table = src.load(datasets.iloc[i]["TableType"], year, 
+										agency=agency, pbar=False, 
+										sortby="date",
+										nrows=max_count if datasets.iloc[i]["DataType"] not in ["CSV","Excel"] else None)
+			except OPD_FutureError as e:
+				future_error = True
+				break
+			except:
+				raise
+
+			sleep(sleep_time)
+
+			if len(table.table)==0:
+				# Ensure count should have been 0
+				count = src.get_count(datasets.iloc[i]["TableType"], year, agency=agency, force=True)
+				if count!=0:
+					raise ValueError(f"Expected data for year {year} but received none")
+				
+				# There may not be any data for the year requested.
+				for y in years_orig:
+					if y not in years:
+						count = src.get_count(datasets.iloc[i]["TableType"], y, agency=agency, force=True)
+						if count>0:
+							years = [x if x!=year else y for x in years]
+							table = src.load(datasets.iloc[i]["TableType"], y, 
+										agency=agency, pbar=False, 
+										sortby="date",
+										nrows=max_count if datasets.iloc[i]["DataType"] not in ["CSV","Excel"] else None)
+							break
+				else:
+					if len(table.table)==0 and has_outages and \
+						(outages[["State","SourceName","Agency","TableType","Year"]] == datasets.iloc[i][["State","SourceName","Agency","TableType","Year"]]).all(axis=1).any():
+						pass
+					else:
+						raise ValueError("Unable to find data for any year")
+
+			tables.append(table)
+
+		if future_error:
+			continue
+
+		for year in years:
+			print(f"Testing for year {year}")
+
+			table = tables[years.index(year)]
+
+			if len(table.table)==0 and has_outages and \
+				(outages[["State","SourceName","Agency","TableType","Year"]] == datasets.iloc[i][["State","SourceName","Agency","TableType","Year"]]).all(axis=1).any():
+				caught_exceptions_warn.append(f'Outage continues for {str(datasets.iloc[i][["State","SourceName","Agency","TableType","Year"]])}')
+				continue
+			else:
+				assert len(table.table)>0
+
+			if table.date_field == None or datasets.iloc[i]["DataType"]==DataType.EXCEL.value or \
+				table.date_field.lower()=="year":
+				continue
+
+			dts = table.table[table.date_field]
+			# Remove all non-datestamps
+			dts = dts[dts.apply(lambda x: isinstance(x,pd.Timestamp) or isinstance(x,pd.Period))].convert_dtypes()
+			try:
+				dts = dts.sort_values(ignore_index=True)
+			except TypeError as e:
+				if re.search(r"not supported between instances of '(Timestamp|Period)' and '(Timestamp|Period)'", str(e)):
+					dts = dts[dts.apply(lambda x: isinstance(x,pd.Timestamp))]
+					dts = dts.sort_values(ignore_index=True)
+				else:
+					raise
+
+			all_years = dts.dt.year.unique().tolist()
 			
-		caught_exceptions = []
-		caught_exceptions_warn = []
-		already_run = []
-		for i in range(len(datasets)):
-			if skip != None and datasets.iloc[i]["SourceName"] in skip:
-				continue
-			if i < len(datasets) - last:
-				continue
-			if source != None and datasets.iloc[i]["SourceName"] != source:
+			try:
+				assert len(all_years) == 1
+			except AssertionError as e:
+				# Some datasets filter by local time but return
+				# UTC time
+				# Until this is solved more elegantly, removing years between {year}-01-01 00:00:00
+				# and {year}-01-01 08:00:00
+				dts = dts[(dts < f"{year+1}-01-01 00:00:00") | (dts > f"{year+1}-01-01 08:00:00")]
+				all_years = dts.dt.year.unique().tolist()
+				assert len(all_years) == 1
+			except:
+				raise(e)
+			assert all_years[0] == year
+
+			if not multi_case:
 				continue
 
+			if "month" in table.date_field.lower() or "year" in table.date_field.lower() or "yr" in table.date_field.lower():
+				# Cannot currently filter only by month/year
+				continue
+			
+			start_date = str(year-1) + "-12-29"
+			stop_date = datetime.strftime(dts.iloc[0]+timedelta(days=1), "%Y-%m-%d")
+
+			try:
+				table_start = src.load(datasets.iloc[i]["TableType"], [start_date, stop_date], 
+												agency=agency, pbar=False)
+			except ValueError as e:
+				if len(e.args)>0 and e.args[0]=="Currently unable to handle non-year inputs":
+					# The format of the date field does not allow for filtering by date
+					continue
+				else:
+					raise
+			except DateFilterException as e:
+				continue
+			except:
+				raise
+
+			sleep(sleep_time)
+			dts_start = table_start.table[table.date_field]
+			dts_start = dts_start[dts_start.apply(lambda x: isinstance(x,pd._libs.tslibs.timestamps.Timestamp))].convert_dtypes()
+			dts_start = dts_start.sort_values(ignore_index=True, na_position="first")
+
+			# If this isn't true then the stop date is too early
+			assert dts_start.iloc[-1].year == year
+
+			# Find first value date in year
+			dts_start = dts_start[dts_start.dt.year == year]
+			try:
+				assert dts.iloc[0] == dts_start.iloc[0]
+			except AssertionError as e:
+				# See comments in above try/except
+				assert dts.iloc[0].tz_localize(None) <= datetime.strptime(f"{year}-01-01 08:00:00", "%Y-%m-%d %H:%M:%S")
+			except:
+				raise(e)
+			
+			if len(table.table) == max_count:
+				# Whole dataset was not read. Don't compare to latest data in the year
+				continue
+
+			start_date = datetime.strftime(dts.iloc[-1]-timedelta(days=1), "%Y-%m-%d")
+			stop_date  = str(year+1) + "-01-10"  
+
+			table_stop = src.load(datasets.iloc[i]["TableType"], [start_date, stop_date], 
+											agency=agency, pbar=False)
+			sleep(sleep_time)
+			dts_stop = table_stop.table[table.date_field]
+
+			dts_stop = dts_stop[dts_stop.apply(lambda x: not isinstance(x,str))]
+			dts_stop = dts_stop.sort_values(ignore_index=True)
+
+			# If this isn't true then the start date is too late
+			assert dts_stop.iloc[0].year == year
+
+			# Find last value date in year
+			dts_stop = dts_stop[dts_stop.dt.year == year]
+			assert dts.iloc[-1] == dts_stop.iloc[-1]
+
+	if loghtml:
+		log_errors_to_file(caught_exceptions, caught_exceptions_warn)
+	else:
+		if len(caught_exceptions)==1:
+			raise caught_exceptions[0]
+		elif len(caught_exceptions)>0:
+			msg = f"{len(caught_exceptions)} URL errors encountered:\n"
+			for e in caught_exceptions:
+				msg += "\t" + e.args[0] + "\n"
+			raise OPD_MultipleErrors(msg)
+
+		for e in caught_exceptions_warn:
+			warnings.warn(str(e))
+
+
+def test_source_download_not_limitable(datasets, source, start_idx, skip, query={}):		
+	for i in range(len(datasets)):
+		if skip != None and datasets.iloc[i]["SourceName"] in skip:
+			continue
+		if i < start_idx:
+			continue
+		if source != None and datasets.iloc[i]["SourceName"] != source:
+			continue
+		if not can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]):
 			if is_stanford(datasets.iloc[i]["URL"]):
 				# There are a lot of data sets from Stanford, no need to run them all
-				# Just run approximately a small percentage
+				# Just run approximately 10%
 				rnd = random.uniform(0,1)
 				if rnd>0.05:
 					continue
@@ -85,298 +359,29 @@ class TestData:
 
 			srcName = datasets.iloc[i]["SourceName"]
 			state = datasets.iloc[i]["State"]
-
-			if datasets.iloc[i]["Agency"] == MULTI and \
-				srcName == "Virginia":
-				# Reduce size of data load by filtering by agency
-				agency = "Henrico Police Department"
-			else:
-				agency = None
-
-			table_print = datasets.iloc[i]["TableType"]
-
-			unique_id = [srcName, state, datasets.iloc[i]["Agency"], table_print]
-			if unique_id in already_run:
-				continue
-			already_run.append(unique_id)
-
-			now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
-			print(f"{now} Testing {i+1} of {len(datasets)}: {srcName} {table_print} table")
-
 			src = data.Source(srcName, state=state)
 
+			year = datasets.iloc[i]["Year"]
+			table_type = datasets.iloc[i]["TableType"]
+
+			now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
+			print(f"{now} Testing {i+1} of {len(datasets)}: {srcName}, {state} {table_type} table for {year}")
 			try:
-				try:
-					years = src.get_years(datasets.iloc[i]["TableType"])
-				except ValueError as e:
-					if len(e.args)>0 and "Extracting the years" in e.args[0]:
-						# Just test reading in the table and continue
-						table = src.load(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], 
-										agency=agency, pbar=False)
-						continue
-					else:
-						raise
-				except:
-					raise
-			except warn_errors as e:
-				e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"])
-				caught_exceptions_warn.append(e)
-				continue
-			except (OPD_TooManyRequestsError, OPD_arcgisAuthInfoError) as e:
-				# Catch exceptions related to URLs not functioning
-				e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"])
-				caught_exceptions.append(e)
+				table = src.load(table_type, year, pbar=False)
+			except OPD_FutureError:
 				continue
 			except:
 				raise
 
-			# Adding a pause here to prevent issues with requesting from site too frequently
 			sleep(sleep_time)
 
-			years_orig = years.copy()
-			for y in src.datasets[src.datasets["TableType"] == datasets.iloc[i]["TableType"]]["Year"]:
-				if y != MULTI:
-					years.remove(y)
-
-			if len(years)==0:
-				# Each datasets is annual
-				# Run 1st and last year
-				multi_case = False
-				years = [min(years_orig)]
-				if len(years_orig)>1:
-					years.append(max(years_orig))
-			else:
-				multi_case = True
-				if len(years)>1:
-					# It is preferred to to not use first or last year that start and stop of year are correct
-					years = years[-2:-1]
-				else:
-					years = years[:1]
-
-			tables = []
-			future_error = False
-			for year in years:
-				try:
-					table = src.load(datasets.iloc[i]["TableType"], year, 
-											agency=agency, pbar=False, 
-											sortby="date",
-											nrows=max_count if datasets.iloc[i]["DataType"] not in ["CSV","Excel"] else None)
-				except OPD_FutureError as e:
-					future_error = True
-					break
-				except:
-					raise
-
-				sleep(sleep_time)
-
-				if len(table.table)==0:
-					# Ensure count should have been 0
-					count = src.get_count(datasets.iloc[i]["TableType"], year, agency=agency, force=True)
-					if count!=0:
-						raise ValueError(f"Expected data for year {year} but received none")
-					
-					# There may not be any data for the year requested.
-					for y in years_orig:
-						if y not in years:
-							count = src.get_count(datasets.iloc[i]["TableType"], y, agency=agency, force=True)
-							if count>0:
-								years = [x if x!=year else y for x in years]
-								table = src.load(datasets.iloc[i]["TableType"], y, 
-											agency=agency, pbar=False, 
-											sortby="date",
-											nrows=max_count if datasets.iloc[i]["DataType"] not in ["CSV","Excel"] else None)
-								break
-					else:
-						if len(table.table)==0 and has_outages and \
-							(outages[["State","SourceName","Agency","TableType","Year"]] == datasets.iloc[i][["State","SourceName","Agency","TableType","Year"]]).all(axis=1).any():
-							pass
-						else:
-							raise ValueError("Unable to find data for any year")
-
-				tables.append(table)
-
-			if future_error:
-				continue
-
-			for year in years:
-				print(f"Testing for year {year}")
-
-				table = tables[years.index(year)]
-
-				if len(table.table)==0 and has_outages and \
-					(outages[["State","SourceName","Agency","TableType","Year"]] == datasets.iloc[i][["State","SourceName","Agency","TableType","Year"]]).all(axis=1).any():
-					caught_exceptions_warn.append(f'Outage continues for {str(datasets.iloc[i][["State","SourceName","Agency","TableType","Year"]])}')
-					continue
-				else:
-					assert len(table.table)>0
-
-				if table.date_field == None or datasets.iloc[i]["DataType"]==DataType.EXCEL.value or \
-					table.date_field.lower()=="year":
-					continue
-
-				dts = table.table[table.date_field]
-				# Remove all non-datestamps
-				dts = dts[dts.apply(lambda x: isinstance(x,pd.Timestamp) or isinstance(x,pd.Period))].convert_dtypes()
-				try:
-					dts = dts.sort_values(ignore_index=True)
-				except TypeError as e:
-					if re.search(r"not supported between instances of '(Timestamp|Period)' and '(Timestamp|Period)'", str(e)):
-						dts = dts[dts.apply(lambda x: isinstance(x,pd.Timestamp))]
-						dts = dts.sort_values(ignore_index=True)
-					else:
-						raise
-
-				all_years = dts.dt.year.unique().tolist()
-				
-				try:
-					assert len(all_years) == 1
-				except AssertionError as e:
-					# Some datasets filter by local time but return
-					# UTC time
-					# Until this is solved more elegantly, removing years between {year}-01-01 00:00:00
-					# and {year}-01-01 08:00:00
-					dts = dts[(dts < f"{year+1}-01-01 00:00:00") | (dts > f"{year+1}-01-01 08:00:00")]
-					all_years = dts.dt.year.unique().tolist()
-					assert len(all_years) == 1
-				except:
-					raise(e)
-				assert all_years[0] == year
-
-				if not multi_case:
-					continue
-
-				if "month" in table.date_field.lower() or "year" in table.date_field.lower() or "yr" in table.date_field.lower():
-					# Cannot currently filter only by month/year
-					continue
-				
-				start_date = str(year-1) + "-12-29"
-				stop_date = datetime.strftime(dts.iloc[0]+timedelta(days=1), "%Y-%m-%d")
-
-				try:
-					table_start = src.load(datasets.iloc[i]["TableType"], [start_date, stop_date], 
-													agency=agency, pbar=False)
-				except ValueError as e:
-					if len(e.args)>0 and e.args[0]=="Currently unable to handle non-year inputs":
-						# The format of the date field does not allow for filtering by date
-						continue
-					else:
-						raise
-				except DateFilterException as e:
-					continue
-				except:
-					raise
-
-				sleep(sleep_time)
-				dts_start = table_start.table[table.date_field]
-				dts_start = dts_start[dts_start.apply(lambda x: isinstance(x,pd._libs.tslibs.timestamps.Timestamp))].convert_dtypes()
-				dts_start = dts_start.sort_values(ignore_index=True, na_position="first")
-
-				# If this isn't true then the stop date is too early
-				assert dts_start.iloc[-1].year == year
-
-				# Find first value date in year
-				dts_start = dts_start[dts_start.dt.year == year]
-				try:
-					assert dts.iloc[0] == dts_start.iloc[0]
-				except AssertionError as e:
-					# See comments in above try/except
-					assert dts.iloc[0].tz_localize(None) <= datetime.strptime(f"{year}-01-01 08:00:00", "%Y-%m-%d %H:%M:%S")
-				except:
-					raise(e)
-				
-				if len(table.table) == max_count:
-					# Whole dataset was not read. Don't compare to latest data in the year
-					continue
-
-				start_date = datetime.strftime(dts.iloc[-1]-timedelta(days=1), "%Y-%m-%d")
-				stop_date  = str(year+1) + "-01-10"  
-
-				table_stop = src.load(datasets.iloc[i]["TableType"], [start_date, stop_date], 
-												agency=agency, pbar=False)
-				sleep(sleep_time)
-				dts_stop = table_stop.table[table.date_field]
-
-				dts_stop = dts_stop[dts_stop.apply(lambda x: not isinstance(x,str))]
-				dts_stop = dts_stop.sort_values(ignore_index=True)
-
-				# If this isn't true then the start date is too late
-				assert dts_stop.iloc[0].year == year
-
-				# Find last value date in year
-				dts_stop = dts_stop[dts_stop.dt.year == year]
-				assert dts.iloc[-1] == dts_stop.iloc[-1]
-
-		if loghtml:
-			log_errors_to_file(caught_exceptions, caught_exceptions_warn)
-		else:
-			if len(caught_exceptions)==1:
-				raise caught_exceptions[0]
-			elif len(caught_exceptions)>0:
-				msg = f"{len(caught_exceptions)} URL errors encountered:\n"
-				for e in caught_exceptions:
-					msg += "\t" + e.args[0] + "\n"
-				raise OPD_MultipleErrors(msg)
-
-			for e in caught_exceptions_warn:
-				warnings.warn(str(e))
-
-
-	def test_source_download_not_limitable(self, csvfile, source, last, skip, loghtml, query={}):
-		if last == None:
-			last = float('inf')
-		datasets = get_datasets(csvfile)
-		if skip != None:
-			skip = skip.split(",")
-			skip = [x.strip() for x in skip]
-			
-		for i in range(len(datasets)):
-			if skip != None and datasets.iloc[i]["SourceName"] in skip:
-				continue
-			if i < len(datasets) - last:
-				continue
-			if source != None and datasets.iloc[i]["SourceName"] != source:
-				continue
-			if not can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]):
-				if is_stanford(datasets.iloc[i]["URL"]):
-					# There are a lot of data sets from Stanford, no need to run them all
-					# Just run approximately 10%
-					rnd = random.uniform(0,1)
-					if rnd>0.05:
-						continue
-
-				match = True
-				for k,v in query.items():
-					if datasets.iloc[i][k]!=v:
-						match = False
-						break
-				if not match:
-					continue
-
-				srcName = datasets.iloc[i]["SourceName"]
-				state = datasets.iloc[i]["State"]
-				src = data.Source(srcName, state=state)
-
-				year = datasets.iloc[i]["Year"]
-				table_type = datasets.iloc[i]["TableType"]
-
-				now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
-				print(f"{now} Testing {i+1} of {len(datasets)}: {srcName}, {state} {table_type} table for {year}")
-				try:
-					table = src.load(table_type, year, pbar=False)
-				except OPD_FutureError:
-					continue
-				except:
-					raise
-
-				sleep(sleep_time)
-
-				assert len(table.table)>1
-				if not pd.isnull(table.date_field):
-					assert table.date_field in table.table
-					#assuming a Pandas string dtype('O').name = object is okay too
-					assert (table.table[table.date_field].dtype.name in ['datetime64[ns]', 'datetime64[ms]'])
-				if not pd.isnull(datasets.iloc[i]["agency_field"]):
-					assert datasets.iloc[i]["agency_field"] in table.table
+			assert len(table.table)>1
+			if not pd.isnull(table.date_field):
+				assert table.date_field in table.table
+				#assuming a Pandas string dtype('O').name = object is okay too
+				assert (table.table[table.date_field].dtype.name in ['datetime64[ns]', 'datetime64[ms]'])
+			if not pd.isnull(datasets.iloc[i]["agency_field"]):
+				assert datasets.iloc[i]["agency_field"] in table.table
 
 
 def can_be_limited(data_type, url):
@@ -419,16 +424,16 @@ def log_errors_to_file(*args):
 
 if __name__ == "__main__":
 	# For testing
-	tp = TestData()
-	# (self, csvfile, source, last, skip, loghtml)
+	# (csvfile, source, last, skip, loghtml)
 	csvfile = None
-	# csvfile = r"..\opd-data\opd_source_table.csv"
+	csvfile = r"..\opd-data\opd_source_table.csv"
 	last = None
-	last = 922-896+1
+	# last = 930-307+1
 	skip = None
 	# skip = "Sacramento"
 	source = None
-	# source = "New York City"
-	tp.test_load_year(csvfile, source, last, skip, None, query={'DataType':'CKAN'})
-	# last = None
-	tp.test_source_download_not_limitable(csvfile, source, last, skip, None, query={'DataType':'CKAN'})
+	source = "Wallkill"
+	# test_bloomington_citations(csvfile, source, last, skip, None)
+	test_load_year(csvfile, source, last, skip, None)
+	last = None
+	test_source_download_not_limitable(csvfile, source, last, skip, None)

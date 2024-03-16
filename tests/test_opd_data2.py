@@ -14,6 +14,8 @@ import os
 import pandas as pd
 import pytest
 
+from test_utils import check_for_dataset
+
 sleep_time = 0.1
 log_filename = f"pytest_url_errors_{datetime.now().strftime('%Y%m%d_%H')}.txt"
 log_folder = os.path.join(".","data/test_logs")
@@ -40,152 +42,138 @@ multi_tables = ['TRAFFIC STOPS','TRAFFIC CITATIONS','STOPS']
 multi_years = [MULTI,MULTI,MULTI]
 multi_partial = ["Hartford",'Buffalo',"Arlington"]
 
-def get_datasets(csvfile):
-    if csvfile != None:
-        datasets.datasets = datasets._build(csvfile)
+def test_get_years(datasets, source, start_idx, skip, loghtml, query={}):
+	caught_exceptions = []
+	caught_exceptions_warn = []
 
-    return datasets.datasets
+	already_ran = []
+	for i in range(len(datasets)):
+		if source != None and datasets.iloc[i]["SourceName"] != source:
+			continue
+		if skip != None and datasets.iloc[i]["SourceName"] in skip:
+			continue
+		if i < start_idx:
+			continue
+		if is_filterable(datasets.iloc[i]["DataType"]) or datasets.iloc[i]["Year"] != MULTI or \
+			datasets.iloc[i]["DataType"] == DataType.EXCEL.value:  # If Excel, we can possibly check
+			srcName = datasets.iloc[i]["SourceName"]
+			state = datasets.iloc[i]["State"]
 
-class TestData:
-	def test_get_years(self, csvfile, source, last, skip, loghtml, query={}):
-		if last == None:
-			last = float('inf')
-		datasets = get_datasets(csvfile)
-		caught_exceptions = []
-		caught_exceptions_warn = []
-		if skip != None:
-			skip = skip.split(",")
-			skip = [x.strip() for x in skip]
-
-		already_ran = []
-		for i in range(len(datasets)):
-			if source != None and datasets.iloc[i]["SourceName"] != source:
+			match = True
+			for k,v in query.items():
+				if datasets.iloc[i][k]!=v:
+					match = False
+					break
+			if not match:
 				continue
-			if skip != None and datasets.iloc[i]["SourceName"] in skip:
+
+			if (srcName, state, datasets.iloc[i]["TableType"]) in already_ran:
 				continue
-			if i < len(datasets) - last:
-				continue
-			if is_filterable(datasets.iloc[i]["DataType"]) or datasets.iloc[i]["Year"] != MULTI or \
-				datasets.iloc[i]["DataType"] == DataType.EXCEL.value:  # If Excel, we can possibly check
-				srcName = datasets.iloc[i]["SourceName"]
-				state = datasets.iloc[i]["State"]
 
-				match = True
-				for k,v in query.items():
-					if datasets.iloc[i][k]!=v:
-						match = False
-						break
-				if not match:
-					continue
+			src = data.Source(srcName, state=state)
 
-				if (srcName, state, datasets.iloc[i]["TableType"]) in already_ran:
-					continue
+			table_print = datasets.iloc[i]["TableType"]
+			now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
+			print(f"{now} Testing {i+1} of {len(datasets)}: {srcName} {table_print} table")
 
-				src = data.Source(srcName, state=state)
-
-				table_print = datasets.iloc[i]["TableType"]
-				now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
-				print(f"{now} Testing {i+1} of {len(datasets)}: {srcName} {table_print} table")
-
-				if datasets.iloc[i]["DataType"] == DataType.EXCEL.value:
+			if datasets.iloc[i]["DataType"] == DataType.EXCEL.value:
+				if pd.notnull(datasets.iloc[i]['dataset_id']) and ';' in datasets.iloc[i]['dataset_id']:
+					# Multi-dataset table
+					if pd.isnull(datasets.iloc[i]['date_field']):
+						continue
+				else:
 					loader = opd.data_loaders.Excel(datasets.iloc[i]["URL"])
 					has_year_sheets = loader._Excel__get_sheets()[1]
 					if not has_year_sheets:
 						continue				
 
-				already_ran.append((srcName, state, datasets.iloc[i]["TableType"]))
+			already_ran.append((srcName, state, datasets.iloc[i]["TableType"]))
 
-				try:
-					years = src.get_years(datasets.iloc[i]["TableType"], force=True)
-				except warn_errors as e:
-					e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"])
-					caught_exceptions_warn.append(e)
-					continue
-				except (OPD_TooManyRequestsError, OPD_arcgisAuthInfoError) as e:
-					# Catch exceptions related to URLs not functioning
-					e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"])
-					caught_exceptions.append(e)
-					continue
-				except:
-					raise
-
-				if len(years)==0 and has_outages and \
-					(outages[["State","SourceName","Agency","TableType","Year"]] == datasets.iloc[i][["State","SourceName","Agency","TableType","Year"]]).all(axis=1).any():
-					caught_exceptions_warn.append(f'Outage continues for {str(datasets.iloc[i][["State","SourceName","Agency","TableType","Year"]])}')
-					continue
-
-				if datasets.iloc[i]["Year"] != MULTI:
-					assert datasets.iloc[i]["Year"] in years
-				else:
-					assert len(years) > 0
-
-				# Adding a pause here to prevent issues with requesting from site too frequently
-				sleep(0.1)
-
-		if loghtml:
-			log_errors_to_file(caught_exceptions, caught_exceptions_warn)
-		else:
-			if len(caught_exceptions)==1:
-				raise caught_exceptions[0]
-			elif len(caught_exceptions)>0:
-				msg = f"{len(caught_exceptions)} URL errors encountered:\n"
-				for e in caught_exceptions:
-					msg += "\t" + e.args[0] + "\n"
-				raise OPD_MultipleErrors(msg)
-
-			for e in caught_exceptions_warn:
-				warnings.warn(str(e))
-
-
-	def test_get_agencies(self, csvfile, source, last, skip, loghtml):
-		if last == None:
-			last = float('inf')
-		datasets = get_datasets(csvfile)
-		if skip != None:
-			skip = skip.split(",")
-			skip = [x.strip() for x in skip]
-			
-		for i in range(len(datasets)):
-			if skip != None and datasets.iloc[i]["SourceName"] in skip:
+			try:
+				years = src.get_years(datasets.iloc[i]["TableType"], force=True)
+			except warn_errors as e:
+				e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"])
+				caught_exceptions_warn.append(e)
 				continue
-			if i < len(datasets) - last:
+			except (OPD_TooManyRequestsError, OPD_arcgisAuthInfoError) as e:
+				# Catch exceptions related to URLs not functioning
+				e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"])
+				caught_exceptions.append(e)
 				continue
-			if source != None and datasets.iloc[i]["SourceName"] != source:
+			except:
+				raise
+
+			if len(years)==0 and has_outages and \
+				(outages[["State","SourceName","Agency","TableType","Year"]] == datasets.iloc[i][["State","SourceName","Agency","TableType","Year"]]).all(axis=1).any():
+				caught_exceptions_warn.append(f'Outage continues for {str(datasets.iloc[i][["State","SourceName","Agency","TableType","Year"]])}')
 				continue
 
-			if is_filterable(datasets.iloc[i]["DataType"]) or datasets.iloc[i]["Agency"] != MULTI:
-				srcName = datasets.iloc[i]["SourceName"]
-				state = datasets.iloc[i]["State"]
-				src = data.Source(srcName, state=state)
+			if datasets.iloc[i]["Year"] != MULTI:
+				assert datasets.iloc[i]["Year"] in years
+			else:
+				assert len(years) > 0
 
-				table_print = datasets.iloc[i]["TableType"]
-				now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
-				print(f"{now} Testing {i+1} of {len(datasets)}: {srcName} {table_print} table")
+			# Adding a pause here to prevent issues with requesting from site too frequently
+			sleep(0.1)
 
-				try:
-					agencies = src.get_agencies(datasets.iloc[i]["TableType"], year=datasets.iloc[i]["Year"])
-				except OPD_MinVersionError: continue
-				except: raise
+	if loghtml:
+		log_errors_to_file(caught_exceptions, caught_exceptions_warn)
+	else:
+		if len(caught_exceptions)==1:
+			raise caught_exceptions[0]
+		elif len(caught_exceptions)>0:
+			msg = f"{len(caught_exceptions)} URL errors encountered:\n"
+			for e in caught_exceptions:
+				msg += "\t" + e.args[0] + "\n"
+			raise OPD_MultipleErrors(msg)
 
-				if datasets.iloc[i]["Agency"] != MULTI:
-					assert [datasets.iloc[i]["Agency"]] == agencies
-				else:
-					assert len(agencies) > 0
-
-				# Adding a pause here to prevent issues with requesting from site too frequently
-				sleep(sleep_time)
-
-
-	def test_multi_agency_list(self, csvfile, source, last, skip, loghtml):
-		datasets = get_datasets(csvfile)
-		for i in range(len(datasets)):
-			if is_filterable(datasets.iloc[i]["DataType"]) and datasets.iloc[i]["Agency"] == MULTI:
-				assert any([datasets.iloc[i]['State']==x and datasets.iloc[i]['TableType']==y and datasets.iloc[i]['Year']==z for 
-							x,y,z in zip(multi_states, multi_tables,multi_years)])
+		for e in caught_exceptions_warn:
+			warnings.warn(str(e))
 
 
-	@pytest.mark.parametrize('state,table_type,year,partial',[(x,y,z,a) for x,y,z,a in zip(multi_states, multi_tables,multi_years,multi_partial)])
-	def test_get_agencies_name_match(self, csvfile, source, last, skip, loghtml, state, table_type, year, partial):
+def test_get_agencies(datasets, source, start_idx, skip):
+		
+	for i in range(len(datasets)):
+		if skip != None and datasets.iloc[i]["SourceName"] in skip:
+			continue
+		if i < start_idx:
+			continue
+		if source != None and datasets.iloc[i]["SourceName"] != source:
+			continue
+
+		if is_filterable(datasets.iloc[i]["DataType"]) or datasets.iloc[i]["Agency"] != MULTI:
+			srcName = datasets.iloc[i]["SourceName"]
+			state = datasets.iloc[i]["State"]
+			src = data.Source(srcName, state=state)
+
+			table_print = datasets.iloc[i]["TableType"]
+			now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
+			print(f"{now} Testing {i+1} of {len(datasets)}: {srcName} {table_print} table")
+
+			try:
+				agencies = src.get_agencies(datasets.iloc[i]["TableType"], year=datasets.iloc[i]["Year"])
+			except OPD_MinVersionError: continue
+			except: raise
+
+			if datasets.iloc[i]["Agency"] != MULTI:
+				assert [datasets.iloc[i]["Agency"]] == agencies
+			else:
+				assert len(agencies) > 0
+
+			# Adding a pause here to prevent issues with requesting from site too frequently
+			sleep(sleep_time)
+
+
+def test_multi_agency_list(datasets):
+	for i in range(len(datasets)):
+		if is_filterable(datasets.iloc[i]["DataType"]) and datasets.iloc[i]["Agency"] == MULTI:
+			assert any([datasets.iloc[i]['State']==x and datasets.iloc[i]['TableType']==y and datasets.iloc[i]['Year']==z for 
+						x,y,z in zip(multi_states, multi_tables,multi_years)])
+
+
+@pytest.mark.parametrize('state,table_type,year,partial',[(x,y,z,a) for x,y,z,a in zip(multi_states, multi_tables,multi_years,multi_partial)])
+def test_get_agencies_name_match(state, table_type, year, partial):
+	if check_for_dataset(state, table_type):
 		src = data.Source(state)
 		try:
 			agencies = src.get_agencies(partial_name=partial, table_type=table_type, year=year)
@@ -195,12 +183,10 @@ class TestData:
 			raise
 
 		assert len(agencies) > 1
-				
-				
-	def test_agency_filter(self, csvfile, source, last, skip, loghtml):
-		if last == None:
-			last = float('inf')
-		get_datasets(csvfile)
+			
+			
+def test_agency_filter():
+	if check_for_dataset('New York', 'TRAFFIC CITATIONS'):
 		src = data.Source("New York")
 		agency="BUFFALO POLICE DEPT"
 		# For speed, set private limit parameter so that only a single entry is requested
@@ -211,9 +197,9 @@ class TestData:
 		assert table.table.iloc[0][table.agency_field] == agency
 
 
-	def test_to_csv(self, csvfile, source, last, skip, loghtml):
+def test_to_csv():
+	if check_for_dataset('New York', 'TRAFFIC CITATIONS'):
 		src = data.Source("New York")
-		get_datasets(csvfile)
 		agency="BUFFALO POLICE DEPT"
 		year = 2021
 		table = src.load('TRAFFIC CITATIONS', 2021, agency=agency, pbar=False, nrows=100)
@@ -272,18 +258,17 @@ def log_errors_to_file(*args):
 
 if __name__ == "__main__":
 	# For testing
-	tp = TestData()
-	# (self, csvfile, source, last, skip, loghtml)
+	# (csvfile, source, last, skip, loghtml)
 	csvfile = None
-	# csvfile = os.path.join("..","opd-data","opd_source_table.csv")
+	csvfile = os.path.join("..","opd-data","opd_source_table.csv")
 	last = None
-	last = 922-896+1
+	# last = 930-307+1
 	source = None
-	# source = "Bloomington"
+	source = "Wallkill"
 	skip = None
 	# skip = "Corona"
-	# tp.test_get_agencies(csvfile, None, None, skip, None)
-	# tp.test_get_agencies_name_match(csvfile, None, last, skip, None)
-	# tp.test_agency_filter(csvfile, None, None, skip, None)
-	# tp.test_to_csv(csvfile, None, None, skip, None)
-	tp.test_get_years(csvfile, source, last, skip, None, query={'DataType':'CKAN'})
+	# test_get_agencies(csvfile, None, None, skip, None)
+	# test_get_agencies_name_match(csvfile, None, last, skip, None)
+	# test_agency_filter(csvfile, None, None, skip, None)
+	# test_to_csv(csvfile, None, None, skip, None)
+	test_get_years(csvfile, source, last, skip, None)
