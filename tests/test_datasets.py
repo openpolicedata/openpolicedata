@@ -116,51 +116,51 @@ def test_arcgis_urls(datasets):
             assert result != None
             assert len(url) == result.span()[1]
 
-def test_source_list_by_state(all_datasets):
+def test_source_list_by_state(datasets, use_changed_rows):
     state = "Virginia"
     df = opd.datasets.query(state=state)
-    df_truth = all_datasets[all_datasets["State"]==state]
-    assert len(df)>0
-    assert df_truth.equals(df)
+    df_truth = datasets[datasets["State"]==state]
+    assert use_changed_rows or len(df)>0
+    pd.testing.assert_frame_equal(df_truth, df)
 
-def test_source_list_by_source_name(all_datasets):
+def test_source_list_by_source_name(datasets, use_changed_rows):
     source_name = "Fairfax County"
     df = opd.datasets.query(source_name=source_name)
-    df_truth = all_datasets[all_datasets["SourceName"]==source_name]
-    assert len(df)>0
-    assert df_truth.equals(df)
+    df_truth = datasets[datasets["SourceName"]==source_name]
+    assert use_changed_rows or len(df)>0
+    pd.testing.assert_frame_equal(df_truth, df)
 
-def test_source_list_by_agency(all_datasets):
+def test_source_list_by_agency(datasets, use_changed_rows):
     agency = "Fairfax County"
     df = opd.datasets.query(agency=agency)
-    df_truth = all_datasets[all_datasets["Agency"]==agency]
-    assert len(df)>0
-    assert df_truth.equals(df)
+    df_truth = datasets[datasets["Agency"]==agency]
+    assert use_changed_rows or len(df)>0
+    pd.testing.assert_frame_equal(df_truth, df)
 
-def test_source_list_by_table_type(all_datasets):
+def test_source_list_by_table_type(datasets, use_changed_rows):
     table_type = opd.defs.TableType.TRAFFIC
     df = opd.datasets.query(table_type=table_type)
-    df_truth = all_datasets[all_datasets["TableType"]==table_type.value]
-    assert len(df)>0
-    assert df_truth.equals(df)
+    df_truth = datasets[datasets["TableType"]==table_type.value]
+    assert use_changed_rows or len(df)>0
+    pd.testing.assert_frame_equal(df_truth, df)
 
-def test_source_list_by_table_type_value(all_datasets):
+def test_source_list_by_table_type_value(datasets, use_changed_rows):
     table_type = opd.defs.TableType.TRAFFIC.value
     df = opd.datasets.query(table_type=table_type)
-    df_truth = all_datasets[all_datasets["TableType"]==table_type]
-    assert len(df)>0
-    assert df_truth.equals(df)
+    df_truth = datasets[datasets["TableType"]==table_type]
+    assert use_changed_rows or len(df)>0
+    pd.testing.assert_frame_equal(df_truth, df)
 
-def test_source_list_by_multi(all_datasets):
+def test_source_list_by_multi(datasets, use_changed_rows):
     state = "Virginia"
     source_name = "Fairfax County"
     table_type = opd.defs.TableType.TRAFFIC_CITATIONS.value
     df = opd.datasets.query(state=state, table_type=table_type, source_name=source_name)
-    df_truth = all_datasets[all_datasets["TableType"]==table_type]
+    df_truth = datasets[datasets["TableType"]==table_type]
     df_truth = df_truth[df_truth["State"]==state]
     df_truth = df_truth[df_truth["SourceName"]==source_name]
-    assert len(df)>0
-    assert df_truth.equals(df)
+    assert use_changed_rows or len(df)>0
+    pd.testing.assert_frame_equal(df_truth, df)
 
 def test_table_types(datasets):
     for t in datasets["TableType"]:
@@ -194,6 +194,23 @@ def test_summary_functions():
 def test_get_table_types():    
     opd.datasets.get_table_types()
     assert opd.datasets.get_table_types(contains="STOPS") == ["PEDESTRIAN STOPS","STOPS","TRAFFIC STOPS"]
+
+def test_combined_num_datasets(all_datasets):
+    for k in range(len(all_datasets)):
+        if pd.notnull(all_datasets.iloc[k]['dataset_id']) and ';' in all_datasets.iloc[k]['dataset_id']:
+            ds = all_datasets.iloc[k]['dataset_id']
+            if '|' in ds:  # Before | are sheet names which we don't need
+                ds = ds.split('|')[1]
+            ds = [x.strip() for x in ds.split(';')]
+            if all_datasets.iloc[k]['SourceName']=='Wallkill' and all_datasets.iloc[k]['Year']==2016:
+                assert len(ds)==3
+            else:
+                # Data quality checks (not set in stone. may need to adjust for new cases)
+                # Biannually, Quarterly, or monthly
+                assert len(ds) in [2, 4,12]
+            # No repeats
+            assert len(ds) == len(set(ds))
+
 
 if __name__ == "__main__":
     csvfile = None

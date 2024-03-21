@@ -143,7 +143,7 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 
 			table_print = datasets.iloc[i]["TableType"]
 			now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
-			print(f"{now} Testing {i+1} of {len(datasets)}: {srcName} {table_print} table")
+			print(f"{now} Testing {i} of {len(datasets)-1}: {srcName} {table_print} table")
 
 			try:
 				table = src.load(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], pbar=False, nrows=20)
@@ -321,22 +321,25 @@ def log_errors_to_file(*args):
 					f.write("\n")
 
 if __name__ == "__main__":
+	from test_utils import get_datasets
 	# For testing
+	use_changed_rows = True
 	csvfile = None
-	csvfile = r"..\opd-data\opd_source_table.csv"
-	last = None
-	# last = 922-634+1
+	# csvfile = r"..\opd-data\opd_source_table.csv"
+	start_idx = 96
 	skip = None
 	# skip = "Greensboro"
 	source = None
-	source = "Washington D.C." #"Wallkill" #"Bremerton"
+	# source = "Washington D.C." #"Wallkill" #"Bremerton"
+
+	datasets = get_datasets(csvfile, use_changed_rows)
 
 	# check_excel_sheets(csvfile, source, last, skip, None) 
 	# test_get_years_to_check(csvfile, source, last, skip, None) 
 	# check_table_type_warning(csvfile, source, last, skip, None) 
 	# test_offsets_and_nrows(csvfile, source, last, skip, None) 
 	# test_check_version(csvfile, None, last, skip, None) #
-	test_source_download_limitable(csvfile, source, last, skip, None) 
+	test_source_download_limitable(datasets, source, start_idx, skip, False) 
 	
 	# test_get_count(csvfile, None, last, skip, None)
 	# test_load_gen(csvfile, source, last, skip, None) 

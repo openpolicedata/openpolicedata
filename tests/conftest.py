@@ -72,9 +72,12 @@ def all_datasets(request):
 
 
 @pytest.fixture(scope='session')
-def datasets(request, all_datasets):
+def use_changed_rows(request):
+    return request.config.option.use_changed_rows
+
+@pytest.fixture(scope='session')
+def datasets(request, all_datasets, use_changed_rows):
     csvfile = request.config.option.csvfile
-    use_changed_rows = request.config.option.use_changed_rows
     if use_changed_rows:
         return get_datasets(csvfile, use_changed_rows)
     else:

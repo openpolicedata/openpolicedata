@@ -1,3 +1,4 @@
+import pandas as pd
 import os
 import subprocess
 import warnings
@@ -24,17 +25,14 @@ def get_datasets(csvfile=None,use_changed_rows=False):
         csv_path = os.path.join('..','opd-data')
         assert os.path.exists(csv_path)
         added_lines_datasets = get_changed_rows(csv_path, 'opd_source_table.csv')
-        return added_lines_datasets
-    elif use_changed_rows==False and csvfile:
+        opd.datasets.reload(added_lines_datasets)
+    elif not use_changed_rows and csvfile:
         assert os.path.exists(csvfile)
         # Use the user specified csv file for the opd_source_table
-        opd.datasets.datasets = opd.datasets._build(csvfile)
-        return opd.datasets.query()
-    elif use_changed_rows==False and not csvfile:
-        # Use default github opd_source_table.csv
-        return opd.datasets.query()
+        opd.datasets.reload(csvfile)
+
+    return opd.datasets.query()
     
-    raise ValueError("There is a logic error in get_datasets. This line should never run.")
 
 
 def get_line_numbers(result):
@@ -74,8 +72,7 @@ def get_changed_rows(repo_dir, file_name):
     # extract the added lines from the csv file        
     csv_file = os.path.join(repo_dir, file_name)
        
-    opd.datasets.datasets = opd.datasets._build(csv_file)
-    datasets=opd.datasets.query()
+    datasets = pd.read_csv(csv_file)
     
     #return only the datasets that are in the added_lines_dataframe_index
     added_lines_datasets = datasets.iloc[added_lines_dataframe_index]

@@ -90,6 +90,12 @@ class TableType(str, Enum):
     DEATHS_IN_CUSTODY = ("DEATHS IN CUSTODY", "Deaths that occur in custody or during the process of arrest")
     FIELD_CONTACTS = ("FIELD CONTACTS", "Consensual contacts between officers and the community.")
     INCIDENTS = ("INCIDENTS", "Crime incident reports")
+    INCIDENTS_INCIDENTS = ("INCIDENTS - INCIDENTS", 
+                          "Incidents data may be split into several tables due to the possibility that multiple "+
+                        "subjects may be involved in an incident. This table contains data on the details of the incident.")
+    INCIDENTS_SUBJECTS = ("INCIDENTS - SUBJECTS", 
+                          "Incidents data may be split into several tables due to the possibility that multiple "+
+                        "subjects may be involved in an incident. This table contains data on subjects.")
     LAWSUITS = ("LAWSUITS", "Lawsuits against a police department")
     PEDESTRIAN = ("PEDESTRIAN STOPS","Stops of pedestrians based on 'reasonable suspicion'. May lead to a frisk.")
     PEDESTRIAN_ARRESTS = ("PEDESTRIAN ARRESTS","Pedestrian stops leading to an arrest")

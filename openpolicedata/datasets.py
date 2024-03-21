@@ -34,7 +34,9 @@ def _build(csv_file, error=False):
 
     loaded, df = check_compat_source_table(column_types=_column_types)
 
-    if not loaded:
+    if isinstance(csv_file, pd.DataFrame):
+        df = csv_file.copy()
+    elif not loaded:
         try:
             df = pd.read_csv(csv_file, dtype=_column_types)
         except:
@@ -51,13 +53,13 @@ def _build(csv_file, error=False):
         }, inplace=True)
 
     # Convert years to int
-    df["Year"] = [int(x) if x.isdigit() else x for x in df["Year"]]
+    df["Year"] = [int(x) if isinstance(x,str) and x.isdigit() else x for x in df["Year"]]
     df["Year"] = df["Year"].apply(lambda x: defs.MULTI if x=="MULTI" else x)
     df["SourceName"] = df["SourceName"].str.replace("Police Department", "")
     df["Agency"] = df["Agency"].str.replace("Police Department", "").apply(lambda x: defs.MULTI if x=="MULTI" else x)
 
     for col in df.columns:
-        df[col] = [x.strip() if type(x)==str else x for x in df[col]]
+        df[col] = [x.strip() if isinstance(x, str) else x for x in df[col]]
 
     # ArcGIS datasets should have a URL ending in either /FeatureServer/# or /MapServer/#
     # Where # is a layer #
@@ -81,8 +83,10 @@ def _build(csv_file, error=False):
 
     if "coverage_start" in df:
         p = re.compile(r"\d{1,2}/\d{1,2}/\d{4}")
-        df["coverage_start"] = df["coverage_start"].apply(lambda x: pd.to_datetime(x) if pd.notnull(x) and p.search(x) else x)
-        df["coverage_end"] = df["coverage_end"].apply(lambda x: pd.to_datetime(x) if pd.notnull(x) and p.search(x) else x)
+        df["coverage_start"] = df["coverage_start"].apply(lambda x: pd.to_datetime(x) if \
+                                                          not isinstance(x,pd.Timestamp) and pd.notnull(x) and p.search(x) else x)
+        df["coverage_end"] = df["coverage_end"].apply(lambda x: pd.to_datetime(x) if \
+                                                      not isinstance(x,pd.Timestamp) and pd.notnull(x) and p.search(x) else x)
 
     return DeprecationHandlerDataFrame(df)
 
@@ -90,13 +94,13 @@ def _build(csv_file, error=False):
 datasets = _build(csv_file)
 
 
-def reload(csvfile: str = csv_file):
+def reload(csvfile: Union[str,pd.DataFrame] = csv_file):
     """Reload default datasets CSV file or load datasets CSV from local file. Useful if datasets file may have been updated.
 
     Parameters
     ----------
-    csvfile : str, optional
-        OPTIONAL CSV file location, by default the default OPD CSV file will be loaded from GitHub
+    csvfile : str, pd.DataFrame, optional
+        OPTIONAL CSV file location or pandas DataFrame, by default the default OPD CSV file will be loaded from GitHub
     """
 
     from .import datasets
