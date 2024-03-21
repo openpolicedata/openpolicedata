@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 ### Added
+- Added Firearm Pointing (by officer) table type
+- Added data loader to combine multiple files that span a single year into a single dataset
 ### Changed
 ### Deprecated
 ### Removed

@@ -1314,21 +1314,30 @@ class Source:
         params = (data_type, url, dataset_id, date_field, agency_field)
         if self.__loader is not None and self.__loader[0]==params:
             return self.__loader[1]
-
-        if data_type ==defs.DataType.CSV:
-            loader = data_loaders.Csv(url, date_field=date_field, agency_field=agency_field)
-        elif data_type ==defs.DataType.EXCEL:
-            loader = data_loaders.Excel(url, sheet=dataset_id, date_field=date_field, agency_field=agency_field) 
-        elif data_type ==defs.DataType.ArcGIS:
-            loader = data_loaders.Arcgis(url, date_field=date_field)
-        elif data_type ==defs.DataType.SOCRATA:
-            loader = data_loaders.Socrata(url, dataset_id, date_field=date_field)
-        elif data_type ==defs.DataType.CARTO:
-            loader = data_loaders.Carto(url, dataset_id, date_field=date_field, query=query)
-        elif data_type ==defs.DataType.CKAN:
-            loader = data_loaders.Ckan(url, dataset_id, date_field=date_field, query=query)
+        
+        if dataset_id and ';' in dataset_id:
+            # Multiple dataset IDs
+            if data_type ==defs.DataType.CSV:
+                loader = data_loaders.CombinedDataset(data_loaders.Csv, url, dataset_id, date_field=date_field, agency_field=agency_field)
+            elif data_type ==defs.DataType.EXCEL:
+                loader = data_loaders.CombinedDataset(data_loaders.Excel, url, dataset_id, date_field=date_field, agency_field=agency_field)
+            else:
+                raise ValueError(f"Not supported data type for CombinedDataset: {data_type}")
         else:
-            raise ValueError(f"Unknown data type: {data_type}")
+            if data_type ==defs.DataType.CSV:
+                loader = data_loaders.Csv(url, date_field=date_field, agency_field=agency_field)
+            elif data_type ==defs.DataType.EXCEL:
+                loader = data_loaders.Excel(url, data_set=dataset_id, date_field=date_field, agency_field=agency_field) 
+            elif data_type ==defs.DataType.ArcGIS:
+                loader = data_loaders.Arcgis(url, date_field=date_field)
+            elif data_type ==defs.DataType.SOCRATA:
+                loader = data_loaders.Socrata(url, dataset_id, date_field=date_field)
+            elif data_type ==defs.DataType.CARTO:
+                loader = data_loaders.Carto(url, dataset_id, date_field=date_field, query=query)
+            elif data_type ==defs.DataType.CKAN:
+                loader = data_loaders.Ckan(url, dataset_id, date_field=date_field, query=query)
+            else:
+                raise ValueError(f"Unknown data type: {data_type}")
 
         self.__loader = (params, loader)
 
