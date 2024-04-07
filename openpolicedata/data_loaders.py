@@ -61,19 +61,20 @@ _verify_arcgis = False
 # Windows: https://www.wikihow.com/Create-an-Environment-Variable-in-Windows-10
 default_sodapy_key = os.environ.get("SODAPY_API_KEY")
 
-class double_format(object):
+class repeat_format(object):
     def __init__(self, string):
         self.string = string
+        self.repeat = int(string.count('{}')/2)
 
     def __eq__(self, other) -> bool:
-        return isinstance(other, double_format) and self.string == other.string
-        # if isinstance(other, double_format):
-        #     return other.string == self.string
-        # else:
-        #     return False
+        return isinstance(other, repeat_format) and self.string == other.string
 
     def format(self, date_field, year):
-        return self.string.format(date_field, year, date_field, year)
+        args = []
+        for _ in range(self.repeat):
+            args.extend([date_field, year])
+        args = tuple(args)
+        return self.string.format(*args)
     
 # Based on https://stackoverflow.com/a/73519818/9922439
 class CustomHttpAdapter (requests.adapters.HTTPAdapter):
@@ -928,7 +929,7 @@ class Excel(Data_Loader):
                     table = pd.read_excel(self.excel_file, nrows=nrows_read, sheet_name=sheet_name)
                     dfs.append(table)
                 table = pd.concat(dfs, ignore_index=True)
-                table = self.__clean(table)               
+                table = self.__clean(table, self.url)               
 
         if offset>0:
             rows_limit = nrows_read if nrows_read is not None and nrows_read<len(table) else len(table)
@@ -967,7 +968,7 @@ class Excel(Data_Loader):
             raise ValueError(f"Sheet {cur_sheet} not found in Excel file at {self.url}")
 
 
-    def __clean(self, df):
+    def __clean(self, df, url):
         # Row names may not be the 1st row in which case columns need to be fixed
         max_drops = 5
         num_drops = 0
@@ -1087,6 +1088,7 @@ class Arcgis(Data_Loader):
             (Optional) Name of the column that contains the date
         '''
 
+        self._date_type = None
         self._date_format = None
         self.date_field = date_field
         self.verify = False
@@ -1314,9 +1316,148 @@ class Arcgis(Data_Loader):
         self._last_count = ((year,None), record_count, where_query)
 
         return where_query, record_count
-
     
     def _build_date_query(self, year):
+        # Determine format by getting some data
+        data = None
+        if not self._date_type:
+            data = self.__request(where='1=1', out_fields=self.date_field, count=1000)
+            self._date_type = data['fields'][0]['type']
+
+        if self._date_type=='esriFieldTypeDate':
+            where_query, record_count = self._build_date_query_date_type(year)
+        elif self._date_type=='esriFieldTypeString':
+            where_query, record_count = self._build_date_query_string_type(year, data)
+        elif self._date_type=='esriFieldTypeInteger' and (self.date_field.lower()=='yr' or 'year' in self.date_field.lower()):
+            where_query, record_count = self._build_date_query_date_type(year, is_numeric_year=True)
+        else:
+            raise NotImplementedError(f"Unknown field {self._date_type}")
+        
+        return where_query, record_count
+
+    def _build_date_query_string_type(self, year, data):
+        if data != None:
+            dates = [x['attributes'][self.date_field] for x in data['features']]
+
+            # [regex for pattern, Arcgis Patter OR date delimiter (punctuation between numbers), whether to use inquality to do comparison,
+                # OPTIONAL time delimiter]
+            matches = [
+                (re.compile(r"^(19|20)\d{6}\b"),  "", True),  # YYYYMMDD
+                (re.compile(r"^(19|20)\d{12}\b"),  "", True, True),  # YYYYMMDDHHMMSS
+                (re.compile(r"^(19|20)\d{2}-\d{2}-\d{2}(\b|T)"), "-", True),  # YYYY-MM-DD, T is for Zulu time after date
+                (re.compile(r"^[A-Z][a-z]+ \d{1,2}, (19|20)\d{2}\b"), "{} LIKE '[A-Z]% [0-9][0-9], {}' OR {} LIKE '[A-Z]% [0-9], {}'", False),  # Month DD, YYYY
+                (re.compile(r"^\d{1,2}[-/]\d{1,2}[-/](19|20)\d{2}\b"), 
+                    "{} LIKE '%[0-9][0-9][/-][0-9][0-9][/-]{}%' OR {} LIKE '%[0-9][/-][0-9][0-9][/-]{}%' OR " + 
+                    "{} LIKE '%[0-9][/-][0-9][/-]{}%' OR {} LIKE '%[0-9][0-9][/-][0-9][/-]{}%'", False),  # mm/dd/yyyy or mm-dd-yyyy
+                (re.compile(r"^\d{4}[-/]\d{1,2}$"), "{} LIKE '{}[-/][0-9][0-9]' OR {} LIKE '{}[-/][0-9]'", False),  # YYYY-MM or YYYY/MM
+                (re.compile(r"^\d{4}$"), "{} = '{}'", False),  # YYYY
+            ]
+
+            hi = 0.0
+            idx = None
+            for k, m in enumerate(matches):
+                if (new:=sum([isinstance(x,str) and m[0].search(x) != None for x in dates])/len(dates)) > hi:
+                    hi = new
+                    idx = k
+
+            if hi < 0.9:
+                raise ValueError("Unable to find date string pattern")
+            
+            self._ineq_comp = matches[idx][2]
+            if self._ineq_comp:
+                self._date_delim = matches[idx][1]
+                self._time_no_delim = matches[idx][3] if len(matches[idx])>3 else False
+            else:
+                self._date_format = repeat_format(matches[idx][1])
+
+        if self._ineq_comp:
+            where_query, record_count = self._build_date_query_date_type(year, self._date_delim, self._time_no_delim)
+        else:
+            year = [year] if isinstance(year, numbers.Number) else year
+            if any([isinstance(x,str) and len(x)!=4 for x in year]):
+                # Currently can only handle years
+                raise ValueError(f"Date column is a string data type at the source {self.url}. "+
+                                "Currently only able to filter for a single year (2023) or a year range ([2022,2023]) "+
+                                "not a date range ([2022-01-01, 2022-03-01]).")
+            
+            where_query = self._date_format.format(self.date_field, year[0])
+            if len(year)>1:
+                for x in range(int(year[0])+1,int(year[1])+1):
+                    where_query = f"{where_query} or " + self._date_format.format(self.date_field, x)
+
+            record_count = self.__request(where=where_query, return_count=True)["count"]
+
+        return where_query, record_count
+        
+        
+
+    def _build_date_query_date_type(self, year, date_delim='-', time_no_delim=False, is_numeric_year=False):
+        # List of error messages that can occur for bad queries as we search for the right query format
+        query_err_msg = ["Unable to complete operation", "Failed to execute query", "Unable to perform query", "Database error has occurred", 
+                         "'where' parameter is invalid", "Parsing error",'Query with count request failed']
+        
+        where_query = ""
+        zero_found = False
+        if self._date_format in [0,1] or self._date_format==None:
+            start_date, stop_date = _process_date(year, force_year=is_numeric_year)
+
+            if date_delim=='':
+                start_date = start_date.replace('-','')
+                stop_date = stop_date.replace('-','')
+            elif date_delim!='-':
+                raise NotImplementedError("Unable to handle this delimiter")
+            
+            if time_no_delim:
+                start_date = start_date.replace('T','').replace(':','')
+                stop_date = stop_date.replace('T','').replace(':','')
+            
+            for k in range(0,2):
+                if self._date_format is not None and self._date_format!=k:
+                    continue
+                if k==0:
+                    if is_numeric_year:
+                        where_query = f"{self.date_field} >= {start_date} AND  {self.date_field} <= {stop_date}"
+                    else:
+                        where_query = f"{self.date_field} >= '{start_date}' AND  {self.date_field} <= '{stop_date}'"
+                elif is_numeric_year:
+                    break
+                else:
+                    # break
+                    # Dataset (San Jose crash data) that required this does not function well so removing its functionality for now to speed up this function.
+                    # This is the recommended way but it has been found to not work sometimes. One dataset was found that requires this.
+                    # https://gis.stackexchange.com/questions/451107/arcgis-rest-api-unable-to-complete-operation-on-esrifieldtypedate-in-query
+                    stop_date_tmp = stop_date.replace("T"," ")
+                    where_query = f"{self.date_field} >= TIMESTAMP '{start_date}' AND  {self.date_field} < TIMESTAMP '{stop_date_tmp}'"
+            
+                try:
+                    record_count = self.__request(where=where_query, return_count=True)["count"]
+
+                    if self.verify:
+                        record_count_orig = self.__active_layer.query(where=where_query, return_count_only=True)
+                        if record_count_orig!=record_count:
+                            raise ValueError(f"Record count of {record_count} does not equal count from arcgis package of {record_count_orig}")
+                    if self._date_format!=None or record_count>0:
+                        self._date_format = k
+                        return where_query, record_count
+                    else:
+                        zero_found = True
+                except Exception as e:
+                    if len(e.args)>0 and "Error Code: 429" in e.args[0]:
+                        raise OPD_TooManyRequestsError(self.url, *e.args, _url_error_msg.format(self.url))
+                    elif len(e.args)>0 and (any([x in e.args[0] for x in query_err_msg]) or any([x in e.args[-1] for x in query_err_msg])):
+                        # This query throws an error for this dataset. Try another one below
+                        pass
+                    else:
+                        raise
+                except:
+                    raise
+
+        if not zero_found:
+            raise AttributeError(f"Unable to find date format for {self.url}")
+
+        return "", 0
+    
+    def _build_date_query_old(self, year):
 
         # List of error messages that can occur for bad queries as we search for the right query format
         query_err_msg = ["Unable to complete operation", "Failed to execute query", "Unable to perform query", "Database error has occurred", 
@@ -1365,13 +1506,17 @@ class Arcgis(Data_Loader):
 
 
         where_formats = [
-            "{} LIKE '%[0-9][0-9]/[0-9][0-9]/{}%'",   # mm/dd/yyyy
-            double_format("{} LIKE '{}/[0-9][0-9]' OR {} LIKE '{}/[0-9]'"),                # yyyy/mm
+            "{} LIKE '%[0-9][0-9][/-][0-9][0-9][/-]{}%' OR {} LIKE '%[0-9][/-][0-9][0-9][/-]{}%' OR " + 
+                "{} LIKE '%[0-9][/-][0-9][/-]{}%' OR {} LIKE '%[0-9][0-9][/-][0-9][/-]{}%'",   # mm/dd/yyyy or mm-dd-yyyy
+            "{} LIKE '{}/[0-9][0-9]' OR {} LIKE '{}/[0-9]'",                # yyyy/mm
             "{} = {}",                # yyyy
-            double_format("{} LIKE '[0-9][0-9]-{}' OR {} LIKE '[0-9]-{}'"),   # mm-yyyy or m-yyyy
+            "{} LIKE '[0-9][0-9]-{}' OR {} LIKE '[0-9]-{}'",   # mm-yyyy or m-yyyy
             "{} = '{}'",                # 'yyyy'
-            "{} LIKE '%[0-9][0-9]-[0-9][0-9]-{}%'",   # mm-dd-yyyy
+            "{}>='{}0101' AND {}<='{}1231'",            # yyyymmdd as float
+            "{} LIKE '[A-Z]% [0-9][0-9], {}'"   # {Month Name} dd, yyyy
         ]
+        where_formats = [repeat_format(x) for x in where_formats]
+
         # Make year iterable
         year = [year] if isinstance(year, numbers.Number) else year
 
@@ -2533,7 +2678,7 @@ def filter_dataframe(df, date_field=None, year_filter=None, agency_field=None, a
         (Optional) Name of the agency to filter for. None value returns data for all agencies.
     '''
 
-    if date_field != None:
+    if pd.notnull(date_field):
         is_year = date_field.lower()=='year'
         if not is_year and pd.api.types.is_integer_dtype(df[date_field]):
             is_year = ((df[date_field] >= 1900) & (df[date_field] <= 2200)).all()

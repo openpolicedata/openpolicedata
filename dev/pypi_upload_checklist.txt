@@ -1,10 +1,12 @@
 Update version
+Update dataset dates
 Test code with min and max Python versions and Ubuntu
-Update readme including changelog and latest datasets
+Run data cleaning script
+Update readme and website including changelog and latest datasets (datasets/index)
+Update datasets tables in datasets/index
 Update last checked date in source table
 Update switcher.json
-Update website including changelog and latest datasets
-Update number of datasets / agencies and map
+Update number of datasets / agencies (README, index.md, and datasets/index) and map
 python -m pip install --upgrade pip
 python -m pip install --upgrade build
 python -m build

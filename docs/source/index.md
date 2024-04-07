@@ -19,7 +19,7 @@ citations/index.md
 
 # OpenPoliceData
 
-**OpenPoliceData (OPD)** aims to make it easier to access and analyze police data. OPD's police data download tools provide the most comprehensive centralized public access to incident-level police data in the United States. Currently, our tools enable easy access to 395+ incident-level datasets for about 4800 police agencies. Types of data include traffic stops, use of force, officer-involved shootings, and complaints. All data is sourced either directly from police departments or state agencies or through the [Stanford Open Policing Project](https://openpolicing.stanford.edu/).  In the future, we hope to expand our offerings to include data dashboards that allow users to do basic analysis of OPD's datasets using web apps.
+**OpenPoliceData (OPD)** aims to make it easier to access and analyze police data. OPD's police data download tools provide the most comprehensive centralized public access to incident-level police data in the United States. Currently, our tools enable easy access to 400+ incident-level datasets for about 4800 police agencies. Types of data include traffic stops, use of force, officer-involved shootings, and complaints. All data is sourced either directly from police departments or state agencies or through the [Stanford Open Policing Project](https://openpolicing.stanford.edu/).  In the future, we hope to expand our offerings to include data dashboards that allow users to do basic analysis of OPD's datasets using web apps.
 
 Here are the current tools provided by OpenPoliceData:
 

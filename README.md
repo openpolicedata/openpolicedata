@@ -2,7 +2,7 @@
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://openpolicedata.streamlit.app)
 
 # OpenPoliceData
-The OpenPoliceData (OPD) Python library is the most comprehensive centralized public access point for incident-level police data in the United States. OPD provides easy access to 395+ incident-level datasets for about 4800 police agencies. Types of data include traffic stops, use of force, officer-involved shootings, and complaints. 
+The OpenPoliceData (OPD) Python library is the most comprehensive centralized public access point for incident-level police data in the United States. OPD provides easy access over 400 incident-level datasets for about 4800 police agencies. Types of data include traffic stops, use of force, officer-involved shootings, and complaints. 
 
 Users request data by department name and type of data, and the data is returned as a [pandas DataFrame](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.html). There is no need to manually find the data online or to know how to work with open data APIs (ArcGIS, Socrata, etc.).
 
@@ -31,19 +31,21 @@ OpenPoliceData provides access to police data with 2 simple lines of code:
 ![alt text](https://github.com/openpolicedata/opd-data/blob/main/OPD_Datasets_Map.png?raw=true)
 
 ## Latest Datasets Added to OPD
-- Chicago, IL: Traffic Citations
-- Traffic Citations for agencies across New York State
-- Buffalo Crashes and Incidents
-- Massachusetts (All Agencies): Employee and Disciplinary Records data
-- Alameda County, CA: Incidents
-- Marin County, CA: Incidents
-- Riverside, CA: Incidents
-- Albany, NY: Arrests, Calls for Service, Field Contacts, Incidents, Traffic Citations, and Use of Force
-- Chicago, IL: Pedestrian Stops
-- New York City, NY: 2022 Pedestrian Stops
-- Oakland, CA: 2022 Use of Force
-- San Diego, CA: 2022 Complaints
-- Tacoma, WA: Calls for Service, Complaints, Incidents, and Officer-Involved Shootings
+- Asheville, NC arrests, citations, complaints, incidents, pointing weapon, traffic stops, use of force, and 2023 calls for service
+- Sacramento, CA 2024 calls for service, 2021-2024 incidents, and 2023-2024 citations   
+- Albemarle County, VA: Stops
+- Norman, OK: Crashes, incidents, and traffic stops data (new) and most recent arrests, complaints and use of force data
+- Oakland, CA: Stops
+- Washington D.C.: Lawsuits against MPD
+- Bloomington, IN: Use of Force and Citations
+- Wallkill, NY: Employee and Stops
+- Bremerton, WA: Arrests, Citations, and Incidents
+- Phoenix, AZ: Officers Firearm Pointing
+- Phoenix, AZ: 2024 Calls for Service 
+- Boston, MA: Deathes in Custody
+- San Jose, CA: 2024 Calls for Service
+- Portland, OR: 2024 Calls for Service
+- Santa Monica, CA: 2022-2023 Incidents
 
 ## Release Notes for Version 0.6 - 2024-02-10
 ### Added

@@ -86,7 +86,6 @@ class TableType(str, Enum):
     DISCIPLINARY_RECORDS = ("DISCIPLINARY RECORDS",
         "Disciplinary records of officers")
     EMPLOYEE = ("EMPLOYEE","Demographic data of the police workforce")
-    FIREARM_POINTING = ('FIREARM POINTING', "Instances of officers pointing a firearm at individuals.")
     DEATHS_IN_CUSTODY = ("DEATHS IN CUSTODY", "Deaths that occur in custody or during the process of arrest")
     FIELD_CONTACTS = ("FIELD CONTACTS", "Consensual contacts between officers and the community.")
     INCIDENTS = ("INCIDENTS", "Crime incident reports")
@@ -101,6 +100,7 @@ class TableType(str, Enum):
     PEDESTRIAN_ARRESTS = ("PEDESTRIAN ARRESTS","Pedestrian stops leading to an arrest")
     PEDESTRIAN_CITATIONS = ("PEDESTRIAN CITATIONS","Pedestrian stops leading to a citation")
     PEDESTRIAN_WARNINGS = ("PEDESTRIAN WARNINGS","Pedestrian stops leading to a warning")
+    POINTING_WEAPON = ('POINTING WEAPON', "Instances of officers pointing a weapon (firearm, Taser, etc.) at individuals.")
     SHOOTINGS = ("OFFICER-INVOLVED SHOOTINGS","Shootings by officers")
     SHOOTINGS_SUBJECTS = ("OFFICER-INVOLVED SHOOTINGS - SUBJECTS",
         "Officer-involved shootings data may be split into several tables due to the possibility that multiple "+
@@ -114,6 +114,12 @@ class TableType(str, Enum):
     STOPS = ("STOPS","Contains data on both pedestrian and traffic stops.")
     TRAFFIC = ("TRAFFIC STOPS","Traffic stops are stops by police of motor vehicles due to reasonable suspicion " + 
         " or traffic violations.")
+    TRAFFIC_INCIDENTS = ("TRAFFIC STOPS INCIDENTS",
+        "Traffic stops data may be split into several tables due to the possibility that multiple "+
+        "subjects and officers may be involved in an incident. This table contains data on the incident.")
+    TRAFFIC_SUBJECTS = ("TRAFFIC STOPS SUBJECTS",
+        "Traffic stops data may be split into several tables due to the possibility that multiple "+
+        "subjects and officers may be involved in an incident. This table contains data on the subjects.")
     TRAFFIC_ARRESTS = ("TRAFFIC ARRESTS","Traffic stops leading to an arrest.")
     TRAFFIC_CITATIONS = ("TRAFFIC CITATIONS","Traffic stops leading to a citation.")
     TRAFFIC_WARNINGS = ("TRAFFIC WARNINGS","Traffic stops leading to a warning.")

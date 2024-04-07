@@ -6,12 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 ### Added
-- Added Firearm Pointing (by officer) table type
+- Added POINTING WEAPON (by officer) table type
 - Added data loader to combine multiple files that span a single year into a single dataset
+- Support for more text date column formats in Arcgis loader.
 ### Changed
 ### Deprecated
 ### Removed
 ### Fixed
+- Fixed year filtering for Tucson OFFICER-INVOLVED SHOOTINGS - INCIDENTS dataset. Datasets is no longer available using OpenPoliceData prior to Version 0.7.
 ### Security
 
 ## v0.6 - 2024-02-14

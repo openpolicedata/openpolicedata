@@ -44,8 +44,7 @@ def parse_date_to_datetime(date_col):
     dts = date_col[date_col.notnull()]
 
     if len(dts) > 0:
-        one_date = dts.iloc[0] 
-        if not hasattr(one_date, "year"):
+        if not hasattr(dts.iloc[0], "year") or (dts.apply(type)==str).any():
             is_num = date_col.dtype == np.int64
             if not is_num:
                 # Try to convert to all numbers
@@ -53,7 +52,7 @@ def parse_date_to_datetime(date_col):
                     warnings.filterwarnings("ignore", category=RuntimeWarning, message="invalid value encountered in cast")
                     new_col = date_col.convert_dtypes()
                 if new_col.dtype in ["object", "string", "string[python]"] and \
-                    new_col.apply(lambda x: pd.isnull(x) or isinstance(x,int) or x.isdigit() or x.strip()=="").all():
+                    new_col.apply(lambda x: pd.isnull(x) or isinstance(x,(pd.Timestamp,int, dt.datetime)) or x.isdigit() or x.strip()=="").all():
                     date_col = new_col.apply(lambda x: int(x) if (pd.notnull(x) and (isinstance(x,int) or x.isdigit())) else np.nan)
                     dts = date_col[date_col.notnull()]
                     is_num = True
@@ -123,7 +122,8 @@ def parse_date_to_datetime(date_col):
                     
             elif date_col.dtype in ["O", "object", "string", "string[python]"]:
                 new_col = date_col.convert_dtypes()
-                if new_col.dtype in ["string", "string[python]"]:
+                if new_col.dtype in ["string", "string[python]"] or \
+                    str in new_col.apply(type).unique():
                     p = re.compile(r"\d{1,2}[/-]\d{1,2}[/-]\d{2,4}")
                     p2 = re.compile(r"\d{4}[/-]\d{1,2}[/-]\d{1,2}")
                     p3 = re.compile(r"\d{2}-[A-Z][a-z][a-z]-\d{2,4}", re.IGNORECASE)
@@ -133,7 +133,10 @@ def parse_date_to_datetime(date_col):
                     k = 0
                     num_check = min(5, len(new_col))
                     for m in range(len(new_col)):
-                        if pd.notnull(new_col[m]) and len(new_col[m].strip())!=0:
+                        if isinstance(new_col[m], (pd.Timestamp, dt.datetime)):
+                            num_match+=1
+                            k+=1
+                        elif pd.notnull(new_col[m]) and len(new_col[m].strip())!=0:
                             if p.search(new_col[m]) or p2.search(new_col[m]) or p3.search(new_col[m]):
                                 num_match+=1
                             elif p_not_match.match(new_col[m])==None:
@@ -401,6 +404,9 @@ def parse_time(time_col):
                     if len(time_list)!=3:
                         raise NotImplementedError()
 
+                if len(time_list)==1 and len(x)==5 and x[2]==';':
+                    # Accidentally used ; instead of :
+                    time_list = x.split(";")
                 if len(time_list)==1:
                     if x.strip() in ["","-"]:
                         return pd.NaT
@@ -476,6 +482,13 @@ def to_datetime(col, ignore_errors=False, *args, **kwargs):
                 return col.apply(to_datetime_local)
             else:
                 return col
+        except pd._libs.tslibs.parsing.DateParseError as e:
+            if 'out of range' in str(e) and not isinstance(col, pd.Series) and re.search(r'year 20\d{6} is out of range: 20\d{6}.0, at position 0', str(e)):
+                return to_datetime(col[:-2])
+            elif ignore_errors and 'out of range' in str(e) and not isinstance(col, pd.Series):
+                return col
+            else:
+                raise
         except ValueError as e:
             if ignore_errors and "Given date string" in str(e) and "not likely a datetime" in str(e) and \
                 (len(args)>0 or 'errors' not in kwargs or kwargs['errors']!='coerce'):

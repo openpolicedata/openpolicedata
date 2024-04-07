@@ -321,6 +321,44 @@ def test_arcgis():
 
     assert layer_query_result.equals(df)
 
+# Including all text date datasets for now. May want to include only unique date formats in the future
+@pytest.mark.parametrize('url, year, date_field',[
+    ('https://gis.ashevillenc.gov/server/rest/services/PublicSafety/APDCitations/MapServer/10', 2023, 'citation_date'), # YYYY-MM-DD
+    ('https://xmaps.indy.gov/arcgis/rest/services/OpenData/OpenData_NonSpatial/MapServer/5', None, 'OCCURRED_DT'),# YYYY-MM-DD
+    ('https://xmaps.indy.gov/arcgis/rest/services/OpenData/OpenData_NonSpatial/MapServer/6', None, 'OCCURRED_DT'),# YYYY-MM-DD
+    ('https://xmaps.indy.gov/arcgis/rest/services/OpenData/OpenData_NonSpatial/MapServer/7', 2023, 'OCCURRED_DT'),# YYYY-MM-DD
+    ('https://services.arcgis.com/aJ16ENn1AaqdFlqx/arcgis/rest/services/APDComplaints/FeatureServer/0', None, 'occurred_date'),  # M/D/YYYY
+    ('https://services1.arcgis.com/79kfd2K6fskCAkyg/arcgis/rest/services/LMPD_STOPS_DATA_(2)/FeatureServer/0', 2020, 'ACTIVITY_DATE'),
+    ('https://gis.ashevillenc.gov/server/rest/services/PublicSafety/APDIncidents/MapServer/3', 2023, 'date_occurred'),   # YYYYMMDD
+    ('https://services.arcgis.com/aJ16ENn1AaqdFlqx/arcgis/rest/services/APD_ShowOfForce/FeatureServer/0', None, 'occ_date'),   # YYYYMMDD
+    ("https://services.arcgis.com/aJ16ENn1AaqdFlqx/arcgis/rest/services/APDTrafficStops2020/FeatureServer/0", 2023, 'date_occurred'),    # YYYYMMDDHHMMSS
+    ('https://services.arcgis.com/aJ16ENn1AaqdFlqx/arcgis/rest/services/APD_UseOfForce2021/FeatureServer/0', 2022, 'occurred_date'),  # YYYYMMDD.0
+    ('https://services.arcgis.com/aJ16ENn1AaqdFlqx/arcgis/rest/services/APDUseOfForce/FeatureServer/0', None, 'date_occurred'), # MONTH, D, YYYY
+    ('https://publicgis.tucsonaz.gov/open/rest/services/OpenData/OpenData_PublicSafety/MapServer/34/', None, 'INCI_DATE'),  # YYYY-MM-DDTHH:MM:SS.SSSZ
+    ('https://gis.charlottenc.gov/arcgis/rest/services/ODP/CMPD_Calls_for_Service/MapServer/0', 2022, 'CALENDAR_YEAR'),  # YYYY
+    ('https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPD/MapServer/11', None, 'YEAR_MONTH'),      # YYYY-MM
+    ("https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPD/MapServer/14", 2020, 'Month_of_Stop'),
+    ('https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPD/MapServer/13', None, 'YR'),   # Numeric year
+])
+def test_arcgis_text_date(url, year, date_field):
+    loader = data_loaders.Arcgis(url, date_field=date_field)
+    data = loader.load(year, pbar=False)
+    
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message='Could not infer format.*')
+        if isinstance(data[date_field].iloc[0],str) and data[date_field].iloc[0][-2:]=='.0': # Date is recorded as float
+            dts = data[date_field].apply(lambda x: x[:-2] if isinstance(x,str) else None)
+            dts = pd.to_datetime(dts, errors='coerce')
+        else:
+            dts = pd.to_datetime(data[date_field], errors='coerce')
+        if year:
+            assert (dts.dt.year==year).all()
+
+    un_months = dts.dt.month.unique()
+    if len(un_months)==1 and un_months==[1] and (date_field.lower()=='yr' or 'year' in date_field.lower()):
+        pass
+    else:
+        assert all([x in un_months for x in range(1,13)])
 
 # No datasets currently trigger usage of the legacy server code
 # def test_arcgis_legacy_server():
