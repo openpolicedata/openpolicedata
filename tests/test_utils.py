@@ -18,9 +18,9 @@ import openpolicedata as opd
 # | False               | False       | Use default github opd_source_table.csv                                                       |
 # 
 def get_datasets(csvfile=None,use_changed_rows=False):
-    if use_changed_rows==True and csvfile:
+    if use_changed_rows==True and csvfile and csvfile!=os.path.join('..','opd-data', 'opd_source_table.csv'):
         raise ValueError("Both --use-changed-rows and --csvfile options were provided, which is ambiguous.")
-    elif use_changed_rows==True and not csvfile:
+    elif use_changed_rows:
         # Use the added rows in the local ../opd-data/opd_source_table.csv that have not been committed
         csv_path = os.path.join('..','opd-data')
         assert os.path.exists(csv_path)
