@@ -110,16 +110,22 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 		unique_id = [srcName, state, datasets.iloc[i]["Agency"], table_print]
 		if unique_id in already_run:
 			continue
-		already_run.append(unique_id)
 
 		now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
-		print(f"{now} Testing {i+1} of {len(datasets)}: {srcName} {table_print} table")
+		print(f"{now} Testing {i} of {len(datasets)-1}: {srcName} {table_print} table")
 
 		src = data.Source(srcName, state=state)
 
+		# Handle cases where URL is required to disambiguate requested dataset
+		ds_filter, _ = src._Source__filter_for_source(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], None, errors=False)
+		ds_input = datasets.iloc[[i]] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
+
+		if ds_input is None:
+			already_run.append(unique_id)
+
 		try:
 			try:
-				years = src.get_years(datasets.iloc[i]["TableType"])
+				years = src.get_years(datasets.iloc[i]["TableType"], datasets=ds_input)
 			except ValueError as e:
 				if len(e.args)>0 and "Extracting the years" in e.args[0]:
 					# Just test reading in the table and continue
@@ -268,7 +274,11 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 				table_start = src.load(datasets.iloc[i]["TableType"], [start_date, stop_date], 
 												agency=agency, pbar=False)
 			except ValueError as e:
-				if len(e.args)>0 and e.args[0]=="Currently unable to handle non-year inputs":
+				if str(e).startswith('Year range cannot contain the year corresponding to a single year dataset'):
+					start_date  = str(year) + "-01-01"
+					table_start = src.load(datasets.iloc[i]["TableType"], [start_date, stop_date], 
+												agency=agency, pbar=False)
+				elif "Currently only able to filter for a single year" in str(e.args):
 					# The format of the date field does not allow for filtering by date
 					continue
 				else:
@@ -303,8 +313,16 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 			start_date = datetime.strftime(dts.iloc[-1]-timedelta(days=1), "%Y-%m-%d")
 			stop_date  = str(year+1) + "-01-10"  
 
-			table_stop = src.load(datasets.iloc[i]["TableType"], [start_date, stop_date], 
-											agency=agency, pbar=False)
+			try:
+				table_stop = src.load(datasets.iloc[i]["TableType"], [start_date, stop_date], 
+												agency=agency, pbar=False)
+			except ValueError as e:
+				if str(e).startswith('Year range cannot contain the year corresponding to a single year dataset'):
+					stop_date  = str(year) + "-12-31T23:59:59.999"  
+					table_stop = src.load(datasets.iloc[i]["TableType"], [start_date, stop_date], 
+												agency=agency, pbar=False)
+				else:
+					raise
 			sleep(sleep_time)
 			dts_stop = table_stop.table[table.date_field]
 
@@ -341,7 +359,8 @@ def test_source_download_not_limitable(datasets, source, start_idx, skip, query=
 			continue
 		if source != None and datasets.iloc[i]["SourceName"] != source:
 			continue
-		if not can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]):
+
+		if datasets.iloc[i]["DataType"] == DataType.CSV and ".zip" in datasets.iloc[i]["URL"]:
 			if is_stanford(datasets.iloc[i]["URL"]):
 				# There are a lot of data sets from Stanford, no need to run them all
 				# Just run approximately 10%
@@ -384,15 +403,6 @@ def test_source_download_not_limitable(datasets, source, start_idx, skip, query=
 				assert datasets.iloc[i]["agency_field"] in table.table
 
 
-def can_be_limited(data_type, url):
-	data_type = DataType(data_type)
-	if (data_type == DataType.CSV and ".zip" in url):
-		return False
-	elif data_type in [DataType.ArcGIS, DataType.SOCRATA, DataType.CSV, DataType.EXCEL, DataType.CARTO, DataType.CKAN]:
-		return True
-	else:
-		raise ValueError("Unknown table type")
-
 def is_stanford(url):
 	return "stanford.edu" in url
 
@@ -423,17 +433,18 @@ def log_errors_to_file(*args):
 					f.write("\n")
 
 if __name__ == "__main__":
+	from test_utils import get_datasets
 	# For testing
-	# (csvfile, source, last, skip, loghtml)
+	use_changed_rows = False
 	csvfile = None
 	csvfile = r"..\opd-data\opd_source_table.csv"
-	last = None
-	# last = 930-307+1
+	start_idx = 717
 	skip = None
-	# skip = "Sacramento"
+	# skip = "Greensboro"
 	source = None
-	source = "Wallkill"
-	# test_bloomington_citations(csvfile, source, last, skip, None)
-	test_load_year(csvfile, source, last, skip, None)
-	last = None
-	test_source_download_not_limitable(csvfile, source, last, skip, None)
+	# source = "Wallkill" #"Bremerton"
+
+	datasets = get_datasets(csvfile, use_changed_rows)
+
+	test_load_year(datasets, source, start_idx, skip, False, {'DataType':'ArcGIS'}) 
+	# test_source_download_not_limitable(datasets, source, start_idx, skip, False) 

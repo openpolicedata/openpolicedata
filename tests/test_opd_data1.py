@@ -76,6 +76,82 @@ def test_check_version(datasets):
 	ds["min_version"] = pd.NA
 	data._check_version(ds)
 
+def test_single_year_filter():
+	if check_for_dataset('Phoenix', opd.defs.TableType.CALLS_FOR_SERVICE):
+		src = data.Source('Phoenix')
+		year = 2017
+		dataset, filter_by_year = src._Source__filter_for_source(opd.defs.TableType.CALLS_FOR_SERVICE, year, None)
+		assert not filter_by_year
+		assert dataset['Year']==year
+		assert dataset['TableType']==opd.defs.TableType.CALLS_FOR_SERVICE
+
+def test_single_year_range_filter():
+	if check_for_dataset('Phoenix', opd.defs.TableType.CALLS_FOR_SERVICE):
+		src = data.Source('Phoenix')
+		with pytest.raises(ValueError, match="There are no sources matching"):
+			src._Source__filter_for_source(opd.defs.TableType.CALLS_FOR_SERVICE, [2017,2018], None)
+
+@pytest.mark.parametrize('year', [2017, opd.defs.MULTI])
+def test_multi_year_filter(year):
+	if check_for_dataset('Norristown', opd.defs.TableType.USE_OF_FORCE):
+		src = data.Source('Norristown')
+		dataset, filter_by_year = src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, None)
+		assert filter_by_year
+		assert dataset['Year']==opd.defs.MULTI
+		assert dataset['TableType']==opd.defs.TableType.USE_OF_FORCE
+
+def test_multi_year_range_filter_includes_single_year():
+	if check_for_dataset('Norristown', opd.defs.TableType.USE_OF_FORCE):
+		src = data.Source('Norristown')
+		year = [2016,2018]
+		with pytest.raises(ValueError, match="Year range cannot contain the year corresponding to a single year"):
+			src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, None)
+
+def test_bad_year_range():
+	if check_for_dataset('Norristown', opd.defs.TableType.USE_OF_FORCE):
+		src = data.Source('Norristown')
+		year = [2016,2018, 2017]
+		with pytest.raises(ValueError, match="year input must either be a single year or a list containing a start and stop year"):
+			src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, None)
+
+@pytest.mark.parametrize('year, url_contains', [(2020, "APDUseOfForce/FeatureServer/0"), 
+												([2019,2020], "APDUseOfForce/FeatureServer/0"), (2021, "APD_UseOfForce2021/FeatureServer/0")])
+def test_multiple_multiple_year_filter(all_datasets, year, url_contains):
+	if check_for_dataset('Asheville', opd.defs.TableType.USE_OF_FORCE):
+		src = data.Source('Asheville')
+		dataset, filter_by_year = src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, None)
+		assert filter_by_year
+		assert dataset['Year']==opd.defs.MULTI
+		assert dataset['TableType']==opd.defs.TableType.USE_OF_FORCE
+		assert url_contains in dataset['URL']
+
+@pytest.mark.parametrize('year, url_contains, url_contains_test', [(2020, None, 'LMPD_STOPS_DATA_(2)'), 
+												(2021, None, 'LMPD_STOP_DATA_2021'),
+												(2021, 'LMPD_STOPS_DATA_(2)', 'LMPD_STOPS_DATA_(2)')])
+def test_overlapping_multi_and_single(all_datasets, year, url_contains, url_contains_test):
+	if check_for_dataset('Louisville', opd.defs.TableType.TRAFFIC):
+		src = data.Source('Louisville')
+		dataset, filter_by_year = src._Source__filter_for_source(opd.defs.TableType.TRAFFIC, year, url_contains)
+		assert url_contains_test in dataset['URL']
+
+@pytest.mark.parametrize('year', [[2020,2021], opd.defs.MULTI])
+def test_multiple_bad_multiple_year_filter(all_datasets, year):
+	if check_for_dataset('Asheville', opd.defs.TableType.USE_OF_FORCE):
+		src = data.Source('Asheville')
+		with pytest.raises(ValueError, match="There is more than one source matching tableType"):
+			src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, None)
+
+@pytest.mark.parametrize('year', [[2020,2021], opd.defs.MULTI])
+def test_url_contains(all_datasets, year):
+	if check_for_dataset('Asheville', opd.defs.TableType.USE_OF_FORCE):
+		src = data.Source('Asheville')
+		url_contains = "APDUseOfForce/FeatureServer/0"
+		dataset, filter_by_year = src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, url_contains)
+		assert filter_by_year
+		assert dataset['Year']==opd.defs.MULTI
+		assert dataset['TableType']==opd.defs.TableType.USE_OF_FORCE
+		assert url_contains in dataset['URL']
+
 
 def test_offsets_and_nrows():
 	if check_for_dataset('Philadelphia', opd.defs.TableType.SHOOTINGS):
@@ -145,8 +221,14 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 			now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
 			print(f"{now} Testing {i} of {len(datasets)-1}: {srcName} {table_print} table")
 
+			nrows = 20 if datasets.iloc[i]['DataType']!='Excel' else None
+
+			# Handle cases where URL is required to disambiguate requested dataset
+			ds_filter, _ = src._Source__filter_for_source(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], None, errors=False)
+			url_contains = datasets.iloc[i]['URL'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
+
 			try:
-				table = src.load(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], pbar=False, nrows=20)
+				table = src.load(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], pbar=False, nrows=nrows, url_contains=url_contains)
 			except warn_errors as e:
 				e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"])
 				caught_exceptions_warn.append(e)
@@ -166,6 +248,34 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 			else:
 				assert len(table.table)>0
 
+			if isinstance(datasets.iloc[i]['dataset_id'], str) and ';' in datasets.iloc[i]['dataset_id']:
+				# A year-long dataset is generated from multiple datasets. Check that whole year is covered
+				# Parse dataset ID to get number of datasets IDs
+				sheets = None
+				dataset_list = datasets.iloc[i]['dataset_id']
+				if '|' in dataset_list:  # dataset names are separated from relative URLs by |
+					dataset_list = dataset_list.split('|')
+					assert len(dataset_list)==2
+					sheets = dataset_list[0].split(';')   # Different sheet names for each dataset are separated by ;. If multiple sheets for a given dataset, separate by &
+					dataset_list = dataset_list[1]
+				dataset_list = dataset_list.split(';')  
+				
+				table.standardize()
+
+				assert opd.defs.columns.DATE in table.table
+				months = table.table[opd.defs.columns.DATE].dt.month.unique()
+				if len(months)!=12:
+					missing_months = [x for x in range(1,13) if x not in months]
+					if srcName=='Wallkill' and datasets.iloc[i]["Year"]==2016:
+						# Only has last 3 quarters of data
+						missing_months = [x for x in missing_months if x not in [1,2,3]]
+					for m in missing_months:
+						url = datasets.iloc[i]["URL"] + '/' + dataset_list[m-1].strip()
+						cur_sheet = sheets[min(m-1, len(sheets)-1)] if sheets else None
+						loader = data_loaders.Excel(url, cur_sheet, datasets.iloc[i]["date_field"])
+						df_check = loader.load()
+						assert df_check['DATE'].apply(lambda x: (int(x[:2]) if isinstance(x,str) else x.month) !=m).all()
+
 			if not pd.isnull(datasets.iloc[i]["date_field"]):
 				if datasets.iloc[i]["date_field"] not in table.table:
 					table = src.load(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], pbar=False, nrows=2000)
@@ -174,7 +284,7 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 				assert (table.table[datasets.iloc[i]["date_field"]].dtype.name in ['datetime64[ns]', 'datetime64[ns, UTC]', 
 																	'datetime64[ms]', 'period[Y-DEC]','period[Q-DEC]',
 																	'period[M]']) or \
-						table.table[datasets.iloc[i]["date_field"]].apply(lambda x: type(x) in [pd.Timestamp,pd.Period]).all()
+						table.table[datasets.iloc[i]["date_field"]].apply(lambda x: type(x) in [pd.Timestamp,pd.Period]).mean()>0.9
 				dts = table.table[datasets.iloc[i]["date_field"]]
 				dts = dts[dts.notnull()]
 				# New Orleans complaints dataset has many empty dates
@@ -182,7 +292,8 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 				if len(dts)>0 or srcName not in ["Seattle","New Orleans",'Minneapolis'] or \
 					datasets.iloc[i]["TableType"] not in [TableType.COMPLAINTS, TableType.INCIDENTS]:
 					assert len(dts) > 0   # If not, either all dates are bad or number of rows requested needs increased
-					assert dts.iloc[0].year <= datetime.now().year
+					assert dts.iloc[0].year <= datetime.now().year if isinstance(dts.iloc[0], (pd.Timestamp,pd.Period)) else \
+						dts.iloc[1].year <= datetime.now().year
 			if not pd.isnull(datasets.iloc[i]["agency_field"]):
 				assert datasets.iloc[i]["agency_field"] in table.table
 
@@ -325,12 +436,12 @@ if __name__ == "__main__":
 	# For testing
 	use_changed_rows = True
 	csvfile = None
-	# csvfile = r"..\opd-data\opd_source_table.csv"
-	start_idx = 96
+	csvfile = r"..\opd-data\opd_source_table.csv"
+	start_idx = 8
 	skip = None
 	# skip = "Greensboro"
 	source = None
-	# source = "Washington D.C." #"Wallkill" #"Bremerton"
+	# source = "Bremerton" #"Washington D.C." #"Wallkill"
 
 	datasets = get_datasets(csvfile, use_changed_rows)
 

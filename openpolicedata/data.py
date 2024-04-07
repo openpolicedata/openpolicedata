@@ -737,7 +737,8 @@ class Source:
     def get_years(self, 
         table_type: str | defs.TableType, 
         force: bool = False, 
-        manual: bool = False
+        manual: bool = False,
+        datasets: pd.DataFrame = None
         ) -> list[int]:
         '''Get years available for 1 or more datasets
 
@@ -749,13 +750,15 @@ class Source:
             (Optional) Some data types such as CSV files require reading the whole file to filter for years. By default, an error will be thrown that indicates running load may be more efficient. For these cases, set force=True to run get_years without error.
         manual - bool
             (Optional) If True, for datasets that contain multiple years, the years will be determined by making requests to the dataset rather than using the years stored in the dataset table. The default is False, which runs faster but may not be up-to-date.
+        datasets - pd.DataFrame
+            (Optional) Only select from datasets in this dataframe instead of self.datasets. datasets should be a subset of the rows in self.datasets.
 
         Returns
         -------
         list
             List of years available for 1 or more datasets
         '''
-        dfs = self.__find_datasets(table_type)
+        dfs = self.__find_datasets(table_type, datasets)
 
         cur_year = datetime.now().year
         all_years = list(dfs["Year"])
@@ -871,7 +874,8 @@ class Source:
                   year: str | int | list[int] | None = None, 
                   agency: str | None = None, 
                   force: bool = False,
-                  verbose: bool | str = False
+                  verbose: bool | str = False,
+                  url_contains: str | None = None
                   ) -> int:
         '''Get number of records for a data request
 
@@ -891,9 +895,11 @@ class Source:
             (Optional) For file-based data, an exception will be thrown unless force 
             is true. It may be more efficient to load the data and extract the years
             manually
-        verbose : bool | str, optional
+        verbose - bool | str, optional
             If True, details of data loading will be logged. If a filename, details will
             be logged to that file., by default False
+        url_contains - bool | None
+            (Optional) If set, URL must contain this string. Can be used when multiple datasets match a set of inputs.
 
         Returns
         -------
@@ -901,7 +907,7 @@ class Source:
             Table object containing the requested data
         '''
 
-        return self.__load(table_type, year, agency, True, pbar=False, return_count=True, force=force, verbose=verbose)
+        return self.__load(table_type, year, agency, True, pbar=False, return_count=True, force=force, verbose=verbose, url_contains=url_contains)
     
     @input_swap([0,1], ['table_type','year'], [defs.TableType, {'values':[defs.NA, defs.MULTI], 'types':[list, int]}], error=True, opt1=None)
     def load_iter(self,
@@ -912,7 +918,8 @@ class Source:
                 nbatch: int = 10000, 
                 offset: int = 0, 
                 force: bool =False,
-                verbose: bool | str = False
+                verbose: bool | str = False,
+                url_contains: str | None = None
                 ) -> Iterator[Table]:
         '''Get generator to load data from URL in batches
 
@@ -941,6 +948,8 @@ class Source:
         verbose : bool | str, optional
             If True, details of data loading will be logged. If a filename, details will
             be logged to that file., by default False
+        url_contains - bool | None
+            (Optional) If set, URL must contain this string. Can be used when multiple datasets match a set of inputs.
 
         Returns
         -------
@@ -948,9 +957,10 @@ class Source:
             generates Table objects containing the requested data
         '''
 
-        count = self.get_count(table_type, year, agency, force, verbose=verbose)
+        count = self.get_count(table_type, year, agency, force, verbose=verbose, url_contains=url_contains)
         for k in range(offset, count, nbatch):
-            yield self.__load(table_type, year, agency, True, pbar, nrows=min(nbatch, count-k), offset=k, verbose=verbose)
+            yield self.__load(table_type, year, agency, True, pbar, nrows=min(nbatch, count-k), offset=k, 
+                              verbose=verbose, url_contains=url_contains)
     
     @deprecated("load_from_url_gen is deprecated and will be removed in a future release. Please use load_iter instead. "+
                 "load_iter uses the same inputs except table_type now comes before year.")
@@ -981,7 +991,8 @@ class Source:
             nrows: int | None = None, 
             offset: int = 0,
             sortby=None,
-            verbose: bool | str = False
+            verbose: bool | str = False,
+            url_contains: str | None = None
             ) -> Table:
         '''Load data from URL
 
@@ -1007,6 +1018,8 @@ class Source:
         verbose : bool | str, optional
             If True, details of data loading will be logged. If a filename, details will
             be logged to that file., by default False
+        url_contains - bool | None
+            (Optional) If set, URL must contain this string. Can be used when multiple datasets match a set of inputs.
 
         Returns
         -------
@@ -1014,7 +1027,8 @@ class Source:
             Table object containing the requested data
         '''
 
-        return self.__load(table_type, year, agency, True, pbar, nrows=nrows, offset=offset, sortby=sortby, verbose=verbose)
+        return self.__load(table_type, year, agency, True, pbar, nrows=nrows, offset=offset, sortby=sortby, 
+                           verbose=verbose, url_contains=url_contains)
 
     
     @deprecated("load_from_url is deprecated and will be removed in a future release. Please use load instead. "+
@@ -1034,46 +1048,88 @@ class Source:
 
         return self.__load(table_type, year, agency, True, pbar, nrows=nrows, offset=offset, sortby=sortby, verbose=verbose)
 
-    def __find_datasets(self, table_type):
-        src = self.datasets.copy()
+    def __find_datasets(self, table_type, src=None):
+        if src is None:
+            src = self.datasets.copy()
         if table_type != None:
-            src = src[self.datasets["TableType"].str.upper() == str(table_type).upper()]
+            src = src[src["TableType"].str.upper() == str(table_type).upper()]
 
         return src
+    
+    def __filter_for_source(self, table_type, year, url_contains, errors=True):
+        orig_src = self.__find_datasets(table_type)
+        src = orig_src.copy()
 
-
-    def __load(self, table_type, year, agency, load_table, pbar=True, return_count=False, force=False, 
-               nrows=None, offset=0, sortby=None, verbose=False):
+        if isinstance(year, list) and len(year)>2:
+            raise ValueError("year input must either be a single year or a list containing a start and stop year")
         
-        src = self.__find_datasets(table_type)
+        if url_contains:
+            src = src[src['URL'].str.contains(url_contains, regex=False)]
 
-        if isinstance(year, list):
-            matchingYears = src["Year"] == year[0]
-            for y in year[1:]:
-                matchingYears = matchingYears | (src["Year"] == y)
+        matchingYears = src["Year"]==year if not isinstance(year, list) else pd.Series(False, src.index)
+
+        if (filter_by_year:=not matchingYears.any()):
+            src = src[src["Year"]==defs.MULTI]
         else:
-            matchingYears = src["Year"] == year
-
-        filter_by_year = not matchingYears.any()
-        if not filter_by_year:
-            # Use source for this specific year if available
             src = src[matchingYears]
-        else:
-            # If there are not any years corresponding to this year, check for a table
-            # containing multiple years
-            matchingYears = src["Year"]==defs.MULTI
-            if matchingYears.any():
-                src = src[matchingYears]
-            else:
-                src = src[src["Year"] == defs.MULTI]
 
+        if isinstance(year,list):
+            year_filter = []
+            for y in year:
+                if isinstance(y, str) and re.search(r'\d{4}-\d{2}-\d{2}', y):
+                    year_filter.append(int(y[:4]))
+                else:
+                    year_filter.append(y)
+        else:
+            year_filter = year
+
+        if len(src)>1 and year!=defs.MULTI:
+            # Try to find a single multi-year dataset containing the year
+            contains = pd.Series(False, index=src.index)
+            for k in src.index:
+                ds_years = self.get_years(table_type, datasets=src.loc[[k]])
+                if isinstance(year,list):
+                    if any([x>=year_filter[0] and x<=year_filter[1] for x in ds_years]):
+                        contains[k] = True
+                elif year in ds_years:
+                    contains[k] = True
+            src = src[contains]
+
+        if len(src)>0 and isinstance(year,list) and not url_contains:
+            # Ensure that year range does not also match a single year dataset
+            if (m:=orig_src['Year'].apply(lambda x: x!=defs.MULTI and x>=year_filter[0] and x<=year_filter[1])).any():
+                raise ValueError(f"Year range cannot contain the year corresponding to a single year dataset.\n \t{year=}\n "+
+                                 f"Single year datasets exist for {list(orig_src['Year'][m])}. "+
+                                 "If the year range was correct, use url_contains input to specify desired dataset.")
+            
         if isinstance(src, pd.core.frame.DataFrame):
             if len(src) == 0:
                 raise ValueError(f"There are no sources matching tableType {table_type} and year {year}")
             elif len(src) > 1:
-                raise ValueError(f"There is more than one source matching tableType {table_type} and year {year}")
+                if errors:
+                    if isinstance(year, list):
+                        raise ValueError(f"There is more than one source matching tableType {table_type} and year {year}. "+
+                                        "Set the year input to not contain years for multiple datasets and/or use the url_contains "+
+                                        "input to specify a single dataset.")
+                    elif year==defs.MULTI:
+                        raise ValueError(f"There is more than one source matching tableType {table_type} and year {year}. "+
+                                        "Set the year input to a single year or a year range and/or use the url_contains input to specify a single dataset.")
+                    else:
+                        raise ValueError(f"There is more than one source matching tableType {table_type} and year {year}. "+
+                                        "Set the year input to a single year or a year range and/or use the url_contains input to specify a single dataset.")
+                else:
+                    # This is only for testing
+                    pass
             else:
                 src = src.iloc[0]
+
+        return src, filter_by_year
+
+
+    def __load(self, table_type, year, agency, load_table, pbar=True, return_count=False, force=False, 
+               nrows=None, offset=0, sortby=None, verbose=False, url_contains=None):
+        
+        src, filter_by_year = self.__filter_for_source(table_type, year, url_contains)
 
         # Load data from URL. For year or agency equal to opd.defs.MULTI, filtering can be done
         url = src["URL"]
@@ -1172,7 +1228,8 @@ class Source:
                       output_dir: str | None = None, 
                       table_type: str | defs.TableType | None = None,
                       agency: str | None = None,
-                      zip: bool =False
+                      zip: bool =False,
+                      url_contains: str | None = None
                       ) -> Table:
         '''Load data from previously saved CSV file
         
@@ -1192,6 +1249,8 @@ class Source:
             only be returned for this agency
         zip - bool
             (Optional) Set to true if CSV is in a zip file with the same filename. Default: False
+        url_contains - bool | None
+            (Optional) If set, URL must contain this string. Can be used when multiple datasets match a set of inputs.
 
         Returns
         -------
@@ -1199,7 +1258,7 @@ class Source:
             Table object containing the requested data
         '''
 
-        table = self.__load(table_type, year, agency, False)
+        table = self.__load(table_type, year, agency, False, url_contains=url_contains)
 
         filename = table.get_csv_filename()
         if output_dir != None:
@@ -1400,12 +1459,21 @@ def _check_date(table, date_field):
                     # This way is much faster
                     table[date_field] = to_datetime(table[date_field])
                 except ValueError as e:
-                    table[date_field] = table[date_field].apply(to_datetime_local)
+                    if re.search(r'year 20\d{6} is out of range: 20\d{6}.0, at position 0', str(e)):
+                        # Remove decimal value
+                        table[date_field] = to_datetime(table[date_field].apply(lambda x: x[:-2]))
+                    else:
+                        table[date_field] = table[date_field].apply(to_datetime_local)
 
                 if pd.api.types.is_object_dtype(table[date_field]):
                     try:
                         # Attempt to convert
                         table = table.astype({date_field: 'datetime64[ns]'})
+                    except pd._libs.tslibs.parsing.DateParseError as e:
+                        if 'out of range' in str(e):
+                            pass
+                        else:
+                            raise
                     except UnicodeEncodeError:
                         pass
                     except ValueError as e:

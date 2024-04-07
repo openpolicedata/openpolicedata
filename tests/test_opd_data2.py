@@ -257,18 +257,24 @@ def log_errors_to_file(*args):
 					f.write("\n")
 
 if __name__ == "__main__":
+	from test_utils import get_datasets
 	# For testing
 	# (csvfile, source, last, skip, loghtml)
+
+	use_changed_rows = True
+
 	csvfile = None
 	csvfile = os.path.join("..","opd-data","opd_source_table.csv")
-	last = None
-	# last = 930-307+1
+	start_idx = 0
 	source = None
-	source = "Wallkill"
+	# source = "Wallkill"
 	skip = None
+
+	datasets = get_datasets(csvfile, use_changed_rows)
+
 	# skip = "Corona"
 	# test_get_agencies(csvfile, None, None, skip, None)
 	# test_get_agencies_name_match(csvfile, None, last, skip, None)
 	# test_agency_filter(csvfile, None, None, skip, None)
 	# test_to_csv(csvfile, None, None, skip, None)
-	test_get_years(csvfile, source, last, skip, None)
+	test_get_years(datasets, source, start_idx, skip, None)
