@@ -1208,7 +1208,20 @@ class Standardizer:
                 for x in un_types:
                     type_cols = [y for t,y in zip(types, col_names) if t==x]
                     if len(type_cols)>1:
-                        warnings.warn(f"Multiple potential {x} columns ({type_cols}) found for {self.source_name} {self.table_type}. None will be standardized.")
+                        if sum(self.df[type_cols].notnull().any())==1:
+                            # Only 1 column isn't all nulls, use that
+                            new_types.append(x)
+                            m = self.df[type_cols].notnull().any()
+                            m = m[m].index[0]
+                            new_col_names.append(m)
+                            warnings.warn(f"Multiple potential {x} columns ({type_cols}) found for {self.source_name} {self.table_type}. {m} will be used because the rest are all null.")
+                        elif len(type_cols)==2 and (self.df[type_cols].isnull().sum(axis=1)>0).all():
+                            new_types.append(x)
+                            new_col_names.append(type_cols)
+                            warnings.warn(f"2 potential {x} columns ({type_cols}) found for {self.source_name} {self.table_type}. For each row, a value of 1 of the columns is always null. "+
+                                          "It appears that data was merged from multiple tables and the name of the column was change. These columns will be merged")
+                        else:
+                            warnings.warn(f"Multiple potential {x} columns ({type_cols}) found for {self.source_name} {self.table_type}. None will be standardized.")
                     else:
                         new_types.append(x)
                         new_col_names.append(type_cols[0])
@@ -2167,12 +2180,17 @@ def _zip_code_validator(df, cols_test):
 
 def cleanup_column(df, col_name, keep_raw):
     if keep_raw:
-        if not col_name.startswith(_OLD_COLUMN_INDICATOR):
-            new_name = _OLD_COLUMN_INDICATOR+"_"+col_name
-            logger.info(f"Renaming raw column {col_name} to {new_name}")
-            df.rename(columns={col_name : new_name}, inplace=True)
-        else:
-            new_name = col_name
+        col_names = col_name if isinstance(col_name, list) else [col_name]
+        new_names = []
+        for col_name in col_names:
+            if not col_name.startswith(_OLD_COLUMN_INDICATOR):
+                new_name = _OLD_COLUMN_INDICATOR+"_"+col_name
+                logger.info(f"Renaming raw column {col_name} to {new_name}")
+                df.rename(columns={col_name : new_name}, inplace=True)
+                new_names.append(new_name)
+            else:
+                new_names.append(col_name)
+        new_name = new_names[0] if len(new_names)==1 else new_names
         return new_name
     else:
         logger.info(f"Removing raw column {col_name}")

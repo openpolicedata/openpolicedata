@@ -31,6 +31,13 @@ def convert(converter, col, source_name="", cats=None, std_map=None, delim=None,
     if no_id not in ["keep", "null", "error","test"]:
         raise ValueError(f"no_id is {no_id}. It should be 'keep', 'null', or 'error'.")
     
+    if len(col.shape)==2 and col.shape[1]==2:
+        # 2 columns are to be merged because 1 or the other is always null
+        col_new = col[col.columns[0]].copy()
+        is_null = col_new.isnull()
+        col_new[is_null] = col[col.columns[1]][is_null]
+        col = col_new
+    
     # value_counts handles more data types when getting unique values than .unique()
     counts = col.value_counts(dropna=False)
     vals = counts.index
@@ -406,7 +413,8 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
     if (has_pi or has_aapi) and ("HAWAI" in x or "PACIFICIS" in x.replace(" ","").replace("_","") or \
                                  "PACISL" in x.replace(" ","")):
         return race_cats[defs._race_keys.PACIFIC_ISLANDER] if has_pi else race_cats[defs._race_keys.AAPI]
-    if has_latino and x in ["H", "WH", "HISPANIC", "LATINO", "HISPANIC OR LATINO", "LATINO OR HISPANIC", "HISPANIC/LATINO", "LATINO/HISPANIC",'HISPANIC/LATIN/MEXICAN']:
+    if has_latino and x in ["H", "WH", "HISPANIC", "LATINO", "HISPANIC OR LATINO", "LATINO OR HISPANIC", 
+                            "HISPANIC/LATINO", "LATINO/HISPANIC",'HISPANIC/LATIN/MEXICAN','HISP']:
         return race_cats[defs._race_keys.LATINO] 
     if has_indigenous and (x in ["I", "INDIAN", "ALASKAN NATIVE", "AN", "AI", "AL NATIVE","A/INDIAN", "NAT AM"] or "AMERICAN IND" in x.replace("II","I") or \
         "NATIVE AM" in x or  "AMERIND" in x.replace(" ","") or "ALASK" in x or "AMIND" in x.replace(" ","") or \
