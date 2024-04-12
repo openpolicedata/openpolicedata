@@ -14,6 +14,7 @@ getting_started/index.ipynb
 datasets/index.ipynb
 examples/index.md
 resources/index.md
+troubleshooting/index.md
 citations/index.md
 ```
 
@@ -41,19 +42,20 @@ Learn what types of data are available in OPD and for what agencies
 :link-alt: examples/index.md
 Explore how to use OPD with Jupyter Notebooks 
 :::
-::::
-
-::::{grid} 2
-:gutter: 1 2 3 4
-
-:::{grid-item-card} {fas}`bookmark;pst-color-primary` Related Projects
+:::{grid-item-card} {fas}`code;pst-color-primary` Related Projects
 :link: resources/index.md
 :link-alt: resources/index.md
 Find other police data projects
 :::
+:::{grid-item-card} {fas}`circle-question;pst-color-primary` Troubleshooting
+:link: troubleshooting/index.md
+:link-alt: troubleshooting/index.md
+Search for help with common issues
+:::
 :::{grid-item-card} {fas}`bookmark;pst-color-primary` Citations
 :link: citations/index.md
 :link-alt: citations/index.md
+Works citing OPD and how to cite OPD
 :::
 ::::
 

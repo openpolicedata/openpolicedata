@@ -14,6 +14,7 @@ getting_started/index.ipynb
 datasets/index.ipynb
 examples/index.md
 resources/index.md
+troubleshooting/index.md
 citations/index.md
 ```
 
