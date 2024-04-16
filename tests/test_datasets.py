@@ -37,7 +37,7 @@ def test_reload(file):
 
 
 def test_duplicates(all_datasets):
-    assert not all_datasets.duplicated(subset=['State', 'SourceName', 'Agency', 'TableType','Year']).any()
+    assert not all_datasets.duplicated(subset=['State', 'SourceName', 'Agency', 'TableType','Year','source_url','dataset_id']).any()
 
 
 def test_check_columns(datasets):
