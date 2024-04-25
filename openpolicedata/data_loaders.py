@@ -533,8 +533,7 @@ class Csv(Data_Loader):
                 else:
                     return requests.get(url, params=None, stream=True, headers=headers)
 
-            is_mass_employee = self.url=="https://www.mass.gov/doc/consolidated-list-of-officer-status-csv-file-as-of-october-5-2023/download" 
-            header = None if is_mass_employee else 'infer'   
+            header = 'infer'   
 
             with get(self.url, use_legacy, headers) as resp:
                 try:
@@ -547,10 +546,10 @@ class Csv(Data_Loader):
                     raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(self.url))
                 except Exception as e:
                     raise e
-
-            if is_mass_employee:
-                table.columns = ['Officer','Agency','Expiration Date', 'Reason','ID','Certification #','Status']
-                logger.debug(f"This file does not contain headers. The following headers will be used {table.columns}")
+                
+        if len(table.columns)==1 and '?xml' in table.columns[0] and len(table)==1 and 'Error' in table.iloc[0,0]:
+            # Read data was not a CSV file. It was an error code where the line breaks were interpreted as single column data by load_csv
+            raise OPD_DataUnavailableError(table.iloc[0,0], _url_error_msg.format(self.url))
 
         if offset>0:
             rows_limit = offset+nrows if nrows is not None and offset+nrows<len(table) else len(table)
