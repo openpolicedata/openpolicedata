@@ -24,6 +24,8 @@ Welcome to the *new* OpenPoliceData documentation. The **OpenPoliceData (OPD)** 
 
 > **NEW IN VERSION 0.6**: OPD now provides tools for automated data standardization. Applying these tools allow you to start your analysis more quickly by replacing column names and data with standard values for some common column types. [Learn how it works and how to use it here.](getting_started/index.ipynb#Data-Standardization)
 
+<!-- https://fontawesome.com/icons?d=gallery&amp%3Bm=free -->
+
 ::::{grid} 3
 :gutter: 1 2 3 4
 
@@ -56,6 +58,24 @@ Search for help with common issues
 :link: citations/index.md
 :link-alt: citations/index.md
 Works citing OPD and how to cite OPD
+:::
+::::
+
+### Advanced Topics
+The follow guides describe more advanced topics that may interest you after viewing the [Getting Started Guide](./getting_started/index.ipynb).
+
+::::{grid} 2
+:gutter: 1 2 3 4
+
+:::{grid-item-card} {fas}`calendar-days;pst-color-primary` Year/Date Filtering
+:link: getting_started/year_filtering.ipynb
+:link-alt: getting_started/year_filtering.ipynb
+More advanced year/date filtering and how to handle special (rare) cases
+:::
+:::{grid-item-card} {fas}`broom;pst-color-primary` Data Standardization
+:link: examples/opd-examples/standardization.ipynb
+:link-alt: examples/opd-examples/standardization.ipynb
+How to customize (optional) data standardization processing
 :::
 ::::
 
