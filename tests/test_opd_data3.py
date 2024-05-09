@@ -11,7 +11,6 @@ from openpolicedata.exceptions import OPD_DataUnavailableError, OPD_TooManyReque
 	DateFilterException
 import random
 from datetime import datetime
-from datetime import timedelta
 import pandas as pd
 from time import sleep
 import warnings
@@ -182,6 +181,10 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 			except OPD_FutureError as e:
 				future_error = True
 				break
+			except OPD_DataUnavailableError as e:
+				caught_exceptions_warn.append(e)
+				tables.append(None)
+				continue
 			except:
 				raise
 
@@ -220,6 +223,8 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 			print(f"Testing for year {year}")
 
 			table = tables[years.index(year)]
+			if table is None: # Data could not be loaded
+				continue
 
 			if len(table.table)==0 and has_outages and \
 				(outages[["State","SourceName","Agency","TableType","Year"]] == datasets.iloc[i][["State","SourceName","Agency","TableType","Year"]]).all(axis=1).any():
@@ -268,7 +273,7 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 				continue
 			
 			start_date = str(year-1) + "-12-29"
-			stop_date = datetime.strftime(dts.iloc[0]+timedelta(days=1), "%Y-%m-%d")
+			stop_date = datetime.strftime(dts.iloc[0], "%Y-%m-%d")
 
 			try:
 				table_start = src.load(datasets.iloc[i]["TableType"], [start_date, stop_date], 
@@ -278,15 +283,10 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 					start_date  = str(year) + "-01-01"
 					table_start = src.load(datasets.iloc[i]["TableType"], [start_date, stop_date], 
 												agency=agency, pbar=False)
-				elif "Currently only able to filter for a single year" in str(e.args):
-					# The format of the date field does not allow for filtering by date
-					continue
 				else:
 					raise
 			except DateFilterException as e:
 				continue
-			except:
-				raise
 
 			sleep(sleep_time)
 			dts_start = table_start.table[table.date_field]
@@ -310,7 +310,7 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 				# Whole dataset was not read. Don't compare to latest data in the year
 				continue
 
-			start_date = datetime.strftime(dts.iloc[-1]-timedelta(days=1), "%Y-%m-%d")
+			start_date = datetime.strftime(dts.iloc[-1], "%Y-%m-%d")
 			stop_date  = str(year+1) + "-01-10"  
 
 			try:
@@ -318,7 +318,7 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 												agency=agency, pbar=False)
 			except ValueError as e:
 				if str(e).startswith('Year range cannot contain the year corresponding to a single year dataset'):
-					stop_date  = str(year) + "-12-31T23:59:59.999"  
+					stop_date  = str(year) + "-12-31"  
 					table_stop = src.load(datasets.iloc[i]["TableType"], [start_date, stop_date], 
 												agency=agency, pbar=False)
 				else:
@@ -327,7 +327,11 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 			dts_stop = table_stop.table[table.date_field]
 
 			dts_stop = dts_stop[dts_stop.apply(lambda x: not isinstance(x,str))]
-			dts_stop = dts_stop.sort_values(ignore_index=True)
+			try:
+				dts_stop = dts_stop.sort_values(ignore_index=True)
+			except TypeError as e:
+				dts_stop = dts_stop[dts_stop.apply(lambda x: isinstance(x,pd.Timestamp))]
+				dts_stop = dts_stop.sort_values(ignore_index=True)
 
 			# If this isn't true then the start date is too late
 			assert dts_stop.iloc[0].year == year
@@ -438,13 +442,14 @@ if __name__ == "__main__":
 	use_changed_rows = False
 	csvfile = None
 	csvfile = r"..\opd-data\opd_source_table.csv"
-	start_idx = 717
+	start_idx = 52
 	skip = None
-	# skip = "Greensboro"
+	skip = "Sacramento,Beloit,Rutland"
 	source = None
-	# source = "Wallkill" #"Bremerton"
+	# source = "Asheville"
 
 	datasets = get_datasets(csvfile, use_changed_rows)
 
-	test_load_year(datasets, source, start_idx, skip, False, {'DataType':'ArcGIS'}) 
-	# test_source_download_not_limitable(datasets, source, start_idx, skip, False) 
+	test_load_year(datasets, source, start_idx, skip, False) 
+	start_idx = 0
+	test_source_download_not_limitable(datasets, source, start_idx, skip) 

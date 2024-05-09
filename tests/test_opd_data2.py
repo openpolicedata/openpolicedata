@@ -152,6 +152,11 @@ def test_get_agencies(datasets, source, start_idx, skip):
 
 			try:
 				agencies = src.get_agencies(datasets.iloc[i]["TableType"], year=datasets.iloc[i]["Year"])
+			except ValueError as e:
+				if 'Inputs must filter for a single source' in str(e):
+					agencies = src.get_agencies(datasets.iloc[i]["TableType"], year=datasets.iloc[i]["Year"], url_contains=datasets.iloc[i]["URL"])
+				else:
+					raise
 			except OPD_MinVersionError: continue
 			except: raise
 
@@ -261,20 +266,21 @@ if __name__ == "__main__":
 	# For testing
 	# (csvfile, source, last, skip, loghtml)
 
-	use_changed_rows = True
+	use_changed_rows = False
 
 	csvfile = None
 	csvfile = os.path.join("..","opd-data","opd_source_table.csv")
-	start_idx = 0
+	start_idx = 876
 	source = None
-	# source = "Wallkill"
+	# source = "Burlington"
 	skip = None
-
+	skip = "Sacramento,Beloit,Rutland"
+	
 	datasets = get_datasets(csvfile, use_changed_rows)
 
 	# skip = "Corona"
-	# test_get_agencies(csvfile, None, None, skip, None)
-	# test_get_agencies_name_match(csvfile, None, last, skip, None)
-	# test_agency_filter(csvfile, None, None, skip, None)
-	# test_to_csv(csvfile, None, None, skip, None)
+	# test_get_agencies(datasets, source, start_idx, skip)
+	# test_get_agencies_name_match(datasets, None, last, skip, None)
+	# test_agency_filter(datasets, None, None, skip, None)
+	# test_to_csv(datasets, None, None, skip, None)
 	test_get_years(datasets, source, start_idx, skip, None)

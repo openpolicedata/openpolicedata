@@ -350,7 +350,7 @@ def test_arcgis_text_date(url, year, date_field):
             dts = data[date_field].apply(lambda x: x[:-2] if isinstance(x,str) else None)
             dts = pd.to_datetime(dts, errors='coerce')
         else:
-            dts = pd.to_datetime(data[date_field], errors='coerce')
+            dts = pd.to_datetime(data[date_field], errors='coerce', utc=True)
         if year:
             assert (dts.dt.year==year).all()
 

@@ -91,12 +91,12 @@ def test_single_year_range_filter():
 		with pytest.raises(ValueError, match="There are no sources matching"):
 			src._Source__filter_for_source(opd.defs.TableType.CALLS_FOR_SERVICE, [2017,2018], None)
 
-@pytest.mark.parametrize('year', [2017, opd.defs.MULTI])
-def test_multi_year_filter(year):
+@pytest.mark.parametrize('year, exp_filt_by_year', [(2017,True), (opd.defs.MULTI,False)])
+def test_multi_year_filter(year,exp_filt_by_year):
 	if check_for_dataset('Norristown', opd.defs.TableType.USE_OF_FORCE):
 		src = data.Source('Norristown')
 		dataset, filter_by_year = src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, None)
-		assert filter_by_year
+		assert filter_by_year == exp_filt_by_year
 		assert dataset['Year']==opd.defs.MULTI
 		assert dataset['TableType']==opd.defs.TableType.USE_OF_FORCE
 
@@ -138,16 +138,16 @@ def test_overlapping_multi_and_single(all_datasets, year, url_contains, url_cont
 def test_multiple_bad_multiple_year_filter(all_datasets, year):
 	if check_for_dataset('Asheville', opd.defs.TableType.USE_OF_FORCE):
 		src = data.Source('Asheville')
-		with pytest.raises(ValueError, match="There is more than one source matching tableType"):
+		with pytest.raises(ValueError, match="There is more than one source matching "):
 			src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, None)
 
-@pytest.mark.parametrize('year', [[2020,2021], opd.defs.MULTI])
-def test_url_contains(all_datasets, year):
+@pytest.mark.parametrize('year, exp_filt_by_year', [([2020,2021], True), (opd.defs.MULTI, False)])
+def test_url_contains(all_datasets, year, exp_filt_by_year):
 	if check_for_dataset('Asheville', opd.defs.TableType.USE_OF_FORCE):
 		src = data.Source('Asheville')
 		url_contains = "APDUseOfForce/FeatureServer/0"
 		dataset, filter_by_year = src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, url_contains)
-		assert filter_by_year
+		assert filter_by_year == exp_filt_by_year
 		assert dataset['Year']==opd.defs.MULTI
 		assert dataset['TableType']==opd.defs.TableType.USE_OF_FORCE
 		assert url_contains in dataset['URL']
@@ -269,6 +269,9 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 					if srcName=='Wallkill' and datasets.iloc[i]["Year"]==2016:
 						# Only has last 3 quarters of data
 						missing_months = [x for x in missing_months if x not in [1,2,3]]
+					elif srcName=='Albemarle County' and datasets.iloc[i]["Year"]==2021:
+						# August and Sept data does not have date field
+						missing_months = [x for x in missing_months if x not in [8,9]]
 					for m in missing_months:
 						url = datasets.iloc[i]["URL"] + '/' + dataset_list[m-1].strip()
 						cur_sheet = sheets[min(m-1, len(sheets)-1)] if sheets else None
@@ -434,12 +437,12 @@ def log_errors_to_file(*args):
 if __name__ == "__main__":
 	from test_utils import get_datasets
 	# For testing
-	use_changed_rows = True
+	use_changed_rows = False
 	csvfile = None
-	csvfile = r"..\opd-data\opd_source_table.csv"
-	start_idx = 8
+	csvfile = os.path.join(r"..",'opd-data','opd_source_table.csv')
+	start_idx = 707
 	skip = None
-	# skip = "Greensboro"
+	skip = "Sacramento,Beloit,Rutland"
 	source = None
 	# source = "Bremerton" #"Washington D.C." #"Wallkill"
 

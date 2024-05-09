@@ -40,10 +40,10 @@ def test_changerows():
         f.write(','.join(line1))
 
     try:
-        num_lines = len(pd.read_csv(csvfile))
+        df_all = get_datasets(csvfile=csvfile)
         df = get_datasets(use_changed_rows=True)
-        assert len(df.index) < num_lines
-        assert df.index[-1]==num_lines-1
+        assert len(df) < len(df_all)
+        pd.testing.assert_series_equal(df_all.iloc[-1], df.iloc[-1], check_names=False)
     except:
         raise
     finally:

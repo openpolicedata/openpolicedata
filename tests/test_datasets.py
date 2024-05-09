@@ -191,9 +191,13 @@ def test_summary_functions():
     with pytest.warns(UserWarning):
         opd.datasets.summary_by_table_type()
 
-def test_get_table_types():    
+def test_get_table_types(all_datasets):   # Passing in all_datasets to ensure that local changes are used if csvfile is set 
     opd.datasets.get_table_types()
-    assert opd.datasets.get_table_types(contains="STOPS") == ["PEDESTRIAN STOPS","STOPS","TRAFFIC STOPS"]
+    stops_tables = opd.datasets.get_table_types(contains="STOPS")
+    exp_stops_tables = ["PEDESTRIAN STOPS","STOPS","TRAFFIC STOPS",
+                        "TRAFFIC STOPS - INCIDENTS", 'TRAFFIC STOPS - SUBJECTS']
+    assert len(stops_tables) == len(exp_stops_tables)
+    assert all([x in exp_stops_tables for x in stops_tables])
 
 def test_combined_num_datasets(all_datasets):
     for k in range(len(all_datasets)):

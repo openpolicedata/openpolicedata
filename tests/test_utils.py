@@ -18,6 +18,8 @@ import openpolicedata as opd
 # | False               | False       | Use default github opd_source_table.csv                                                       |
 # 
 def get_datasets(csvfile=None,use_changed_rows=False):
+    csvfile = m if csvfile and os.path.exists((m:=csvfile.replace('\\','/'))) else csvfile
+
     if use_changed_rows==True and csvfile and csvfile!=os.path.join('..','opd-data', 'opd_source_table.csv'):
         raise ValueError("Both --use-changed-rows and --csvfile options were provided, which is ambiguous.")
     elif use_changed_rows:
@@ -64,7 +66,7 @@ def get_line_numbers(result):
 
 # Function to get changed rows
 def get_changed_rows(repo_dir, file_name):
-    cmd = f"git -C {repo_dir} diff HEAD -- {file_name}"
+    cmd = f"git -C {repo_dir} diff -- {file_name}"
     result = subprocess.check_output(cmd, shell=True).decode('utf-8')
 
     added_lines_dataframe_index = get_line_numbers(result)
