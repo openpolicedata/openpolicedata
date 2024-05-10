@@ -64,8 +64,13 @@ class TableType(str, Enum):
         "Complaint data may be split into several tables. This table contains specific data on the allegations.")
     COMPLAINTS_BACKGROUND = ("COMPLAINTS - BACKGROUND",
         "Complaint data may be split into several tables. This table contains data on the general background of the complaints.")
+    COMPLAINTS_BODY_WORN_CAMERA = ("COMPLAINTS - BODY WORN CAMERA",
+        "Complaint data may be split into several tables. This table contains data on body worn camera details.")
     COMPLAINTS_SUBJECTS = ("COMPLAINTS - SUBJECTS",
         "Complaint data may be split into several tables. This table contains specific data on the involved subjects.")
+    COMPLAINTS_SUBJECTS_OFFICERS = ("COMPLAINTS - SUBJECTS/OFFICERS",
+        "Complaint data may be split into several tables. This table contains data on the involved subjects and officers. "+
+        "A row in the data will indicate whether that row corresponds to an officer or subject.")
     COMPLAINTS_OFFICERS = ("COMPLAINTS - OFFICERS",
         "Complaint data may be split into several tables. This table contains specific data on the involved officers.")
     COMPLAINTS_PENALTIES = ("COMPLAINTS - PENALTIES",
@@ -114,10 +119,10 @@ class TableType(str, Enum):
     STOPS = ("STOPS","Contains data on both pedestrian and traffic stops.")
     TRAFFIC = ("TRAFFIC STOPS","Traffic stops are stops by police of motor vehicles due to reasonable suspicion " + 
         " or traffic violations.")
-    TRAFFIC_INCIDENTS = ("TRAFFIC STOPS INCIDENTS",
+    TRAFFIC_INCIDENTS = ("TRAFFIC STOPS - INCIDENTS",
         "Traffic stops data may be split into several tables due to the possibility that multiple "+
         "subjects and officers may be involved in an incident. This table contains data on the incident.")
-    TRAFFIC_SUBJECTS = ("TRAFFIC STOPS SUBJECTS",
+    TRAFFIC_SUBJECTS = ("TRAFFIC STOPS - SUBJECTS",
         "Traffic stops data may be split into several tables due to the possibility that multiple "+
         "subjects and officers may be involved in an incident. This table contains data on the subjects.")
     TRAFFIC_ARRESTS = ("TRAFFIC ARRESTS","Traffic stops leading to an arrest.")
@@ -135,7 +140,8 @@ class TableType(str, Enum):
         "subjects and officers may be involved in an incident. This table contains data on the incident.")
     USE_OF_FORCE_SUBJECTS_OFFICERS = ("USE OF FORCE - SUBJECTS/OFFICERS",
         "Use of force data may be split into several tables due to the possibility that multiple "+
-        "subjects and officers may be involved in an incident. This table contains data on subjects and officers.")
+        "subjects and officers may be involved in an incident. This table contains data on subjects and officers."+
+        "A row in the data will indicate whether that row corresponds to an officer or subject.")
     VEHICLE_PURSUITS = ("VEHICLE PURSUITS","Attempts by officers in vehicles to pursue vehicles where the operator " + 
         "is believed to be aware that they are being signaled to stop but who is fleeing or ignoring the officer's attempt "+
         "to stop them.")

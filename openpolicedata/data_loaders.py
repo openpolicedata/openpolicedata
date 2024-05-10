@@ -1,10 +1,11 @@
+from dataclasses import dataclass
 from io import BytesIO
 import json
 import logging
 import numbers
 import os
 import tempfile
-from datetime import date
+from datetime import date, datetime
 import pandas as pd
 from pandas.api.types import is_numeric_dtype
 from pandas.api.types import is_datetime64_any_dtype as is_datetime
@@ -17,6 +18,7 @@ from sodapy import Socrata as SocrataClient
 import warnings
 from time import sleep
 from tqdm import tqdm
+from typing import Optional
 from math import ceil
 import re
 from xlrd.biffh import XLRDError
@@ -32,6 +34,7 @@ except:
 try:
     from .datetime_parser import to_datetime
     from .exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError, DateFilterException
+    from .utils import is_str_number
 except:
     from datetime_parser import to_datetime
     from exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError, DateFilterException
@@ -305,10 +308,29 @@ class CombinedDataset(Data_Loader):
         offset = kwargs.pop('offset') if 'offset' in kwargs else None
 
         dfs = []
+        date_warn = force_subject_warn = force_officer_warn = False
         for loader in self.loaders:
             dfs.append(loader.load(**kwargs))
             if loader!=self.loaders[-1]:
                 sleep(0.5)  # Reduce likelihood of timeout due to repeated requests
+
+            if 'www.albemarle.org' in loader.url:
+                # Renamed
+                if 'Stop Date' in dfs[-1] and 'Date' in dfs[0]: # Column renamed
+                    dfs[-1] = dfs[-1].rename(columns={'Stop Date':'Date'})
+                    if not date_warn:
+                        date_warn = True
+                        warnings.warn("Renaming date column because name of column names changes in some of the monthly data files")
+                if 'Force Used by Subject' in dfs[-1] and 'Physical Force by Subject' in dfs[0]: # Column renamed
+                    dfs[-1] = dfs[-1].rename(columns={'Force Used by Subject':'Physical Force by Subject'})
+                    if not force_subject_warn:
+                        force_subject_warn = True
+                        warnings.warn("Renaming force by subject column because name of column names changes in some of the monthly data files")
+                if 'Force Used by Officer' in dfs[-1] and 'Physical Force by Officer' in dfs[0]: # Column renamed
+                    dfs[-1] = dfs[-1].rename(columns={'Force Used by Officer':'Physical Force by Officer'})
+                    if not force_officer_warn:
+                        force_officer_warn = True
+                        warnings.warn("Renaming force by officer column because name of column names changes in some of the monthly data files")
 
         df = pd.concat(dfs, ignore_index=True)
         if offset!=None:
@@ -463,6 +485,9 @@ class Csv(Data_Loader):
         pandas DataFrame
             DataFrame containing table imported from CSV
         '''
+
+        if isinstance(nrows, float):
+            nrows = int(nrows)
         
         logger.debug(f"Loading file from {self.url}")
         if ".zip" in self.url:
@@ -492,6 +517,11 @@ class Csv(Data_Loader):
                 if "[SSL: UNSAFE_LEGACY_RENEGOTIATION_DISABLED] unsafe legacy renegotiation disabled" in str(e.args[0]) or \
                     "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate" in str(e.args[0]):
                     use_legacy = True
+                else:
+                    raise e
+            except requests.exceptions.ConnectionError as e:
+                if 'Max retries exceeded' in str(e):
+                    raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(self.url))
                 else:
                     raise e
             except Exception as e:
@@ -550,6 +580,9 @@ class Csv(Data_Loader):
         if len(table.columns)==1 and '?xml' in table.columns[0] and len(table)==1 and 'Error' in table.iloc[0,0]:
             # Read data was not a CSV file. It was an error code where the line breaks were interpreted as single column data by load_csv
             raise OPD_DataUnavailableError(table.iloc[0,0], _url_error_msg.format(self.url))
+        
+        table = filter_dataframe(table, date_field=self.date_field, year_filter=year, 
+            agency_field=self.agency_field, agency=agency)
 
         if offset>0:
             rows_limit = offset+nrows if nrows is not None and offset+nrows<len(table) else len(table)
@@ -558,9 +591,6 @@ class Csv(Data_Loader):
         if nrows is not None and len(table)>nrows:
             logger.debug(f"Extracting the first {nrows} rows")
             table = table.head(nrows)
-
-        table = filter_dataframe(table, date_field=self.date_field, year_filter=year, 
-            agency_field=self.agency_field, agency=agency)
 
         return table
 
@@ -860,7 +890,7 @@ class Excel(Data_Loader):
                 if not isinstance(year, list):
                     year = [year, year]
 
-                table = None
+                table = pd.DataFrame()
                 cols_added = 0
                 for y in range(year[0], year[1]+1):
                     if y in sheets:
@@ -869,7 +899,7 @@ class Excel(Data_Loader):
 
                         df = self.__clean(df)
 
-                        if isinstance(table, type(None)):
+                        if len(table)==0:
                             table = df
                             col_matches = [[k] for k in range(len(df.columns))]
                         else:
@@ -889,13 +919,13 @@ class Excel(Data_Loader):
                                                     "(https://pypi.org/project/rapidfuzz/) to load data from multiple years (pip install rapidfuzz)")
 
                                             if fuzz.ratio(table.columns[k], df.columns[m]) > 80:
-                                                print(f"Identified difference in column names when combining sheets {sheets[y-1]} and {sheets[y]}. " + 
+                                                warnings.warn(f"Identified difference in column names when combining sheets {sheets[y-1]} and {sheets[y]}. " + 
                                                     f"Column names are '{table.columns[k]}' and '{df.columns[m]}'. This appears to be a typo. " + 
                                                     f"These columns are assumed to be the same and will be combined as column '{table.columns[k]}'")
                                                 df.columns = [table.columns[k] if j==m else df.columns[j] for j in range(len(df.columns))]
                                                 break
                                         else:
-                                            print(f"Column '{table.columns[m]}' in current DataFrame does not match '{df.columns[m]}' in new DataFrame. "+ 
+                                            warnings.warn(f"Column '{table.columns[m]}' in current DataFrame does not match '{df.columns[m]}' in new DataFrame. "+ 
                                                 "When they are concatenated, both columns will be included.")
                                             col_matches[m].append(len(table.columns))
                                             cols_added+=1
@@ -907,9 +937,6 @@ class Excel(Data_Loader):
 
                         if nrows_read!=None and len(table)>=nrows_read:
                             break
-
-                if isinstance(table, type(None)):
-                    return table
             else:
                 sheets_load = self.sheet.split("&") if isinstance(self.sheet,str) else [self.sheet]
                 dfs = []
@@ -928,15 +955,7 @@ class Excel(Data_Loader):
                     table = pd.read_excel(self.excel_file, nrows=nrows_read, sheet_name=sheet_name)
                     dfs.append(table)
                 table = pd.concat(dfs, ignore_index=True)
-                table = self.__clean(table, self.url)               
-
-        if offset>0:
-            rows_limit = nrows_read if nrows_read is not None and nrows_read<len(table) else len(table)
-            logger.debug(f"Extracting {rows_limit} rows starting at {offset}")
-            table = table.iloc[offset:rows_limit].reset_index(drop=True)
-        if nrows is not None and len(table)>nrows:
-            logger.debug(f"Extracting the first {nrows} rows")
-            table = table.head(nrows)
+                table = self.__clean(table)               
 
         # Check for empty rows at the bottom
         num_empty = table.isnull().sum(axis=1)
@@ -954,6 +973,14 @@ class Excel(Data_Loader):
 
         table = filter_dataframe(table, date_field=self.date_field, year_filter=year, 
             agency_field=self.agency_field, agency=agency)
+        
+        if offset>0:
+            rows_limit = nrows_read if nrows_read is not None and nrows_read<len(table) else len(table)
+            logger.debug(f"Extracting {rows_limit} rows starting at {offset}")
+            table = table.iloc[offset:rows_limit].reset_index(drop=True)
+        if nrows is not None and len(table)>nrows:
+            logger.debug(f"Extracting the first {nrows} rows")
+            table = table.head(nrows)
 
         return table
 
@@ -967,7 +994,7 @@ class Excel(Data_Loader):
             raise ValueError(f"Sheet {cur_sheet} not found in Excel file at {self.url}")
 
 
-    def __clean(self, df, url):
+    def __clean(self, df):
         # Row names may not be the 1st row in which case columns need to be fixed
         max_drops = 5
         num_drops = 0
@@ -1001,7 +1028,9 @@ class Excel(Data_Loader):
                     if len(df)==0 or num_drops>=max_drops:
                         raise ValueError("Unable to find column names")
 
-        df = df.convert_dtypes()
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=RuntimeWarning)
+            df = df.convert_dtypes()
 
         # Check for 1st column being row numbers
         if pd.isnull(df.columns[0]) and list(df.iloc[:,0]) in [[k+1 for k in range(0, len(df))], [k for k in range(0, len(df))]]:
@@ -1104,6 +1133,9 @@ class Arcgis(Data_Loader):
         # Get metadata
         meta = self.__request()
 
+        if 'type' not in meta and meta['status']=='error':
+            raise OPD_DataUnavailableError(self.url, meta['messages'])
+
         if "maxRecordCount" in meta:
             self.max_record_count = meta["maxRecordCount"] if meta['maxRecordCount']<self.__max_maxRecordCount else self.__max_maxRecordCount
         else:
@@ -1205,6 +1237,14 @@ class Arcgis(Data_Loader):
             where_query = self._last_count[2]
         elif where==None:
             where_query, record_count = self.__construct_where(year)
+
+            if not self.__accurate_count:
+                raise ValueError(f"Count is not accurate for year input {self.__accurate_count}. "
+                                 "Date field contains data in text format not date format "
+                                 "and the text not formatted in a way that makes getting a count "
+                                 "possible without loading in the data. Either adjust the input to "
+                                 "get_count to get a range of years instead of a range of dates or "
+                                 "load in the data for the current date range")
         else:
             where_query = where
             try:
@@ -1289,13 +1329,14 @@ class Arcgis(Data_Loader):
         return result
 
 
-    def __construct_where(self, year=None):
+    def __construct_where(self, year=None, date_range_error=True):
         where_query = ""
+        self.__accurate_count = True
         if self._last_count is not None and self._last_count[0]==(year,None):
             record_count = self._last_count[1]
             where_query = self._last_count[2]
         elif self.date_field!=None and year!=None:
-            where_query, record_count = self._build_date_query(year)
+            where_query, record_count = self._build_date_query(year, date_range_error)
         else:
             where_query = '1=1'
             try:
@@ -1312,11 +1353,13 @@ class Arcgis(Data_Loader):
             except:
                 raise
 
-        self._last_count = ((year,None), record_count, where_query)
+        if self.__accurate_count:
+            # Count may not be accurate if date ranges are allowed and the date field was a string
+            self._last_count = ((year,None), record_count, where_query)
 
         return where_query, record_count
     
-    def _build_date_query(self, year):
+    def _build_date_query(self, year, date_range_error):
         # Determine format by getting some data
         data = None
         if not self._date_type:
@@ -1326,7 +1369,7 @@ class Arcgis(Data_Loader):
         if self._date_type=='esriFieldTypeDate':
             where_query, record_count = self._build_date_query_date_type(year)
         elif self._date_type=='esriFieldTypeString':
-            where_query, record_count = self._build_date_query_string_type(year, data)
+            where_query, record_count = self._build_date_query_string_type(year, data, date_range_error)
         elif self._date_type=='esriFieldTypeInteger' and (self.date_field.lower()=='yr' or 'year' in self.date_field.lower()):
             where_query, record_count = self._build_date_query_date_type(year, is_numeric_year=True)
         else:
@@ -1334,46 +1377,59 @@ class Arcgis(Data_Loader):
         
         return where_query, record_count
 
-    def _build_date_query_string_type(self, year, data):
+    def _build_date_query_string_type(self, year, data, date_range_error):
         if data != None:
             dates = [x['attributes'][self.date_field] for x in data['features']]
 
-            # [regex for pattern, Arcgis Patter OR date delimiter (punctuation between numbers), whether to use inquality to do comparison,
+            # [regex for pattern, Arcgis Pattern OR date delimiter (punctuation between numbers), whether to use inquality to do comparison,
                 # OPTIONAL time delimiter]
+            @dataclass
+            class DateParseParams:
+                regex_pattern: re.Pattern
+                arcgis_pattern: Optional[str] = None
+                ineq_comp: bool = False
+                date_delim: str = ""
+                full_date: bool = True
+
             matches = [
-                (re.compile(r"^(19|20)\d{6}\b"),  "", True),  # YYYYMMDD
-                (re.compile(r"^(19|20)\d{12}\b"),  "", True, True),  # YYYYMMDDHHMMSS
-                (re.compile(r"^(19|20)\d{2}-\d{2}-\d{2}(\b|T)"), "-", True),  # YYYY-MM-DD, T is for Zulu time after date
-                (re.compile(r"^[A-Z][a-z]+ \d{1,2}, (19|20)\d{2}\b"), "{} LIKE '[A-Z]% [0-9][0-9], {}' OR {} LIKE '[A-Z]% [0-9], {}'", False),  # Month DD, YYYY
-                (re.compile(r"^\d{1,2}[-/]\d{1,2}[-/](19|20)\d{2}\b"), 
+                DateParseParams(re.compile(r"^(19|20)\d{6}\b"), ineq_comp=True),  # YYYYMMDD
+                DateParseParams(re.compile(r"^(19|20)\d{12}\b"), ineq_comp=True),  # YYYYMMDDHHMMSS
+                DateParseParams(re.compile(r"^(19|20)\d{2}-\d{2}-\d{2}(\b|T)"), ineq_comp=True, date_delim="-"),  # YYYY-MM-DDThh:mm:ss
+                DateParseParams(re.compile(r"^[A-Z][a-z]+ \d{1,2}, (19|20)\d{2}\b"), "{} LIKE '[A-Z]% [0-9][0-9], {}' OR {} LIKE '[A-Z]% [0-9], {}'"),  # Month DD, YYYY
+                DateParseParams(re.compile(r"^\d{1,2}[-/]\d{1,2}[-/](19|20)\d{2}\b"), 
                     "{} LIKE '%[0-9][0-9][/-][0-9][0-9][/-]{}%' OR {} LIKE '%[0-9][/-][0-9][0-9][/-]{}%' OR " + 
-                    "{} LIKE '%[0-9][/-][0-9][/-]{}%' OR {} LIKE '%[0-9][0-9][/-][0-9][/-]{}%'", False),  # mm/dd/yyyy or mm-dd-yyyy
-                (re.compile(r"^\d{4}[-/]\d{1,2}$"), "{} LIKE '{}[-/][0-9][0-9]' OR {} LIKE '{}[-/][0-9]'", False),  # YYYY-MM or YYYY/MM
-                (re.compile(r"^\d{4}$"), "{} = '{}'", False),  # YYYY
+                    "{} LIKE '%[0-9][/-][0-9][/-]{}%' OR {} LIKE '%[0-9][0-9][/-][0-9][/-]{}%'"),  # mm/dd/yyyy or mm-dd-yyyy
+                DateParseParams(re.compile(r"^\d{4}[-/]\d{1,2}$"), "{} LIKE '{}[-/][0-9][0-9]' OR {} LIKE '{}[-/][0-9]'", full_date=False),  # YYYY-MM or YYYY/M
+                DateParseParams(re.compile(r"^\d{4}$"), "{} = '{}'", full_date=False),  # YYYY
             ]
 
             hi = 0.0
             idx = None
             for k, m in enumerate(matches):
-                if (new:=sum([isinstance(x,str) and m[0].search(x) != None for x in dates])/len(dates)) > hi:
+                if (new:=sum([isinstance(x,str) and m.regex_pattern.search(x) != None for x in dates])/len(dates)) > hi:
                     hi = new
                     idx = k
 
             if hi < 0.9:
                 raise ValueError("Unable to find date string pattern")
             
-            self._ineq_comp = matches[idx][2]
+            self._ineq_comp = matches[idx].ineq_comp
             if self._ineq_comp:
-                self._date_delim = matches[idx][1]
-                self._time_no_delim = matches[idx][3] if len(matches[idx])>3 else False
+                self._date_delim = matches[idx].date_delim
             else:
-                self._date_format = repeat_format(matches[idx][1])
+                self._date_format = repeat_format(matches[idx].arcgis_pattern)
+                self._full_date = matches[idx].full_date
 
         if self._ineq_comp:
-            where_query, record_count = self._build_date_query_date_type(year, self._date_delim, self._time_no_delim)
+            where_query, record_count = self._build_date_query_date_type(year, self._date_delim, is_date_string=True)
         else:
-            year = [year] if isinstance(year, numbers.Number) else year
-            if any([isinstance(x,str) and len(x)!=4 for x in year]):
+            year = [year] if isinstance(year, numbers.Number) else year.copy()
+            for k,y in enumerate(year):
+                if isinstance(y,str) and re.search(r'^\d{4}-\d{2}-\d{2}', y):
+                    year[k] = y[:4]
+                    self.__accurate_count = False
+                    
+            if (not self._full_date or date_range_error) and any([isinstance(x,str) and len(x)!=4 for x in year]):
                 # Currently can only handle years
                 raise ValueError(f"Date column is a string data type at the source {self.url}. "+
                                 "Currently only able to filter for a single year (2023) or a year range ([2022,2023]) "+
@@ -1390,7 +1446,7 @@ class Arcgis(Data_Loader):
         
         
 
-    def _build_date_query_date_type(self, year, date_delim='-', time_no_delim=False, is_numeric_year=False):
+    def _build_date_query_date_type(self, year, date_delim='-', is_numeric_year=False, is_date_string=False):
         # List of error messages that can occur for bad queries as we search for the right query format
         query_err_msg = ["Unable to complete operation", "Failed to execute query", "Unable to perform query", "Database error has occurred", 
                          "'where' parameter is invalid", "Parsing error",'Query with count request failed']
@@ -1398,17 +1454,13 @@ class Arcgis(Data_Loader):
         where_query = ""
         zero_found = False
         if self._date_format in [0,1] or self._date_format==None:
-            start_date, stop_date = _process_date(year, force_year=is_numeric_year)
+            start_date, stop_date = _process_date(year, force_year=is_numeric_year, is_date_string=is_date_string)
 
             if date_delim=='':
                 start_date = start_date.replace('-','')
                 stop_date = stop_date.replace('-','')
             elif date_delim!='-':
                 raise NotImplementedError("Unable to handle this delimiter")
-            
-            if time_no_delim:
-                start_date = start_date.replace('T','').replace(':','')
-                stop_date = stop_date.replace('T','').replace(':','')
             
             for k in range(0,2):
                 if self._date_format is not None and self._date_format!=k:
@@ -1578,7 +1630,7 @@ class Arcgis(Data_Loader):
             DataFrame containing table imported from ArcGIS
         '''
         
-        where_query, record_count = self.__construct_where(year)
+        where_query, record_count = self.__construct_where(year, date_range_error=False)
         
         # Update record count for request record offset
         record_count-=offset
@@ -1663,6 +1715,21 @@ class Arcgis(Data_Loader):
             if col in df:
                 logger.debug(f"Column {col} had a data type of esriFieldTypeDate. Converting values to datetime objects.")
                 df[col] = to_datetime(df[col], unit="ms", errors='coerce')
+
+        if not self.__accurate_count:
+            logger.debug(f"User requested filtering by a date range but this was NOT done in the Arcgis query "+
+                         f"due to the date field not being in a date format. Converting {self.date_field} column to "
+                         f"a datetime in order to filter for requested date range {year}")
+            df[self.date_field] = to_datetime(df[self.date_field], errors='coerce')
+            date_range = [str(x) for x in year]
+            if len(date_range[0])==4:
+                date_range[0] = date_range[0]+'-01-01'
+            if len(date_range[1])==4:
+                date_range[1] = date_range[1] + "-12-31T23:59:59.999"
+            else:
+                date_range[1] = date_range[1] + "T23:59:59.999"
+
+            df = df[ (df[self.date_field] >= date_range[0]) & (df[self.date_field] <= date_range[1]) ]
 
         if len(df) > 0:
             has_point_geometry = any("geometry" in x and "x" in x["geometry"] for x in features)
@@ -1776,6 +1843,9 @@ class Carto(Data_Loader):
         False
         '''
         return False
+    
+    def get_api_url(self):
+        return f'{self.url}?q=SELECT * FROM {self.data_set}'
 
 
     def get_count(self, year=None, **kwargs):
@@ -1854,7 +1924,7 @@ class Carto(Data_Loader):
         except requests.HTTPError as e:
             if len(e.args)>0:
                 if "503 Server Error" in e.args[0]:
-                    raise OPD_DataUnavailableError(self.url, e.args)
+                    raise OPD_DataUnavailableError(self.get_api_url(), e.args, _url_error_msg.format(self.get_api_url()))
                 else:
                     raise
 
@@ -1934,7 +2004,7 @@ class Carto(Data_Loader):
                         raise ValueError(f"Number of rows is {num_rows} but is expected to be max rows to read {batch_size} or total number of rows {nrows}")
             except Exception as e:
                 if len(e.args)>0 and "Error Code: 429" in e.args[0]:
-                    raise OPD_TooManyRequestsError(self.url, *e.args, _url_error_msg.format(self.url))
+                    raise OPD_TooManyRequestsError(self.url, *e.args, _url_error_msg.format(self.get_api_url()))
                 else:
                     raise
             except:
@@ -2097,6 +2167,11 @@ class Socrata(Data_Loader):
         False
         '''
         return False
+    
+    def get_api_url(self):
+        url = self.url[:-1] if self.url.endswith('/') else self.url
+        url = url if url.startswith('http') else 'https://'+url
+        return f"{url}/resource/{self.data_set}.json"
 
 
     def get_count(self, year=None, *,  opt_filter=None, where=None, **kwargs):
@@ -2131,11 +2206,11 @@ class Socrata(Data_Loader):
         try:
             results = self.client.get(self.data_set, where=where, select="count(*)")
         except (requests.HTTPError, requests.exceptions.ReadTimeout) as e:
-            raise OPD_SocrataHTTPError(self.url, self.data_set, *e.args, _url_error_msg.format(self.url))
+            raise OPD_SocrataHTTPError(self.url, self.data_set, *e.args, _url_error_msg.format(self.get_api_url()))
         except Exception as e: 
             if len(e.args)>0 and (e.args[0]=='Unknown response format: text/html' or \
                 "Read timed out" in e.args[0]):
-                raise OPD_SocrataHTTPError(self.url, self.data_set, *e.args, _url_error_msg.format(self.url))
+                raise OPD_SocrataHTTPError(self.url, self.data_set, *e.args, _url_error_msg.format(self.get_api_url()))
             else:
                 raise e  
             
@@ -2224,7 +2299,7 @@ class Socrata(Data_Loader):
                 results = self.client.get(self.data_set, where=where,
                     limit=batch_size,offset=offset, select=select, order=order)
             except requests.HTTPError as e:
-                raise OPD_SocrataHTTPError(self.url, self.data_set, *e.args, _url_error_msg.format(self.url))
+                raise OPD_SocrataHTTPError(self.url, self.data_set, *e.args, _url_error_msg.format(self.get_api_url()))
             except Exception as e: 
                 arg_str = None
                 err = e
@@ -2241,7 +2316,7 @@ class Socrata(Data_Loader):
                         break
                 if arg_str and (arg_str=='Unknown response format: text/html' or \
                     "Read timed out" in arg_str):
-                    raise OPD_SocrataHTTPError(self.url, self.data_set, *e.args, _url_error_msg.format(self.url))
+                    raise OPD_SocrataHTTPError(self.url, self.data_set, *e.args, _url_error_msg.format(self.get_api_url()))
                 else:
                     raise e
 
@@ -2386,6 +2461,9 @@ class Ckan(Data_Loader):
         False
         '''
         return False
+    
+    def get_api_url(self):
+        return f'{self.url}?sql=SELECT * FROM "{self.data_set}"'
 
 
     def get_count(self, year=None, opt_filter=None, **kwargs):
@@ -2406,10 +2484,7 @@ class Ckan(Data_Loader):
             logger.debug("Request matches previous count request. Returning saved count.")
             return self._last_count[2]
         else:
-            data = self.__request(count=0)
-            date_cols = [x['id'] for x in data['result']["fields"] if x["type"] in ['timestamp','date']]
-
-            where = self.__construct_where(year, opt_filter, filter_year=self.date_field and self.date_field not in date_cols)
+            where = self.__construct_where(year, opt_filter)
             json = self.__request(where=where, return_count=True)
             count = json['result']['records'][0]['count']
 
@@ -2468,14 +2543,17 @@ class Ckan(Data_Loader):
         for k,v in params.items():
             logger.debug(f"\t{k} = {v}")
 
-        r = requests.get(self.url, params=params)
+        try:
+            r = requests.get(self.url, params=params)
+        except requests.exceptions.SSLError as e:
+            raise OPD_DataUnavailableError(self.url, e.args, self.get_api_url())
 
         try:
             r.raise_for_status()
         except requests.HTTPError as e:
             if len(e.args)>0:
                 if "503 Server Error" in e.args[0]:
-                    raise OPD_DataUnavailableError(self.url, e.args)
+                    raise OPD_DataUnavailableError(self.url, e.args, self.get_api_url())
                 else:
                     raise
 
@@ -2485,8 +2563,41 @@ class Ckan(Data_Loader):
         return r.json()
 
 
-    def __construct_where(self, year=None, opt_filter=None, filter_year=False):
+    def __construct_where(self, year=None, opt_filter=None, filter_year=False, sample_data=None):
         if self.date_field!=None and year!=None:
+            datetime_format = None
+            if not sample_data:
+                sample_data = self.__request(count=100)
+            
+            date_col_info = [x for x in sample_data['result']["fields"] if x["id"]==self.date_field]
+            if len(date_col_info)==0:
+                raise ValueError(f"Date column {self.date_field} not found")
+            filter_year = date_col_info[0]["type"] not in ['timestamp','date']
+            if filter_year and date_col_info[0]["type"] == 'text':
+                # See if year can be filtered by YYYY-MM-DD 
+                dates = [x[self.date_field] for x in sample_data['result']['records']]
+                p = re.compile(r'^20\d{2}\-\d{2}\-\d{2}')
+                if all([p.search(x) for x in dates]):
+                    filter_year = False
+                    # Identify time format
+                    times = [p.sub('', x) for x in dates]
+                    if len(times[0])>0:
+                        if times[0][0]==' ':
+                            times = [x[1:] for x in times]
+                        else:
+                            raise ValueError(f"Dates in {self.date_field} are text (not date) values and have unknown format (i.e. {dates[0]})")
+                        
+                        if all([re.search(r'^\d{2}:\d{2}:\d{2}$',x) for x in times]):
+                            datetime_format = r'%Y-%m-%d %H:%M:%S'
+                        elif all(m:=[re.search(r'^\d{2}:\d{2}:\d{2}\+(\d{2})$',x) for x in times]):
+                            utc_offsets = [x.groups(1)[0] for x in m]
+                            if all([x==utc_offsets[0] for x in utc_offsets]):
+                                datetime_format = r'%Y-%m-%d %H:%M:%S+' + utc_offsets[0]
+                            else:
+                                raise ValueError(f"Dates in {self.date_field} are text (not date) values and have varying UTC offset")
+                        else:
+                            raise ValueError(f"Dates in {self.date_field} are text (not date) values and have unknown format (i.e. {dates[0]})")
+
             if filter_year:
                 start_date, stop_date = _process_date(year, date_field=self.date_field, force_year=True)
                 where = ''
@@ -2495,7 +2606,7 @@ class Ckan(Data_Loader):
                     where+='"' + self.date_field + '"' + rf" LIKE '%{y}%' OR "
                 where = where[:-4]
             else:
-                start_date, stop_date = _process_date(year, date_field=self.date_field)
+                start_date, stop_date = _process_date(year, date_field=self.date_field, datetime_format=datetime_format)
                 where = f""""{self.date_field}" >= '{start_date}' AND "{self.date_field}" <= '{stop_date}'"""
         else:
             where = None
@@ -2543,14 +2654,14 @@ class Ckan(Data_Loader):
             DataFrame containing downloaded
         '''
 
-        data = self.__request(count=0)
+        data = self.__request(count=100)
         date_cols = [x['id'] for x in data['result']["fields"] if x["type"] in ['timestamp','date']]
         
         if self._last_count is not None and self._last_count[0]==year and self._last_count[1]==opt_filter:
             record_count = self._last_count[2]
             where_query = self._last_count[3]
         else:
-            where_query = self.__construct_where(year, opt_filter, filter_year=self.date_field and self.date_field not in date_cols)
+            where_query = self.__construct_where(year, opt_filter, sample_data=data)
             json = self.__request(where=where_query, return_count=True, out_fields=select)
             record_count = json['result']['records'][0]['count']
             self._last_count = (year, opt_filter, record_count, where_query)
@@ -2572,7 +2683,7 @@ class Ckan(Data_Loader):
         if select:
             fields = select
         else:
-            # CKAN includes a large _full_text and _id columns that are not useful and the _full_text is large
+            # CKAN includes a large _full_text and _id columns that are not useful
             # Get info on columns in order to exclude these columns from the returned data
             
             fields = [x['id'] for x in data['result']['fields'] if x['id'] not in ['_id','_full_text']]
@@ -2590,7 +2701,7 @@ class Ckan(Data_Loader):
                         raise ValueError(f"Number of rows is {len(features)} but is expected to be max rows to read {batch_size} or total number of rows {nrows}")
             except Exception as e:
                 if len(e.args)>0 and "Error Code: 429" in e.args[0]:
-                    raise OPD_TooManyRequestsError(self.url, *e.args, _url_error_msg.format(self.url))
+                    raise OPD_TooManyRequestsError(self.url, *e.args, _url_error_msg.format(self.get_api_url()))
                 else:
                     raise
             except:
@@ -2623,7 +2734,7 @@ def _check_year(year):
     return isinstance(year, int) or (isinstance(year, str) and len(year)==4 and year.isdigit())
 
 
-def _process_date(date, date_field=None, force_year=False):
+def _process_date(date, date_field=None, force_year=False, datetime_format=None, is_date_string=False):
     if not isinstance(date, list):
         date = [date, date]
 
@@ -2634,28 +2745,33 @@ def _process_date(date, date_field=None, force_year=False):
         raise ValueError('date[0] needs to be smaller than or equal to date[1]')
     
     is_year = force_year or (date_field != None and 'year' in date_field.lower())
-    for d in date:
-        if is_year and not _check_year(d):
-            raise DateFilterException(f"Column {date_field} is not a date column. It either contains a year or is a date but in a text format. "+
-                             "Currently, only a year filter is allowed for this case, but the input {d} appears to not be a year.")
-
-    if type(date[0]) == str:
-        # This should already be in date format
-        start_date = date[0]
-    elif is_year:
-        # Assuming this as actually a string or numeric field for the year rather than a datestamp
+    if is_year:
+        for d in date:
+            if not _check_year(d):
+                raise DateFilterException(f"Column {date_field} is not a date column. It either contains a year or is a date but in a text format. "+
+                                "Currently, only a year filter is allowed for this case, but the input {d} appears to not be a year.")
         start_date = str(date[0])
-    else:
-        start_date = str(date[0]) + "-01-01"
-
-    if type(date[1]) == str:
-        # This should already be in date format
-        stop_date = date[1]
-    elif is_year:
-        # Assuming this as actually a string or numeric field for the year rather than a datestamp
         stop_date = str(date[1])
     else:
-        stop_date  = str(date[1]) + "-12-31T23:59:59.999"
+        if isinstance(date[0], str) and re.search(r'^\d{4}-\d{2}-\d{2}$', date[0]):  # YYYY-MM-DD
+            start_date = date[0]
+        elif isinstance(date[0], numbers.Number) or re.search(r'^\d{4}$', date[0]):   # YYYY
+            start_date = str(date[0]) + "-01-01"
+        else:
+            raise ValueError(f"Unknown date input {date[0]}")
+
+        if isinstance(date[1], str) and re.search(r'^\d{4}-\d{2}-\d{2}$', date[1]):  # YYYY-MM-DD
+            # If date date are strings, the ASCII character for z will be greater than all possible values that follow date[1]
+            stop_date  = str(date[1])+'zz' if is_date_string else str(date[1])+"T23:59:59.999"
+        elif isinstance(date[1], numbers.Number) or re.search(r'^\d{4}$', date[1]):   # YYYY
+            # If date date are strings, the ASCII character for z will be greater than all possible values that follow date[1]
+            stop_date  = str(date[1])+'-12-31zz' if is_date_string else str(date[1])+"-12-31T23:59:59.999"
+        else:
+            raise ValueError(f"Unknown date input {date[1]}")
+
+    if datetime_format:
+        start_date = datetime.strftime(pd.to_datetime(start_date), datetime_format)
+        stop_date = datetime.strftime(pd.to_datetime(stop_date), datetime_format)
 
     return start_date, stop_date
 
@@ -2696,26 +2812,40 @@ def filter_dataframe(df, date_field=None, year_filter=None, agency_field=None, a
     
         if year_filter != None:
             if isinstance(year_filter, list):
+                if len(year_filter) != 2:
+                    raise ValueError(f'Format of the input {year_filter} is invalid.'
+                                     'Date/year filters that are lists are expected to be a length 2 list of ' +
+                                     '[startYear, stopYear] or [startDate, stopDate]. Dates should be in '+
+                                     'YYYY-MM-DD format.')
                 if not is_year:
-                    if isinstance(year_filter[0],int):
-                        if len(year_filter)==1:
-                            year_filter.append(f"{year_filter[0]}-12-31")
+                    if isinstance(year_filter[0],int) or is_str_number(year_filter[0]):
                         year_filter[0] = f"{year_filter[0]}-01-01"
-                    if isinstance(year_filter[-1],int):
-                        year_filter[-1] = f"{year_filter[-1]}-12-31"
-                    logger.debug(f"Keeping values of column {date_field} between {year_filter[0]} and {year_filter[-1]}")
-                    df = df[(df[date_field] >= year_filter[0]) & (df[date_field] <= year_filter[-1])]
-                else:
+                    elif not (re.search(r'\d{4}-\d{2}-\d{2}', year_filter[0]) or \
+                              re.search(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}', year_filter[0])):
+                        raise ValueError(f"{year_filter[0]} must be in YYYY-MM-DD format")
+                    
+                    if isinstance(year_filter[-1],int) or is_str_number(year_filter[0]):
+                        year_filter[-1] = f"{year_filter[-1]}-12-31T23:59:59.999"
+                    elif re.search(r'\d{4}-\d{2}-\d{2}', year_filter[1]):
+                        year_filter[-1] = f"{year_filter[-1]}T23:59:59.999"
+                    elif not re.search(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}', year_filter[1]):
+                        raise ValueError(f"{year_filter[0]} must be in YYYY-MM-DD format")
+                    logger.debug(f"Keeping values of column {date_field} between {year_filter[0]} and {year_filter[1]}")
+                    df = df[(df[date_field] >= year_filter[0]) & (df[date_field] <= year_filter[1])]
+                elif (isinstance(year_filter[0],int) or is_str_number(year_filter[0])) and \
+                     (isinstance(year_filter[1],int) or is_str_number(year_filter[1])):
                     logger.debug(f"Column {date_field} has been identfied as a year column")
-                    logger.debug(f"Keeping values of column {date_field} between {year_filter[0]} and {year_filter[-1]}")
-                    df = df[df[date_field].isin(range(year_filter[0], year_filter[-1]+1))]
+                    logger.debug(f"Keeping values of column {date_field} between {year_filter[0]} and {year_filter[1]}")
+                    df = df[df[date_field].isin(range(year_filter[0], year_filter[1]+1))]
+                else:
+                    raise ValueError(f"Column {date_field} has been identfied as a year column and cannot be filtered by dates: {year_filter}")
             elif not is_year:
                 logger.debug(f"Keeping values of column {date_field} for year={year_filter}")
-                df = df[df[date_field].dt.year == year_filter]
+                df = df[df[date_field].dt.year == int(year_filter)]
             else:
                 logger.debug(f"Column {date_field} has been identfied as a year column")
                 logger.debug(f"Keeping values of column {date_field} for year={year_filter}")
-                df = df[df[date_field] == year_filter]
+                df = df[df[date_field] == int(year_filter)]
 
     if agency != None and agency_field != None:
         logger.debug(f"Keeping values of column {agency_field} that are equal to {agency}")

@@ -9,6 +9,7 @@ import logging
 from packaging import version
 import re
 from collections.abc import Iterator
+import sys
 try:
     from typing import Literal
 except:
@@ -717,7 +718,7 @@ class Source:
         if len(self.datasets) == 0:
             raise ValueError(f"No Sources Found for {source_name}")
         elif self.datasets["State"].nunique() > 1:
-            raise ValueError("Not all sources are from the same state")
+            raise ValueError(f"There are multiple sources matching the source name {source_name}. Please specify the state of the desired location in the 2nd argument.")
 
 
     def __repr__(self) -> str:
@@ -802,7 +803,8 @@ class Source:
     def get_agencies(self, 
                      table_type: str | defs.TableType | None = None, 
                      year: str | int | None = None, 
-                     partial_name: str | None = None
+                     partial_name: str | None = None,
+                     url_contains: str | None = None
                      ) -> list[str]:
         '''Get agencies available for 1 or more datasets
 
@@ -817,6 +819,8 @@ class Source:
         partial_name - str
             (Optional)  If set, only returns agencies containing the substring
             partial_name for datasets that contain multiple agencies
+        url_contains - str | None
+            (Optional) If set, URL must contain this string. Can be used when multiple datasets match a set of inputs.
 
         Returns
         -------
@@ -826,13 +830,17 @@ class Source:
 
         src = self.__find_datasets(table_type)
 
+        if url_contains:
+            src = src[src['URL'].str.contains(url_contains, regex=False)]
+
         if year != None:
             src = src[src["Year"] == year]
 
         if len(src) == 1:
             src = src.iloc[0]
         else:
-            raise ValueError("table_type and year inputs must filter for a single source")            
+            print(src, file=sys.stderr)
+            raise ValueError("Inputs must filter for a single source")            
 
         # If year is opd.defs.MULTI, need to use self._agencyField to query URL
         # Otherwise return self.agency
@@ -899,7 +907,7 @@ class Source:
         verbose - bool | str, optional
             If True, details of data loading will be logged. If a filename, details will
             be logged to that file., by default False
-        url_contains - bool | None
+        url_contains - str | None
             (Optional) If set, URL must contain this string. Can be used when multiple datasets match a set of inputs.
 
         Returns
@@ -949,7 +957,7 @@ class Source:
         verbose : bool | str, optional
             If True, details of data loading will be logged. If a filename, details will
             be logged to that file., by default False
-        url_contains - bool | None
+        url_contains - str | None
             (Optional) If set, URL must contain this string. Can be used when multiple datasets match a set of inputs.
 
         Returns
@@ -1019,7 +1027,7 @@ class Source:
         verbose : bool | str, optional
             If True, details of data loading will be logged. If a filename, details will
             be logged to that file., by default False
-        url_contains - bool | None
+        url_contains - str | None
             (Optional) If set, URL must contain this string. Can be used when multiple datasets match a set of inputs.
 
         Returns
@@ -1098,26 +1106,42 @@ class Source:
 
         if len(src)>0 and isinstance(year,list) and not url_contains:
             # Ensure that year range does not also match a single year dataset
-            if (m:=orig_src['Year'].apply(lambda x: x!=defs.MULTI and x>=year_filter[0] and x<=year_filter[1])).any():
-                raise ValueError(f"Year range cannot contain the year corresponding to a single year dataset.\n \t{year=}\n "+
-                                 f"Single year datasets exist for {list(orig_src['Year'][m])}. "+
-                                 "If the year range was correct, use url_contains input to specify desired dataset.")
+            if (orig_src['Year'].apply(lambda x: x!=defs.MULTI and x>=year_filter[0] and x<=year_filter[1])).any():
+                raise ValueError(f"Year range cannot contain the year corresponding to a single year dataset.\n "
+                                 f"A dataset exists for the year {year}\n "+
+                                 "If the requested year range was correct, the url_contains input can be used to specify a dataset in ambiguous cases "+
+                                 "by setting url_contains to a unique substring of the desired dataset's URL. The URL(s) for the datasets matching "+
+                                 f"the current inputs are {list(src['URL'])}")
             
         if isinstance(src, pd.core.frame.DataFrame):
             if len(src) == 0:
-                raise ValueError(f"There are no sources matching tableType {table_type} and year {year}")
+                err_msg = f"There are no sources matching {table_type=} and {year=}"
+                if url_contains:
+                    err_msg+=f" and {url_contains=}"
+                raise ValueError(err_msg)
             elif len(src) > 1:
                 if errors:
+                    err_msg = f"There is more than one source matching {table_type=} and {year=}"
+                    if url_contains:
+                        err_msg+=f" and {url_contains=}"
                     if isinstance(year, list):
-                        raise ValueError(f"There is more than one source matching tableType {table_type} and year {year}. "+
-                                        "Set the year input to not contain years for multiple datasets and/or use the url_contains "+
-                                        "input to specify a single dataset.")
+                        raise ValueError(err_msg+" It is possible that the year range covers more the one dataset."
+                                        " Set the year input to not contain years for multiple datasets and/or use the url_contains "+
+                                        "input to specify a single dataset "+
+                                        "by setting url_contains to a unique substring of the desired dataset's URL. "
+                                        f"The URL(s) for the datasets matching the current inputs are {list(src['URL'])}")
                     elif year==defs.MULTI:
-                        raise ValueError(f"There is more than one source matching tableType {table_type} and year {year}. "+
-                                        "Set the year input to a single year or a year range and/or use the url_contains input to specify a single dataset.")
+                        raise ValueError(err_msg+f" Therea are multiple multi-year datasets with year={defs.MULTI}."
+                                        " Use the url_contains "+
+                                        "input to specify a single dataset "+
+                                        "by setting url_contains to a unique substring of the desired dataset's URL. "
+                                        f"The URL(s) for the datasets matching the current inputs are {list(src['URL'])}")
                     else:
-                        raise ValueError(f"There is more than one source matching tableType {table_type} and year {year}. "+
-                                        "Set the year input to a single year or a year range and/or use the url_contains input to specify a single dataset.")
+                        raise ValueError(err_msg+
+                                        "Set the year input to a single year or a year range and/or "+
+                                        "use the url_contains input to specify a single dataset "+
+                                        "by setting url_contains to a unique substring of the desired dataset's URL. "
+                                        f"The URL(s) for the datasets matching the current inputs are {list(src['URL'])}")
                 else:
                     # This is only for testing
                     pass
@@ -1129,7 +1153,9 @@ class Source:
 
     def __load(self, table_type, year, agency, load_table, pbar=True, return_count=False, force=False, 
                nrows=None, offset=0, sortby=None, verbose=False, url_contains=None):
-        
+        # Make copy so original isn't changed
+        year = year.copy() if isinstance(year, list) else year
+
         src, filter_by_year = self.__filter_for_source(table_type, year, url_contains)
 
         # Load data from URL. For year or agency equal to opd.defs.MULTI, filtering can be done
@@ -1250,7 +1276,7 @@ class Source:
             only be returned for this agency
         zip - bool
             (Optional) Set to true if CSV is in a zip file with the same filename. Default: False
-        url_contains - bool | None
+        url_contains - str | None
             (Optional) If set, URL must contain this string. Can be used when multiple datasets match a set of inputs.
 
         Returns
@@ -1335,7 +1361,8 @@ class Source:
                          year: str | int | list[int],
                          output_dir: str | None = None, 
                          table_type: str | defs.TableType | None = None,
-                         agency: str | None = None
+                         agency: str | None = None,
+                         url_contains: str | None = None
                          ) -> str:
         '''Get auto-generated CSV filename
         
@@ -1353,6 +1380,8 @@ class Source:
         agency - str
             (Optional) If set, for datasets containing multiple agencies, data will
             only be returned for this agency
+        url_contains - str | None
+            (Optional) If set, URL must contain this string. Can be used when multiple datasets match a set of inputs.
 
         Returns
         -------
@@ -1360,7 +1389,7 @@ class Source:
             Auto-generated CSV filename
         '''
 
-        table = self.__load(table_type, year, agency, False)
+        table = self.__load(table_type, year, agency, False, url_contains=url_contains)
 
         filename = table.get_csv_filename()
         if output_dir != None:
@@ -1417,6 +1446,7 @@ class Source:
 
 def _check_date(table, date_field):
     logger = logging.getLogger("opd-load")
+    table = table.copy()
     if date_field != None and table is not None and len(table)>0 and date_field in table:
         dts = table[date_field]
         dts = dts[dts.notnull()]
@@ -1480,14 +1510,17 @@ def _check_date(table, date_field):
                     except ValueError as e:
                         if len(e.args)>0 and e.args[0].startswith('Cannot mix tz-aware with tz-naive values') and \
                             table[date_field].apply(lambda x: x.hour==0 and x.minute==0).all() and \
-                            len(s:=set([x.tzinfo for x in table[date_field] if x.tzinfo is not None]))==1:
+                            len(set([str(x.tzinfo) for x in table[date_field] if x.tzinfo is not None]))==1:
                             warnings.warn("Some date values have timezone and some do not. Setting timezone unware objects to have the same timezone as the rest.")
-                            tz = s.pop()
+                            tz = [x.tzinfo for x in table[date_field] if x.tzinfo is not None][0]
                             is_not_aware = table[date_field].apply(lambda x: x.tzinfo is None or x.tzinfo.utcoffset(x) is None)
                             table.loc[is_not_aware, date_field] = table.loc[is_not_aware, date_field].apply(lambda x: x.replace(tzinfo=tz))
                             table[date_field] = table[date_field].convert_dtypes()
                         elif 'DateParseError' in str(type(e)) and '-__' in str(e):
                             # Ignore case where month and day are underscores (i.e. 2023-__-__)
+                            pass
+                        elif 'ParserError' in str(type(e)) and re.search('Unknown string format: \d+[-/]\d+[-/]\d+,?\s?\d+[-/]\d+[-/]\d+', str(e)):
+                            # Comma separated list of dates cannot be parsed
                             pass
                         else:
                             raise
@@ -1510,7 +1543,6 @@ def _check_date(table, date_field):
             if logger:
                 logger.debug(f"Replacing any values of 1900-01-01 00:00:00 in column {date_field} with null")
             table[date_field] = table[date_field].replace(datetime.strptime('1900-01-01 00:00:00', '%Y-%m-%d %H:%M:%S'), pd.NaT)
-
 
     return table
 
