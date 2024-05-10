@@ -1,9 +1,14 @@
+import datetime
+import math
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_datetime64_any_dtype as is_datetime
+from pandas .api.types import is_numeric_dtype
 import datetime as dt
 import re
 import warnings
+import numbers
+
+from .utils import is_str_number
 
 def parse_date_to_datetime(date_col):
     if len(date_col.shape)==2:
@@ -45,15 +50,28 @@ def parse_date_to_datetime(date_col):
 
     if len(dts) > 0:
         if not hasattr(dts.iloc[0], "year") or (dts.apply(type)==str).any():
-            is_num = date_col.dtype == np.int64
+            is_num = is_numeric_dtype(date_col)
             if not is_num:
                 # Try to convert to all numbers
                 with warnings.catch_warnings():
                     warnings.filterwarnings("ignore", category=RuntimeWarning, message="invalid value encountered in cast")
                     new_col = date_col.convert_dtypes()
                 if new_col.dtype in ["object", "string", "string[python]"] and \
-                    new_col.apply(lambda x: pd.isnull(x) or isinstance(x,(pd.Timestamp,int, dt.datetime)) or x.isdigit() or x.strip()=="").all():
-                    date_col = new_col.apply(lambda x: int(x) if (pd.notnull(x) and (isinstance(x,int) or x.isdigit())) else np.nan)
+                    new_col.apply(lambda x: pd.notnull(x) and (isinstance(x, numbers.Number) or \
+                                  (isinstance(x,str) and (x.isdigit() or x.strip()=="")))).sum() > 0 and \
+                    new_col.apply(lambda x: pd.isnull(x) or isinstance(x,(pd.Timestamp,int, dt.datetime)) or \
+                                  isinstance(x, numbers.Number) or \
+                                  (isinstance(x,str) and (x.isdigit() or x.strip()==""))).sum()>=len(new_col)-1:
+                    # Almost all numeric, null, or timestamp values and at least one numeric value
+                    def clean_dates(x):
+                        if pd.notnull(x) and (isinstance(x, numbers.Number) or is_str_number(x)):
+                            return int(x)
+                        elif isinstance(x,str):
+                            return np.nan
+                        else:
+                            return x
+                        
+                    date_col = new_col.apply(clean_dates)
                     dts = date_col[date_col.notnull()]
                     is_num = True
 
@@ -65,10 +83,12 @@ def parse_date_to_datetime(date_col):
 
                 year_last = dts % 10000
                 year_first = np.floor(dts / 10000)
+                year_last_2digit = dts % 100
                 this_year = dt.datetime.now().year
 
                 is_valid_last = (year_last <= this_year).all() and (year_last > 1300).all()
                 is_valid_first = (year_first <= this_year).all() and (year_first > 1300).all()
+                is_valid_last_2digit = (year_last_2digit <= this_year-2000).all() and (year_last_2digit >= 0).all()
 
                 any_valid = True
                 if is_valid_first and is_valid_last:
@@ -79,12 +99,15 @@ def parse_date_to_datetime(date_col):
                 elif is_valid_last:
                     year = date_col.apply(lambda x : x % 10000 if not pd.isnull(x) else x)
                     month_day = date_col.apply(lambda x : np.floor(x / 10000) if not pd.isnull(x) else x)
+                elif is_valid_last_2digit:
+                    year = 2000+date_col.apply(lambda x : x % 100 if not pd.isnull(x) else x)
+                    month_day = date_col.apply(lambda x : np.floor(x / 100) if not pd.isnull(x) else x)
                 else:
                     any_valid = False
 
                 if any_valid:
                     # Determine if month is first or last in month_day
-                    first_val = np.floor(month_day / 100)
+                    first_val = month_day.apply(lambda x: np.floor(x/100) if pd.notnull(x) and isinstance(x,numbers.Number) else x)
                     last_val = month_day % 100
 
                     is_valid_month_first = first_val.max() < 13 and last_val.max() < 32
@@ -473,12 +496,13 @@ def to_datetime(col, ignore_errors=False, *args, **kwargs):
         try:
             return pd.to_datetime(col, *args, **kwargs)
         except UnicodeEncodeError as e:
-            if ignore_errors and isinstance(col, pd.Series):
+            if (ignore_errors or 'errors' in kwargs and kwargs['errors']=='coerce') and isinstance(col, pd.Series):
+                coerce = 'errors' in kwargs and kwargs['errors']=='coerce'
                 def to_datetime_local(x, *args, **kwargs):
                     try:
                         return pd.to_datetime(x, *args, **kwargs)
                     except:
-                        return x
+                        return pd.NaT if coerce else x  # Coerce input to pd.to_datetime should return NaT if cannot convert to datetime
                 return col.apply(to_datetime_local)
             else:
                 return col
@@ -487,6 +511,13 @@ def to_datetime(col, ignore_errors=False, *args, **kwargs):
                 return to_datetime(col[:-2])
             elif ignore_errors and 'out of range' in str(e) and not isinstance(col, pd.Series):
                 return col
+            elif ignore_errors and isinstance(col,str) and \
+                ((m:=re.search(r'^(?P<year>\d{4})\-(?P<month>[\d\_]{2})\-\_\_', col)) or \
+                 (m:=re.search(r'^(?P<year>\d{4})\-(?P<month>[\_]{2})\-\d{2}', col))):
+                if m.groupdict()['month'].isdigit():
+                    return pd.Period(freq='M', year=int(m.groupdict()['year']), month=int(m.groupdict()['month']))
+                else:
+                    return pd.Period(freq='Y', year=int(m.groupdict()['year']))
             else:
                 raise
         except ValueError as e:
@@ -505,6 +536,34 @@ def to_datetime(col, ignore_errors=False, *args, **kwargs):
                     return pd.Period(freq='Y', year=int(m.groupdict()['year']))
             elif 'doesn\'t match format "%Y-%m-%dT%H:%M:%S.%f%z"' in str(e):
                 return pd.to_datetime(col.apply(lambda x: x[:-1] if isinstance(x,str) and x[-1]=='Z' else x), format='mixed')
+            elif ignore_errors and 'is out of range' in str(e) and is_str_number(col):
+                if (dec:=col.find('.'))>0 and int(col[dec+1:])==0:
+                    col = int(col[:dec])
+                    year_first = math.floor(col/10000)
+                    year_last = col % 10000
+
+                    is_year_first = 1980 <= year_first <= datetime.datetime.now().year
+                    is_year_last =  1980 <= year_last <= datetime.datetime.now().year
+                    if is_year_first + is_year_last != 1:
+                        raise e
+                    elif is_year_first:
+                        year = year_first
+                        month_day = col - year*10000
+                        month = math.floor(month_day/100)
+                        day = month_day - month*100
+                    else:
+                        year = year_last
+                        month_day = year_first
+                        month = math.floor(month_day/100)
+                        day = month_day - month*100
+                    if month>12 or day>31:
+                        raise e
+                    return pd.to_datetime(datetime.datetime(year=year, month=month, day=day))
+                else:
+                    raise e
+            elif ignore_errors and re.search(r'Unknown string format: \d+[-/]\d+[-/]\d+,?\s?\d+[-/]\d+[-/]\d+', str(e)):
+                # Comma separated list of dates. Just return value
+                return col
             else:
                 return pd.to_datetime(col, *args, format='mixed', **kwargs)
         except Exception as e:

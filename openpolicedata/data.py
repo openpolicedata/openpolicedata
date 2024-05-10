@@ -639,6 +639,7 @@ class Table:
                 self.table, self.__transforms = preproc.standardize(self.table, self.table_type, self.year,
                     known_cols=known_cols, 
                     source_name=self.source_name,
+                    state=self.state,
                     keep_raw=keep_raw,
                     agg_race_cat=agg_race_cat,
                     race_cats=race_cats,

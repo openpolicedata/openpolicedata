@@ -15,7 +15,7 @@ from . import _converters as convert
 from ._converters import  _p_age_range
 from ._preproc_utils import _MultData, check_column, DataMapping, _case, MultType
 from .exceptions import BadCategoryDict
-from .utils import camel_case_split, split_words
+from .utils import camel_case_split, split_words, is_str_number
 
 _skip_tables = ["calls for service"]
 _OLD_COLUMN_INDICATOR = "RAW"
@@ -74,6 +74,7 @@ class _ColMapDict():
 def standardize(df, table_type, year, 
     known_cols={}, 
     source_name=None, 
+    state=None, 
     keep_raw=True,
     agg_race_cat=False,
     race_cats=defs.get_race_cats(),
@@ -90,7 +91,7 @@ def standardize(df, table_type, year,
     
     logger.info(f"Original columns:\n{df.columns}")
     
-    std = Standardizer(df, table_type, year, known_cols, source_name, keep_raw, agg_race_cat, race_cats, eth_cats, gender_cats, no_id)
+    std = Standardizer(df, table_type, year, known_cols, source_name, state, keep_raw, agg_race_cat, race_cats, eth_cats, gender_cats, no_id)
 
     std.id_columns()
     std.standardize_date()
@@ -144,7 +145,7 @@ def find_id_column(df1, df2, std_id, keep_raw):
     df2 = df2.copy()
     default_result = (None, None, df1, df2, None)
 
-    p_inc_id = r'incident(_|\s)?(id|num|number|code)$'
+    p_inc_id = r'(incident|stop)(_|\s)?(id|num|number|code)$'
     inc_id_matches1 = [x for x in df1.columns if re.search('^'+p_inc_id,x, re.IGNORECASE)]
     inc_id_matches1 = inc_id_matches1 if len(inc_id_matches1) else [x for x in df1.columns if re.search(p_inc_id,x, re.IGNORECASE)]
     inc_id_matches2 = [x for x in df2.columns if re.search('^'+p_inc_id,x, re.IGNORECASE)]
@@ -176,7 +177,7 @@ def find_id_column(df1, df2, std_id, keep_raw):
         
         if not id_col1:
             # If not incident ID, check for other types
-            id_words = ['master','crime','complaint','tax','log','collision','report']
+            id_words = ['master','crime','complaint','tax','log','collision','report','case']
             for c in possible_cols:
                 col1 = [x for x in df1.columns if x.lower()==c][0]
                 col2 = [x for x in df2.columns if x.lower()==c][0]
@@ -190,9 +191,14 @@ def find_id_column(df1, df2, std_id, keep_raw):
                     break
 
         if not id_col1:
-            if 'id' in possible_cols:
+            if (c:='id') in possible_cols or (c:='filenum') in possible_cols:
                 id_col1 = [x for x in df1.columns if x.lower()==c][0]
                 id_col2 = [x for x in df2.columns if x.lower()==c][0]
+            elif any([(c1:=x) for x in df1.columns if x.lower() in ['casenumber','accidentnumber']]) and \
+                 any([(c2:=x) for x in df2.columns if x.lower() in ['casenumber','accidentnumber']]) and \
+                 (df2[c2].isin(df1[c1].unique()).mean()>0.98 or df1[c1].isin(df2[c2].unique()).mean()>0.98):  # Norman crashes dataset
+                id_col1 = c1
+                id_col2 = c2
             else:
                 return default_result         
     
@@ -260,7 +266,16 @@ def _count_values(col, known_delim=None):
 
 
 def _find_gender_col_type_advanced(df, source_name, col_names, types, col_map, civilian_col_name, officer_col_name):
-    if ("subject_sex" in col_names or "officer_sex" in col_names) and \
+    if source_name=='Bloomington' and \
+        len(col_names)==2 and \
+        all([x==civilian_col_name] for x in types) and \
+        all([any([y.lower() in x.lower() for y in ['_male','_female'] for x in col_names])]) and \
+        all([x.startswith('suspect_gender') for x in col_names]):
+        # This dataset has separate boolean columns for each race 
+        # Indicate that all columns should be combined into a single column
+        col_names = [col_names]
+        types = [types[0]]
+    elif ("subject_sex" in col_names or "officer_sex" in col_names) and \
         any([x.startswith("raw_") for x in col_names]):
         # Stanford data
         old_col_names = col_names
@@ -280,7 +295,16 @@ def _find_gender_col_type_advanced(df, source_name, col_names, types, col_map, c
 
 
 def _find_race_col_type_advanced(df, source_name, col_names, types, col_map, civilian_col_name, officer_col_name):
-    if ("subject_race" in col_names or "officer_race" in col_names) and \
+    if source_name=='Bloomington' and \
+        len(col_names)>=3 and \
+        all([x==civilian_col_name] for x in types) and \
+        all([any([y.lower() in x.lower() for y in ['white','_aa_','asian','indian'] for x in col_names])]) and \
+        all([x.startswith('suspect_race') for x in col_names]):
+        # This dataset has separate boolean columns for each race 
+        # Indicate that all columns should be combined into a single column
+        col_names = [col_names]
+        types = [types[0]]
+    elif ("subject_race" in col_names or "officer_race" in col_names) and \
         any([x.startswith("raw_") for x in col_names]):
         # Stanford data
         old_col_names = col_names
@@ -364,6 +388,7 @@ class Standardizer:
     def __init__(self, df, table_type, year, 
             known_cols={}, 
             source_name=None, 
+            state=None,
             keep_raw=True,
             agg_race_cat=False,
             race_cats=defs.get_race_cats(),
@@ -377,6 +402,7 @@ class Standardizer:
         self.year = year
         self.known_cols = defaultdict(lambda: None, known_cols)
         self.source_name = source_name
+        self.state = state
         self.keep_raw=keep_raw
         self.agg_race_cat=agg_race_cat
         self.race_cats=race_cats
@@ -465,6 +491,7 @@ class Standardizer:
     def _find_col_matches(self, id, match_substr, 
         known_col_names=None, 
         only_table_types=None,
+        required_table_types=[],
         exclude_table_types=[], 
         exclude_col_names=[], 
         secondary_patterns=[], 
@@ -475,6 +502,9 @@ class Standardizer:
         search_data=False,
         word_replacements={},
         tables_to_exclude=[]):
+
+        if only_table_types is not None:  # Make sure that the tables can have this column include the tables that must have this column
+            only_table_types.extend(required_table_types)
 
         logger.info(f"Searching for {id} column")
         if self.table_type in exclude_table_types or \
@@ -487,7 +517,7 @@ class Standardizer:
                 logger.info(f"\tTable type {self.table_type} is excluded from tables to search for {id} column. Skipping...")
                 return []
 
-        officer_terms = ["officer","deputy", "empl"]
+        officer_terms = ["officer","deputy", "empl", 'personnel']
         if known_col_names != None and (not isinstance(known_col_names, list) or any([x is not None for x in known_col_names])):
             if isinstance(known_col_names,str):
                 known_col_names = [known_col_names]
@@ -577,7 +607,7 @@ class Standardizer:
                 match_cols = validator(self.df, match_cols, *validate_args)
                 logger.info(f"Validated data in column(s) {match_cols} as potential {id} column")
 
-            if search_data and len(match_cols)==0:
+            if (search_data or self.table_type in required_table_types) and len(match_cols)==0:
                 logger.info(f"Testing data in all columns as potential {id} column")
                 match_cols = validator(self.df, self.df.columns, *validate_args)
                 logger.info(f"Validated data in column(s) {match_cols} as potential {id} column")
@@ -713,7 +743,7 @@ class Standardizer:
                     try:
                         col = df[col_name]
                         # Function for validating a column indicates whether the person described is a civilian or officer
-                        new_col = convert.convert(convert.convert_off_or_civ, col)
+                        new_col = convert.convert(convert.convert_off_or_civ, col, no_id='error')
                         vals = new_col.unique()
 
                         if not any([isinstance(x,str) for x in vals]) or (defs._roles.SUBJECT not in vals and defs._roles.OFFICER not in vals):
@@ -747,7 +777,8 @@ class Standardizer:
 
             match_cols = self._find_col_matches("Is Person Officer or Subject", ["Civilian_Officer","ROLE"], 
                 known_col_names=self.known_cols[defs.columns.SUBJECT_OR_OFFICER],
-                only_table_types = [defs.TableType.USE_OF_FORCE, defs.TableType.USE_OF_FORCE_SUBJECTS_OFFICERS, defs.TableType.SHOOTINGS],
+                only_table_types = [defs.TableType.USE_OF_FORCE, defs.TableType.SHOOTINGS],
+                required_table_types=[defs.TableType.USE_OF_FORCE_SUBJECTS_OFFICERS, defs.TableType.COMPLAINTS_SUBJECTS_OFFICERS],
                 exclude_col_names=[("not equal","SubjectRole")],  # Subject role would be role of subject not whether person is subject or officer
                 validator=role_validator,
                 always_validate=True)
@@ -854,7 +885,7 @@ class Standardizer:
                         defs.TableType.USE_OF_FORCE_SUBJECTS_OFFICERS, defs.TableType.SHOOTINGS, defs.TableType.SHOOTINGS_OFFICERS, 
                         defs.TableType.SHOOTINGS_SUBJECTS]
         
-        match_cols = self._find_col_matches("fatal", ['fatal','fatality','deceased','died'], 
+        match_cols = self._find_col_matches("fatal", ['fatal','fatality','deceased','died','death'], 
                                             exclude_col_names=[v for k,v in self.col_map.items() if "INJURY" in k],
                                             validator=_fatal_validator,
                                             only_table_types=injury_tables,
@@ -892,6 +923,7 @@ class Standardizer:
 
         match_cols = self._find_col_matches("zip_code", ['zip','zipcode'],
                                             validator=_zip_code_validator,
+                                            validate_args=[self.state],
                                             always_validate=True)
         if len(match_cols) > 1:
             raise NotImplementedError()
@@ -941,6 +973,7 @@ class Standardizer:
                     ("- OFFICERS" in self.table_type and "SUBJECTS" not in self.table_type)
             for k in range(len(eth_cols)):
                 if "officer" in eth_cols[k].lower() or \
+                   "personnel" in eth_cols[k].lower() or \
                     "offcr" in eth_cols[k].lower() or is_officer_table or \
                     (self.source_name=="Orlando" and self.table_type==defs.TableType.SHOOTINGS and eth_cols[k]=="ethnicity"):
                     eth_types.append(defs.columns.ETHNICITY_OFFICER)
@@ -1063,7 +1096,7 @@ class Standardizer:
                 ("- OFFICERS" in self.table_type and "SUBJECTS" not in self.table_type)
             is_subject_table = ("- SUBJECTS" in self.table_type and "OFFICERS" not in self.table_type)
             # mos = Member of Service
-            off_words = ["off", "deputy", "employee", "ofc", "empl", 'emp','mos']
+            off_words = ["off", "deputy", "employee", "ofc", "empl", 'emp','mos', 'personnel']
             civilian_terms = ["citizen","subject","suspect","civilian", "cit", "offender",]
             not_off_words = ["offender"]
 
@@ -1572,7 +1605,7 @@ class Standardizer:
                 return
             else:
                 cols = [self.col_map[x] for x in [age_col, race_col, eth_col, gender_col] if x in self.col_map]
-                if len(cols)<2:
+                if len(cols)<2 or any([isinstance(x, list) for x in cols]):
                     return
 
                 all_bad = self.df[cols].isnull().all()
@@ -1874,7 +1907,7 @@ class Standardizer:
                         self.col_map.pop(col_name)
                         return
 
-                    test = [int(x)==y if ((isinstance(x,Number) and pd.notnull(x)) or (type(x)==str and x.strip().isdigit())) 
+                    test = [int(float(x))==y if ((isinstance(x,Number) and pd.notnull(x)) or is_str_number(x)) 
                             else False for x,y in zip(self.df[self.col_map[col_name]],col)]
                     sum_test = sum(test)
                     if not check_column(self.col_map[col_name], "age") and  sum_test / len(test) < 0.2:
@@ -1890,7 +1923,7 @@ class Standardizer:
                                 x = x.lower().strip() if isinstance(x,str) else x
                                 if pd.isnull(x) or (isinstance(x,str) and x in ["na", "unknown"]):
                                     continue
-                                elif isinstance(x,Number) or  (isinstance(x,str) and x.isdigit()):
+                                elif isinstance(x,Number) or is_str_number(x):
                                     x = int(x)
                                     if x<0 or x>max_age:
                                         badvals+=1
@@ -1973,6 +2006,9 @@ def _race_validator(df, cols_test, source_name, mult_data=_MultData()):
         # Anything checked beyond this point is less likely to be a race column
         col = df[col_name]
         try:
+            if len(col.unique())>100:
+                # There shouldn't be this many race values
+                continue
             if "address" in col_name.lower() or \
                 (search_all and pd.api.types.is_numeric_dtype(col.dtype)):
                 # Addresses are complicated and could trigger false alarms
@@ -2026,7 +2062,7 @@ def _race_validator(df, cols_test, source_name, mult_data=_MultData()):
                 continue
 
             if col.apply(lambda x: isinstance(x,list)).mean() > 0.95 and \
-                col.apply(lambda x: any([isinstance(y,Number) or (isinstance(y,str) and y.isdigit()) for y in x]) 
+                col.apply(lambda x: any([isinstance(y,Number) or is_str_number(y) for y in x]) 
                           if isinstance(x,list) else False).mean() > 0.95:
                 # Date columns can result in lists that are mostly of numbers
                 continue
@@ -2158,17 +2194,19 @@ def _firearm_validator(df, cols_test):
 
     return match_cols
 
-def _zip_code_validator(df, cols_test):
+def _zip_code_validator(df, cols_test, state):
     match_cols = []
     for col_name in cols_test:
         try:
-            possible_zips = df[col_name].apply(lambda x: isinstance(x, Number) or (isinstance(x,str) and x.isdigit()) and \
-                                               pd.notnull(x) and int(x)>=1e4 and int(x)<1e5)
-            if possible_zips.mean()>0.5:
+            min_zip = 1e3 if state=='Vermont' else 1e4
+            possible_zips = df[col_name].apply(lambda x: (isinstance(x, Number) or is_str_number(x)) and \
+                                               pd.notnull(x) and int(x)>=min_zip and int(x)<1e5)
+            if (m:=possible_zips.mean())>0.5 or \
+                (m>=0.1 and m+df[col_name].apply(lambda x: pd.isnull(x) or (isinstance(x,str) and x.strip().upper() in ['','UNKNOWN'])).mean()>=0.99):
                 match_cols.append(col_name)
             elif (df[col_name]=='UNKNOWN').any() and \
                 len(m:=df[col_name][df[col_name]!='UNKNOWN'])/len(df)>0.3 and \
-                m.apply(lambda x: isinstance(x, Number) or (isinstance(x,str) and x.isdigit()) and \
+                m.apply(lambda x: (isinstance(x, Number) or is_str_number(x)) and \
                                                pd.notnull(x) and int(x)>=1e4 and int(x)<1e5).mean()==1:
                 match_cols.append(col_name)
             else:

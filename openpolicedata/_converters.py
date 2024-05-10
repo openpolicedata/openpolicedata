@@ -23,6 +23,8 @@ _p_age_range = re.compile(r"""
     $                   # End of string
     """, re.VERBOSE)
 
+_p_nonlatino = re.compile(r'[\s,]*NON\-?(HISPANIC|LATINO)(\s|$)+')
+
 
 def convert(converter, col, source_name="", cats=None, std_map=None, delim=None, mult_type=None, item_num=None, 
             no_id="keep", agg_cat=False):
@@ -31,12 +33,21 @@ def convert(converter, col, source_name="", cats=None, std_map=None, delim=None,
     if no_id not in ["keep", "null", "error","test"]:
         raise ValueError(f"no_id is {no_id}. It should be 'keep', 'null', or 'error'.")
     
-    if len(col.shape)==2 and col.shape[1]==2:
-        # 2 columns are to be merged because 1 or the other is always null
-        col_new = col[col.columns[0]].copy()
-        is_null = col_new.isnull()
-        col_new[is_null] = col[col.columns[1]][is_null]
-        col = col_new
+    is_boolean_cols = False
+    if len(col.shape)==2: # More than 1 column was passed in
+        is_boolean_cols = (col.isnull() | col.isin(['True','False','true','false', True, False])).all().all()
+        if is_boolean_cols and mult_type!=MultType.SINGLE:
+            raise NotImplementedError(f"Multi-column input is not possible for {mult_type} case. "+
+                                      "Please submit an issue: https://github.com/openpolicedata/openpolicedata/issues")
+        if not is_boolean_cols:
+            if col.shape[1]==2:
+                # 2 columns are to be merged because 1 or the other is always null
+                col_new = col[col.columns[0]].copy()
+                is_null = col_new.isnull()
+                col_new[is_null] = col[col.columns[1]][is_null]
+                col = col_new
+            else:
+                raise ValueError(f"Unknown multi-column input to convert with columns {col.columns}")
     
     # value_counts handles more data types when getting unique values than .unique()
     counts = col.value_counts(dropna=False)
@@ -54,12 +65,58 @@ def convert(converter, col, source_name="", cats=None, std_map=None, delim=None,
     elif mult_type == MultType.WITH_COUNTS:
         return std_with_counts(col, vals, std_map, delim, converter, no_id, source_name, cats, agg_cat)
     else:
+        if is_boolean_cols:
+            # This currently has only been tested on and needed for Bloomington use of force data
+            col_names = col.columns
+            vals = []
+            for c in col_names:
+                words = utils.split_words(c)
+                last = ""
+                v = []
+                for w in words:
+                    w = w.lower()
+                    if last=='non':
+                        last = ''
+                    elif w=='non':
+                        last = w
+                    elif w not in ['suspect', 'race', 'gender']:
+                        v.append(w)
+
+                if len(v)==0:
+                    raise ValueError(f"Unable to parse column name {c}")
+                vals.append(', '.join(v))
+
         for x in vals:
             std_map[x] = converter(x, no_id, source_name, cats, agg_cat)
             if isinstance(std_map[x], list):
                 std_map[x].sort()
                 std_map[x] = ", ".join(std_map[x])
-        return col.map(std_map)
+        
+        if is_boolean_cols:
+            std_map = {c:std_map[v] for c,v in zip(col_names, vals)}
+            def convert_bools(x):
+                out = set()
+                for c in x.index:
+                    if x[c] in ['true','True'] or x[c]==True:
+                        if isinstance(std_map[c],list):
+                            out.update(std_map[c])
+                        else:
+                            out.add(std_map[c])
+
+                out = list(out)
+                if len(out)==1:
+                    return out[0]
+                elif len(out)>1:
+                    if agg_cat and defs.get_race_cats()[defs._race_keys.LATINO] in out:
+                        return defs.get_race_cats()[defs._race_keys.LATINO]
+                    else:
+                        return ", ".join(out)
+                else:
+                    return defs._race_keys.UNSPECIFIED
+
+            return col.apply(convert_bools, axis=1)
+        else:
+            return col.map(std_map)
     
 
 def convert_off_or_civ(x, no_id, *args, **kwargs):
@@ -71,7 +128,7 @@ def convert_off_or_civ(x, no_id, *args, **kwargs):
         return defs._roles.UNSPECIFIED
     elif x in ["OFFICER"]:
         return defs._roles.OFFICER
-    elif x in ["SUBJECT","CIVILIAN"]:
+    elif x in ["SUBJECT","CIVILIAN",'CITIZEN']:
         return defs._roles.SUBJECT
     elif no_id in ["error","test"]:
         raise ValueError(f"Unknown person type {orig}")
@@ -103,6 +160,7 @@ def _create_age_range_lut(x, no_id, source_name, *args, **kwargs):
     orig=x
     if type(x)==str:
         x = x.upper().strip()
+        x = re.sub(r'[A-Z] \- ','', x)  # Oakland Stops data includes a category label up front such as: 'B - 18-29'. Remove this.
     if isinstance(x,str) and _p_age_range.search(x)!=None:
         return _p_age_range.sub(r"\1-\3", x)
     elif isinstance(x,str) and p_over.search(x)!=None:
@@ -254,6 +312,81 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
             # Replace numerical code with default value
             x = map_dict[x]
 
+    if pd.isnull(x):
+        if has_unspecified:
+            return race_cats[defs._race_keys.UNSPECIFIED]
+        elif no_id=="error":
+            raise ValueError(f"Null value found in race column: {orig}")
+        else:
+            # Same result whether no_id is keep or null
+            return ""
+                 
+    x = x.strip().upper()
+
+    if source_name in ["Austin", "Bloomington", "New York City", "St. John", "Louisville", "Charleston", 
+                        "Los Angeles", "Dallas","Chicago"]:
+        # Handling dataset-specific letter codes
+        if source_name=="Austin":
+            # Per email with Kruemcke, Adrian <Adrian.Kruemcke@austintexas.gov> on 2022-06-17
+            map_dict = {"M":"Middle Eastern", "P":"Pacific Islander/Native Hawaiian", "N":"Native American/Alaskan", "O":"Other"}
+        elif source_name=="Bloomington":
+            # https://data.bloomington.in.gov/Police/Citizen-Complaints/kit3-8bua/about_data
+            map_dict = {
+                "A": "Asian/Pacific Island, Non-Hispanic", 
+                "B": "African American, Non-Hispanic", 
+                "C": "Hawaiian/Other Pacific Island, Hispanic", 
+                "H": "Hawaiian/Other Pacific Island, Non-Hispanic", 
+                "I": "Indian/Alaskan Native, Non-Hispanic", 
+                "K": "African American, Hispanic", 
+                "L": "Caucasian, Hispanic", 
+                "N": "Indian/Alaskan Native, Hispanic", 
+                "P": "Asian/Pacific Island, Hispanic", 
+                "S": "Asian, Non-Hispanic", 
+                "T": "Asian, Hispanic", 
+                "U": "Unknown", 
+                "W": "Caucasian, Non-Hispanic"
+            } 
+        elif source_name == "New York City":
+            # https://www.nyc.gov/assets/nypd/downloads/zip/analysis_and_planning/stop-question-frisk/SQF-File-Documentation.zip
+            map_dict = {"P":"Black-Hispanic", "Q":"White-Hispanic", "X":"Unknown","Z":"Other"}
+        elif source_name == "St. John":
+            # https://stjohnin.gov/PD/PDI/Warnings/2019Warnings.php
+            map_dict = {"L":"White/Hispanic/Latin","M":"Multiracial","N":"Asian Indian"}
+        elif source_name == "Louisville":
+            map_dict = {"A":"Asian/Pacific Islander", "U":"Undeclared", "IB":"Indian/India/Burmese", "M":"Middle Eastern Descent","AN":"Alaskan Native"}
+        elif source_name=="Charleston":
+            # Based on correspondance with City of Charleston Ombudsman
+            map_dict = {"A":"Asian or Pacific Islander", "AI": "Alaskan or American Indian", "AP":"Asian or Pacific Islander",
+                        "BK":"Black","MR":"Multi-Racial","AO":"Other"}
+        elif source_name=="Los Angeles":
+            # https://data.lacity.org/Public-Safety/Traffic-Collision-Data-from-2010-to-Present/d5tf-ez2w
+            map_dict = {"A":"Other Asian", "B":"Black", "C":"Chinese", "D":"Cambodian", "F":"Filipino", 
+                        "G":"Guamanian", "H":"Hispanic/Latin/Mexican", "I":"American Indian/Alaskan Native", 
+                        "J":"Japanese", "K":"Korean", "L":"Laotian", "O":"Other", "P":"Pacific Islander", 
+                        "S":"Samoan", "U":"Hawaiian", "V":"Vietnamese", "W":"White", "X":"Unknown", "Z":"Asian Indian"}
+        elif source_name=="Dallas":
+            # Based on Bloomington and St. John usage as well as names associated with usage
+            map_dict = {"L":"Caucasian, Hispanic"}
+        elif source_name=="Chicago":
+            # https://home.chicagopolice.org/wp-content/uploads/2020/08/ISR-Data-Dictionary.csv
+            map_dict = {
+                'BLK' : 'BLACK',
+                'WHI' : 'WHITE',
+                'API' : 'ASIAN/PACIFIC ISLANDER',
+                'WBH' : 'BLACK HISPANIC',
+                'WWH' : 'WHITE HISPANIC',
+                'I' : 'AMER IND/ALASKAN NATIVE',
+                'U' : 'UNKNOWN',
+                'P' : 'NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER',
+                'WHT' : 'WHITE'
+            }
+
+        if x in map_dict:
+            x = map_dict[x].upper()
+
+    if _p_nonlatino.search(x) and len(m:=_p_nonlatino.sub('', x))>0:
+        x = m
+
     if isinstance(x,str):
         # Look for code: {Race_Abbreviation_Initial} {- or =} {Full name}
         abbrev_full_match = re.search(r"^([\w\s/\.]+)\s?[-=]\s?([\w\s/\.]+)$",x)
@@ -273,7 +406,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
             delim = delim[0]
             race_list = []
             for v in x.split(delim):
-                if (v=="INDIAN" and "BURMESE" in x):
+                if (v=="INDIAN" and "BURMESE" in x) or v=='N':  # N is non-Latino, which can be ignored
                     # Handle special case to prevent setting someone from country of India to Indigenous
                     continue
                 new_val = _create_race_lut(v, no_id, source_name, race_cats, agg_cat, known_single=True)
@@ -306,58 +439,9 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
                 return race_cats[defs._race_keys.LATINO]
             else:
                 return race_list
-                 
-        # Clean x
-        x = x.upper().replace("_", " ").replace("*","").replace("-"," ").replace(".","")
-        x = x.strip()
 
-        if source_name in ["Austin", "Bloomington", "New York City", "St. John", "Louisville", "Charleston", 
-                           "Los Angeles", "Dallas","Chicago"]:
-            # Handling dataset-specific letter codes
-            if source_name=="Austin":
-                # Per email with Kruemcke, Adrian <Adrian.Kruemcke@austintexas.gov> on 2022-06-17
-                map_dict = {"M":"Middle Eastern", "P":"Pacific Islander/Native Hawaiian", "N":"Native American/Alaskan", "O":"Other"}
-            elif source_name=="Bloomington":
-                # https://data.bloomington.in.gov/dataset/bloomington-police-department-employee-demographics
-                map_dict = {"K":"African American, Hispanic", "L":"Caucasian, Hispanic", "N":"Indian/Alaskan Native, Hispanic",
-                            "P":"Asian/Pacific Island, Hispanic"}
-            elif source_name == "New York City":
-                # https://www.nyc.gov/assets/nypd/downloads/zip/analysis_and_planning/stop-question-frisk/SQF-File-Documentation.zip
-                map_dict = {"P":"Black-Hispanic", "Q":"White-Hispanic", "X":"Unknown","Z":"Other"}
-            elif source_name == "St. John":
-                # https://stjohnin.gov/PD/PDI/Warnings/2019Warnings.php
-                map_dict = {"L":"White/Hispanic/Latin","M":"Multiracial","N":"Asian Indian"}
-            elif source_name == "Louisville":
-                map_dict = {"A":"Asian/Pacific Islander", "U":"Undeclared", "IB":"Indian/India/Burmese", "M":"Middle Eastern Descent","AN":"Alaskan Native"}
-            elif source_name=="Charleston":
-                # Based on correspondance with City of Charleston Ombudsman
-                map_dict = {"A":"Asian or Pacific Islander", "AI": "Alaskan or American Indian", "AP":"Asian or Pacific Islander",
-                            "BK":"Black","MR":"Multi-Racial","AO":"Other"}
-            elif source_name=="Los Angeles":
-                # https://data.lacity.org/Public-Safety/Traffic-Collision-Data-from-2010-to-Present/d5tf-ez2w
-                map_dict = {"A":"Other Asian", "B":"Black", "C":"Chinese", "D":"Cambodian", "F":"Filipino", 
-                            "G":"Guamanian", "H":"Hispanic/Latin/Mexican", "I":"American Indian/Alaskan Native", 
-                            "J":"Japanese", "K":"Korean", "L":"Laotian", "O":"Other", "P":"Pacific Islander", 
-                            "S":"Samoan", "U":"Hawaiian", "V":"Vietnamese", "W":"White", "X":"Unknown", "Z":"Asian Indian"}
-            elif source_name=="Dallas":
-                # Based on Bloomington and St. John usage as well as names associated with usage
-                map_dict = {"L":"Caucasian, Hispanic"}
-            elif source_name=="Chicago":
-                # https://home.chicagopolice.org/wp-content/uploads/2020/08/ISR-Data-Dictionary.csv
-                map_dict = {
-                    'BLK' : 'BLACK',
-                    'WHI' : 'WHITE',
-                    'API' : 'ASIAN/PACIFIC ISLANDER',
-                    'WBH' : 'BLACK HISPANIC',
-                    'WWH' : 'WHITE HISPANIC',
-                    'I' : 'AMER IND/ALASKAN NATIVE',
-                    'U' : 'UNKNOWN',
-                    'P' : 'NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER',
-                    'WHT' : 'WHITE'
-                }
-
-            if x.upper() in map_dict:
-                x = map_dict[x.upper()].upper()
+    # Clean x
+    x = x.upper().replace("_", " ").replace("*","").replace("-","").replace(".","").strip()
 
     if pd.notnull(x):
         # Check if value is part of race_cats
@@ -366,30 +450,24 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
             # Key is always be a string
             if k.upper()==str(orig).upper() or k.upper()==str(x) or str(v)==str(orig).upper() or str(v)==str(x):
                 return v
-    
-    if pd.isnull(x):
-        if has_unspecified:
-            return race_cats[defs._race_keys.UNSPECIFIED]
-        elif no_id=="error":
-            raise ValueError(f"Null value found in race column: {orig}")
-        else:
-            # Same result whether no_id is keep or null
-            return ""
         
     def is_latino(x):
         if isinstance(x,str):
             x = x.upper().replace("-","").replace(" ","")
-            return ("HISPANIC" in x and "NONHISPANIC" not in x) or \
-                ("LATINO" in x and "NONLATINO" not in x)
+            return "HISPANIC" in x or "LATINO" in x
         else:
             return False
 
+    x_no_space = x.replace(" ","")
     if has_unspecified and (x in ["MISSING","NOT SPECIFIED", "", "NOT RECORDED","N/A", "NOT REPORTED", "NONE"] or \
-        (type(x)==str and ("NO DATA" in x or ("NOT APP" in x and x not in ["NOT APPLICABLE (NON-U.S.)",'NOT APPLICABLE (NON US)']) or "NO RACE" in x or "NULL" in x))):
+        (type(x)==str and ("NO DATA" in x or ("NOT APP" in x and x not in ["NOT APPLICABLE (NONUS)",'NOT APPLICABLE (NON US)']) or "NO RACE" in x or "NULL" in x))):
         return race_cats[defs._race_keys.UNSPECIFIED]
-    if has_white and x.replace(" ","") in ["W", "CAUCASIAN", "WN", "WHITE", "WHTE","WHITENONLATINO", "WHITENONHISPANIC", "WHITE,OTHER"]:  # WN = White-Non-Hispanic
+    if has_white and x_no_space in ["W", "CAUCASIAN", "WN", "WHITE", "WHTE", "WHITE,OTHER"]:  # WN = White-Non-Hispanic
         return race_cats[defs._race_keys.WHITE]
-    if has_black and (x in ["B", "AFRICAN AMERICAN", "BLCK", "BLK", "BLACE"] or re.search("BLACK?($|[^A-Za-z])",x)) and not is_latino(x):
+    if has_black and (x in ["B", "AFRICAN AMERICAN", "BLCK", "BLK", "BLACE",'AFR AMERICAN'] or \
+                      x_no_space in ["AFRICANAMERICAN"] or \
+                      re.search("BLACK?($|[^A-Za-z])",x)) \
+                      and not is_latino(x):
         if x.count("BLACK") > 1:
             raise ValueError(f"The value of {x} likely contains the races for multiple people")
         return race_cats[defs._race_keys.BLACK]
@@ -405,23 +483,23 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
                 return race_cats[defs._race_keys.MIDDLE_EASTERN_SOUTH_ASIAN]
         else:
             return race_cats[defs._race_keys.MIDDLE_EASTERN] if defs._race_keys.MIDDLE_EASTERN in race_cats else race_cats[defs._race_keys.MIDDLE_EASTERN_SOUTH_ASIAN]
-    if (has_asian or has_aapi) and (x in ["A", 'ORIENTAL'] or "ASIAN" in x.replace("CAUCASIAN","")) and x not in ["SOUTHWEST ASIAN"] and "INDIAN" not in x:
+    if (has_asian or has_aapi) and (x in ["A", 'ORIENTAL', 'AA', 'ASN'] or "ASIAN" in x.replace("CAUCASIAN","")) and x not in ["SOUTHWEST ASIAN"] and "INDIAN" not in x:
         if has_aapi and ("PAC" in x or "HAWAI" in x):
             return race_cats[defs._race_keys.AAPI] 
         else:
             return race_cats[defs._race_keys.ASIAN] if has_asian else race_cats[defs._race_keys.AAPI]
-    if (has_pi or has_aapi) and ("HAWAI" in x or "PACIFICIS" in x.replace(" ","").replace("_","") or \
-                                 "PACISL" in x.replace(" ","")):
+    if (has_pi or has_aapi) and ("HAWAI" in x or "PACIFIC" in x_no_space or \
+                                 "PACISL" in x_no_space):
         return race_cats[defs._race_keys.PACIFIC_ISLANDER] if has_pi else race_cats[defs._race_keys.AAPI]
     if has_latino and x in ["H", "WH", "HISPANIC", "LATINO", "HISPANIC OR LATINO", "LATINO OR HISPANIC", 
                             "HISPANIC/LATINO", "LATINO/HISPANIC",'HISPANIC/LATIN/MEXICAN','HISP']:
         return race_cats[defs._race_keys.LATINO] 
     if has_indigenous and (x in ["I", "INDIAN", "ALASKAN NATIVE", "AN", "AI", "AL NATIVE","A/INDIAN", "NAT AM"] or "AMERICAN IND" in x.replace("II","I") or \
-        "NATIVE AM" in x or  "AMERIND" in x.replace(" ","") or "ALASK" in x or "AMIND" in x.replace(" ","") or \
+        "NATIVE AM" in x or  "AMERIND" in x_no_space or "ALASK" in x or "AMIND" in x_no_space or \
         "NAT AMER" in x):
         return race_cats[defs._race_keys.INDIGENOUS] 
     if has_multiple and ("OR MORE" in x or "MULTI" in x or \
-        x.replace(" ","") in ["MIXED","BIRACIAL","MIXEDRACE","MORE THAN TWO RACES".replace(" ",""),
+        x_no_space in ["MIXED","BIRACIAL","MIXEDRACE","MORE THAN TWO RACES".replace(" ",""),
                               "MORE THAN 2 RACES".replace(" ","")]):
         return race_cats[defs._race_keys.MULTIPLE]
     if defs._race_keys.OTHER_UNKNOWN in race_cats and "UNK" in x and "OTH" in x:
@@ -435,8 +513,8 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
         # This attempts to categorize more cases based on U.S. Census definitions:
         # https://www.census.gov/programs-surveys/decennial-census/decade/2020/planning-management/release/faqs-race-ethnicity.html
         # Cases include here are based on data values that have been observed
-        if has_latino and (("HISP" in x and "NONHISP" not in x.replace(" ","")) or \
-                           ("LATINO" in x and "NONLATINO" not in x.replace(" ","")) or \
+        if has_latino and (("HISP" in x and "NONHISP" not in x_no_space) or \
+                           ("LATIN" in x and "NONLATINO" not in x_no_space) or \
                             x in ["MEXICAN"]):
             # agg_cat forces Latino of all races
             return race_cats[defs._race_keys.LATINO] 
@@ -459,7 +537,8 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
             raise ValueError(f"Unknown value in race column: {orig}")
         elif no_id=="test":
             if x in ["MALE","FEMALE","GIVING ANYTHING OF VALUE","REFUSED", "NA","M","F","OTHER/NOT REPORTED", 
-                     'UNOCCUPIED VEHICLE','MIDDLE EASTERN OR NORTH AFRICAN','P','PAKISTANI','DUPLICATE'] or \
+                     'UNOCCUPIED VEHICLE','MIDDLE EASTERN OR NORTH AFRICAN','P','PAKISTANI','DUPLICATE',
+                     'NOT AVAILABLE'] or \
                 (source_name in ["Chapel Hill","Lansing","Fayetteville"] and x in ["S","P"]) or \
                 (source_name=="Burlington" and x in ["EXPUNGED"]) or \
                 (source_name in ["Cincinnati","San Diego"] and x in ["F","S","P"]) or \
@@ -472,11 +551,12 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
                 (source_name in ["Dallas"] and x in ["NA"]) or \
                 (source_name in ["Sacramento"] and x in ["CUBAN","CARRIBEAN"]) or \
                 (source_name in ["New York City"] and x in ["SOUTHWEST"]) or \
-                (source_name in ["New York City"] and x in ["SOUTHWEST"]) or \
+                (source_name in ["Wallkill"] and x in ["IND",'N','M']) or \
                 (x=="UN" and source_name=="State Police") or \
                 (x=="P" and source_name=="Pittsfield") or \
                 (x=="PENDING RELEASE" and source_name=="Portland") or \
                 (x=="IRAK" and source_name=="Chattanooga") or \
+                (x=="N" and source_name=="Bremerton") or \
                 (x=="W\nW" and source_name=="Sparks") or \
                 (x in ['E','P'] and source_name=="Tucson") or \
                 ("DOG" in x) or \
@@ -582,7 +662,7 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
     elif defs._gender_keys.GENDER_NONBINARY in gender_cats and x in ["NONBINARY"]:
         return gender_cats[defs._gender_keys.GENDER_NONBINARY]
     elif defs._gender_keys.TRANSGENDER_OR_GENDER_NONCONFORMING in gender_cats and (x in [
-        "Gender Diverse (gender non-conforming and/or transgender)".upper().replace("-","").replace("_","").replace(" ",""),
+        "Gender Diverse (gender non-conforming and/or transgender)".upper().replace("-","").replace(" ",""),
         "GENDERNONCONFORMING"] or "TGNC" in x):
         return gender_cats[defs._gender_keys.TRANSGENDER_OR_GENDER_NONCONFORMING]
     elif defs._gender_keys.TRANSGENDER_MALE in gender_cats and (x in ["TRANSGENDER MALE".replace(" ","")] or \
@@ -602,7 +682,7 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
     
     if no_id=="test":
         bad_data = ["BLACK","WHITE",'HISPANIC','ASIAN','FEMALE10','DUPLICATE']
-        if "EXEMPT" in x or x in ["DATAPENDING", "NOTAPPLICABLE","N/A",'NA'] or ("BUSINESS" in x and source_name=="Cincinnati"):
+        if "EXEMPT" in x or x in ["DATAPENDING", "NOTAPPLICABLE","N/A",'NA','NOTAVAILABLE'] or ("BUSINESS" in x and source_name=="Cincinnati"):
             return orig
         elif x in bad_data or \
             (source_name=="New York City" and (x=="Z" or x.isdigit())) or \
@@ -613,15 +693,19 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
             (source_name=="Columbia" and x in ["B"]) or \
             (source_name=="Burlington" and x in ["EXPUNGED"]) or \
             (source_name=="Fairfax County" and x in ["X",'O']) or \
+            (source_name=='Albemarle County' and x in ['N']) or \
             (source_name in ["Seattle","New Orleans","Menlo Park","Rutland"] and x in ["D","N"]) or \
             (source_name=="Los Angeles County" and x=="0") or \
-            (x in ["W","NA"] and source_name in ["Cincinnati","Beloit"]) or \
+            (x in ["W","NA"]) or \
+            (x in ['L'] and source_name=='Bloomington') or \
+            (x in ['GROUP'] and source_name=='Asheville') or \
             (x=="MA" and source_name in ["Lincoln"]) or \
             (x=="P" and source_name=="Fayetteville") or \
             (x=="5" and source_name=="Lincoln") or \
             (x in ["MALE,MALE"] and source_name=="Chattanooga") or \
             (x=="PENDINGRELEASE" and source_name=="Portland") or \
             (x in ["N","H"] and source_name=="Los Angeles") or \
+            (source_name=='Bremerton' and x in ['B', 'W', 'A','I']) or \
             (x=="X" and source_name in ["Sacramento", "State Police", "Washington D.C.","Northampton"]) or \
             "DOG" in x or \
             x in ["UNDISCLOSE","UNDISCLOSED","PREFER TO SELF DESCRIBE".replace(" ",""),'NONBINARY/THIRDGENDER',
@@ -646,7 +730,8 @@ def _create_injury_lut(x, no_id, source_name, cats, *args, **kwargs):
         else:
             return "INJURED" if x>0 else "NO INJURY"
     orig = x
-    x = x.upper().replace('-',' ').replace('*','').strip()
+    x = x.upper().replace('-',' ').replace('*','').replace('SUBJECT','').strip()
+    x = re.sub(r'OF[FI]{2}CER','', x).strip()  # Handle misspelling officer
 
     if len(x)==0:
         return "UNSPECIFIED"
@@ -666,7 +751,7 @@ def _create_injury_lut(x, no_id, source_name, cats, *args, **kwargs):
     if is_fatal or x in fatal_words:
         return "FATAL"
     elif x.startswith('NO INJUR') or x.startswith('NONE') or x.startswith('NO COMPLAINT') or\
-        x in ["NOT INJURED",'NEITHER','NO','N', "MISS", 'SHOOT AND MISS','FALSE','NO VISIBLE INJURY','UNINJURED']:
+        x in ["NOT INJURED",'NEITHER','NO','N', "MISS", 'SHOOT AND MISS','FALSE','NO VISIBLE INJURY','UNINJURED', 'SHOW OF FORCE']:
         return "NO INJURY"
     elif contains_yes or x in nonfatal_words or x in ['Y','YES','TRUE'] or \
         any([x.startswith(y) for y in ['COMPLAINED OF','COMPLAINT OF']]) or \
@@ -676,7 +761,8 @@ def _create_injury_lut(x, no_id, source_name, cats, *args, **kwargs):
                               'SCRATCH','NUMBNESS','BREATHING','CUT','STUN', 'MARKS', 'EYE', 'PEELING', 'HURT', 'ELBOW', 'KNEE',
                               'SOFT TISSUE','BLOOD','HEAD','SORE','SHOULDER', 'MINOR INJUR', 'FINGER', 'IMPACT', 'FACE', 'ARM',
                               'MOUTH', 'BACK','RIB', 'THUMB','SHIN',' EAR', 'ACHILLES', 'STRUCK', 'LEG', 'SERIOUS',
-                              'CONCUSSION','FRACTURE','CANINE BITE', 'MARK','BURN', 'MINOR', 'DISABL', 'PHYSICAL INJURY']]):
+                              'CONCUSSION','FRACTURE','CANINE BITE', 'MARK','BURN', 'MINOR', 'DISABL', 'PHYSICAL INJURY',
+                              'TREATED','TAKEN TO HOSPITAL']]):
         return "INJURED"
     elif 'NALOXONE' in x:
         return orig
@@ -707,7 +793,7 @@ def _create_fatal_lut(x, no_id, source_name, cats, *args, **kwargs):
             return "YES" if x>0 else "NO"
     orig = x
     x = x.upper().strip()
-    if x in ["FATAL","YES", "Y"]:
+    if x in ["FATAL","YES", "Y",'DECEASED']:
         return "YES"
     elif x in ["NON-FATAL","NON FATAL", "NO","N",'NO CONTACT']:
         return "NO"

@@ -40,3 +40,13 @@ def split_words(string, case=None):
             raise ValueError("Unknown input case")
 
     return words
+
+def is_str_number(x):
+    is_num = isinstance(x,str)
+    if is_num:
+        x = x.strip()
+        if not x.isdigit():
+            # Try removing decimal
+            dec = x.find('.')
+            is_num = dec>0 and x[:dec].isdigit() and x[dec+1:].isdigit()
+    return is_num
