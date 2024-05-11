@@ -11,12 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added support for more text date column formats in Arcgis loader.
 - Added url_contains input to get_count, load_iter, load, and load_from_csv of Source class to distinguish between multiple datasets matching a data request
 - Added datasets input to get_years to allow getting the years in specific datasets.
+- Added [Year Filter Guide](https://openpolicedata.readthedocs.io/en/stable/getting_started/year_filtering.html) to documentation
 ### Changed
+- Updates to standardization to handle more datasets
 ### Deprecated
 ### Removed
 ### Fixed
 - Fixed year filtering for Tucson OFFICER-INVOLVED SHOOTINGS - INCIDENTS dataset. Datasets is no longer available using OpenPoliceData prior to Version 0.7.
 ### Security
+
+## v0.6 - 2024-05-10
+### Added
+- Added POINTING WEAPON (by officer) table type
+- Added data loader to combine multiple files that span a single year into a single dataset
+- Added support for more text date column formats in Arcgis loader.
+- Added url_contains input to get_count, load_iter, load, and load_from_csv of Source class to distinguish between multiple datasets matching a data request
+- Added datasets input to get_years to allow getting the years in specific datasets.
+- Added [Year Filter Guide](https://openpolicedata.readthedocs.io/en/stable/getting_started/year_filtering.html) to documentation
+### Changed
+- Updates to standardization to handle more datasets
+### Fixed
+- Fixed year filtering for Tucson OFFICER-INVOLVED SHOOTINGS - INCIDENTS dataset. Datasets is no longer available using OpenPoliceData prior to Version 0.7.
 
 ## v0.6 - 2024-02-14
 ### Added

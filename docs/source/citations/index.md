@@ -13,4 +13,4 @@ html_theme.sidebar_secondary.remove: true
 
 If OpenPoliceData has been important to your research and you would like to cite us, you can cite the following:
 
-> M. Sowd and P. Otto. (2024, April 8). *OpenPoliceData* (v0.7) [Online]. Available: https://openpolicedata.readthedocs.io/.
+> M. Sowd and P. Otto. (2024, May 10). *OpenPoliceData* (v0.7) [Online]. Available: https://openpolicedata.readthedocs.io/.

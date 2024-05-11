@@ -1125,20 +1125,20 @@ class Source:
                     if url_contains:
                         err_msg+=f" and {url_contains=}"
                     if isinstance(year, list):
-                        raise ValueError(err_msg+" It is possible that the year range covers more the one dataset."
+                        raise ValueError(err_msg+" It is possible that the year range covers more the one dataset." +
                                         " Set the year input to not contain years for multiple datasets and/or use the url_contains "+
                                         "input to specify a single dataset "+
                                         "by setting url_contains to a unique substring of the desired dataset's URL. "
                                         f"The URL(s) for the datasets matching the current inputs are {list(src['URL'])}")
                     elif year==defs.MULTI:
-                        raise ValueError(err_msg+f" Therea are multiple multi-year datasets with year={defs.MULTI}."
+                        raise ValueError(err_msg+f" Therea are multiple multi-year datasets with year={defs.MULTI}." +
                                         " Use the url_contains "+
                                         "input to specify a single dataset "+
                                         "by setting url_contains to a unique substring of the desired dataset's URL. "
                                         f"The URL(s) for the datasets matching the current inputs are {list(src['URL'])}")
                     else:
                         raise ValueError(err_msg+
-                                        "Set the year input to a single year or a year range and/or "+
+                                        " Set the year input to a single year or a year range and/or "+
                                         "use the url_contains input to specify a single dataset "+
                                         "by setting url_contains to a unique substring of the desired dataset's URL. "
                                         f"The URL(s) for the datasets matching the current inputs are {list(src['URL'])}")

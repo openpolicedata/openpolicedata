@@ -114,8 +114,8 @@ def test_bad_year_range():
 		with pytest.raises(ValueError, match="year input must either be a single year or a list containing a start and stop year"):
 			src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, None)
 
-@pytest.mark.parametrize('year, url_contains', [(2020, "APDUseOfForce/FeatureServer/0"), 
-												([2019,2020], "APDUseOfForce/FeatureServer/0"), (2021, "APD_UseOfForce2021/FeatureServer/0")])
+@pytest.mark.parametrize('year, url_contains', [(2019, "APDUseOfForce/FeatureServer/0"), 
+												([2018,2019], "APDUseOfForce/FeatureServer/0"), (2021, "APD_UseOfForce2021/FeatureServer/0")])
 def test_multiple_multiple_year_filter(all_datasets, year, url_contains):
 	if check_for_dataset('Asheville', opd.defs.TableType.USE_OF_FORCE):
 		src = data.Source('Asheville')
@@ -134,14 +134,14 @@ def test_overlapping_multi_and_single(all_datasets, year, url_contains, url_cont
 		dataset, filter_by_year = src._Source__filter_for_source(opd.defs.TableType.TRAFFIC, year, url_contains)
 		assert url_contains_test in dataset['URL']
 
-@pytest.mark.parametrize('year', [[2020,2021], opd.defs.MULTI])
+@pytest.mark.parametrize('year', [2020, [2020,2021], opd.defs.MULTI])
 def test_multiple_bad_multiple_year_filter(all_datasets, year):
 	if check_for_dataset('Asheville', opd.defs.TableType.USE_OF_FORCE):
 		src = data.Source('Asheville')
 		with pytest.raises(ValueError, match="There is more than one source matching "):
 			src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, None)
 
-@pytest.mark.parametrize('year, exp_filt_by_year', [([2020,2021], True), (opd.defs.MULTI, False)])
+@pytest.mark.parametrize('year, exp_filt_by_year', [([2021,2022], True), (opd.defs.MULTI, False)])
 def test_url_contains(all_datasets, year, exp_filt_by_year):
 	if check_for_dataset('Asheville', opd.defs.TableType.USE_OF_FORCE):
 		src = data.Source('Asheville')
@@ -439,8 +439,8 @@ if __name__ == "__main__":
 	# For testing
 	use_changed_rows = False
 	csvfile = None
-	csvfile = os.path.join(r"..",'opd-data','opd_source_table.csv')
-	start_idx = 707
+	# csvfile = os.path.join(r"..",'opd-data','opd_source_table.csv')
+	start_idx = 402
 	skip = None
 	skip = "Sacramento,Beloit,Rutland"
 	source = None

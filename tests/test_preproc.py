@@ -201,7 +201,6 @@ def test_gender_cats(table, std_table):
                          [(race_col, Column.RACE_OFFICER_SUBJECT),
                           (gender_col, Column.GENDER_OFFICER_SUBJECT),
                           (eth_col, Column.ETHNICITY_OFFICER_SUBJECT),
-                          (role_col, Column.SUBJECT_OR_OFFICER),
                           (age_group_col, Column.AGE_RANGE_OFFICER_SUBJECT)
                           ])
 def test_no_id_keep(table_w_role, old_column, new_column):
@@ -216,7 +215,6 @@ def test_no_id_keep(table_w_role, old_column, new_column):
                          [(race_col, Column.RACE_OFFICER_SUBJECT),
                           (gender_col, Column.GENDER_OFFICER_SUBJECT),
                           (eth_col, Column.ETHNICITY_OFFICER_SUBJECT),
-                          (role_col, Column.SUBJECT_OR_OFFICER),
                           (age_group_col, Column.AGE_RANGE_OFFICER_SUBJECT)
                           ])
 def test_no_id_null(table_w_role, old_column, new_column):

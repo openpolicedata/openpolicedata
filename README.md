@@ -2,7 +2,7 @@
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://openpolicedata.streamlit.app)
 
 # OpenPoliceData
-The OpenPoliceData (OPD) Python library is the most comprehensive centralized public access point for incident-level police data in the United States. OPD provides easy access over 400 incident-level datasets for about 4800 police agencies. Types of data include traffic stops, use of force, officer-involved shootings, and complaints. 
+The OpenPoliceData (OPD) Python library is the most comprehensive centralized public access point for incident-level police data in the United States. OPD provides easy access to 425+ incident-level datasets for about 4850 police agencies. Types of data include traffic stops, use of force, officer-involved shootings, and complaints. 
 
 Users request data by department name and type of data, and the data is returned as a [pandas DataFrame](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.html). There is no need to manually find the data online or to know how to work with open data APIs (ArcGIS, Socrata, etc.). When data is loaded by OPD, the returned data is unmodified (with the exception of formatting known date fields) from what appears on the source's site, and OPD provides links to the original data for transparency.
 
@@ -18,7 +18,7 @@ OpenPoliceData provides access to police data with 2 simple lines of code:
 > data = src.load(table_type="USE OF FORCE", year=2022)
 ```
 
-> **NEW IN VERSION 0.6**: OPD now provides tools for automated data standardization. Applying these tools allow you to start your analysis more quickly by replacing column names and data with standard values for some common column types. [Learn how it works and how to use it here.](https://openpolicedata.readthedocs.io/en/stable/getting_started/index.html#Data-Standardization)
+> **NEW STARTING IN VERSION 0.6**: OPD now provides tools for automated data standardization. Applying these tools allow you to start your analysis more quickly by replacing column names and data with standard values for some common column types. [Learn how it works and how to use it here.](https://openpolicedata.readthedocs.io/en/stable/getting_started/index.html#Data-Standardization)
 
 - Documentation: https://openpolicedata.readthedocs.io/
 - Source Code: https://github.com/openpolicedata/openpolicedata
@@ -47,30 +47,18 @@ OpenPoliceData provides access to police data with 2 simple lines of code:
 - Portland, OR: 2024 Calls for Service
 - Santa Monica, CA: 2022-2023 Incidents
 
-## Release Notes for Version 0.6 - 2024-02-10
+## v0.6 - 2024-05-10
 ### Added
-- Data standardization: Added function for standardizing some column names and data values
-- Added reload function to datasets module to allow reloading the datasets table (in case of an update) or loading a datasets table from a custom location
-- Added functions for getting race, gender, and age columns after standardization
-- Added merge function for merging 2 table together
-- Added function for finding related tables
-- Added a function for expanding rows that contain information on multiple officers or subjects into multiple row
-- Made opd.defs.TableType and opd.defs.columns available as opd.TableType and opd.Column
-- Added Table.urls to enable quick retrieval of URLs associated with a dataset
-- Added verbose mode to enable transparency when loading data with get_count, load_data_from_url, and load_from_url_gen
-- Added Source.load_iter to be used instead of Source.load_from_url_gen
-- Added Source.load to be used instead of Source.load_from_url
-- Added data loader for CKAN API
+- Added POINTING WEAPON (by officer) table type
+- Added data loader to combine multiple files that span a single year into a single dataset
+- Added support for more text date column formats in Arcgis loader.
+- Added url_contains input to get_count, load_iter, load, and load_from_csv of Source class to distinguish between multiple datasets matching a data request
+- Added datasets input to get_years to allow getting the years in specific datasets.
+- Added [Year Filter Guide](https://openpolicedata.readthedocs.io/en/stable/getting_started/year_filtering.html) to documentation
 ### Changed
-- Inputs to Source.get_count is now (table_type, year, ...) instead of (year, table_type, ...) so inputs go from general to specific. Original input order is deprecated and will be removed in Version 1.0.
-### Deprecated
-- Deprecated Source.load_from_url_gen. Will be removed in Version 1.0
-- Deprecated Source.load_from_url. Will be removed in Version 1.0
-### Removed
-- Removed support for Python 3.7 which has reached end of life: https://www.python.org/downloads/release/python-370/
+- Updates to standardization to handle more datasets
 ### Fixed
-- Improved speed and feedback when reading large CSV files contained in zip files
-- Source.get_agencies with a partial_name is now case-insensitive
+- Fixed year filtering for Tucson OFFICER-INVOLVED SHOOTINGS - INCIDENTS dataset. Datasets is no longer available using OpenPoliceData prior to Version 0.7.
 
 Complete change log available at: https://github.com/openpolicedata/openpolicedata/blob/main/CHANGELOG.md
 
