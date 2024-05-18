@@ -37,21 +37,21 @@ def test_no_inputswap(year, table_type):
 @pytest.mark.parametrize("year", [2019, [2019, 2020], opd.defs.NA, opd.defs.MULTI])
 @pytest.mark.parametrize("table_type", [TableType.ARRESTS, str(TableType.ARRESTS)])
 def test_inputswap_warning(year, table_type):
-	with pytest.warns(DeprecationWarning):
+	with pytest.deprecated_call():
 		fswap(year, table_type)
 
 
 @pytest.mark.parametrize("year", [2019, [2019, 2020], opd.defs.NA, opd.defs.MULTI])
 @pytest.mark.parametrize("table_type", [TableType.ARRESTS, str(TableType.ARRESTS)])
 def test_inputswap_keyword_warning(year, table_type):
-	with pytest.warns(DeprecationWarning):
+	with pytest.deprecated_call():
 		fswap(year, table_type=table_type)
 
 
 @pytest.mark.parametrize("year", [2019, [2019, 2020], opd.defs.NA, opd.defs.MULTI])
 @pytest.mark.parametrize("table_type", [TableType.ARRESTS, str(TableType.ARRESTS)])
 def test_inputswap_singleinput_warning(year, table_type):
-	with pytest.warns(DeprecationWarning):
+	with pytest.deprecated_call():
 		fswap(year)
 
 
@@ -68,14 +68,14 @@ def fdep():
 
 @pytest.mark.parametrize("func", [fdep, datasets_query])
 def test_deprecated_decorator(func):
-	with pytest.warns(DeprecationWarning):
+	with pytest.deprecated_call():
 		func()
 
 
 @pytest.mark.parametrize("type1, type2", [("COMPLAINTS - SUBJECTS", 'COMPLAINTS - CIVILIANS'),
 										  ("USE OF FORCE - SUBJECTS/OFFICERS", 'USE OF FORCE - CIVILIANS/OFFICERS')])
 def test_deprecated_enums(type1, type2):
-	with pytest.warns(DeprecationWarning):
+	with pytest.deprecated_call():
 		assert TableType(type1) == TableType(type2)
 
 
@@ -90,7 +90,7 @@ def test_datasets_equals_civilian():
 
 	s = df["TableType"]
 	assert isinstance(s, DeprecationHandlerSeries)
-	with pytest.warns(DeprecationWarning):
+	with pytest.deprecated_call():
 		t = s == "USE OF FORCE - CIVILIANS/OFFICERS"
 
 	assert t.sum()>0
@@ -203,7 +203,7 @@ def test_datasets_isin_civilians():
 	df = opd.datasets.query()
 	assert isinstance(df, DeprecationHandlerDataFrame)
 
-	with pytest.warns(DeprecationWarning):
+	with pytest.deprecated_call():
 		df["TableType"].isin(["ARRESTS", "OFFICER-INVOLVED SHOOTINGS - CIVILIANS"])
 
 
@@ -236,7 +236,7 @@ def test_pandas_query_has_subject():
 
 
 def test_pandas_query_tabletype_subject():
-	with pytest.warns(DeprecationWarning):
+	with pytest.deprecated_call():
 		df = opd.datasets.query(table_type="COMPLAINTS - CIVILIANS")
 	assert isinstance(df, DeprecationHandlerDataFrame)
 	assert len (df)>0
@@ -250,7 +250,7 @@ def test_pandas_query_tabletype_no_subject():
 	assert len (df)>0
 
 def test_tabletype_contains_subject():
-	with pytest.warns(DeprecationWarning):
+	with pytest.deprecated_call():
 		t = opd.datasets.get_table_types(contains="- CIVILIANS")
 	assert len (t)>0
 
@@ -268,7 +268,7 @@ def test_source_table_bad_df_compat():
 	assert not check_compat_source_table(df_compat=1)[0]
 
 def test_source_table_deprecated():
-	with pytest.warns(DeprecationWarning):
+	with pytest.deprecated_call():
 		loaded, df = check_compat_source_table(cur_ver='0.0')
 	assert loaded
 	assert len(df)==1  # Number of rows in 1st test source table
@@ -276,7 +276,7 @@ def test_source_table_deprecated():
 def test_source_table_fail_not_req(df_compat):
 	df_compat = df_compat.copy(deep=True)
 	df_compat.loc[0, 'csv_name'] = '?!~notafile.csv'
-	with pytest.warns(DeprecationWarning):
+	with pytest.deprecated_call():
 		loaded, df = check_compat_source_table(df_compat=df_compat, cur_ver='0.0')
 	assert loaded
 	assert len(df)==2  # Number of rows in 2nd test source table
@@ -287,6 +287,21 @@ def test_source_table_fail_req(df_compat):
 	with pytest.raises(opd.exceptions.CompatSourceTableLoadError):
 		check_compat_source_table(df_compat=df_compat, cur_ver='0.0.1')
 
+@pytest.mark.parametrize("y", [7, 13, range(0,8), [6, 7,13]])
+@pytest.mark.filterwarnings("error::DeprecationWarning")
+def test_datasets_iloc_no_warning(all_datasets, y):
+	all_datasets.iloc[0,y]
+
+
+@pytest.mark.parametrize("x", [0, [0,1], range(0,2)])
+@pytest.mark.filterwarnings("error::DeprecationWarning")
+def test_datasets_iloc_single_input_no_warning(all_datasets, x):
+	all_datasets.iloc[x]
+
+@pytest.mark.parametrize("y", [8, 10, [8,9], range(8,12), [1,8], range(6,10)])
+def test_datasets_iloc_warning(all_datasets, y):
+	with pytest.deprecated_call():
+		all_datasets.iloc[0,y]
 
 if __name__ == "__main__":
 	csvfile = None

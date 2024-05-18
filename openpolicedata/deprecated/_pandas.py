@@ -17,6 +17,19 @@ class _iLocIndexerSub(_iLocIndexer):
     def __getitem__(self, key):
         result = super().__getitem__(key)
 
+        if isinstance(key, tuple) and len(key)>1:
+            try:
+                # 8 is where the Year column has been moved to and therefore, any old iloc calls
+                # requesting data past index 8 could now return the wrong value
+                if (isinstance(key[1], int) and 8<=key[1]<13) or \
+                    (not isinstance(key[1], int) and any(8<=x<13 for x in key[1])):
+                    warnings.warn(DeprecationWarning("The Year column of the datasets table has recently been moved to column 8 from column 12. "+\
+                                                     f"Column input {key[1]} could be outputting a different column than desired for index 8-12 as a result "+\
+                                                     "if the code was written prior to this change. Code may need to be changed. It is recommended "+\
+                                                     "that .loc be used to index the datasets table rather than .iloc."))
+            except:
+                raise
+
         return _cast_if_necessary(result)
  
 

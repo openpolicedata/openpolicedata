@@ -8,7 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Added subject and officer name to standardization fields for officer-involved shootings only
 ### Changed
+- Year column in the OPD source table has been moved to the left to make it more visible
 ### Deprecated
+- Usage of iloc with datasets table is now discouraged due to change in location of Year column
 ### Removed
 ### Fixed
 ### Security
