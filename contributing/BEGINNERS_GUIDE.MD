@@ -5,10 +5,12 @@ If you run into any trouble don't hesitate to reach out on [GitHub](https://gith
 
 - [Get Started with GitHub](#get-started-with-github)
 - [Git](#git)
+- [General Git/GitHub workflow](#general-gitgithub-workflow)
 - [Conda](#conda)
 - [VS Code](#vs-code)
 - [Python Tutorials](#python-tutorials)
 - [Sphinx Documentation Tutorial](#sphinx-documentation-tutorial)
+- [Next Steps](#next-steps)
 
 ## Get Started with GitHub
 Our project is on GitHub so most contributions will require some interaction with [GitHub](https://github.com/). First, you need to [create an account](https://github.com/join). For learning how to use GitHub, we recommend reading [About GitHub and Git](https://docs.github.com/en/get-started/start-your-journey/about-github-and-git) section from their documentation.
@@ -35,17 +37,37 @@ Now, we are ready to clone your OPD fork onto your machine.
 - [Generate a new SSH key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent): An SSH key will allow for secure communication between Git on your local machine and GitHub
 - [Add SSH key to your GitHub account](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account)
 - Navigate in the command prompt to where you want to store the repository. For example:
-```
+```sh
 > mkdir repos
 > cd repos
 ```
 - Clone your forked repository
 
-`> git clone git@github.com:{Your GitHub Username}/openpolicedata.git`
+```sh 
+> git clone --recursive git@github.com:{Your GitHub Username}/openpolicedata.git
+```
 
 - Enter the passphase that you created for your SSH key
 
 A folder will be created openpolicedata that contains the contents of your forked repository.
+
+## General Git/GitHub workflow
+The general Git/GitHub workflow (after forking OPD) for contributing is:
+
+1. Select an issue to work on or create your own
+2. Assign the issue to yourself
+3. [Sync your fork](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/syncing-a-fork) with upstream repository
+4. Clone the repository (first time) / git pull changes from your fork
+5. Make some changes to some files
+6. Commit those changes to your local repository
+7. Push those changes to your fork
+8. Create a pull request to request that your changes be added to the baseline code / upstream repository
+9. Repeat
+
+There are some modifications that you may consider making including creating a branch of your fork (work on multiple issues / easier to sync)
+
+https://stackoverflow.com/questions/7244321/how-do-i-update-or-sync-a-forked-repository-on-github
+
 
 ## Conda
 Next, you are going to need an installation of Python and an environment manager. [Environment management](https://towardsdatascience.com/getting-started-with-python-environments-using-conda-32e9f2779307) allows you to have multiple sandboxes to work in that are independent of each other. Each environment has their own Python installation and can have different packages/libraries installed in it. Examples of reasons to use an environment manager include:
@@ -63,40 +85,56 @@ Here's how to create the development environment:
 - On Linux, open a command prompt. On Windows, open the Anaconda Powershell Prompt.
 - Create a new environment. Below, opd is the name of the environment. It can be anything you like.
 
-`> conda create -n opd python=3.12`
+```sh
+> conda create -n opd python=3.12
+```
 
 - When prompted to proceed, type y and hit enter.
 - Activate the new environment. The name of the new environment should now appear in parentheses in your command prompt.
 
-`> conda activate opd`
+```sh
+> conda activate opd
+```
 
 - Navigate to the openpolicedata folder.
 
-`> cd {path to parent folder}\openpolicedata`
+```sh
+> cd {path to parent folder}\openpolicedata
+```
 
 - Install the libraries that can (easily) be installed with pip
 
-`> pip install -r .\dev\requirements-test.txt`
+```sh
+> pip install -r .\dev\requirements-test.txt
+```
 
 - Install the libraries that are more easily installed with conda
 
-`> conda install --file .\dev\requirements-conda.txt`
+```sh
+> conda install --file .\dev\requirements-conda.txt
+```
 
 Your OPD development environment is all set.
 
 ### OPD Documentation Environment
 Now, let's create the OPD documentation environment:
-- (Optional) Deactivate the development environment:
+- (Optional) Deactivate the development environment (if created above):
 
-`> conda deactivate`
+```sh
+> conda deactivate
+```
 
 - Create the opd-docs environment and install packages:
 
-`> conda env create -f .\docs\requirements.yml`
+```sh
+> conda env create -f .\docs\requirements.yml
+```
 
 - Activate the new environment. The name of the new environment should now appear in parentheses in your command prompt.
 
-`> conda activate opd-docs`
+```sh
+> conda activate opd-docs
+```
 
 Your OPD documentation environment is all set.
 
@@ -135,7 +173,9 @@ Below, you will our VS Code installation and customization guide along with a fe
 - *For Windows users*, click the plus (+) sign icon in the terminal panel to create a new terminal (the old terminal was started prior to the settings.json change)
 - To test that Conda is now available, run the following in the terminal to output the version of Conda installed:
 
-`> conda --version`
+```sh
+> conda --version
+```
 
 ### Set Python Envioronment
 - Go to `View` > `Command Palette` Type `CTRL+SHIFT+P` (or ⇧⌘P on a Mac) to bring up the Command Palette
@@ -195,3 +235,6 @@ Here are a couple tutorials that you may find useful for helping to get up to sp
 
 ## Sphinx Documentation Tutorial
 We use Sphinx to create our documentation. If you want to help with documentation, we recommend the [Sphinx tutorial](https://www.sphinx-doc.org/en/master/tutorial/index.html).
+
+## Next Steps
+Check out our [Contributing Guide](https://github.com/openpolicedata/openpolicedata/blob/main/CONTRIBUTING.MD).
