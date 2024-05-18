@@ -154,7 +154,7 @@ class Data_Loader(ABC):
         pass
 
     @abstractmethod
-    def load(self, year=None, nrows=None, offset=0, *, pbar=True, agency=None, opt_filter=None, select=None, output_type=None):
+    def load(self, year=None, nrows=None, offset=0, *, pbar=True, agency=None, opt_filter=None, select=None, output_type=None, format_date=True):
         pass
 
     def get_years(self, *, nrows=1, check=None, **kwargs):
@@ -464,7 +464,7 @@ class Csv(Data_Loader):
         return count
 
 
-    def load(self, year=None, nrows=None, offset=0, *, pbar=True, agency=None, **kwargs):
+    def load(self, year=None, nrows=None, offset=0, *, pbar=True, agency=None, format_date=True, **kwargs):
         '''Download CSV file to pandas DataFrame
         
         Parameters
@@ -479,6 +479,9 @@ class Csv(Data_Loader):
             (Optional) If true (default), a progress bar will be displayed
         agency : str
             (Optional) Name of the agency to filter for. None value returns data for all agencies.
+        format_date : bool, optional
+            If True, known date columns (based on presence of date_field in datasets table or data type information provided by dataset owner) will be automatically formatted
+            to be pandas datetimes (or pandas Period in rare cases), by default True
             
         Returns
         -------
@@ -582,7 +585,7 @@ class Csv(Data_Loader):
             raise OPD_DataUnavailableError(table.iloc[0,0], _url_error_msg.format(self.url))
         
         table = filter_dataframe(table, date_field=self.date_field, year_filter=year, 
-            agency_field=self.agency_field, agency=agency)
+            agency_field=self.agency_field, agency=agency, format_date=format_date)
 
         if offset>0:
             rows_limit = offset+nrows if nrows is not None and offset+nrows<len(table) else len(table)
@@ -853,7 +856,7 @@ class Excel(Data_Loader):
         return names, False
 
 
-    def load(self, year=None, nrows=None, offset=0, *, agency=None, **kwargs):
+    def load(self, year=None, nrows=None, offset=0, *, agency=None, format_date=True, **kwargs):
         '''Download Excel file to pandas DataFrame
         
         Parameters
@@ -866,6 +869,9 @@ class Excel(Data_Loader):
             (Optional) Number of records to offset from first record. Default is 0 to return records starting from the first.
         agency : str
             (Optional) Name of the agency to filter for. None value returns data for all agencies.
+        format_date : bool, optional
+            If True, known date columns (based on presence of date_field in datasets table or data type information provided by dataset owner) will be automatically formatted
+            to be pandas datetimes (or pandas Period in rare cases), by default True
             
         Returns
         -------
@@ -972,7 +978,7 @@ class Excel(Data_Loader):
         table.columns = [x.strip() if isinstance(x, str) else x for x in table.columns]
 
         table = filter_dataframe(table, date_field=self.date_field, year_filter=year, 
-            agency_field=self.agency_field, agency=agency)
+            agency_field=self.agency_field, agency=agency, format_date=format_date)
         
         if offset>0:
             rows_limit = nrows_read if nrows_read is not None and nrows_read<len(table) else len(table)
@@ -1610,7 +1616,7 @@ class Arcgis(Data_Loader):
         return "", 0
 
     
-    def load(self, year=None, nrows=None, offset=0, *, pbar=True, **kwargs):
+    def load(self, year=None, nrows=None, offset=0, *, pbar=True, format_date=True, **kwargs):
         '''Download table from ArcGIS to pandas or geopandas DataFrame
         
         Parameters
@@ -1623,6 +1629,9 @@ class Arcgis(Data_Loader):
             (Optional) Number of records to offset from first record. Default is 0 to return records starting from the first.
         pbar : bool
             (Optional) If true (default), a progress bar will be displayed
+        format_date : bool, optional
+            If True, known date columns (based on presence of date_field in datasets table or data type information provided by dataset owner) will be automatically formatted
+            to be pandas datetimes (or pandas Period in rare cases), by default True
             
         Returns
         -------
@@ -1711,12 +1720,16 @@ class Arcgis(Data_Loader):
             bar.close()
 
         df = pd.DataFrame.from_records([x["attributes"] for x in features])
-        for col in date_cols:
-            if col in df:
-                logger.debug(f"Column {col} had a data type of esriFieldTypeDate. Converting values to datetime objects.")
-                df[col] = to_datetime(df[col], unit="ms", errors='coerce')
+        if format_date:
+            for col in date_cols:
+                if col in df:
+                    logger.debug(f"Column {col} had a data type of esriFieldTypeDate. Converting values to datetime objects.")
+                    df[col] = to_datetime(df[col], unit="ms", errors='coerce')
 
         if not self.__accurate_count:
+            if not format_date:
+                raise ValueError("Dates cannot be filtered if format_date is False for this dataset due to the date column not being a "+
+                                 "esriFieldTypeDate type at the Arcgis source. Note: most other Arcgis datasets will work fine if format_date is False")
             logger.debug(f"User requested filtering by a date range but this was NOT done in the Arcgis query "+
                          f"due to the date field not being in a date format. Converting {self.date_field} column to "
                          f"a datetime in order to filter for requested date range {year}")
@@ -1944,7 +1957,7 @@ class Carto(Data_Loader):
         return where_query
 
     
-    def load(self, year=None, nrows=None, offset=0, *, pbar=True, **kwargs):
+    def load(self, year=None, nrows=None, offset=0, *, pbar=True, format_date=True, **kwargs):
         '''Download table to pandas or geopandas DataFrame
         
         Parameters
@@ -1957,6 +1970,9 @@ class Carto(Data_Loader):
             (Optional) Number of records to offset from first record. Default is 0 to return records starting from the first.
         pbar : bool
             (Optional) If true (default), a progress bar will be displayed
+        format_date : bool, optional
+            If True, known date columns (based on presence of date_field in datasets table or data type information provided by dataset owner) will be automatically formatted
+            to be pandas datetimes (or pandas Period in rare cases), by default True
             
         Returns
         -------
@@ -2017,10 +2033,11 @@ class Carto(Data_Loader):
             bar.close()
 
         df = pd.DataFrame.from_records([x["properties"] for x in features])
-        for col in date_cols:
-            if col in df:
-                logger.debug(f"Column {col} had a data type of date. Converting values to datetime objects.")
-                df[col] = to_datetime(df[col])
+        if format_date:
+            for col in date_cols:
+                if col in df:
+                    logger.debug(f"Column {col} had a data type of date. Converting values to datetime objects.")
+                    df[col] = to_datetime(df[col])
 
         if len(df) > 0:
             has_point_geometry = any("geometry" in x and x["geometry"]!=None for x in features)
@@ -2626,7 +2643,8 @@ class Ckan(Data_Loader):
         return where
 
     
-    def load(self, year=None, nrows=None, offset=0, *, pbar=True, opt_filter=None, select=None, output_type=None, sortby='_id', **kwargs):
+    def load(self, year=None, nrows=None, offset=0, *, pbar=True, opt_filter=None, select=None, output_type=None, sortby='_id', 
+             format_date=True, **kwargs):
         '''Download table to pandas or geopandas DataFrame
         
         Parameters
@@ -2647,6 +2665,9 @@ class Ckan(Data_Loader):
             (Optional) Data type for the output. Allowable values: 'DataFrame' and 'set'. Default: DataFrame
         sortby : str
             (Optional) Columns to sort by. Default: '_id'
+        format_date : bool, optional
+            If True, known date columns (based on presence of date_field in datasets table or data type information provided by dataset owner) will be automatically formatted
+            to be pandas datetimes (or pandas Period in rare cases), by default True
             
         Returns
         -------
@@ -2714,10 +2735,11 @@ class Ckan(Data_Loader):
             bar.close()
 
         df = pd.DataFrame(features)
-        for col in date_cols:
-            if col in df:
-                logger.debug(f"Column {col} had a data type of date. Converting values to datetime objects.")
-                df[col] = to_datetime(df[col])
+        if format_date:
+            for col in date_cols:
+                if col in df:
+                    logger.debug(f"Column {col} had a data type of date. Converting values to datetime objects.")
+                    df[col] = to_datetime(df[col])
 
         if len(df) > 0:
             if output_type=='set':
@@ -2776,7 +2798,7 @@ def _process_date(date, date_field=None, force_year=False, datetime_format=None,
     return start_date, stop_date
 
 
-def filter_dataframe(df, date_field=None, year_filter=None, agency_field=None, agency=None):
+def filter_dataframe(df, date_field=None, year_filter=None, agency_field=None, agency=None, format_date=True):
     '''Filter dataframe by agency and/or year (range)
     
     Parameters
@@ -2791,7 +2813,14 @@ def filter_dataframe(df, date_field=None, year_filter=None, agency_field=None, a
         (Optional) Name of the column that contains the agency name (i.e. name of the police departments)
     agency : str
         (Optional) Name of the agency to filter for. None value returns data for all agencies.
+    format_date : bool, optional
+        If True, known date columns (based on presence of date_field in datasets table or data type information provided by dataset owner) will be automatically formatted
+        to be pandas datetimes (or pandas Period in rare cases), by default True
     '''
+
+    if agency != None and agency_field != None:
+        logger.debug(f"Keeping values of column {agency_field} that are equal to {agency}")
+        df = df.query(agency_field + " = '" + agency + "'")
 
     if pd.notnull(date_field):
         is_year = date_field.lower()=='year'
@@ -2803,7 +2832,6 @@ def filter_dataframe(df, date_field=None, year_filter=None, agency_field=None, a
                 # Ignore future warning about how this operation will be attempted to be done inplace:
                 # In a future version, `df.iloc[:, i] = newvals` will attempt to set the values inplace instead of always setting a new array. 
                 # To retain the old behavior, use either `df[df.columns[i]] = newvals` or, if columns are non-unique, `df.isetitem(i, newvals)`
-                warnings.simplefilter("ignore", category=FutureWarning)
                 logger.debug(f"Converting values in column {date_field} to datetime objects")
                 try:
                     df[date_field] = to_datetime(df[date_field], ignore_errors=True)
@@ -2811,6 +2839,8 @@ def filter_dataframe(df, date_field=None, year_filter=None, agency_field=None, a
                     return df
     
         if year_filter != None:
+            if not format_date:
+                raise ValueError("Dates cannot be filtered if format_date is False for CSV and Excel data types")
             if isinstance(year_filter, list):
                 if len(year_filter) != 2:
                     raise ValueError(f'Format of the input {year_filter} is invalid.'
@@ -2846,10 +2876,6 @@ def filter_dataframe(df, date_field=None, year_filter=None, agency_field=None, a
                 logger.debug(f"Column {date_field} has been identfied as a year column")
                 logger.debug(f"Keeping values of column {date_field} for year={year_filter}")
                 df = df[df[date_field] == int(year_filter)]
-
-    if agency != None and agency_field != None:
-        logger.debug(f"Keeping values of column {agency_field} that are equal to {agency}")
-        df = df.query(agency_field + " = '" + agency + "'")
 
     return df
 

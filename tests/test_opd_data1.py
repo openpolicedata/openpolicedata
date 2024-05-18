@@ -59,6 +59,26 @@ def check_table_type_warning(all_datasets):
 	with pytest.warns(UserWarning):
 		data.Table(sources)
 
+@pytest.mark.parametrize('source, table, year', [('Phoenix', "OFFICER-INVOLVED SHOOTINGS", 2022), 
+				('Orlando', "OFFICER-INVOLVED SHOOTINGS", 2022), ('Indianapolis', "OFFICER-INVOLVED SHOOTINGS", 2022),
+				('Philadelphia', "OFFICER-INVOLVED SHOOTINGS", 2018)])
+def test_format_date_false(all_datasets, source, table, year):
+	if check_for_dataset(source, table):
+		src = opd.Source(source)
+		table = src.load(table, year, format_date=False, nrows=1)
+		# Confirm date has not been formatted
+		assert isinstance(table.table[table.date_field].iloc[0],str)
+		
+
+@pytest.mark.parametrize('source, table, year', [('Denver', "OFFICER-INVOLVED SHOOTINGS", 2022), 
+				('Sparks', "OFFICER-INVOLVED SHOOTINGS", 2022),  ('Louisville', "TRAFFIC STOPS", ['2018-12-29', '2019-01-01'])])
+def test_format_date_false_not_allowed(all_datasets, source, table, year):
+	if check_for_dataset(source, table):
+		src = opd.Source(source)
+		with pytest.raises(ValueError, match='Dates cannot be filtered'):
+			src.load(table, year, format_date=False, nrows=1)
+
+
 def test_check_version(datasets):
 	ds = datasets.iloc[0].copy()
 	# Set min_version to create error

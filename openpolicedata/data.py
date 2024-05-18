@@ -928,7 +928,8 @@ class Source:
                 offset: int = 0, 
                 force: bool =False,
                 verbose: bool | str = False,
-                url_contains: str | None = None
+                url_contains: str | None = None,
+                format_date: bool = True
                 ) -> Iterator[Table]:
         '''Get generator to load data from URL in batches
 
@@ -959,6 +960,9 @@ class Source:
             be logged to that file., by default False
         url_contains - str | None
             (Optional) If set, URL must contain this string. Can be used when multiple datasets match a set of inputs.
+        format_date : bool, optional
+            If True, known date columns (based on presence of date_field in datasets table or data type information provided by dataset owner) will be automatically formatted
+            to be pandas datetimes (or pandas Period in rare cases), by default True
 
         Returns
         -------
@@ -969,7 +973,7 @@ class Source:
         count = self.get_count(table_type, year, agency, force, verbose=verbose, url_contains=url_contains)
         for k in range(offset, count, nbatch):
             yield self.__load(table_type, year, agency, True, pbar, nrows=min(nbatch, count-k), offset=k, 
-                              verbose=verbose, url_contains=url_contains)
+                              verbose=verbose, url_contains=url_contains, format_date=format_date)
     
     @deprecated("load_from_url_gen is deprecated and will be removed in a future release. Please use load_iter instead. "+
                 "load_iter uses the same inputs except table_type now comes before year.")
@@ -1001,7 +1005,8 @@ class Source:
             offset: int = 0,
             sortby=None,
             verbose: bool | str = False,
-            url_contains: str | None = None
+            url_contains: str | None = None,
+            format_date: bool = True
             ) -> Table:
         '''Load data from URL
 
@@ -1029,6 +1034,9 @@ class Source:
             be logged to that file., by default False
         url_contains - str | None
             (Optional) If set, URL must contain this string. Can be used when multiple datasets match a set of inputs.
+        format_date : bool, optional
+            If True, known date columns (based on presence of date_field in datasets table or data type information provided by dataset owner) will be automatically formatted
+            to be pandas datetimes (or pandas Period in rare cases), by default True
 
         Returns
         -------
@@ -1037,7 +1045,7 @@ class Source:
         '''
 
         return self.__load(table_type, year, agency, True, pbar, nrows=nrows, offset=offset, sortby=sortby, 
-                           verbose=verbose, url_contains=url_contains)
+                           verbose=verbose, url_contains=url_contains, format_date=format_date)
 
     
     @deprecated("load_from_url is deprecated and will be removed in a future release. Please use load instead. "+
@@ -1152,7 +1160,7 @@ class Source:
 
 
     def __load(self, table_type, year, agency, load_table, pbar=True, return_count=False, force=False, 
-               nrows=None, offset=0, sortby=None, verbose=False, url_contains=None):
+               nrows=None, offset=0, sortby=None, verbose=False, url_contains=None, format_date=True):
         # Make copy so original isn't changed
         year = year.copy() if isinstance(year, list) else year
 
@@ -1229,9 +1237,11 @@ class Source:
                 if return_count:
                     return loader.get_count(year=year_filter, agency=agency, opt_filter=opt_filter, force=force)
                 else:
-                    table = loader.load(year=year_filter, agency=agency, opt_filter=opt_filter, nrows=nrows, pbar=pbar, offset=offset, sortby=sortby)
-                    date_field = self.__fix_date_field(table, date_field, src.name)
-                    table = _check_date(table, date_field)
+                    table = loader.load(year=year_filter, agency=agency, opt_filter=opt_filter, nrows=nrows, pbar=pbar, offset=offset, sortby=sortby, 
+                                        format_date=format_date)
+                    if format_date:
+                        date_field = self.__fix_date_field(table, date_field, src.name)
+                        table = _check_date(table, date_field)
             except:
                 raise
             finally:
@@ -1256,7 +1266,8 @@ class Source:
                       table_type: str | defs.TableType | None = None,
                       agency: str | None = None,
                       zip: bool =False,
-                      url_contains: str | None = None
+                      url_contains: str | None = None,
+                      format_date: bool = True
                       ) -> Table:
         '''Load data from previously saved CSV file
         
@@ -1278,6 +1289,9 @@ class Source:
             (Optional) Set to true if CSV is in a zip file with the same filename. Default: False
         url_contains - str | None
             (Optional) If set, URL must contain this string. Can be used when multiple datasets match a set of inputs.
+        format_date : bool, optional
+            If True, known date columns (based on presence of date_field in datasets table or data type information provided by dataset owner) will be automatically formatted
+            to be pandas datetimes (or pandas Period in rare cases), by default True
 
         Returns
         -------
@@ -1285,7 +1299,7 @@ class Source:
             Table object containing the requested data
         '''
 
-        table = self.__load(table_type, year, agency, False, url_contains=url_contains)
+        table = self.__load(table_type, year, agency, False, url_contains=url_contains, format_date=format_date)
 
         filename = table.get_csv_filename()
         if output_dir != None:
@@ -1519,7 +1533,7 @@ def _check_date(table, date_field):
                         elif 'DateParseError' in str(type(e)) and '-__' in str(e):
                             # Ignore case where month and day are underscores (i.e. 2023-__-__)
                             pass
-                        elif 'ParserError' in str(type(e)) and re.search('Unknown string format: \d+[-/]\d+[-/]\d+,?\s?\d+[-/]\d+[-/]\d+', str(e)):
+                        elif 'ParserError' in str(type(e)) and re.search(r'Unknown string format: \d+[-/]\d+[-/]\d+,?\s?\d+[-/]\d+[-/]\d+', str(e)):
                             # Comma separated list of dates cannot be parsed
                             pass
                         else:
