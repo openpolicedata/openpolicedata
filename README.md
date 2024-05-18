@@ -47,7 +47,7 @@ OpenPoliceData provides access to police data with 2 simple lines of code:
 - Portland, OR: 2024 Calls for Service
 - Santa Monica, CA: 2022-2023 Incidents
 
-## v0.7 - 2024-05-10
+## v0.7.1 - 2024-05-10
 ### Added
 - Added POINTING WEAPON (by officer) table type
 - Added data loader to combine multiple files that span a single year into a single dataset

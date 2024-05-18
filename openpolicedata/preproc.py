@@ -123,7 +123,8 @@ def standardize(df, table_type, year,
                         delim_name="delim_gender",
                         item_num="item_gender")
     std.standardize_agency()
-    std.standardize_zip_code()
+    std.standardize_name([defs.columns.NAME_OFFICER_SUBJECT, defs.columns.NAME_OFFICER, defs.columns.NAME_SUBJECT])
+    std.standardize_rename_only([defs.columns.ZIP_CODE])
     std.cleanup()
     std.sort_columns()
 
@@ -434,7 +435,10 @@ class Standardizer:
         matches = []
         for p in patterns:
             if p[0].lower() == "equals":
-                matches = [x for x in select_cols if x.lower() == p[1].lower()]
+                if isinstance(p[1], list):
+                    matches = [x for x in select_cols if any([x.lower()==y.lower() for y in p[1]])]
+                else:
+                    matches = [x for x in select_cols if x.lower() == p[1].lower()]
             elif p[0].lower() == "not equal":
                 matches = [x for x in select_cols if x.lower() != p[1].lower()]
             elif p[0].lower() == "does not contain":
@@ -488,8 +492,7 @@ class Standardizer:
         return match_cols_out
 
 
-    def _find_col_matches(self, id, match_substr, 
-        known_col_names=None, 
+    def _find_col_matches(self, id, match_substr, known_col_names,
         only_table_types=None,
         required_table_types=[],
         exclude_table_types=[], 
@@ -753,6 +756,7 @@ class Standardizer:
                             # California data, RAE = Race and Ethnicity
                             # Check if it's possible this does not indicate subject vs officer
                             race_match_cols = self._find_col_matches("race", ["race", "descent","rae_full","citizen_demographics","officer_demographics","ethnicity"],
+                                known_col_names=None,
                                 validator=_race_validator, validate_args=[self.source_name])
 
                             off_type = False
@@ -886,6 +890,8 @@ class Standardizer:
                         defs.TableType.SHOOTINGS_SUBJECTS]
         
         match_cols = self._find_col_matches("fatal", ['fatal','fatality','deceased','died','death'], 
+                                            known_col_names=[self.known_cols[x] for x in [defs.columns.FATAL_OFFICER,defs.columns.FATAL_OFFICER_SUBJECT, 
+                                                                                              defs.columns.FATAL_SUBJECT]],
                                             exclude_col_names=[v for k,v in self.col_map.items() if "INJURY" in k],
                                             validator=_fatal_validator,
                                             only_table_types=injury_tables,
@@ -901,6 +907,8 @@ class Standardizer:
         exclude_cols.append(("does not contain", ["causedby",'preexisting','animal']))
         match_cols = self._find_col_matches("injury", ['injured','injury', 'injuries','affecttype','wounded_or_killed', 
                                                        'cond_type','injdec', 'wounded','inj','injure', 'effect'], 
+                                            known_col_names=[self.known_cols[x] for x in [defs.columns.INJURY_OFFICER,defs.columns.INJURY_OFFICER_SUBJECT, 
+                                                                                              defs.columns.INJURY_SUBJECT]],
                                             exclude_col_names=exclude_cols,
                                             validator=_injury_validator,
                                             only_table_types=injury_tables,
@@ -921,7 +929,22 @@ class Standardizer:
             logger.info(f"Column {match_cols[0]} identified as a {defs.columns.AGENCY} column")
             self.col_map[defs.columns.AGENCY] = match_cols[0]
 
+        match_cols = self._find_col_matches("name", ["name"],
+                                            known_col_names=[self.known_cols[x] for x in [defs.columns.NAME_OFFICER,defs.columns.NAME_SUBJECT, 
+                                                                                              defs.columns.NAME_OFFICER_SUBJECT]],
+                                            validator=_name_validator,
+                                            secondary_patterns=[("equals", ["subject", "officer", 'trooper'])],
+                                            always_validate=True,
+                                            only_table_types=[defs.TableType.SHOOTINGS, defs.TableType.SHOOTINGS_OFFICERS, 
+                                                        defs.TableType.SHOOTINGS_SUBJECTS]) 
+
+        self._id_demographic_column(match_cols,
+                defs.columns.NAME_SUBJECT, defs.columns.NAME_OFFICER, 
+                defs.columns.NAME_OFFICER_SUBJECT,
+                 specific_cases=[_case("Dallas", defs.TableType.SHOOTINGS, 'officer_s', defs.columns.NAME_OFFICER)],)
+
         match_cols = self._find_col_matches("zip_code", ['zip','zipcode'],
+                                            known_col_names=self.known_cols[defs.columns.ZIP_CODE],
                                             validator=_zip_code_validator,
                                             validate_args=[self.state],
                                             always_validate=True)
@@ -1096,7 +1119,7 @@ class Standardizer:
                 ("- OFFICERS" in self.table_type and "SUBJECTS" not in self.table_type)
             is_subject_table = ("- SUBJECTS" in self.table_type and "OFFICERS" not in self.table_type)
             # mos = Member of Service
-            off_words = ["off", "deputy", "employee", "ofc", "empl", 'emp','mos', 'personnel']
+            off_words = ["off", "deputy", "employee", "ofc", "empl", 'emp','mos', 'personnel', 'trooper']
             civilian_terms = ["citizen","subject","suspect","civilian", "cit", "offender",]
             not_off_words = ["offender"]
 
@@ -1323,11 +1346,40 @@ class Standardizer:
         #     if not keeporig:
         #         self.table.drop(columns=[defs.columns.DATE], inplace=True)
 
-    def standardize_zip_code(self):
-        if defs.columns.ZIP_CODE in self.col_map:
-            self.df[defs.columns.ZIP_CODE] = self.df[self.col_map[defs.columns.ZIP_CODE]]
-            self.data_maps.append(DataMapping(orig_column_name=self.col_map.get_original(defs.columns.ZIP_CODE), new_column_name=defs.columns.ZIP_CODE,
-                                    orig_column=self.df[self.col_map[defs.columns.ZIP_CODE]]))
+    def standardize_name(self, cols):
+        for c in cols:
+            if c in self.col_map:
+                if self.source_name=="Dallas" and self.col_map[c]=='officer_s':
+                    # Column combines name and demographics
+                    # The åÊ is a typo in an entry
+                    p = re.compile(r'^\[?(.+)(\s|åÊ)[A-Z]{1,2}/[A-Z]\]?$')
+                    def convert(x):
+                        return {k:p.search(v.strip()).groups()[0].strip() for k,v in enumerate(x.split(';'))}
+
+                    self.df[c] = self.df[self.col_map[c]].apply(convert)
+                else:
+                    def convert(x):
+                        if pd.isnull(x):
+                            return 'UNSPECIFIED'
+                        elif '/' in x:
+                            return {k:v.strip() for k,v in enumerate(x.split('/'))}
+                        else:
+                            return x
+                        
+                    self.df[c] = self.df[self.col_map[c]].apply(convert)
+
+                    if any(self.df[c].apply(lambda x: isinstance(x,dict))):
+                        self.df[c] = self.df[c].apply(lambda x: x if isinstance(x,dict) else {0:x})
+
+                self.data_maps.append(DataMapping(orig_column_name=self.col_map.get_original(c), new_column_name=c,
+                                        orig_column=self.df[self.col_map[c]]))
+
+    def standardize_rename_only(self, cols):
+        for c in cols:
+            if c in self.col_map:
+                self.df[c] = self.df[self.col_map[c]]
+                self.data_maps.append(DataMapping(orig_column_name=self.col_map.get_original(c), new_column_name=c,
+                                        orig_column=self.df[self.col_map[c]]))
 
 
     def standardize_agency(self):
@@ -2211,6 +2263,31 @@ def _zip_code_validator(df, cols_test, state):
                 match_cols.append(col_name)
             else:
                 raise ValueError("Column is not recognized as a zip code column")
+        except:
+            pass
+
+    return match_cols
+
+def _name_validator(df, cols_test):
+    match_cols = []
+    off_words = ["deputy", "employee", "officer", 'personnel', 'offficer', 'trooper']
+    civilian_terms = ["citizen","subject","suspect","civilian", "offender"]
+    all_words = off_words.copy()
+    all_words.extend(civilian_terms)
+    
+    name_pattern = re.compile(r'^[A-Z][a-z]+,?\s+[A-Z]?[a-z]*\.?\s*(Mc|O\')?[A-Z][a-z]+(\sJr\.|\sI+)?$')
+    for col_name in cols_test:
+        try:
+            if col_name.lower()=='name' or \
+                (any([x in split_words(col_name, case='lower') for x in ['name','names']]) and \
+                 any([x.lower() in all_words for x in split_words(col_name)])):
+                match_cols.append(col_name)
+            elif col_name.lower() in all_words and \
+                (df[col_name][df[col_name].notnull()].apply(lambda x: name_pattern.search(x.strip()) is not None).mean() > 0.5 or \
+                df[col_name][df[col_name].notnull()].apply(lambda x: all([name_pattern.search(y.strip()) for y in x.split(',')])).mean() > 0.5 or \
+                df[col_name][df[col_name].notnull()].apply(lambda x: all([name_pattern.search(y.strip()) for y in x.split('/')])).mean() > 0.5):
+                # Data looks like a name
+                match_cols.append(col_name)
         except:
             pass
 

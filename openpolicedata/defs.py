@@ -251,6 +251,9 @@ class _Columns(_ToDict_Mixin):
     INJURY_SUBJECT = "SUBJECT_INJURY"
     INJURY_OFFICER = "OFFICER_INJURY"
     INJURY_OFFICER_SUBJECT = "OFFICER/SUBJECT_INJURY"
+    NAME_SUBJECT = "SUBJECT_NAME"
+    NAME_OFFICER = "OFFICER_NAME"
+    NAME_OFFICER_SUBJECT = "OFFICER/SUBJECT_NAME"
     ZIP_CODE = 'ZIP_CODE'
 
     def _get_columns_as_df(self):
@@ -272,6 +275,9 @@ class _Columns(_ToDict_Mixin):
                 sort_by.append(match.group(2).title())
             elif match and match.group(2)=="INJURY":
                 defs.append(f"Whether {match.group(1).lower()} was injured in an officer-involved shooting or use of force")
+                sort_by.append(match.group(2).title())
+            elif match and match.group(2)=="INJURY":
+                defs.append(f"Name of {match.group(1).lower()} in an officer-involved shooting")
                 sort_by.append(match.group(2).title())
             elif match:
                 addon = ''
