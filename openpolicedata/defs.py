@@ -276,7 +276,7 @@ class _Columns(_ToDict_Mixin):
             elif match and match.group(2)=="INJURY":
                 defs.append(f"Whether {match.group(1).lower()} was injured in an officer-involved shooting or use of force")
                 sort_by.append(match.group(2).title())
-            elif match and match.group(2)=="INJURY":
+            elif match and match.group(2)=="NAME":
                 defs.append(f"Name of {match.group(1).lower()} in an officer-involved shooting")
                 sort_by.append(match.group(2).title())
             elif match:
