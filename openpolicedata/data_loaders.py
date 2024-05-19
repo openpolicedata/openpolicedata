@@ -1004,6 +1004,7 @@ class Excel(Data_Loader):
         # Row names may not be the 1st row in which case columns need to be fixed
         max_drops = 5
         num_drops = 0
+        updated_cols = False
         while sum([(pd.isnull(x) or "Unnamed" in x) for x in df.columns]) / len(df.columns) > 0.5:
             if ((m:=df.isnull().mean())==1).any():
                 keep = []
@@ -1030,9 +1031,15 @@ class Excel(Data_Loader):
                     df.drop(index=df.index[0], inplace=True)
                     df.reset_index(drop=True, inplace=True)
                     num_drops+=1
+                    updated_cols = True
 
                     if len(df)==0 or num_drops>=max_drops:
                         raise ValueError("Unable to find column names")
+
+        if updated_cols:
+            # Remove any empty rows or repeated column headers. There may be multiple of the same table for different years
+            df = df.dropna(thresh=3)
+            df = df[df.apply(lambda x: not all([y==df.columns[k] for k,y in enumerate(x)]), axis=1)]
 
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=RuntimeWarning)

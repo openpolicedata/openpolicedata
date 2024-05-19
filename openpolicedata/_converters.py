@@ -558,6 +558,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
                 (x=="IRAK" and source_name=="Chattanooga") or \
                 (x=="N" and source_name=="Bremerton") or \
                 (x=="W\nW" and source_name=="Sparks") or \
+                (x in ['UI'] and source_name=="Norwich") or \
                 (x in ['E','P'] and source_name=="Tucson") or \
                 ("DOG" in x) or \
                 (source_name in ["New Orleans"] and "NOT APPLICABLE (NON" in x) or \
@@ -699,6 +700,7 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
             (x in ["W","NA"]) or \
             (x in ['L'] and source_name=='Bloomington') or \
             (x in ['GROUP'] and source_name=='Asheville') or \
+            (x in ['UI'] and source_name=="Norwich") or \
             (x=="MA" and source_name in ["Lincoln"]) or \
             (x=="P" and source_name=="Fayetteville") or \
             (x=="5" and source_name=="Lincoln") or \
@@ -730,7 +732,7 @@ def _create_injury_lut(x, no_id, source_name, cats, *args, **kwargs):
         else:
             return "INJURED" if x>0 else "NO INJURY"
     orig = x
-    x = x.upper().replace('-',' ').replace('*','').replace('SUBJECT','').strip()
+    x = x.upper().replace('-',' ').replace('*','').replace('SUBJECT','').replace('  ',' ').strip()
     x = re.sub(r'OF[FI]{2}CER','', x).strip()  # Handle misspelling officer
 
     if len(x)==0:
@@ -766,7 +768,7 @@ def _create_injury_lut(x, no_id, source_name, cats, *args, **kwargs):
         return "INJURED"
     elif 'NALOXONE' in x:
         return orig
-    elif x in ['SELF INFLICTED FATAL', 'DECEASED (SELF INFLICTED)','KILLED (SELF INFLICTED)']:
+    elif x in ['SELF INFLICTED FATAL', 'DECEASED (SELF INFLICTED)','KILLED (SELF INFLICTED)', 'FATAL SUICIDE']:
         return 'SELF-INFLICTED FATAL'
     elif x in ['UNKNOWN','UNKNWON']:
         return 'UNKNOWN'
@@ -775,7 +777,8 @@ def _create_injury_lut(x, no_id, source_name, cats, *args, **kwargs):
     elif x=='OTHER':
         return 'OTHER'
     elif no_id=='test':
-        if source_name not in ['Indianapolis', 'Northampton','Minneapolis','Rutland']:
+        if source_name not in ['Indianapolis', 'Northampton','Minneapolis','Rutland'] and \
+            (x not in ['UI'] or source_name!="Norwich"):
             raise ValueError(f"Unknown value in injury column: {orig}")
     elif no_id=='error':
         raise ValueError(f"Unknown value in injury column: {orig}")

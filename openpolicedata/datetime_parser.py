@@ -509,6 +509,8 @@ def to_datetime(col, ignore_errors=False, *args, **kwargs):
         except pd._libs.tslibs.parsing.DateParseError as e:
             if 'out of range' in str(e) and not isinstance(col, pd.Series) and re.search(r'year 20\d{6} is out of range: 20\d{6}.0, at position 0', str(e)):
                 return to_datetime(col[:-2])
+            elif re.search(r'\d{2}/\d{2}/\d{4} \d{4} hours', str(e)) and isinstance(col, pd.Series):
+                return pd.to_datetime(col, format='%m/%d/%Y %H%M hours')
             elif ignore_errors and 'out of range' in str(e) and not isinstance(col, pd.Series):
                 return col
             elif ignore_errors and isinstance(col,str) and \
