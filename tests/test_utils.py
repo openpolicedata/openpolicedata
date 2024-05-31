@@ -20,11 +20,17 @@ import openpolicedata as opd
 def get_datasets(csvfile=None,use_changed_rows=False):
     csvfile = m if csvfile and os.path.exists((m:=csvfile.replace('\\','/'))) else csvfile
 
-    if use_changed_rows==True and csvfile and csvfile!=os.path.join('..','opd-data', 'opd_source_table.csv'):
-        raise ValueError("Both --use-changed-rows and --csvfile options were provided, which is ambiguous.")
-    elif use_changed_rows:
+    if use_changed_rows:
         # Use the added rows in the local ../opd-data/opd_source_table.csv that have not been committed
-        csv_path = os.path.join('..','opd-data')
+        if csvfile:
+            # Check if git repo
+            cmd =f'git -C {os.path.dirname(csvfile)} remote -v'
+            result = subprocess.run(cmd, stdout=subprocess.PIPE).stdout.decode('utf-8')
+            if "opd-data.git" not in result:
+                 raise ValueError(f"{csvfile} does not appear to be an Git repository for opd-data")
+            csv_path = os.path.dirname(csvfile)
+        else:
+            csv_path = os.path.join('..','opd-data')
         assert os.path.exists(csv_path)
         added_lines_datasets = get_changed_rows(csv_path, 'opd_source_table.csv')
         opd.datasets.reload(added_lines_datasets)

@@ -287,7 +287,7 @@ def test_source_table_fail_req(df_compat):
 	with pytest.raises(opd.exceptions.CompatSourceTableLoadError):
 		check_compat_source_table(df_compat=df_compat, cur_ver='0.0.1')
 
-@pytest.mark.parametrize("y", [7, 13, range(0,8), [6, 7,13]])
+@pytest.mark.parametrize("y", [7, 13, range(0,8), [6, 7,13], slice(0,8)])
 @pytest.mark.filterwarnings("error::DeprecationWarning")
 def test_datasets_iloc_no_warning(all_datasets, y):
 	all_datasets.iloc[0,y]
@@ -298,7 +298,7 @@ def test_datasets_iloc_no_warning(all_datasets, y):
 def test_datasets_iloc_single_input_no_warning(all_datasets, x):
 	all_datasets.iloc[x]
 
-@pytest.mark.parametrize("y", [8, 10, [8,9], range(8,12), [1,8], range(6,10)])
+@pytest.mark.parametrize("y", [8, 10, [8,9], range(8,12), [1,8], range(6,10), slice(8,10), slice(1,10,2)])
 def test_datasets_iloc_warning(all_datasets, y):
 	with pytest.deprecated_call():
 		all_datasets.iloc[0,y]

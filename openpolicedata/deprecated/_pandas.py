@@ -22,7 +22,8 @@ class _iLocIndexerSub(_iLocIndexer):
                 # 8 is where the Year column has been moved to and therefore, any old iloc calls
                 # requesting data past index 8 could now return the wrong value
                 if (isinstance(key[1], int) and 8<=key[1]<13) or \
-                    (not isinstance(key[1], int) and any(8<=x<13 for x in key[1])):
+                    (isinstance(key[1], slice) and any([8<=x<13 for x in range(*key[1].indices(1000000))])) or \
+                    (not isinstance(key[1], (int, slice)) and any(8<=x<13 for x in key[1])):
                     warnings.warn(DeprecationWarning("The Year column of the datasets table has recently been moved to column 8 from column 12. "+\
                                                      f"Column input {key[1]} could be outputting a different column than desired for index 8-12 as a result "+\
                                                      "if the code was written prior to this change. Code may need to be changed. It is recommended "+\
