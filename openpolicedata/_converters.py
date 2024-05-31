@@ -240,7 +240,7 @@ def _create_ethnicity_lut(x, no_id, source_name, eth_cats, *args, **kwargs):
             # Same result whether no_id is keep or null
             return ""
         
-    if has_nonlat and (x in ["N", "NH", "NHIS"] or "NOTHISP" in x or "NONHIS" in x or "NONLATINO" in x):
+    if has_nonlat and (x in ["N", "NH", "NHIS",'NONE'] or "NOTHISP" in x or "NONHIS" in x or "NONLATINO" in x):
         return eth_cats[defs._eth_keys.NONLATINO]
     if has_latino and (x in ["H","HIS","LAT"] or "HISPANIC" in x or "LATINO" in x):
         return eth_cats[defs._eth_keys.LATINO]
@@ -393,7 +393,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
         if abbrev_full_match and any([len(x)==1 for x in abbrev_full_match.groups()]):
             x = [x for x in abbrev_full_match.groups() if len(x)>1][0].strip()
 
-        delims = [" and ", ",",'|','/']
+        delims = [" and ", ",",'|','/',';']
         delim = [d for d in delims if d in x]
         # Look for delimited multi-race data
         if not known_single and len(delim)>0 and \
@@ -489,7 +489,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
         else:
             return race_cats[defs._race_keys.ASIAN] if has_asian else race_cats[defs._race_keys.AAPI]
     if (has_pi or has_aapi) and ("HAWAI" in x or "PACIFIC" in x_no_space or \
-                                 "PACISL" in x_no_space):
+                                 "PACISL" in x_no_space or x in ['PI']):
         return race_cats[defs._race_keys.PACIFIC_ISLANDER] if has_pi else race_cats[defs._race_keys.AAPI]
     if has_latino and x in ["H", "WH", "HISPANIC", "LATINO", "HISPANIC OR LATINO", "LATINO OR HISPANIC", 
                             "HISPANIC/LATINO", "LATINO/HISPANIC",'HISPANIC/LATIN/MEXICAN','HISP']:
@@ -703,6 +703,7 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
             (x in ['UI'] and source_name=="Norwich") or \
             (x=="MA" and source_name in ["Lincoln"]) or \
             (x=="P" and source_name=="Fayetteville") or \
+            (x in ['B'] and source_name=="Louisville") or \
             (x=="5" and source_name=="Lincoln") or \
             (x in ["MALE,MALE"] and source_name=="Chattanooga") or \
             (x=="PENDINGRELEASE" and source_name=="Portland") or \
@@ -792,6 +793,11 @@ def _create_fatal_lut(x, no_id, source_name, cats, *args, **kwargs):
         x = int(x)
         if x<0:
             return x
+        elif x>1:
+            if no_id=='error':
+                raise ValueError(f"Unknown value in fatal column: {orig}")
+            else:
+                return orig if no_id=="keep" else ""
         else:
             return "YES" if x>0 else "NO"
     orig = x
@@ -800,12 +806,13 @@ def _create_fatal_lut(x, no_id, source_name, cats, *args, **kwargs):
         return "YES"
     elif x in ["NON-FATAL","NON FATAL", "NO","N",'NO CONTACT']:
         return "NO"
-    elif x in ["SELF-INFLICTED"]:
+    elif x in ["SELF-INFLICTED"] or (source_name=='Louisville' and x=='YS'):
         return "SELF-INFLICTED FATAL"
-    elif no_id=='test':
-        raise ValueError(f"Unknown value in injury column: {orig}")
-    elif no_id=='error':
-        raise ValueError(f"Unknown value in injury column: {orig}")
+    elif (source_name=='Louisville' and x=='CONTINUED'):
+        # Used in Louisville table to indicate where a single shooting applies to multiple officers in different rows
+        return orig
+    elif no_id in ['test', 'error']:
+        raise ValueError(f"Unknown value in fatal column: {orig}")
     else:
         return orig if no_id=="keep" else ""
     

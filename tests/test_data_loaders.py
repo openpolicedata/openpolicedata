@@ -572,56 +572,136 @@ def test_excel():
     df_comp.columns = [x.strip() if isinstance(x, str) else x for x in df_comp.columns]
     assert df_comp.equals(df)
 
-
-def test_excel_year_sheets(skip):
-    if "Northampton" in skip:
+# Add Norwich OIS and UoF to Unnamed column test
+# Unnamed column: https://northamptonpd.com/images/ODP%20Spreadsheets/2021/Use%20of%20Force.xlsx
+@pytest.mark.parametrize('src, url, multitable', [
+    ("Norwich", "https://www.norwichct.org/ArchiveCenter/ViewFile/Item/922", True), # Multiple separated tables in same sheet for different years
+    ("Norwich", "https://www.norwichct.org/ArchiveCenter/ViewFile/Item/771", False), # 1st row is just the year and data type
+    ("Norwich", "https://www.norwichct.org/ArchiveCenter/ViewFile/Item/882", False), # 1st row is just the year and data type
+    ("Norwich", "https://www.norwichct.org/ArchiveCenter/ViewFile/Item/923", False), # 1st row is just the year and data type
+    ("Northampton", "https://northamptonpd.com/images/ODP%20Spreadsheets/2021/Use%20of%20Force.xlsx", False) # 1st row is just the year and data type
+])
+def test_1st_row_not_headers(skip, src, url, multitable):
+    if src in skip:
         return
 
-    url = "https://northamptonpd.com/images/ODP%20Spreadsheets/2014-2020_MV_Pursuits_incident_level_data.xlsx"
-    loader = data_loaders.Excel(url, date_field="Date")
+    loader = data_loaders.Excel(url)
+    df = loader.load(pbar=False)
+
+    def clean_df(df):
+        df.columns= [x for x in df.iloc[0]]
+        df = df.drop(index=df.index[0])
+        if multitable:
+            keep = df.apply(lambda x: not all([y==df.columns[k] for k,y in enumerate(x)]), axis=1)
+            keep = keep & df.apply(lambda x: not x.iloc[2:].isnull().all(), axis=1)
+            df = df[keep]
+
+        df = df.reset_index(drop=True)
+        df = df.convert_dtypes()
+        df.columns = [x.strip() if isinstance(x, str) else x for x in df.columns]
+
+        return df
+    
+    df_comp = pd.read_excel(url)
+    df_comp = clean_df(df_comp)
+
+    assert df_comp.equals(df)
+
+
+@pytest.mark.parametrize('src, url, date_field, yrs', [
+    ("Northampton", "https://northamptonpd.com/images/ODP%20Spreadsheets/2014-2020_MV_Pursuits_incident_level_data.xlsx", "Date", range(2014,2021)), # This dataset has a typo in 1 of the year sheet names
+    ("Northampton", "https://northamptonpd.com/images/ODP%20Spreadsheets/NPD_Use_of_Force_2014-2020_incident_level_data.xlsx", "Year", range(2014,2021)), # This dataset has a typo in the column names of some sheets
+    ('Louisville', 'https://www.arcgis.com/sharing/rest/content/items/73672aa470da4095a88fcac074ee00e6/data', 'Year', range(2011, 2022))
+]
+)
+def test_excel_year_sheets(skip, src, url, date_field, yrs):
+    if src in skip:
+        return
+    
+    warnings.filterwarnings('ignore', message='Identified difference in column names', category=UserWarning)
+    warnings.filterwarnings('ignore', message=r"Column '.+' in current DataFrame does not match '.+' in new DataFrame. When they are concatenated, both columns will be included.", category=UserWarning)
+
+    loader = data_loaders.Excel(url, date_field=date_field)
 
     years = loader.get_years()
-    assert years == [x for x in range(2014,2021)]
+    yrs = [x for x in yrs]
+    assert years == yrs
 
-    df_comp = pd.read_excel(url, sheet_name="2014")
-    df_comp.columns= [x for x in df_comp.iloc[0]]
-    df_comp.drop(index=df_comp.index[0], inplace=True)
-    df_comp.reset_index(drop=True, inplace=True)
-    df_comp = df_comp.convert_dtypes()
-    df_comp.columns = [x.strip() if isinstance(x, str) else x for x in df_comp.columns]
-    df_comp = df_comp.iloc[:, 1:]
+    def clean_df(df, yr):
+        if all(['Unnamed' in x for x in df.columns[2:]]):
+            df.columns= [x for x in df.iloc[0]]
+            df = df.drop(index=df.index[0])
+        elif any('Unnamed' in x for x in df.columns):
+            new_cols = []
+            addon = ''
+            for c in df.columns:
+                if pd.isnull(df.loc[0,c]):
+                    addon = ''
+                    new_cols.append(c)
+                elif c.lower().endswith('info'):
+                    addon = re.sub(r'[Ii]nfo', '', c).strip() + ' '
+                    new_cols.append(addon + df.loc[0,c])
+                else:
+                    new_cols.append(addon + df.loc[0,c])
+
+            df = df.copy() # Avoids any warnings from pandas
+            df.columns = new_cols
+            df = df.iloc[1:]
+
+        df = df.reset_index(drop=True)
+        df['Year'] = yr
+        if 'Month' in df:
+            cols = []
+            for c in df.columns:
+                if c=='Month':
+                    cols.append('Year')
+                    cols.append(c)
+                elif c!='Year':
+                    cols.append(c)
+            df = df[cols]
+        df = df.convert_dtypes()
+        df.columns = [x.strip() if isinstance(x, str) else x for x in df.columns]
+        if pd.isnull(df.columns[0]):
+            df = df.iloc[:, 1:]
+        return df
+    
+    df_comp = pd.read_excel(url, sheet_name=str(yrs[0]))
+    df_comp = clean_df(df_comp, yrs[0])
 
     # Load all years
-    df_2014 = loader.load(year=2014, pbar=False)
+    df_loaded1 = loader.load(year=yrs[0], pbar=False)
 
-    assert df_comp.equals(df_2014)
+    assert df_comp.equals(df_loaded1)
 
-    df_comp = pd.read_excel(url, sheet_name="2015")
-    df_comp.columns= [x for x in df_comp.iloc[0]]
-    df_comp.drop(index=df_comp.index[0], inplace=True)
-    df_comp.reset_index(drop=True, inplace=True)
-    df_comp = df_comp.convert_dtypes()
-    df_comp.columns = [x.strip() if isinstance(x, str) else x for x in df_comp.columns]
-    df_comp = df_comp.iloc[:, 1:]
+    df_comp = pd.read_excel(url, sheet_name=str(yrs[1]))
+    df_comp = clean_df(df_comp, yrs[1])
 
     # Load all years
-    df_2015 = loader.load(year=2015, pbar=False)
+    df_loaded2 = loader.load(year=yrs[1], pbar=False)
 
-    assert df_comp.equals(df_2015)
+    assert df_comp.equals(df_loaded2)
 
-    # Note: There is no 2013 data
-    df_multi = loader.load(year=[2013,2015], pbar=False)
+    df_multi = loader.load(year=[yrs[0]-1,yrs[1]], pbar=False)
 
-    assert df_multi.equals(pd.concat([df_2014, df_2015], ignore_index=True))
+    df_loaded2.columns = df_loaded1.columns  # This takes care of case where columns had typos which is handled by data loader
+    assert df_multi.equals(pd.concat([df_loaded1, df_loaded2], ignore_index=True))
 
     df = loader.load(pbar=False)
+
+    df2 = df[df_multi.columns].head(len(df_multi)).convert_dtypes()
+    pd.testing.assert_frame_equal(df2, df_multi)
+
     df_last = loader.load(year=years[-1], pbar=False)
+    if 'Incident/Type of Charges' in df_last:
+        df_last = df_last.rename(columns={'Incident/Type of Charges':'Incident Type/Charges',
+                                          'Event':'Event #',
+                                          'Alcohol/Drugs':'Alcohol Drugs',
+                                          'Arrest or ProtectiveCustody':'Arrest or Protective Custody'})
+    elif 'Lethal Y/N' in df_last:
+        df_last = df_last.rename(columns={'Lethal Y/N':'Lethal Y/YS/N'})
+    df2 = df[df_last.columns].tail(len(df_last)).reset_index(drop=True).convert_dtypes()
+    pd.testing.assert_frame_equal(df2, df_last)
 
-    assert df.head(len(df_multi)).equals(df_multi)
-    assert df.tail(len(df_last)).reset_index(drop=True).equals(df_last.reset_index(drop=True))
-
-    # Test loading to ensure that channel name changes are handled
-    data_loaders.Excel("https://northamptonpd.com/images/ODP%20Spreadsheets/NPD_Use_of_Force_2014-2020_incident_level_data.xlsx").load()
 
 def test_excel_header():
     url = "https://cms7files1.revize.com/sparksnv/Document_Center/Sparks%20Police/IA%20Data/2000-2022-SPD-OIS-Incidents%20(3).xlsx"
@@ -701,6 +781,7 @@ def test_excel_xls_protected():
 
     df_comp = df_comp.convert_dtypes()
     df_comp.columns = [x.strip() if isinstance(x, str) else x for x in df_comp.columns]
+    df_comp = df_comp[[x for x in df_comp.columns if 'Unnamed' not in x]]
     assert df_comp.equals(df)
 
 if __name__ == "__main__":

@@ -806,51 +806,40 @@ class Excel(Data_Loader):
 
     def __get_sheets(self):
         names = self.excel_file.sheet_names
-        if all([x.isdigit() for x in names]):
+        if sum([x.isdigit() for x in names]) / len(names) > 0.75 and len(names)>1:
             logger.debug("Different years of data may be stored in separate Excel sheets. Evaluating...")
-            possible_years = [int(x) for x in names]
-            # possible_years.sort()
+            possible_years = [int(x) for x in names if x.isdigit()]
+            year_names = [x for x in names if x.isdigit()]
 
-            cur_year = date.today().year
-            def is_year(x):
-                return x > 2000 and x<=cur_year
+            if self.url=='https://www.arcgis.com/sharing/rest/content/items/73672aa470da4095a88fcac074ee00e6/data':
+                # This is the Louisville OIS dataset. The sheets for years before 2011 are empty
+                year_names = [x for x,y in zip(year_names, possible_years) if y>2010]
+                possible_years = [x for x in possible_years if x>2010]
+            
+            min_year = min(possible_years)
 
-            last_year = None
+            if min_year < 2000 or min_year > date.today().year:
+                raise ValueError(f"Sheet name {min_year} is not recognized as a year in {self.url}")
+
             year_dict = {}
             years_found = True
-            for k in range(len(possible_years)):
-                year = possible_years[k]
-                if is_year(year):
-                    if last_year!=None and year!=last_year+1:
-                        raise ValueError("Unable to parse sheet names")
-                    logger.debug(f"Identified likely year sheet: {names[k]}")
-                    year_dict[year] = names[k]
-                elif len(names[k])==4:
+            for i in range(len(possible_years)):
+                year = min_year + i
+                k = [k for k,x in enumerate(possible_years) if x==year]
+                if len(k)==1:
+                    logger.debug(f"Identified likely year sheet: {year_names[k[0]]}")
+                    year_dict[year] = year_names[k[0]]
+                elif len(k)==0:
                     # Check for typo
-                    success = False
-                    for j in range(len(names[k])-1):
-                        new_name = list(names[k])
-                        tmp = new_name[j]
-                        new_name[j] = new_name[j+1]
-                        new_name[j+1] = tmp
-                        new_name = str("".join(new_name))
-                        new_year = int(new_name)
-                        if is_year(new_year) and new_year==last_year+1:
-                            year = new_year
-                            year_dict[new_year] = names[k]
-                            logger.debug(f"Identified likely year sheet with typo: {names[k]}")
-                            success = True
-                            break
-
-                    if not success:
+                    m = [y for y in year_names if {x for x in str(year)}=={x for x in y} and y not in year_dict.values()]
+                    if len(m)!=1:
                         raise ValueError("Unable to parse sheet names")
+                    year_dict[year] = m[0]
                 else:
                     raise ValueError("Unable to parse sheet names")
 
-                last_year = year
-
             if years_found:
-                logger.debug("Treating Excel file as aifferent years stored in separate Excel sheets.")
+                logger.debug("Treating Excel file as different years stored in separate Excel sheets.")
                 return year_dict, True
 
         return names, False
@@ -885,83 +874,83 @@ class Excel(Data_Loader):
         nrows_read = offset+nrows if nrows is not None else None
         sheets, has_year_sheets = self.__get_sheets()
 
-        with warnings.catch_warnings():        
-            # Progress bar is not used because TqdmReader object has no attribute 'seek' and would need to be modified to not have a newline operator
-            warnings.simplefilter("ignore", category=pd.errors.DtypeWarning)
-            if has_year_sheets:
-                if year==None:
-                    year = list(sheets.keys())
-                    year.sort()
-                    year = [year[0], year[-1]]
-                if not isinstance(year, list):
-                    year = [year, year]
+        if has_year_sheets:
+            if year==None:
+                year = list(sheets.keys())
+                year.sort()
+                year = [year[0], year[-1]]
+            if not isinstance(year, list):
+                year = [year, year]
 
-                table = pd.DataFrame()
-                cols_added = 0
-                for y in range(year[0], year[1]+1):
-                    if y in sheets:
-                        logger.debug(f"Loading data from sheet {sheets[y]}")
+            table = pd.DataFrame()
+            cols_added = 0
+            for y in range(year[0], year[1]+1):
+                if y in sheets:
+                    logger.debug(f"Loading data from sheet {sheets[y]}")
+                    with warnings.catch_warnings():
+                        warnings.filterwarnings("ignore", category=UserWarning, message='Data validation extension is not supported')
                         df = pd.read_excel(self.excel_file, nrows=nrows_read, sheet_name=sheets[y])
 
-                        df = self.__clean(df)
+                    df = self.__clean(df, sheets[y], has_year_sheets)
 
-                        if len(table)==0:
-                            table = df
-                            col_matches = [[k] for k in range(len(df.columns))]
-                        else:
-                            if not df.columns.equals(table.columns):
-                                # Conditional for preventing column names from being too different
-                                if len(df.columns)+cols_added == len(table.columns) and \
-                                    (df.columns == table.columns[:len(df.columns)]).sum()>=len(df.columns)-3-cols_added:
-                                    # Try to find a typo
-                                    for m in [j for j in range(len(df.columns)) if table.columns[j]!=df.columns[j]]:
-                                        for k in col_matches[m]:
-                                            if table.columns[k]==df.columns[m]:
-                                                break
-                                            try:
-                                                from rapidfuzz import fuzz
-                                            except:
-                                                raise ImportError(f"{self.url} requires installation of rapidfuzz " + 
-                                                    "(https://pypi.org/project/rapidfuzz/) to load data from multiple years (pip install rapidfuzz)")
+                    if len(table)==0:
+                        table = df
+                        col_matches = [[k] for k in range(len(df.columns))]
+                    else:
+                        if not df.columns.equals(table.columns):
+                            # Conditional for preventing column names from being too different
+                            if len(df.columns)+cols_added == len(table.columns) and \
+                                (df.columns == table.columns[:len(df.columns)]).sum()>=len(df.columns)-3-cols_added:
+                                # Try to find a typo
+                                for m in [j for j in range(len(df.columns)) if table.columns[j]!=df.columns[j]]:
+                                    for k in col_matches[m]:
+                                        if table.columns[k]==df.columns[m]:
+                                            break
+                                        try:
+                                            from rapidfuzz import fuzz
+                                        except:
+                                            raise ImportError(f"{self.url} requires installation of rapidfuzz " + 
+                                                "(https://pypi.org/project/rapidfuzz/) to load data from multiple years (pip install rapidfuzz)")
 
-                                            if fuzz.ratio(table.columns[k], df.columns[m]) > 80:
-                                                warnings.warn(f"Identified difference in column names when combining sheets {sheets[y-1]} and {sheets[y]}. " + 
-                                                    f"Column names are '{table.columns[k]}' and '{df.columns[m]}'. This appears to be a typo. " + 
-                                                    f"These columns are assumed to be the same and will be combined as column '{table.columns[k]}'")
-                                                df.columns = [table.columns[k] if j==m else df.columns[j] for j in range(len(df.columns))]
-                                                break
-                                        else:
-                                            warnings.warn(f"Column '{table.columns[m]}' in current DataFrame does not match '{df.columns[m]}' in new DataFrame. "+ 
-                                                "When they are concatenated, both columns will be included.")
-                                            col_matches[m].append(len(table.columns))
-                                            cols_added+=1
-                                            # raise ValueError(f"Column {table.columns[k]} in table does not match {df.columns[k]} in df")
-                                else:
-                                    raise ValueError("Columns don't match")
-                            logger.debug("Concatenating data from multiple year sheets")
-                            table = pd.concat([table, df], ignore_index=True)
+                                        if fuzz.ratio(table.columns[k], df.columns[m]) > 80 or \
+                                            fuzz.token_sort_ratio(table.columns[k], df.columns[m])>90:
+                                            warnings.warn(f"Identified difference in column names when combining sheets {sheets[y-1]} and {sheets[y]}. " + 
+                                                f"Column names are '{table.columns[k]}' and '{df.columns[m]}'. This appears to be a typo. " + 
+                                                f"These columns are assumed to be the same and will be combined as column '{table.columns[k]}'")
+                                            df.columns = [table.columns[k] if j==m else df.columns[j] for j in range(len(df.columns))]
+                                            break
+                                    else:
+                                        warnings.warn(f"Column '{table.columns[m]}' in current DataFrame does not match '{df.columns[m]}' in new DataFrame. "+ 
+                                            "When they are concatenated, both columns will be included.")
+                                        col_matches[m].append(len(table.columns))
+                                        cols_added+=1
+                                        # raise ValueError(f"Column {table.columns[k]} in table does not match {df.columns[k]} in df")
+                            else:
+                                raise ValueError("Columns don't match")
+                        logger.debug("Concatenating data from multiple year sheets")
+                        table = pd.concat([table, df], ignore_index=True)
 
-                        if nrows_read!=None and len(table)>=nrows_read:
-                            break
-            else:
-                sheets_load = self.sheet.split("&") if isinstance(self.sheet,str) else [self.sheet]
-                dfs = []
-                for s in sheets_load:
-                    if isinstance(s,str):
-                        s = s.strip()
-                        if '*' in s:
-                            p = s.replace('*','.*')
-                            s = [x for x in sheets if re.search(p,x)]
-                            assert len(s)==1
-                            s = s[0]
-                    
-                    self.__check_sheet(s, sheets)
-                    sheet_name = 0 if s is None else s
-                    logger.debug(f"Loading sheet: {sheet_name}")
-                    table = pd.read_excel(self.excel_file, nrows=nrows_read, sheet_name=sheet_name)
-                    dfs.append(table)
-                table = pd.concat(dfs, ignore_index=True)
-                table = self.__clean(table)               
+                    if nrows_read!=None and len(table)>=nrows_read:
+                        break
+        else:
+            sheets_load = self.sheet.split("&") if isinstance(self.sheet,str) else [self.sheet]
+            dfs = []
+            for s in sheets_load:
+                if isinstance(s,str):
+                    s = s.strip()
+                    if '*' in s:
+                        p = s.replace('*','.*')
+                        s = [x for x in sheets if re.search(p,x)]
+                        assert len(s)==1
+                        s = s[0]
+                
+                self.__check_sheet(s, sheets)
+                sheet_name = 0 if s is None else s
+                logger.debug(f"Loading sheet: {sheet_name}")
+                table = pd.read_excel(self.excel_file, nrows=nrows_read, sheet_name=sheet_name)
+                dfs.append(table)
+            table = pd.concat(dfs, ignore_index=True)
+            table = self.__clean(table)               
 
         # Check for empty rows at the bottom
         num_empty = table.isnull().sum(axis=1)
@@ -1000,46 +989,196 @@ class Excel(Data_Loader):
             raise ValueError(f"Sheet {cur_sheet} not found in Excel file at {self.url}")
 
 
-    def __clean(self, df):
+    def __find_column_names(self, df):
+        # Check if the entire column is null for any unnamed columns
+        unnamed_cols = [x for x in df.columns if pd.isnull(x) or 'Unnamed' in x]
+        delete_cols_tf = df[unnamed_cols].apply(lambda x: [pd.isnull(y) or (isinstance(y,str) and len(y.strip())==0) for y in x]).mean()==1  # Null or empty string
+        delete_cols = delete_cols_tf.index[delete_cols_tf]
+        if len(delete_cols)>0 and len(delete_cols)!=len(delete_cols_tf):
+            m = (~delete_cols_tf).sum()
+            if len(delete_cols_tf)<15 or (~delete_cols_tf[-m:]).sum()!=m>2:
+                raise NotImplementedError(f'Unable to parse columns in {self.url}')
+            # Only non-null unnamed columns are far to the right of the last named column
+            delete_cols_tf[-m:] = True
+            delete_cols = delete_cols_tf.index[delete_cols_tf]
+        elif len(unnamed_cols)>0 and len(delete_cols)==0 and all(['Unnamed' in x for x in df.columns[-len(unnamed_cols):]]) and \
+            (df[df.columns[-len(unnamed_cols):]].notnull().sum()<=1).all():
+            # All unnamed columns have 0 or 1 non-null value
+            delete_cols = unnamed_cols
+
+        unnamed_cols = [x for x in unnamed_cols if x not in delete_cols]
+        df = df.drop(columns=delete_cols)
+
+        if len(unnamed_cols)==0:
+            return df
+        
+        if len(delete_cols)>0 and len(unnamed_cols)>0:
+            raise NotImplementedError(f"Unable to parse columns in {self.url}")
+        
+        # Find 1st unnamed column
+        for idx_unnamed, x in enumerate(df.columns):
+            if 'Unnamed' in x:
+                break
+
+        if idx_unnamed==0 and len(unnamed_cols)==1 and all(x==k+1 for k,x in enumerate(df[unnamed_cols[0]])):
+            # First column is just row numbers
+            df = df.iloc[:,1:]
+        elif idx_unnamed < 2 and all(['Unnamed' in x for x in df.columns[idx_unnamed:]]):
+            # First row is likely just some information about the table
+            # First columns are likely in first row of data
+            col_row = 0
+            new_cols = [x for x in df.iloc[0]]
+            while not all([isinstance(x, str) or pd.isnull(x) for x in new_cols]) or all([pd.isnull(x) for x in new_cols[1:]]):  # First column often has text while rest don't in non-data sections
+                col_row+=1
+                new_cols = [x for x in df.iloc[col_row]]
+            
+            new_cols = [x.strip() if isinstance(x,str) else x for x in new_cols]
+            
+            logger.debug(f"Detected that first row does not contain column headers: {df.columns}")
+            logger.debug(f"Making the  second row the column headers: {new_cols}")
+            df.columns = new_cols
+            df = df.iloc[col_row+1:]
+
+            # Look for rows that are just the column names to find if there are multiple tables in the sheet
+            not_col_names = df.apply(lambda x: not all([y==df.columns[k] for k,y in enumerate(x)]), axis=1)
+            if not not_col_names.all():
+                df = df[not_col_names]
+                # Look for gaps between tables and/or tables that don't contain any data (including ones with a row that just says there is no data)
+                df = df[df.iloc[:,2:].notnull().any(axis=1)]
+        else:
+            # This is likely the result of column headers that span multiple rows
+            # with some headers in the first row in merged Excel columns that will not 
+            # be merged in the pandas columns
+
+            # Validate that columns match expected pattern
+            for k, c in enumerate(df.columns):
+                if 'Unnamed' in c:
+                    if pd.isnull(df.loc[0,c]): # If the column name is empty, the first row should be part of the column name
+                        raise ValueError(f"Unexpected condition in column {c} where first row is null for url {self.url}")
+                elif pd.notnull(df.loc[0,c]):  # Both column name and 1st row have value. Column name is expected to be a merged column
+                    if k == len(df.columns) or 'Unnamed' not in df.columns[k+1]:
+                        raise ValueError(f"Unexpected column pattern with columns {df.columns} and first row {df.iloc[0]} for url {self.url}")
+                    
+            # Merge 1st row with columns
+            new_cols = []
+            addon = ''
+            for c in df.columns:
+                if pd.isnull(df.loc[0,c]):
+                    addon = ''
+                    new_cols.append(c)
+                elif c.lower().endswith('info'):
+                    addon = re.sub(r'[Ii]nfo', '', c).strip() + ' '
+                    new_cols.append(addon + df.loc[0,c])
+                else:
+                    new_cols.append(addon + df.loc[0,c])
+
+            df = df.copy() # Avoids any warnings from pandas
+            df.columns = new_cols
+            df = df.iloc[1:]
+
+        df = df.reset_index(drop=True)
+        return df
+
         # Row names may not be the 1st row in which case columns need to be fixed
-        max_drops = 5
-        num_drops = 0
-        updated_cols = False
-        while sum([(pd.isnull(x) or "Unnamed" in x) for x in df.columns]) / len(df.columns) > 0.5:
-            if ((m:=df.isnull().mean())==1).any():
-                keep = []
-                found1 = False
-                num1 = 0
-                max1 = 3
-                for k,v in m.items():
-                    if found1 and v!=1:
-                        raise ValueError(f"Unable to parse Excel table from {self.url}")
-                    elif v==1:
-                        found1 = True
-                        num1+=1
-                        if num1>=max1:
-                            break
-                    else:
-                        keep.append(k)
-                df = df[keep]
-            else:
-                new_cols = [x for x in df.iloc[0]]
-                if all([isinstance(x, str) or pd.isnull(x) for x in new_cols]):
-                    logger.debug(f"Detect that first row does not contain column headers: {df.columns}")
-                    logger.debug(f"Making the  second row the column headers: {new_cols}")
-                    df.columns = new_cols
-                    df.drop(index=df.index[0], inplace=True)
-                    df.reset_index(drop=True, inplace=True)
-                    num_drops+=1
-                    updated_cols = True
+        # max_drops = 5
+        # num_drops = 0
+        # updated_cols = False
+        # while sum([(pd.isnull(x) or "Unnamed" in x) for x in df.columns]) / len(df.columns) > 0.5:
+        #     if ((m:=df.isnull().mean())==1).any():
+        #         keep = []
+        #         found1 = False
+        #         num1 = 0
+        #         max1 = 3
+        #         for k,v in m.items():
+        #             if found1 and v!=1:
+        #                 raise ValueError(f"Unable to parse Excel table from {self.url}")
+        #             elif v==1:
+        #                 found1 = True
+        #                 num1+=1
+        #                 if num1>=max1:
+        #                     break
+        #             else:
+        #                 keep.append(k)
+        #         df = df[keep]
+        #     else:
+        #         new_cols = [x for x in df.iloc[0]]
+        #         if all([isinstance(x, str) or pd.isnull(x) for x in new_cols]):
+        #             logger.debug(f"Detect that first row does not contain column headers: {df.columns}")
+        #             logger.debug(f"Making the  second row the column headers: {new_cols}")
+        #             df.columns = new_cols
+        #             df.drop(index=df.index[0], inplace=True)
+        #             df.reset_index(drop=True, inplace=True)
+        #             num_drops+=1
+        #             updated_cols = True
 
-                    if len(df)==0 or num_drops>=max_drops:
-                        raise ValueError("Unable to find column names")
+        #             if len(df)==0 or num_drops>=max_drops:
+        #                 raise ValueError("Unable to find column names")
+                    
+        # if sum([(pd.isnull(x) or "Unnamed" in x) for x in df.columns]) / len(df.columns) > 0.3 and \
+        #     len(df)>0:
+        #     # Check for multi-row column header with merged columns in first row of spreadsheet
+        #     is_multi_row = True
+        #     for k, c in enumerate(df.columns):
+        #         if 'Unnamed' in c:
+        #             if pd.isnull(df.loc[0,c]):
+        #                 raise ValueError(f"Unexpected condition in column {c} where first row is null")
+        #         elif pd.notnull(df.loc[0,c]):
+        #             if k == len(df.columns) or 'Unnamed' not in df.columns[k+1]:
+        #                 raise ValueError(f"Unexpected column pattern with columns {df.columns} and first row {df.iloc[0]}")
+                    
+        #     if is_multi_row:
+        #         # Merge 1st row with columns
+        #         new_cols = []
+        #         addon = ''
+        #         for k, c in enumerate(df.columns):
+        #             if pd.isnull(df.loc[0,c]):
+        #                 addon = ''
+        #                 new_cols.append(c)
+        #             elif c.lower().endswith('info'):
+        #                 addon = re.sub(r'[Ii]nfo', '', c).strip() + ' '
+        #                 new_cols.append(addon + df.loc[0,c])
+        #             else:
+        #                 new_cols.append(addon + df.loc[0,c])
 
-        if updated_cols:
-            # Remove any empty rows or repeated column headers. There may be multiple of the same table for different years
-            df = df.dropna(thresh=3)
-            df = df[df.apply(lambda x: not all([y==df.columns[k] for k,y in enumerate(x)]), axis=1)]
+        #         df = df.copy() # Avoids any warnings from pandas
+        #         df.columns = new_cols
+        #         df = df.iloc[1:]
+
+        # if updated_cols:
+        #     # Remove any empty rows or repeated column headers. There may be multiple of the same table for different years
+        #     df = df.dropna(thresh=3)
+        #     df = df[df.apply(lambda x: not all([y==df.columns[k] for k,y in enumerate(x)]), axis=1)]
+
+
+    def __clean(self, df, sheet_name=None, has_year_sheets=False):
+        if any([(pd.isnull(x) or "Unnamed" in x) for x in df.columns]):
+            # At least 1 column name was empty
+            df = self.__find_column_names(df)
+
+        if has_year_sheets:
+            if sheet_name and 'Year' not in df:
+                df['Year'] = int(sheet_name)
+            if sheet_name and sheet_name.isdigit() and 1990 < int(sheet_name) < 2100 and \
+                'Month' in df and 'Day' in df:
+                # Rearrange columns
+                col_order = []
+                year_added = False
+                day_found = False
+                for c in df.columns:
+                    if not year_added and c=='Month':
+                        if day_found:
+                            col_order.append(c)
+                            col_order.append('Year')
+                        else:
+                            col_order.append('Year')
+                            col_order.append(c)
+                        year_added = True
+                    elif c=='Day':
+                        day_found = True
+                        col_order.append(c)
+                    elif c!='Year':
+                        col_order.append(c)
+                df = df[col_order]
 
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=RuntimeWarning)

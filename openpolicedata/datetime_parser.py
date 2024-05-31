@@ -369,7 +369,7 @@ def validate_time(df, match_cols_test, date_col=None):
 def parse_time(time_col):
     # Returns time in seconds since 00:00
     time_col = time_col.copy()
-    if time_col.dtype == np.int64 or time_col.dtype == np.float64:
+    if pd.api.types.is_numeric_dtype(time_col):
         # Expected to be time as integer in 24-hr HHMM format
         # Check that this is true
         time_col[(time_col==9999) | (time_col==999)] = pd.NA  # 9999 is used as error code
@@ -421,6 +421,12 @@ def parse_time(time_col):
                     return dt.time(hour=int(hour),minute=int(min))
 
                 x = x.replace(" ","")
+
+                if (x.upper().endswith('AM') or x.upper().endswith('PM')) and \
+                    x[:-2].isdigit():
+                    # Time does not have colon. Try to insert one
+                    x = x[:-4] + ":" + x[-4:]
+                    
                 time_list = x.split(":")
                 if len(time_list)==1 and len(x.split("."))>1:
                     time_list = x.split(".")
@@ -469,6 +475,9 @@ def parse_time(time_col):
                     time_list[-1] = time_list[-1].upper().replace("PM", "")
                     if time_list[0].strip() == "12":
                         time_list[0] = "0"
+                    elif int(time_list[0].strip()) > 12:
+                        # Typo where 24 hour time was provided but also PM indicated
+                        hours_add = 0
 
                 try:
                     t = dt.time(hour=int(time_list[0])+hours_add,minute=int(time_list[1]))
@@ -566,6 +575,33 @@ def to_datetime(col, ignore_errors=False, *args, **kwargs):
             elif ignore_errors and re.search(r'Unknown string format: \d+[-/]\d+[-/]\d+,?\s?\d+[-/]\d+[-/]\d+', str(e)):
                 # Comma separated list of dates. Just return value
                 return col
+            elif isinstance(col, pd.DataFrame) and col.shape[1]==3 and str(e)=='cannot convert NA to integer':
+                # This is year/month/date with NaNs in some of the values
+                year_col = [x for x in col.columns if x.lower()=='year'][0]
+                month_col = [x for x in col.columns if x.lower()=='month'][0]
+                day_col = [x for x in col.columns if x.lower()=='day'][0]
+                def to_datetime_local(x):
+                    if pd.isnull(x[day_col]):
+                        if pd.isnull(x[month_col]):
+                            if pd.isnull(x[year_col]):
+                                return pd.NaT
+                            else:
+                                return pd.Period(freq='Y', year=x[year_col])
+                        else:
+                            return pd.Period(freq='M', year=x[year_col], month=x[month_col])
+                    elif pd.isnull(x[month_col]):
+                        return ValueError(f"Month is null but day is not. Unable to parse {x}")
+                    elif pd.isnull(x[year_col]):
+                        return ValueError(f"Year is null but month and day are not. Unable to parse {x}")
+                    
+                    return pd.to_datetime(x.to_frame().T, *args, **kwargs).iloc[0]
+                return col.apply(to_datetime_local, axis=1)
+            elif isinstance(col, pd.DataFrame) and col.shape[1]==3 and re.search(r'Unable to parse string \"\d+(th|st|nd|rd)\"', str(e)) and \
+                col.iloc[:,2][col.iloc[:,2].notnull()].apply(lambda x: isinstance(x, numbers.Number) or is_str_number(x) or \
+                                                             re.search(r'\d+(th|st|nd|rd)',x) is not None).all():
+                # Day is ordinal
+                col[col.columns[-1]] = col[col.columns[-1]].apply(lambda x: x.strip()[:-2] if  isinstance(x,str) and re.search(r'\d+(th|st|nd|rd)',x) else x)
+                return to_datetime(col, ignore_errors=ignore_errors, *args, **kwargs)
             else:
                 return pd.to_datetime(col, *args, format='mixed', **kwargs)
         except Exception as e:

@@ -439,12 +439,12 @@ def log_errors_to_file(*args):
 if __name__ == "__main__":
 	from test_utils import get_datasets
 	# For testing
-	use_changed_rows = False
+	use_changed_rows = True
 	csvfile = None
-	csvfile = r"..\opd-data\opd_source_table.csv"
-	start_idx = 52
+	csvfile = os.path.join('..','opd-data', 'opd_source_table.csv')
+	start_idx = 0
 	skip = None
-	skip = "Sacramento,Beloit,Rutland"
+	# skip = "Sacramento,Beloit,Rutland"
 	source = None
 	# source = "Asheville"
 
@@ -452,4 +452,4 @@ if __name__ == "__main__":
 
 	test_load_year(datasets, source, start_idx, skip, False) 
 	start_idx = 0
-	test_source_download_not_limitable(datasets, source, start_idx, skip) 
+	# test_source_download_not_limitable(datasets, source, start_idx, skip) 

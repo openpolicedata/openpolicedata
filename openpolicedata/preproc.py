@@ -894,6 +894,7 @@ class Standardizer:
                                                                                               defs.columns.FATAL_SUBJECT]],
                                             exclude_col_names=[v for k,v in self.col_map.items() if "INJURY" in k],
                                             validator=_fatal_validator,
+                                            validate_args=(self.source_name,),
                                             only_table_types=injury_tables,
                                             tables_to_exclude=[("Los Angeles County",defs.TableType.SHOOTINGS_OFFICERS)],
                                             always_validate=True)
@@ -901,7 +902,9 @@ class Standardizer:
         self._id_demographic_column(match_cols,
                 defs.columns.FATAL_SUBJECT, defs.columns.FATAL_OFFICER, 
                 defs.columns.FATAL_OFFICER_SUBJECT,
-                specific_cases=[_case("Philadelphia", defs.TableType.SHOOTINGS, "offender_deceased", defs.columns.FATAL_SUBJECT)])
+                specific_cases=[_case("Philadelphia", defs.TableType.SHOOTINGS, "offender_deceased", defs.columns.FATAL_SUBJECT),
+                                _case("Louisville", defs.TableType.SHOOTINGS, "Lethal Y/YS/N", defs.columns.FATAL_SUBJECT),  # This column has different names in different years
+                                _case("Louisville", defs.TableType.SHOOTINGS, "Lethal Y/N", defs.columns.FATAL_SUBJECT)])
 
         exclude_cols = match_cols
         exclude_cols.append(("does not contain", ["causedby",'preexisting','animal']))
@@ -1329,7 +1332,7 @@ class Standardizer:
             
     
     def merge_date_time(self, empty_time="NaT"):
-        if defs.columns.DATE in self.col_map and defs.columns.TIME in self.col_map and not isinstance(self.df[defs.columns.DATE].dtype,pd.PeriodDtype):
+        if defs.columns.DATE in self.col_map and defs.columns.TIME in self.col_map and not self.df[defs.columns.DATE].apply(lambda x: isinstance(x, pd.Period)).any():
             self.df[defs.columns.DATETIME] = datetime_parser.merge_date_and_time(self.df[defs.columns.DATE], self.df[defs.columns.TIME], empty_time)
             self.data_maps.append(DataMapping(orig_column_name=[defs.columns.DATE, defs.columns.TIME], new_column_name=defs.columns.DATETIME))
 
@@ -1973,7 +1976,7 @@ class Standardizer:
                             badvals = 0                        
                             for x in self.df[self.col_map[col_name]].unique():
                                 x = x.lower().strip() if isinstance(x,str) else x
-                                if pd.isnull(x) or (isinstance(x,str) and x in ["na", "unknown"]):
+                                if pd.isnull(x) or (isinstance(x,str) and x in ["na", "unknown", 'varies']):
                                     continue
                                 elif isinstance(x,Number) or is_str_number(x):
                                     x = int(x)
@@ -2211,7 +2214,7 @@ def _injury_validator(df, cols_test):
 
     return match_cols
 
-def _fatal_validator(df, cols_test):
+def _fatal_validator(df, cols_test, source_name):
     match_cols = []
     for col_name in cols_test:
         if check_column(col_name, ["fatal"]):
@@ -2224,7 +2227,8 @@ def _fatal_validator(df, cols_test):
             match_cols.append(col_name)
             continue
         try:
-            col = convert.convert(convert._create_fatal_lut, df[col_name], no_id='error')
+            col = convert.convert(convert._create_fatal_lut, df[col_name], no_id='error',
+                                  source_name=source_name)
             match_cols.append(col_name)
         except:
             pass
@@ -2271,7 +2275,7 @@ def _zip_code_validator(df, cols_test, state):
 def _name_validator(df, cols_test):
     match_cols = []
     off_words = ["deputy", "employee", "officer", 'personnel', 'offficer', 'trooper']
-    civilian_terms = ["citizen","subject","suspect","civilian", "offender"]
+    civilian_terms = ["citizen","subject","suspect","civilian", "offender", 'victim']
     all_words = off_words.copy()
     all_words.extend(civilian_terms)
     
@@ -2280,7 +2284,7 @@ def _name_validator(df, cols_test):
         try:
             if col_name.lower()=='name' or \
                 (any([x in split_words(col_name, case='lower') for x in ['name','names']]) and \
-                 any([x.lower() in all_words for x in split_words(col_name)])):
+                 any([re.search(r'^('+'|'.join(all_words)+r')s?$', x.lower()) for x in split_words(col_name)])):
                 match_cols.append(col_name)
             elif col_name.lower() in all_words and \
                 (df[col_name][df[col_name].notnull()].apply(lambda x: name_pattern.search(x.strip()) is not None).mean() > 0.5 or \
