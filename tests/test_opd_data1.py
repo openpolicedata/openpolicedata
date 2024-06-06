@@ -460,11 +460,13 @@ if __name__ == "__main__":
 	use_changed_rows = False
 	csvfile = None
 	# csvfile = os.path.join(r"..",'opd-data','opd_source_table.csv')
-	start_idx = 402
+	start_idx = 875
 	skip = None
-	skip = "Sacramento,Beloit,Rutland"
+	# skip = "Sacramento"
 	source = None
 	# source = "Bremerton" #"Washington D.C." #"Wallkill"
+	query = {}
+	# query = {'DataType':'Excel'}
 
 	datasets = get_datasets(csvfile, use_changed_rows)
 
@@ -473,7 +475,7 @@ if __name__ == "__main__":
 	# check_table_type_warning(csvfile, source, last, skip, None) 
 	# test_offsets_and_nrows(csvfile, source, last, skip, None) 
 	# test_check_version(csvfile, None, last, skip, None) #
-	test_source_download_limitable(datasets, source, start_idx, skip, False) 
+	test_source_download_limitable(datasets, source, start_idx, skip, False, query) 
 	
 	# test_get_count(csvfile, None, last, skip, None)
 	# test_load_gen(csvfile, source, last, skip, None) 

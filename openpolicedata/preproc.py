@@ -628,7 +628,7 @@ class Standardizer:
         match_cols = self._find_col_matches("date", "date", known_col_names=self.known_cols[defs.columns.DATE], 
             std_col_name=defs.columns.DATE,
             secondary_patterns = [("equals","date"),("contains","time"),("does not contain", "officer")],
-            exclude_col_names=[("does not contain", ["as_of","last_reported","objectid"])], # Terms associated with dates not of interest
+            exclude_col_names=[("does not contain", ["as_of","last_reported","objectid","modified","created",'received'])], # Terms associated with dates not of interest
             # Calls for services often has multiple date/times with descriptive names for what it corresponds to.
             # Don't generalize by standardizing
             exclude_table_types=[defs.TableType.EMPLOYEE, defs.TableType.CALLS_FOR_SERVICE], 
@@ -2278,13 +2278,17 @@ def _name_validator(df, cols_test):
     civilian_terms = ["citizen","subject","suspect","civilian", "offender", 'victim']
     all_words = off_words.copy()
     all_words.extend(civilian_terms)
+
+    bad_words = ['unit']
     
     name_pattern = re.compile(r'^[A-Z][a-z]+,?\s+[A-Z]?[a-z]*\.?\s*(Mc|O\')?[A-Z][a-z]+(\sJr\.|\sI+)?$')
     for col_name in cols_test:
         try:
+            words = split_words(col_name, case='lower')
             if col_name.lower()=='name' or \
-                (any([x in split_words(col_name, case='lower') for x in ['name','names']]) and \
-                 any([re.search(r'^('+'|'.join(all_words)+r')s?$', x.lower()) for x in split_words(col_name)])):
+                (any([x in words for x in ['name','names']]) and \
+                 any([re.search(r'^('+'|'.join(all_words)+r')s?$', x) for x in words])) and \
+                (len(words)<2 or not any(x in bad_words and y=='name' for x,y in zip(words[:-1], words[1:]))):
                 match_cols.append(col_name)
             elif col_name.lower() in all_words and \
                 (df[col_name][df[col_name].notnull()].apply(lambda x: name_pattern.search(x.strip()) is not None).mean() > 0.5 or \

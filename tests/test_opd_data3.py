@@ -181,7 +181,7 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 			except OPD_FutureError as e:
 				future_error = True
 				break
-			except OPD_DataUnavailableError as e:
+			except (OPD_DataUnavailableError, OPD_SocrataHTTPError) as e:
 				caught_exceptions_warn.append(e)
 				tables.append(None)
 				continue
@@ -317,7 +317,8 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 				table_stop = src.load(datasets.iloc[i]["TableType"], [start_date, stop_date], 
 												agency=agency, pbar=False)
 			except ValueError as e:
-				if str(e).startswith('Year range cannot contain the year corresponding to a single year dataset'):
+				if str(e).startswith('There is more than one source matching') or \
+					str(e).startswith('Year range cannot contain the year corresponding to a single year dataset'):
 					stop_date  = str(year) + "-12-31"  
 					table_stop = src.load(datasets.iloc[i]["TableType"], [start_date, stop_date], 
 												agency=agency, pbar=False)
@@ -439,17 +440,19 @@ def log_errors_to_file(*args):
 if __name__ == "__main__":
 	from test_utils import get_datasets
 	# For testing
-	use_changed_rows = True
+	use_changed_rows = False
 	csvfile = None
-	csvfile = os.path.join('..','opd-data', 'opd_source_table.csv')
-	start_idx = 0
+	# csvfile = os.path.join('..','opd-data', 'opd_source_table.csv')
+	start_idx = 404
 	skip = None
 	# skip = "Sacramento,Beloit,Rutland"
 	source = None
 	# source = "Asheville"
+	query = {}
+	# query = {'DataType':'CSV'}
 
 	datasets = get_datasets(csvfile, use_changed_rows)
 
-	test_load_year(datasets, source, start_idx, skip, False) 
+	test_load_year(datasets, source, start_idx, skip, False, query=query) 
 	start_idx = 0
-	# test_source_download_not_limitable(datasets, source, start_idx, skip) 
+	test_source_download_not_limitable(datasets, source, start_idx, skip) 

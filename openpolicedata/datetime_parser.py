@@ -1,4 +1,5 @@
 import datetime
+import dateutil
 import math
 import numpy as np
 import pandas as pd
@@ -57,15 +58,14 @@ def parse_date_to_datetime(date_col):
                     warnings.filterwarnings("ignore", category=RuntimeWarning, message="invalid value encountered in cast")
                     new_col = date_col.convert_dtypes()
                 if new_col.dtype in ["object", "string", "string[python]"] and \
-                    new_col.apply(lambda x: pd.notnull(x) and (isinstance(x, numbers.Number) or \
-                                  (isinstance(x,str) and (x.isdigit() or x.strip()=="")))).sum() > 0 and \
+                    new_col.apply(lambda x: pd.notnull(x) and (isinstance(x, numbers.Number) or is_str_number(x))).sum() > 0 and \
                     new_col.apply(lambda x: pd.isnull(x) or isinstance(x,(pd.Timestamp,int, dt.datetime)) or \
-                                  isinstance(x, numbers.Number) or \
-                                  (isinstance(x,str) and (x.isdigit() or x.strip()==""))).sum()>=len(new_col)-1:
+                                  isinstance(x, numbers.Number) or is_str_number(x) or \
+                                  (isinstance(x,str) and x.strip()=="")).sum()>=len(new_col)-1:
                     # Almost all numeric, null, or timestamp values and at least one numeric value
                     def clean_dates(x):
                         if pd.notnull(x) and (isinstance(x, numbers.Number) or is_str_number(x)):
-                            return int(x)
+                            return int(float(x))
                         elif isinstance(x,str):
                             return np.nan
                         else:
@@ -515,8 +515,8 @@ def to_datetime(col, ignore_errors=False, *args, **kwargs):
                 return col.apply(to_datetime_local)
             else:
                 return col
-        except pd._libs.tslibs.parsing.DateParseError as e:
-            if 'out of range' in str(e) and not isinstance(col, pd.Series) and re.search(r'year 20\d{6} is out of range: 20\d{6}.0, at position 0', str(e)):
+        except (pd._libs.tslibs.parsing.DateParseError, dateutil.parser._parser.ParserError) as e:
+            if 'out of range' in str(e) and not isinstance(col, pd.Series) and re.search(r'year 20\d{6} is out of range: 20\d{6}.0.* position 0', str(e)):
                 return to_datetime(col[:-2])
             elif re.search(r'\d{2}/\d{2}/\d{4} \d{4} hours', str(e)) and isinstance(col, pd.Series):
                 return pd.to_datetime(col, format='%m/%d/%Y %H%M hours')
@@ -529,6 +529,9 @@ def to_datetime(col, ignore_errors=False, *args, **kwargs):
                     return pd.Period(freq='M', year=int(m.groupdict()['year']), month=int(m.groupdict()['month']))
                 else:
                     return pd.Period(freq='Y', year=int(m.groupdict()['year']))
+            elif ignore_errors and isinstance(col, str) and re.search(r'Unknown(\sdatetime)? string format.+: \d+[-/]\d+[-/]\d+,?\s?\d+[-/]\d+[-/]\d+', str(e)):
+                # Comma separated list of dates. Just return value
+                return col
             else:
                 raise
         except ValueError as e:

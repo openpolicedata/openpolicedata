@@ -500,9 +500,21 @@ class Csv(Data_Loader):
                     table = read_zipped_csv(self.url, pbar=pbar)
                 except requests.exceptions.HTTPError as e:
                     if len(e.args) and 'Forbidden' in e.args[0]:
-                        storage_options = {'User-Agent': 'Mozilla/5.0'} 
+                        headers = {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:106.0) Gecko/20100101 Firefox/106.0',
+                            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                            'Accept-Language': 'en-US,en;q=0.5',
+                            # 'Accept-Encoding': 'gzip, deflate, br',
+                            'DNT': '1',
+                            'Connection': 'keep-alive',
+                            'Upgrade-Insecure-Requests': '1',
+                            'Sec-Fetch-Dest': 'document',
+                            'Sec-Fetch-Mode': 'navigate',
+                            'Sec-Fetch-Site': 'none',
+                            'Sec-Fetch-User': '?1',
+                        }
                         try:
-                            table = pd.read_csv(self.url, encoding_errors='surrogateescape', storage_options=storage_options)
+                            table = pd.read_csv(self.url, encoding_errors='surrogateescape', storage_options=headers)
                         except urllib.error.HTTPError as e:
                             raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(self.url))
                         except:
@@ -520,6 +532,8 @@ class Csv(Data_Loader):
                 if "[SSL: UNSAFE_LEGACY_RENEGOTIATION_DISABLED] unsafe legacy renegotiation disabled" in str(e.args[0]) or \
                     "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate" in str(e.args[0]):
                     use_legacy = True
+                elif 'Max retries exceeded' in str(e):
+                    raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(self.url))
                 else:
                     raise e
             except requests.exceptions.ConnectionError as e:
@@ -2263,7 +2277,7 @@ class Socrata(Data_Loader):
         self.date_field = date_field
         # Unauthenticated client only works with public data sets. Note 'None'
         # in place of application token, and no username or password:
-        self.client = SocrataClient(self.url, key, timeout=60)
+        self.client = SocrataClient(self.url, key, timeout=90)
 
 
     def __construct_where(self, year, opt_filter):

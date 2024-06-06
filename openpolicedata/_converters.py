@@ -735,6 +735,7 @@ def _create_injury_lut(x, no_id, source_name, cats, *args, **kwargs):
     orig = x
     x = x.upper().replace('-',' ').replace('*','').replace('SUBJECT','').replace('  ',' ').strip()
     x = re.sub(r'OF[FI]{2}CER','', x).strip()  # Handle misspelling officer
+    x = re.sub(r'\s{2,10}',' ',x)
 
     if len(x)==0:
         return "UNSPECIFIED"
@@ -759,7 +760,7 @@ def _create_injury_lut(x, no_id, source_name, cats, *args, **kwargs):
     elif contains_yes or x in nonfatal_words or x in ['Y','YES','TRUE'] or \
         any([x.startswith(y) for y in ['COMPLAINED OF','COMPLAINT OF']]) or \
         any([y in x for y in ['WOUND','PAIN', "BLEEDING",'SWELLING','SCRAPE','PUNCTURE','LACERATION','BRUIS',
-                              'BROKEN','UNCONSCIOUS', 'FIRST AID', 'SHOT (INJURED ONLY)', 'INJURED   INCIDENTALLY',
+                              'BROKEN','UNCONSCIOUS', 'FIRST AID', 'SHOT (INJURED ONLY)', 'INJURED INCIDENTALLY',
                               'DISLOCATED','FRACTURED','ABBRASION','ABRASION','ABRAISON','ABRASSION','BUSTED','PULLED OUT','REDNESS','LOSS','RASH',
                               'SCRATCH','NUMBNESS','BREATHING','CUT','STUN', 'MARKS', 'EYE', 'PEELING', 'HURT', 'ELBOW', 'KNEE',
                               'SOFT TISSUE','BLOOD','HEAD','SORE','SHOULDER', 'MINOR INJUR', 'FINGER', 'IMPACT', 'FACE', 'ARM',

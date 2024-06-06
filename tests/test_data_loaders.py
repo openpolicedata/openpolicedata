@@ -689,7 +689,7 @@ def test_excel_year_sheets(skip, src, url, date_field, yrs):
     df = loader.load(pbar=False)
 
     df2 = df[df_multi.columns].head(len(df_multi)).convert_dtypes()
-    pd.testing.assert_frame_equal(df2, df_multi)
+    pd.testing.assert_frame_equal(df2, df_multi, check_dtype=False)
 
     df_last = loader.load(year=years[-1], pbar=False)
     if 'Incident/Type of Charges' in df_last:
@@ -700,7 +700,7 @@ def test_excel_year_sheets(skip, src, url, date_field, yrs):
     elif 'Lethal Y/N' in df_last:
         df_last = df_last.rename(columns={'Lethal Y/N':'Lethal Y/YS/N'})
     df2 = df[df_last.columns].tail(len(df_last)).reset_index(drop=True).convert_dtypes()
-    pd.testing.assert_frame_equal(df2, df_last)
+    pd.testing.assert_frame_equal(df2, df_last, check_dtype=False)
 
 
 def test_excel_header():

@@ -1068,6 +1068,8 @@ class Source:
     def __find_datasets(self, table_type, src=None):
         if src is None:
             src = self.datasets.copy()
+        elif isinstance(src, pd.Series):
+            src = src.to_frame().T
         if table_type != None:
             src = src[src["TableType"].str.upper() == str(table_type).upper()]
 
@@ -1267,7 +1269,8 @@ class Source:
                       agency: str | None = None,
                       zip: bool =False,
                       url_contains: str | None = None,
-                      format_date: bool = True
+                      format_date: bool = True,
+                      filename: str | None = None
                       ) -> Table:
         '''Load data from previously saved CSV file
         
@@ -1292,6 +1295,8 @@ class Source:
         format_date : bool, optional
             If True, known date columns (based on presence of date_field in datasets table or data type information provided by dataset owner) will be automatically formatted
             to be pandas datetimes (or pandas Period in rare cases), by default True
+        filename: str, optional
+            If set, this will override the default filename based on the other inputs
 
         Returns
         -------
@@ -1301,7 +1306,9 @@ class Source:
 
         table = self.__load(table_type, year, agency, False, url_contains=url_contains, format_date=format_date)
 
-        filename = table.get_csv_filename()
+        if not filename:
+            filename = table.get_csv_filename()
+            
         if output_dir != None:
             filename = path.join(output_dir, filename)   
 
@@ -1504,18 +1511,15 @@ def _check_date(table, date_field):
                     # This way is much faster
                     table[date_field] = to_datetime(table[date_field])
                 except ValueError as e:
-                    if re.search(r'year 20\d{6} is out of range: 20\d{6}.0, at position 0', str(e)):
-                        # Remove decimal value
-                        table[date_field] = to_datetime(table[date_field].apply(lambda x: x[:-2]))
-                    else:
-                        table[date_field] = table[date_field].apply(to_datetime_local)
+                    table[date_field] = table[date_field].apply(to_datetime_local)
 
                 if pd.api.types.is_object_dtype(table[date_field]):
                     try:
                         # Attempt to convert
                         table = table.astype({date_field: 'datetime64[ns]'})
-                    except pd._libs.tslibs.parsing.DateParseError as e:
-                        if 'out of range' in str(e):
+                    except (pd._libs.tslibs.parsing.DateParseError, ParserError) as e:
+                        if 'out of range' in str(e) or \
+                            re.search(r'Unknown(\sdatetime)? string format.+: \d+[-/]\d+[-/]\d+,?\s?\d+[-/]\d+[-/]\d+', str(e)):
                             pass
                         else:
                             raise

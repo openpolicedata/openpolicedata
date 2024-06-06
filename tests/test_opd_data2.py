@@ -47,6 +47,7 @@ def test_get_years(datasets, source, start_idx, skip, loghtml, query={}):
 	caught_exceptions_warn = []
 
 	already_ran = []
+	last_source = None
 	for i in range(len(datasets)):
 		if source != None and datasets.iloc[i]["SourceName"] != source:
 			continue
@@ -88,6 +89,13 @@ def test_get_years(datasets, source, start_idx, skip, loghtml, query={}):
 						continue				
 
 			already_ran.append((srcName, state, datasets.iloc[i]["TableType"]))
+
+			if srcName == last_source:
+				sleep(num_sources*0.1) # Sleep for a bit to not hit the same site repeatedly too hard
+				num_sources +=1
+			else:
+				num_sources = 1
+			last_source = srcName
 
 			try:
 				years = src.get_years(datasets.iloc[i]["TableType"], force=True)
@@ -269,12 +277,12 @@ if __name__ == "__main__":
 	use_changed_rows = False
 
 	csvfile = None
-	csvfile = os.path.join("..","opd-data","opd_source_table.csv")
-	start_idx = 876
+	# csvfile = os.path.join("..","opd-data","opd_source_table.csv")
+	start_idx = 796
 	source = None
 	# source = "Burlington"
 	skip = None
-	skip = "Sacramento,Beloit,Rutland"
+	# skip = "Sacramento,Beloit,Rutland"
 	
 	datasets = get_datasets(csvfile, use_changed_rows)
 

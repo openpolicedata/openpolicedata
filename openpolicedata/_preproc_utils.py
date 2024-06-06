@@ -103,7 +103,7 @@ def check_column(col_name, col_types):
         # sus has been used as shorthand for suspect
         # ofc has been used as shorthand for officer
         desc_terms = ["citizen","subject","suspect", "sus", "civilian", "complainant", "person", "cit",
-                      "offender", "officer", "ofc", "deputy", "off"]
+                      "offender", "officer", "ofc", "deputy", "off", 'ctzn']
 
         if any([col_name.lower()==x+col_type or col_name.lower()==col_type+x for x in desc_terms]):
             return True
