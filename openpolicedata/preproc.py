@@ -449,7 +449,10 @@ class Standardizer:
                     for k in range(1,len(p[1])):
                         matches = [x for x in matches if p[1][k].lower() not in x.lower()]
             elif p[0].lower() == "contains":
-                matches = [x for x in select_cols if p[1].lower() in x.lower()]
+                if isinstance(p[1], list):
+                    matches = [x for x in select_cols if any([y.lower() in x.lower() for y in p[1]])]
+                else:
+                    matches = [x for x in select_cols if p[1].lower() in x.lower()]
             elif p[0].lower() == "format":
                 if type(match_substr) != str:
                     raise TypeError("match_substr should be a string")
@@ -627,7 +630,7 @@ class Standardizer:
         # Find the date columns
         match_cols = self._find_col_matches("date", "date", known_col_names=self.known_cols[defs.columns.DATE], 
             std_col_name=defs.columns.DATE,
-            secondary_patterns = [("equals","date"),("contains","time"),("does not contain", "officer")],
+            secondary_patterns = [("equals","date"),("contains","time"),("does not contain", "officer"),("contains",["occurred",'offense'])],
             exclude_col_names=[("does not contain", ["as_of","last_reported","objectid","modified","created",'received'])], # Terms associated with dates not of interest
             # Calls for services often has multiple date/times with descriptive names for what it corresponds to.
             # Don't generalize by standardizing
@@ -2256,7 +2259,7 @@ def _zip_code_validator(df, cols_test, state):
         try:
             min_zip = 1e3 if state=='Vermont' else 1e4
             possible_zips = df[col_name].apply(lambda x: (isinstance(x, Number) or is_str_number(x)) and \
-                                               pd.notnull(x) and int(x)>=min_zip and int(x)<1e5)
+                                               pd.notnull(x) and int(float(x))>=min_zip and int(float(x))<1e5 and int(float(x))==float(x))
             if (m:=possible_zips.mean())>0.5 or \
                 (m>=0.1 and m+df[col_name].apply(lambda x: pd.isnull(x) or (isinstance(x,str) and x.strip().upper() in ['','UNKNOWN'])).mean()>=0.99):
                 match_cols.append(col_name)

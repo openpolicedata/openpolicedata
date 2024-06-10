@@ -151,7 +151,7 @@ def _create_age_range_lut(x, no_id, source_name, *args, **kwargs):
     p_plus = re.compile(r"(\d+)\+\s?-?\s?(\1\+)?",re.IGNORECASE)
     p_plus2 = re.compile(r"(\d+)\s*plus",re.IGNORECASE)
     p_over = re.compile(r"(OVER|>)\s?(\d+)",re.IGNORECASE)
-    p_under = re.compile(r"(UNDER|<)\s?(\d+)",re.IGNORECASE)
+    p_under = re.compile(r"(UNDER|<|BELOW)\s?(\d+)",re.IGNORECASE)
     p_under2 = re.compile(r"(\d+) (AND|&) (UNDER|YOUNGER)",re.IGNORECASE)
     p_above = re.compile(r"(\d+) (AND|&) (ABOVE|OLDER)",re.IGNORECASE)
     p_decade = re.compile(r"^(\d+)s$", re.IGNORECASE)

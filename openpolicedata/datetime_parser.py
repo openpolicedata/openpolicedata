@@ -47,10 +47,9 @@ def parse_date_to_datetime(date_col):
         else:
             date_col = date_col.iloc[:,0]
 
-    dts = date_col[date_col.notnull()]
-
-    if len(dts) > 0:
-        if not hasattr(dts.iloc[0], "year") or (dts.apply(type)==str).any():
+    ind_is_num = date_col.notnull()
+    if ind_is_num.any():
+        if not hasattr(date_col[ind_is_num].iloc[0], "year") or (date_col[ind_is_num].apply(type)==str).any():
             is_num = is_numeric_dtype(date_col)
             if not is_num:
                 # Try to convert to all numbers
@@ -72,12 +71,14 @@ def parse_date_to_datetime(date_col):
                             return x
                         
                     date_col = new_col.apply(clean_dates)
-                    dts = date_col[date_col.notnull()]
+
+                    ind_is_num = date_col.notnull() & date_col.apply(lambda x: not isinstance(x, (pd.Timestamp, pd.Period, dt.datetime)))
                     is_num = True
 
             if is_num:
                 # Date as number like MMDDYYYY. Need to determine order
                 # Assuming year is either first or last
+                dts = date_col[ind_is_num]
                 if (dts < 0).any():
                     raise ValueError("Date values cannot be negative")
 
@@ -91,17 +92,15 @@ def parse_date_to_datetime(date_col):
                 is_valid_last_2digit = (year_last_2digit <= this_year-2000).all() and (year_last_2digit >= 0).all()
 
                 any_valid = True
-                if is_valid_first and is_valid_last:
-                    raise ValueError("Error parsing date")
-                elif is_valid_first:
-                    year = date_col.apply(lambda x : np.floor(x / 10000) if not pd.isnull(x) else x)
-                    month_day = date_col.apply(lambda x : x % 10000 if not pd.isnull(x) else x)
+                if is_valid_first:
+                    year = dts.apply(lambda x : np.floor(x / 10000) if not pd.isnull(x) else x)
+                    month_day = dts.apply(lambda x : x % 10000 if not pd.isnull(x) else x)
                 elif is_valid_last:
-                    year = date_col.apply(lambda x : x % 10000 if not pd.isnull(x) else x)
-                    month_day = date_col.apply(lambda x : np.floor(x / 10000) if not pd.isnull(x) else x)
+                    year = dts.apply(lambda x : x % 10000 if not pd.isnull(x) else x)
+                    month_day = dts.apply(lambda x : np.floor(x / 10000) if not pd.isnull(x) else x)
                 elif is_valid_last_2digit:
-                    year = 2000+date_col.apply(lambda x : x % 100 if not pd.isnull(x) else x)
-                    month_day = date_col.apply(lambda x : np.floor(x / 100) if not pd.isnull(x) else x)
+                    year = 2000+dts.apply(lambda x : x % 100 if not pd.isnull(x) else x)
+                    month_day = dts.apply(lambda x : np.floor(x / 100) if not pd.isnull(x) else x)
                 else:
                     any_valid = False
 
@@ -112,9 +111,8 @@ def parse_date_to_datetime(date_col):
 
                     is_valid_month_first = first_val.max() < 13 and last_val.max() < 32
                     is_valid_month_last = last_val.max() < 13 and first_val.max() < 32
-                    if is_valid_month_first and is_valid_month_last:
-                        raise ValueError("Error parsing month and day")
-                    elif is_valid_month_first:
+                    if is_valid_month_first:
+                        # If also is_valid_month_last, assuming month is first because this is more common in the U.S. 
                         month = first_val
                         day = last_val
                     elif is_valid_month_last:
@@ -124,24 +122,35 @@ def parse_date_to_datetime(date_col):
                         any_valid = False
 
                     if any_valid:
-                        return to_datetime({"year" : year, "month" : month, "day" : day})
+                        # Convert data type to object to avoid changing dtype warning and then convert to TimeStamp
+                        date_col = date_col.astype('O')
+                        date_col[ind_is_num] = to_datetime({"year" : year, "month" : month, "day" : day})
+                        date_col[date_col.isnull()] = pd.NaT
+                        return date_col.convert_dtypes()
 
                 if not any_valid:
+                    # Convert data type to object to avoid changing dtype warning and then convert to TimeStamp
+                    date_col = date_col.astype('O')
                     # This may be Epoch time
                     try:
-                        new_date_col = to_datetime(dts, unit='s')
+                        date_col[ind_is_num] = to_datetime(dts, unit='s')
                     except pd._libs.tslibs.np_datetime.OutOfBoundsDatetime:
-                        new_date_col = to_datetime(dts, unit='ms')
+                        date_col[ind_is_num] = to_datetime(dts, unit='ms')
                     except:
                         raise
 
-                    if (new_date_col.dt.year > this_year).any() or (new_date_col.dt.year < 1971).any():
-                        raise ValueError("Date is outside acceptable range (1971 to this year)")
+                    date_col = date_col.convert_dtypes()
+
+                    if (date_col.dt.year > this_year).any() or (date_col.dt.year < 1971).any():
+                        if not (date_col.dt.year > this_year).any() and (m:=(date_col.dt.year < 1971)).mean() < 0.01:
+                            date_col[m] = pd.NaT
+                        else:
+                            raise ValueError("Date is outside acceptable range (1971 to this year)")
                     
-                    if new_date_col.dt.year.max() < 1980:
+                    if date_col.dt.year.max() < 1980:
                         raise ValueError("All dates are before 1980. This is unlikely to be a date column.")
 
-                    return new_date_col
+                    return date_col
                     
             elif date_col.dtype in ["O", "object", "string", "string[python]"]:
                 new_col = date_col.convert_dtypes()
@@ -174,7 +183,7 @@ def parse_date_to_datetime(date_col):
                     if num_match<num_check-1:
                         raise ValueError("Column is not a date column")
                     try:
-                        return to_datetime(new_col, errors="coerce")
+                        return to_datetime(new_col)
                     except:
                         def to_dt(x):
                             try:
