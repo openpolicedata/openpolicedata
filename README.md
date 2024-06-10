@@ -31,34 +31,25 @@ OpenPoliceData provides access to police data with 2 simple lines of code:
 ![alt text](https://github.com/openpolicedata/opd-data/blob/main/OPD_Datasets_Map.png?raw=true)
 
 ## Latest Datasets Added to OPD
-- Asheville, NC arrests, citations, complaints, incidents, pointing weapon, traffic stops, use of force, and 2023 calls for service
-- Sacramento, CA 2024 calls for service, 2021-2024 incidents, and 2023-2024 citations   
+- Louisville, KY: Officer-involved shootings data
+- Norwich, CT: Officer-involved shootings data
+- Fairfax County, VA: 2023 arrests, traffic citations, and traffic warnings
+- Asheville, NC: arrests, citations, complaints, incidents, pointing weapon, traffic stops, use of force, and 2023 calls for service
+- Sacramento, CA: 2024 calls for service, 2021-2024 incidents, and 2023-2024 citations   
 - Albemarle County, VA: Stops
 - Norman, OK: Crashes, incidents, and traffic stops data (new) and most recent arrests, complaints and use of force data
 - Oakland, CA: Stops
 - Washington D.C.: Lawsuits against MPD
 - Bloomington, IN: Use of Force and Citations
-- Wallkill, NY: Employee and Stops
-- Bremerton, WA: Arrests, Citations, and Incidents
-- Phoenix, AZ: Officers Firearm Pointing
-- Phoenix, AZ: 2024 Calls for Service 
-- Boston, MA: Deathes in Custody
-- San Jose, CA: 2024 Calls for Service
-- Portland, OR: 2024 Calls for Service
-- Santa Monica, CA: 2022-2023 Incidents
 
-## v0.7.1 - 2024-05-10
+## v0.7.1 - 2024-06-01
 ### Added
-- Added POINTING WEAPON (by officer) table type
-- Added data loader to combine multiple files that span a single year into a single dataset
-- Added support for more text date column formats in Arcgis loader.
-- Added url_contains input to get_count, load_iter, load, and load_from_csv of Source class to distinguish between multiple datasets matching a data request
-- Added datasets input to get_years to allow getting the years in specific datasets.
-- Added [Year Filter Guide](https://openpolicedata.readthedocs.io/en/stable/getting_started/year_filtering.html) to documentation
+- Added subject and officer name to standardization fields for officer-involved shootings only
+- Added capability to handle more formats for storing data in Excel files (different ways of storing data across sheets and multiple tables in a single sheet)
 ### Changed
-- Updates to standardization to handle more datasets
-### Fixed
-- Fixed year filtering for Tucson OFFICER-INVOLVED SHOOTINGS - INCIDENTS dataset. Datasets is no longer available using OpenPoliceData prior to Version 0.7.
+- Year column in the OPD source table has been moved to the left to make it more visible
+### Deprecated
+- Usage of iloc with datasets table is now discouraged due to change in location of Year column
 
 Complete change log available at: https://github.com/openpolicedata/openpolicedata/blob/main/CHANGELOG.md
 

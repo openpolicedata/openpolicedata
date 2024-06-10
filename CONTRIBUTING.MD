@@ -19,9 +19,6 @@ Interested in helping build OpenPoliceData (OPD)? Have code from your research t
 - [Further Reading](#further-reading)
 - [Still Have Questions?](#still-have-questions)
 
-TODO:
-- Tests: Update optional commands including changed-rows
-
 ## Introduction
 
 First off, thank you for considering contributing to OpenPoliceData. OPD is community-driven project. It's people like you that make OPD useful and successful. 
@@ -278,7 +275,7 @@ The OPD custom pytest arguments are described below:
 > NOTE: In our experience, (for unknown reasons) this input must be entered as `--csvfile='/path/to/opd_source_table.csv'` rather than the typical `--csvfile /path/to/opd_source_table.csv` or `--csvfile '/path/to/opd_source_table.csv'`.
 
 * `--use-changed-rows`: This input only runs datasets through the tests that have been changed or editted based on the output of `git diff` on a local CSV file. Currently, this will only run on files located in `../opd-data/opd_sources_table.csv` (i.e. the [opd-data](https://github.com/openpolicedata/opd-data) repository is located in the same folder containing the root openpolicedata folder). Similar to `--csvfile`, this input is useful when adding and editing datasets. `--use-changed-rows` greatly speeds up testing when dataset changes are being tested (not OPD code changes). See the [Adding Datasets Contributing Guide](https://github.com/openpolicedata/opd-data/blob/main/CONTRIBUTING.MD) for more details on adding datasets.
-* `--source`: Follow with the name of a single source whose datasets will be tested, such as `--source Chicago`.
+* `--source`: Follow with the name of a single source whose datasets will be tested, such as `--source Chicago`. This input can be useful when adding or editing datasets.
 * `--skip`: Follow with a comma-separated list of sources to skip, such as `--skip 'Sacramento,Beloit` to skip datasets from Sacramento and Beloit. This can be useful when certain datasets are unavailable and cause some tests to fail due to issues with the datsets themselves, not OPD's code.
 * `--start`: Follow with the index of a dataset. Tests that arun on all datasets will skip datasets prior to this index. This can be useful when restarting a long tests that loops over all the datasets (perhaps if the failure was due to an issue with the dataset, not OPD). 
 

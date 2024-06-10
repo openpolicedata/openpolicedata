@@ -6,7 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 ### Added
+### Changed
+### Deprecated
+### Removed
+### Fixed
+### Security
+
+## v0.7.1 - 2024-06-01
+### Added
 - Added subject and officer name to standardization fields for officer-involved shootings only
+- Added capability to handle more formats for storing data in Excel files (different ways of storing data across sheets and multiple tables in a single sheet)
 ### Changed
 - Year column in the OPD source table has been moved to the left to make it more visible
 ### Deprecated
@@ -15,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
-## v0.7.1 - 2024-05-10
+## v0.7 - 2024-05-10
 ### Added
 - Added POINTING WEAPON (by officer) table type
 - Added data loader to combine multiple files that span a single year into a single dataset

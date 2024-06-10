@@ -26,7 +26,7 @@ classifiers = [
 ]
 dependencies = [
     "openpyxl",
-    "numpy",
+    "numpy<2.0.0",
     "packaging",
     "pandas<3.0.0",
     "requests",
@@ -79,6 +79,5 @@ filterwarnings = [
     "ignore:datetime.datetime:DeprecationWarning:.*openpyxl:",
     "ignore:datetime.datetime.utcfromtimestamp():DeprecationWarning:.*tz:",
     "ignore:Passing a SingleBlockManager to Series.*:DeprecationWarning:geopandas:",
-    # "ignore:distutils Version classes are deprecated. Use packaging.version instead.*:DeprecationWarning::",
-    # "ignore:An exception was ignored while fetching the attribute `__array_interface__` from an object of type 'Polygon'*:DeprecationWarning:geopandas.*:"
+    "ignore:Mismatched null-like values.*:FutureWarning::",
 ]
