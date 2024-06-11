@@ -1,7 +1,7 @@
 sodapy
 pandas<3.0.0
 rapidfuzz
-numpy
+numpy<2.0.0
 requests
 packaging
 tqdm
