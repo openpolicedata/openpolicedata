@@ -30,7 +30,7 @@ Following these guidelines helps to communicate that you respect the time of the
 Please take a few minutes to read through this guide and get setup for success with your OpenPoliceData contributions. We're glad you're here!
 
 ## What Can I Do?
-There are a variety of ways you can contribution. Here are some options, but don't feel limited to these.
+There are a variety of ways you can contribute. Here are some options, but don't feel limited to these.
 
 ### No Python Required
 Whether you know how to code or not, you can help us by finding and/or adding new datasets to OPD. If you would like to help us with this, skip to our [Adding Datasets Guide](https://github.com/openpolicedata/opd-data/blob/main/CONTRIBUTING.MD) for more details. 
@@ -79,7 +79,7 @@ We welcome contributions from people new to open source, Git, GitHub, Python, an
 ## Setting Up Your Development Environment
 We have split environment setup into 2 sections: Python and OpenPoliceData. There are many ways to set up your Python environment. We provide setup instructions for our preferred tools, but you are welcome to use your own. The OpenPoliceData section is specific to OPD: what needs to be installed to develop OPD. If you find setting up your environment challenging, the [Beginner's Guide](#beginners-guide) section may help.
 
-### Python Environement Setup
+### Python Environment Setup
 We are defining the Python environment to consist of GitHub, Git, your code editor, and your environment manager.
 
 Our preferred code editor (of the *many* options) is [VS Code](https://code.visualstudio.com/), which is lightweight and provides extensions to add many customizations. The [quick start guide](https://code.visualstudio.com/docs/python/python-quick-start) will get you started and provides next steps for debugging, testing, etc. in VS Code. You are obviously free to you use your own preferred tool(s).
