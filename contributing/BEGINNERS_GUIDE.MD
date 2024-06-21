@@ -15,7 +15,7 @@ If you run into any trouble don't hesitate to reach out on [GitHub](https://gith
 ## Get Started with GitHub
 Our project is on GitHub so most contributions will require some interaction with [GitHub](https://github.com/). First, you need to [create an account](https://github.com/join). For learning how to use GitHub, we recommend reading [About GitHub and Git](https://docs.github.com/en/get-started/start-your-journey/about-github-and-git) section from their documentation.
 
-In GitHub, [Issues](https://docs.github.com/en/issues/tracking-your-work-with-issues/about-issues) are used to plan, discuss, and track work. You can [create new issues](https://github.com/openpolicedata/openpolicedata/issues) to suggest changes, bug fixes, and feature enhancements. You can also assign yourself an issue, which indicates that you will work on the issue. A good place to start when looking for an issue to take on are the issues labeled [*Good First Issue*](https://github.com/openpolicedata/openpolicedata/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22), which are meant for developers who are not familiar with OpenPoliceData.
+In GitHub, [Issues](https://docs.github.com/en/issues/tracking-your-work-with-issues/about-issues) are used to plan, discuss, and track work. You can [create new issues](https://github.com/openpolicedata/openpolicedata/issues) to suggest changes, bug fixes, and feature enhancements. A good place to start when looking for an issue to take on are the issues labeled [*Good First Issue*](https://github.com/openpolicedata/openpolicedata/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22), which are meant for developers who are not familiar with OpenPoliceData.
 
 Now, let's create a fork of the OpenPoliceData repository. A [fork](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/fork-a-repo) is a copy of a repository where you can make changes independent of the main repository. When you are ready, you can propose that the changes be merged into the main repository by doing what's called a [pull request](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request) (described later). 
 - Go to the [OpenPoliceData repository](https://github.com/openpolicedata/openpolicedata) and click `Fork`
@@ -55,14 +55,13 @@ A folder will be created openpolicedata that contains the contents of your forke
 The general Git/GitHub workflow (after forking OPD) for contributing is:
 
 1. Select an issue to work on or create your own
-2. Assign the issue to yourself
-3. [Sync your fork](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/syncing-a-fork) with upstream repository
-4. Clone the repository (first time) / git pull changes from your fork
-5. Make some changes to some files
-6. Commit those changes to your local repository
-7. Push those changes to your fork
-8. Create a pull request to request that your changes be added to the baseline code / upstream repository
-9. Repeat
+2. [Sync your fork](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/syncing-a-fork) with upstream repository
+3. Clone the repository (first time) / git pull changes from your fork
+4. Make some changes to some files
+5. Commit those changes to your local repository
+6. Push those changes to your fork
+7. Create a pull request to request that your changes be added to the baseline code / upstream repository
+8. Repeat
 
 There are some modifications that you may consider making including creating a branch of your fork (work on multiple issues / easier to sync)
 
