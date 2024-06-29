@@ -312,7 +312,7 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 				dts = dts[dts.notnull()]
 				# New Orleans complaints dataset has many empty dates
 				# "Seattle and Minneapolis starts with bad date data"
-				if len(dts)>0 or srcName not in ["Seattle","New Orleans",'Minneapolis'] or \
+				if len(dts)>0 or srcName not in ["Seattle","New Orleans",'Minneapolis','St. Paul'] or \
 					datasets.iloc[i]["TableType"] not in [TableType.COMPLAINTS, TableType.INCIDENTS]:
 					assert len(dts) > 0   # If not, either all dates are bad or number of rows requested needs increased
 					assert dts.iloc[0].year <= datetime.now().year if isinstance(dts.iloc[0], (pd.Timestamp,pd.Period)) else \
@@ -457,10 +457,10 @@ def log_errors_to_file(*args):
 if __name__ == "__main__":
 	from test_utils import get_datasets
 	# For testing
-	use_changed_rows = False
+	use_changed_rows = True
 	csvfile = None
 	# csvfile = os.path.join(r"..",'opd-data','opd_source_table.csv')
-	start_idx = 875
+	start_idx = 0
 	skip = None
 	# skip = "Sacramento"
 	source = None

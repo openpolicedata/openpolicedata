@@ -274,11 +274,11 @@ if __name__ == "__main__":
 	# For testing
 	# (csvfile, source, last, skip, loghtml)
 
-	use_changed_rows = False
+	use_changed_rows = True
 
 	csvfile = None
 	# csvfile = os.path.join("..","opd-data","opd_source_table.csv")
-	start_idx = 796
+	start_idx = 56
 	source = None
 	# source = "Burlington"
 	skip = None
@@ -287,8 +287,8 @@ if __name__ == "__main__":
 	datasets = get_datasets(csvfile, use_changed_rows)
 
 	# skip = "Corona"
-	# test_get_agencies(datasets, source, start_idx, skip)
+	test_get_agencies(datasets, source, start_idx, skip)
 	# test_get_agencies_name_match(datasets, None, last, skip, None)
 	# test_agency_filter(datasets, None, None, skip, None)
 	# test_to_csv(datasets, None, None, skip, None)
-	test_get_years(datasets, source, start_idx, skip, None)
+	# test_get_years(datasets, source, start_idx, skip, None)

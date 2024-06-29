@@ -106,6 +106,7 @@ class TableType(str, Enum):
     PEDESTRIAN_CITATIONS = ("PEDESTRIAN CITATIONS","Pedestrian stops leading to a citation")
     PEDESTRIAN_WARNINGS = ("PEDESTRIAN WARNINGS","Pedestrian stops leading to a warning")
     POINTING_WEAPON = ('POINTING WEAPON', "Instances of officers pointing a weapon (firearm, Taser, etc.) at individuals.")
+    SEARCHES = ("SEARCHES", "Details of searches")
     SHOOTINGS = ("OFFICER-INVOLVED SHOOTINGS","Shootings by officers")
     SHOOTINGS_SUBJECTS = ("OFFICER-INVOLVED SHOOTINGS - SUBJECTS",
         "Officer-involved shootings data may be split into several tables due to the possibility that multiple "+
@@ -117,6 +118,12 @@ class TableType(str, Enum):
         "Officer-involved shootings data may be split into several tables due to the possibility that multiple "+
         "subjects and officers may be involved in an incident. This table contains data on the incident.")
     STOPS = ("STOPS","Contains data on both pedestrian and traffic stops.")
+    STOPS_INCIDENTS = ("STOPS - INCIDENTS",
+        "Stops data may be split into several tables due to the possibility that multiple "+
+        "subjects and officers may be involved in an incident. This table contains data on the incident.")
+    STOPS_SUBJECTS = ("STOPS - SUBJECTS",
+        "Stops data may be split into several tables due to the possibility that multiple "+
+        "subjects and officers may be involved in an incident. This table contains data on the subjects.")
     TRAFFIC = ("TRAFFIC STOPS","Traffic stops are stops by police of motor vehicles due to reasonable suspicion " + 
         " or traffic violations.")
     TRAFFIC_INCIDENTS = ("TRAFFIC STOPS - INCIDENTS",
@@ -145,6 +152,7 @@ class TableType(str, Enum):
     VEHICLE_PURSUITS = ("VEHICLE PURSUITS","Attempts by officers in vehicles to pursue vehicles where the operator " + 
         "is believed to be aware that they are being signaled to stop but who is fleeing or ignoring the officer's attempt "+
         "to stop them.")
+    WARNINGS = ("WARNINGS","Warnings for traffic and civil violations")
 
 # Constants used in dataset parameters
 MULTI = "MULTIPLE"    # For data sets that put multiple years or agencies in 1 dataset

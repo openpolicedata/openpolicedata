@@ -1536,7 +1536,8 @@ class Arcgis(Data_Loader):
             where_query, record_count = self._build_date_query_date_type(year)
         elif self._date_type=='esriFieldTypeString':
             where_query, record_count = self._build_date_query_string_type(year, data, date_range_error)
-        elif self._date_type=='esriFieldTypeInteger' and (self.date_field.lower()=='yr' or 'year' in self.date_field.lower()):
+        elif self._date_type in ['esriFieldTypeInteger','esriFieldTypeDouble'] and \
+            (self.date_field.lower()=='yr' or 'year' in self.date_field.lower()):
             where_query, record_count = self._build_date_query_date_type(year, is_numeric_year=True)
         else:
             raise NotImplementedError(f"Unknown field {self._date_type}")

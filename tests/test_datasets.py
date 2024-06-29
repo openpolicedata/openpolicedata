@@ -195,7 +195,8 @@ def test_get_table_types(all_datasets):   # Passing in all_datasets to ensure th
     opd.datasets.get_table_types()
     stops_tables = opd.datasets.get_table_types(contains="STOPS")
     exp_stops_tables = ["PEDESTRIAN STOPS","STOPS","TRAFFIC STOPS",
-                        "TRAFFIC STOPS - INCIDENTS", 'TRAFFIC STOPS - SUBJECTS']
+                        "TRAFFIC STOPS - INCIDENTS", 'TRAFFIC STOPS - SUBJECTS',
+                        "STOPS - INCIDENTS", 'STOPS - SUBJECTS']
     assert len(stops_tables) == len(exp_stops_tables)
     assert all([x in exp_stops_tables for x in stops_tables])
 
