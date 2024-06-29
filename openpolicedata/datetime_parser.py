@@ -508,39 +508,39 @@ def parse_time(time_col):
         raise NotImplementedError()
     
 
-def to_datetime(col, ignore_errors=False, *args, **kwargs):
+def to_datetime(dates, ignore_errors=False, *args, **kwargs):
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=UserWarning, message="Could not infer format")
         try:
-            return pd.to_datetime(col, *args, **kwargs)
+            return pd.to_datetime(dates, *args, **kwargs)
         except UnicodeEncodeError as e:
-            if (ignore_errors or 'errors' in kwargs and kwargs['errors']=='coerce') and isinstance(col, pd.Series):
+            if (ignore_errors or 'errors' in kwargs and kwargs['errors']=='coerce') and isinstance(dates, pd.Series):
                 coerce = 'errors' in kwargs and kwargs['errors']=='coerce'
                 def to_datetime_local(x, *args, **kwargs):
                     try:
                         return pd.to_datetime(x, *args, **kwargs)
                     except:
                         return pd.NaT if coerce else x  # Coerce input to pd.to_datetime should return NaT if cannot convert to datetime
-                return col.apply(to_datetime_local)
+                return dates.apply(to_datetime_local)
             else:
-                return col
+                return dates
         except (pd._libs.tslibs.parsing.DateParseError, dateutil.parser._parser.ParserError) as e:
-            if 'out of range' in str(e) and not isinstance(col, pd.Series) and re.search(r'year 20\d{6} is out of range: 20\d{6}.0.* position 0', str(e)):
-                return to_datetime(col[:-2])
-            elif re.search(r'\d{2}/\d{2}/\d{4} \d{4} hours', str(e)) and isinstance(col, pd.Series):
-                return pd.to_datetime(col, format='%m/%d/%Y %H%M hours')
-            elif ignore_errors and 'out of range' in str(e) and not isinstance(col, pd.Series):
-                return col
-            elif ignore_errors and isinstance(col,str) and \
-                ((m:=re.search(r'^(?P<year>\d{4})\-(?P<month>[\d\_]{2})\-\_\_', col)) or \
-                 (m:=re.search(r'^(?P<year>\d{4})\-(?P<month>[\_]{2})\-\d{2}', col))):
+            if 'out of range' in str(e) and not isinstance(dates, pd.Series) and re.search(r'year 20\d{6} is out of range: 20\d{6}.0.* position 0', str(e)):
+                return to_datetime(dates[:-2])
+            elif re.search(r'\d{2}/\d{2}/\d{4} \d{4} hours', str(e)) and isinstance(dates, pd.Series):
+                return pd.to_datetime(dates, format='%m/%d/%Y %H%M hours')
+            elif ignore_errors and 'out of range' in str(e) and not isinstance(dates, pd.Series):
+                return dates
+            elif ignore_errors and isinstance(dates,str) and \
+                ((m:=re.search(r'^(?P<year>\d{4})\-(?P<month>[\d\_]{2})\-\_\_', dates)) or \
+                 (m:=re.search(r'^(?P<year>\d{4})\-(?P<month>[\_]{2})\-\d{2}', dates))):
                 if m.groupdict()['month'].isdigit():
                     return pd.Period(freq='M', year=int(m.groupdict()['year']), month=int(m.groupdict()['month']))
                 else:
                     return pd.Period(freq='Y', year=int(m.groupdict()['year']))
-            elif ignore_errors and isinstance(col, str) and re.search(r'Unknown(\sdatetime)? string format.+: \d+[-/]\d+[-/]\d+,?\s?\d+[-/]\d+[-/]\d+', str(e)):
+            elif ignore_errors and isinstance(dates, str) and re.search(r'Unknown(\sdatetime)? string format.+: \d+[-/]\d+[-/]\d+,?\s?\d+[-/]\d+[-/]\d+', str(e)):
                 # Comma separated list of dates. Just return value
-                return col
+                return dates
             else:
                 raise
         except ValueError as e:
@@ -548,22 +548,22 @@ def to_datetime(col, ignore_errors=False, *args, **kwargs):
                 (len(args)>0 or 'errors' not in kwargs or kwargs['errors']!='coerce'):
                 new_kwargs = kwargs.copy()
                 new_kwargs['errors'] = 'coerce'
-                dts = pd.to_datetime(col, *args, **new_kwargs)
+                dts = pd.to_datetime(dates, *args, **new_kwargs)
                 raise NotImplementedError()
-            elif ignore_errors and isinstance(col,str) and \
-                ((m:=re.search(r'^(?P<year>\d{4})\-(?P<month>[\d\_]{2})\-\_\_', col)) or \
-                 (m:=re.search(r'^(?P<year>\d{4})\-(?P<month>[\_]{2})\-\d{2}', col))):
+            elif ignore_errors and isinstance(dates,str) and \
+                ((m:=re.search(r'^(?P<year>\d{4})\-(?P<month>[\d\_]{2})\-\_\_', dates)) or \
+                 (m:=re.search(r'^(?P<year>\d{4})\-(?P<month>[\_]{2})\-\d{2}', dates))):
                 if m.groupdict()['month'].isdigit():
                     return pd.Period(freq='M', year=int(m.groupdict()['year']), month=int(m.groupdict()['month']))
                 else:
                     return pd.Period(freq='Y', year=int(m.groupdict()['year']))
             elif 'doesn\'t match format "%Y-%m-%dT%H:%M:%S.%f%z"' in str(e):
-                return pd.to_datetime(col.apply(lambda x: x[:-1] if isinstance(x,str) and x[-1]=='Z' else x), format='mixed')
-            elif ignore_errors and 'is out of range' in str(e) and is_str_number(col):
-                if (dec:=col.find('.'))>0 and int(col[dec+1:])==0:
-                    col = int(col[:dec])
-                    year_first = math.floor(col/10000)
-                    year_last = col % 10000
+                return pd.to_datetime(dates.apply(lambda x: x[:-1] if isinstance(x,str) and x[-1]=='Z' else x), format='mixed')
+            elif ignore_errors and 'is out of range' in str(e) and is_str_number(dates):
+                if (dec:=dates.find('.'))>0 and int(dates[dec+1:])==0:
+                    dates = int(dates[:dec])
+                    year_first = math.floor(dates/10000)
+                    year_last = dates % 10000
 
                     is_year_first = 1980 <= year_first <= datetime.datetime.now().year
                     is_year_last =  1980 <= year_last <= datetime.datetime.now().year
@@ -571,7 +571,7 @@ def to_datetime(col, ignore_errors=False, *args, **kwargs):
                         raise e
                     elif is_year_first:
                         year = year_first
-                        month_day = col - year*10000
+                        month_day = dates - year*10000
                         month = math.floor(month_day/100)
                         day = month_day - month*100
                     else:
@@ -586,12 +586,12 @@ def to_datetime(col, ignore_errors=False, *args, **kwargs):
                     raise e
             elif ignore_errors and re.search(r'Unknown string format: \d+[-/]\d+[-/]\d+,?\s?\d+[-/]\d+[-/]\d+', str(e)):
                 # Comma separated list of dates. Just return value
-                return col
-            elif isinstance(col, pd.DataFrame) and col.shape[1]==3 and str(e)=='cannot convert NA to integer':
+                return dates
+            elif isinstance(dates, pd.DataFrame) and dates.shape[1]==3 and str(e)=='cannot convert NA to integer':
                 # This is year/month/date with NaNs in some of the values
-                year_col = [x for x in col.columns if x.lower()=='year'][0]
-                month_col = [x for x in col.columns if x.lower()=='month'][0]
-                day_col = [x for x in col.columns if x.lower()=='day'][0]
+                year_col = [x for x in dates.columns if x.lower()=='year'][0]
+                month_col = [x for x in dates.columns if x.lower()=='month'][0]
+                day_col = [x for x in dates.columns if x.lower()=='day'][0]
                 def to_datetime_local(x):
                     if pd.isnull(x[day_col]):
                         if pd.isnull(x[month_col]):
@@ -607,14 +607,14 @@ def to_datetime(col, ignore_errors=False, *args, **kwargs):
                         return ValueError(f"Year is null but month and day are not. Unable to parse {x}")
                     
                     return pd.to_datetime(x.to_frame().T, *args, **kwargs).iloc[0]
-                return col.apply(to_datetime_local, axis=1)
-            elif isinstance(col, pd.DataFrame) and col.shape[1]==3 and re.search(r'Unable to parse string \"\d+(th|st|nd|rd)\"', str(e)) and \
-                col.iloc[:,2][col.iloc[:,2].notnull()].apply(lambda x: isinstance(x, numbers.Number) or is_str_number(x) or \
+                return dates.apply(to_datetime_local, axis=1)
+            elif isinstance(dates, pd.DataFrame) and dates.shape[1]==3 and re.search(r'Unable to parse string \"\d+(th|st|nd|rd)\"', str(e)) and \
+                dates.iloc[:,2][dates.iloc[:,2].notnull()].apply(lambda x: isinstance(x, numbers.Number) or is_str_number(x) or \
                                                              re.search(r'\d+(th|st|nd|rd)',x) is not None).all():
                 # Day is ordinal
-                col[col.columns[-1]] = col[col.columns[-1]].apply(lambda x: x.strip()[:-2] if  isinstance(x,str) and re.search(r'\d+(th|st|nd|rd)',x) else x)
-                return to_datetime(col, ignore_errors=ignore_errors, *args, **kwargs)
+                dates[dates.columns[-1]] = dates[dates.columns[-1]].apply(lambda x: x.strip()[:-2] if  isinstance(x,str) and re.search(r'\d+(th|st|nd|rd)',x) else x)
+                return to_datetime(dates, ignore_errors=ignore_errors, *args, **kwargs)
             else:
-                return pd.to_datetime(col, *args, format='mixed', **kwargs)
+                return pd.to_datetime(dates, *args, format='mixed', **kwargs)
         except Exception as e:
             raise
