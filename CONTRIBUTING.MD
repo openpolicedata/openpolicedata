@@ -151,7 +151,7 @@ Currently there are no packages in this environment, let's change that.
 - Install the libraries that are more easily installed (on Windows at least) with conda. 
 
 ```sh
-> conda install --file .\dev\requirements-conda.txt
+> conda install -c conda-forge  --file .\dev\requirements-conda.txt
 ```
 
 Now you're all set!

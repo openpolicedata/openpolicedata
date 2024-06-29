@@ -1,1 +1,2 @@
 geopandas
+charset-normalizer>=3.3  # Required to prevent conda from downgrading to a version that causes a circular import
