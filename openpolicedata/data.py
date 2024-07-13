@@ -1502,11 +1502,11 @@ def _check_date(table, date_field):
         dts = dts[dts.notnull()]
         if len(dts) > 0:
             one_date = dts.iloc[0]  
-            if type(one_date) == pd._libs.tslibs.timestamps.Timestamp:
+            if isinstance(one_date, pd.Timestamp):
                 if logger:
                     logger.debug(f"Converting values in column {date_field} to datetime objects")
                 table[date_field] = to_datetime(table[date_field], ignore_errors=True)
-            elif isinstance(one_date, str) and re.match(r'^20\d{2}\-\d{2}$',one_date):
+            elif isinstance(one_date, str) and re.match(r'^20\d{2}(\-|/)\d{2}$',one_date):
                 if logger:
                     logger.debug(f"Converting values in column {date_field} to monthly Period objects")
                 table[date_field] = table[date_field].apply(pd.Period, args=('M'))
@@ -1520,7 +1520,7 @@ def _check_date(table, date_field):
                     table[date_field] = table[date_field].apply(pd.Period, args=('Q'))
                 else:
                     table[date_field] = table[date_field].apply(pd.Period, args=('Y'))
-            elif isinstance(one_date, str) and not re.match(r'^20\d{2}\-\d{2}$',one_date):
+            elif isinstance(one_date, str):
                 p = re.compile(r'^Unknown string format: \d{4}-(\d{2}|__)-(\d{2}|__) present at position \d+$')
                 def to_datetime_local(x):
                     try:
@@ -1538,7 +1538,7 @@ def _check_date(table, date_field):
                 
                 try:
                     # This way is much faster
-                    table[date_field] = to_datetime(table[date_field])
+                    table[date_field] = to_datetime(table[date_field], ignore_errors=True)
                 except ValueError as e:
                     table[date_field] = table[date_field].apply(to_datetime_local)
 

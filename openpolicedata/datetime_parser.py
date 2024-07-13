@@ -509,31 +509,79 @@ def parse_time(time_col):
     
 
 def to_datetime(dates, ignore_errors=False, *args, **kwargs):
+    coerce = 'errors' in kwargs and kwargs['errors']=='coerce'
+    def to_datetime_local(x, *args, **kwargs):
+        try:
+            return pd.to_datetime(x, *args, **kwargs)
+        except:
+            return pd.NaT if coerce else x  # Coerce input to pd.to_datetime should return NaT if cannot convert to datetime
+
+    if isinstance(dates, pd.DataFrame) and \
+        (dates.isnull().any().any() or dates.apply(lambda x: isinstance(x,str)).any()):
+        # This should have columns year, month, and day
+        # Special code to handle nans in month or day which will be set to Periods instead of datetimes
+        # or to handle cases where the day is an ordinal
+        # This is year/month/date with NaNs in some of the values
+        year_col = [x for x in dates.columns if x.lower()=='year'][0]
+        month_col = [x for x in dates.columns if x.lower()=='month'][0]
+        day_col = [x for x in dates.columns if x.lower()=='day'][0]
+        def to_datetime_local(x):
+            if pd.isnull(x[day_col]):
+                if pd.isnull(x[month_col]):
+                    if pd.isnull(x[year_col]):
+                        return pd.NaT
+                    else:
+                        return pd.Period(freq='Y', year=x[year_col])
+                else:
+                    return pd.Period(freq='M', year=x[year_col], month=x[month_col])
+            elif pd.isnull(x[month_col]):
+                return ValueError(f"Month is null but day is not. Unable to parse {x}")
+            elif pd.isnull(x[year_col]):
+                return ValueError(f"Year is null but month and day are not. Unable to parse {x}")
+            
+            return pd.to_datetime(x.to_frame().T, *args, **kwargs).iloc[0]
+        
+        # Replace any ordinal days
+        try:
+            dates[day_col] = dates[day_col].apply(lambda x: x.strip()[:-2] if  isinstance(x,str) and re.search(r'\d+(th|st|nd|rd)',x) else x)
+            return dates.apply(to_datetime_local, axis=1)
+        except:
+            # Adding this to put breakpoint here to catch errors. This try/except should be removed in the future
+            raise
+
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=UserWarning, message="Could not infer format")
         try:
             return pd.to_datetime(dates, *args, **kwargs)
         except UnicodeEncodeError as e:
             if (ignore_errors or 'errors' in kwargs and kwargs['errors']=='coerce') and isinstance(dates, pd.Series):
-                coerce = 'errors' in kwargs and kwargs['errors']=='coerce'
-                def to_datetime_local(x, *args, **kwargs):
-                    try:
-                        return pd.to_datetime(x, *args, **kwargs)
-                    except:
-                        return pd.NaT if coerce else x  # Coerce input to pd.to_datetime should return NaT if cannot convert to datetime
                 return dates.apply(to_datetime_local)
             else:
                 return dates
         except (pd._libs.tslibs.parsing.DateParseError, dateutil.parser._parser.ParserError) as e:
-            if 'out of range' in str(e) and not isinstance(dates, pd.Series) and re.search(r'year 20\d{6} is out of range: 20\d{6}.0.* position 0', str(e)):
-                return to_datetime(dates[:-2])
+            if 'out of range' in str(e) and \
+                ((m1:=re.search(r'year ((19|20)\d{6}) is out of range: \1\.0.* position 0', str(e))) or \
+                 re.search(r'year (\d{3,4}(19|20)\d{2}) is out of range: 0?\1\.0.* position 0', str(e))):
+                if isinstance(dates, pd.Series):
+                    return dates.apply(to_datetime)
+                elif m1:
+                    return pd.to_datetime(dates[:-2])
+                else:
+                    dates = dates[:-2]
+                    year = dates[-4:]
+                    mmdd = dates[:-4] if len(dates)==8 else '0'+dates[:-4]
+                    return pd.to_datetime(year+mmdd)
             elif re.search(r'\d{2}/\d{2}/\d{4} \d{4} hours', str(e)) and isinstance(dates, pd.Series):
                 return pd.to_datetime(dates, format='%m/%d/%Y %H%M hours')
             elif ignore_errors and 'out of range' in str(e) and not isinstance(dates, pd.Series):
                 return dates
+            elif ignore_errors and isinstance(dates,pd.Series) and \
+                  (re.search(r'(Unknown string format|unable to parse): \d{4}\-__', str(e)) or \
+                   re.search(r'(Unknown string format|unable to parse): \d{4}\-\d{2}\-__', str(e))):
+                return dates.apply(lambda x: to_datetime(x, ignore_errors, *args, **kwargs))
             elif ignore_errors and isinstance(dates,str) and \
                 ((m:=re.search(r'^(?P<year>\d{4})\-(?P<month>[\d\_]{2})\-\_\_', dates)) or \
-                 (m:=re.search(r'^(?P<year>\d{4})\-(?P<month>[\_]{2})\-\d{2}', dates))):
+                 (m:=re.search(r'^(?P<year>\d{4})\-(?P<month>\_\_)\-\d{2}', dates))):
                 if m.groupdict()['month'].isdigit():
                     return pd.Period(freq='M', year=int(m.groupdict()['year']), month=int(m.groupdict()['month']))
                 else:
@@ -550,13 +598,20 @@ def to_datetime(dates, ignore_errors=False, *args, **kwargs):
                 new_kwargs['errors'] = 'coerce'
                 dts = pd.to_datetime(dates, *args, **new_kwargs)
                 raise NotImplementedError()
-            elif ignore_errors and isinstance(dates,str) and \
-                ((m:=re.search(r'^(?P<year>\d{4})\-(?P<month>[\d\_]{2})\-\_\_', dates)) or \
-                 (m:=re.search(r'^(?P<year>\d{4})\-(?P<month>[\_]{2})\-\d{2}', dates))):
-                if m.groupdict()['month'].isdigit():
-                    return pd.Period(freq='M', year=int(m.groupdict()['year']), month=int(m.groupdict()['month']))
-                else:
-                    return pd.Period(freq='Y', year=int(m.groupdict()['year']))
+            elif ignore_errors and isinstance(dates,pd.Series) and \
+                    (re.search(r'time data \"\d{4}\-(\d\d|\_\_)\-\_\_\"',  str(e)) or \
+                     re.search(r'time data \"\d{4}\-\_\_\-\d\d\"',  str(e))):
+                def to_datetime_local(x):
+                    if isinstance(x, str) and ((m:=re.search(r'^(?P<year>\d{4})\-(?P<month>[\d\_]{2})\-\_\_', x)) or \
+                        (m:=re.search(r'^(?P<year>\d{4})\-(?P<month>[\_]{2})\-\d{2}', x))):
+                        if m.groupdict()['month'].isdigit():
+                            return pd.Period(freq='M', year=int(m.groupdict()['year']), month=int(m.groupdict()['month']))
+                        else:
+                            return pd.Period(freq='Y', year=int(m.groupdict()['year']))
+                    else:
+                        return pd.to_datetime(x, *args, **kwargs)
+                    
+                return dates.apply(to_datetime_local)
             elif 'doesn\'t match format "%Y-%m-%dT%H:%M:%S.%f%z"' in str(e):
                 return pd.to_datetime(dates.apply(lambda x: x[:-1] if isinstance(x,str) and x[-1]=='Z' else x), format='mixed')
             elif ignore_errors and 'is out of range' in str(e) and is_str_number(dates):
@@ -587,33 +642,11 @@ def to_datetime(dates, ignore_errors=False, *args, **kwargs):
             elif ignore_errors and re.search(r'Unknown string format: \d+[-/]\d+[-/]\d+,?\s?\d+[-/]\d+[-/]\d+', str(e)):
                 # Comma separated list of dates. Just return value
                 return dates
-            elif isinstance(dates, pd.DataFrame) and dates.shape[1]==3 and str(e)=='cannot convert NA to integer':
-                # This is year/month/date with NaNs in some of the values
-                year_col = [x for x in dates.columns if x.lower()=='year'][0]
-                month_col = [x for x in dates.columns if x.lower()=='month'][0]
-                day_col = [x for x in dates.columns if x.lower()=='day'][0]
-                def to_datetime_local(x):
-                    if pd.isnull(x[day_col]):
-                        if pd.isnull(x[month_col]):
-                            if pd.isnull(x[year_col]):
-                                return pd.NaT
-                            else:
-                                return pd.Period(freq='Y', year=x[year_col])
-                        else:
-                            return pd.Period(freq='M', year=x[year_col], month=x[month_col])
-                    elif pd.isnull(x[month_col]):
-                        return ValueError(f"Month is null but day is not. Unable to parse {x}")
-                    elif pd.isnull(x[year_col]):
-                        return ValueError(f"Year is null but month and day are not. Unable to parse {x}")
-                    
-                    return pd.to_datetime(x.to_frame().T, *args, **kwargs).iloc[0]
-                return dates.apply(to_datetime_local, axis=1)
-            elif isinstance(dates, pd.DataFrame) and dates.shape[1]==3 and re.search(r'Unable to parse string \"\d+(th|st|nd|rd)\"', str(e)) and \
-                dates.iloc[:,2][dates.iloc[:,2].notnull()].apply(lambda x: isinstance(x, numbers.Number) or is_str_number(x) or \
-                                                             re.search(r'\d+(th|st|nd|rd)',x) is not None).all():
-                # Day is ordinal
-                dates[dates.columns[-1]] = dates[dates.columns[-1]].apply(lambda x: x.strip()[:-2] if  isinstance(x,str) and re.search(r'\d+(th|st|nd|rd)',x) else x)
-                return to_datetime(dates, ignore_errors=ignore_errors, *args, **kwargs)
+            elif isinstance(dates, pd.DataFrame) and dates.shape[1]==3 and (str(e)=='cannot convert NA to integer' or \
+                    (re.search(r'Unable to parse string \"\d+(th|st|nd|rd)\"', str(e)) and \
+                    dates.iloc[:,2][dates.iloc[:,2].notnull()].apply(lambda x: isinstance(x, numbers.Number) or is_str_number(x) or \
+                    re.search(r'\d+(th|st|nd|rd)',x) is not None).all())):
+                raise NotImplementedError("This should no longer be reachable. Remove in a future release")
             else:
                 return pd.to_datetime(dates, *args, format='mixed', **kwargs)
         except Exception as e:
