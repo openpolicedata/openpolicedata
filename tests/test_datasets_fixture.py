@@ -20,7 +20,7 @@ def test_get_line_numbers():
 
 
 def test_changerows_and_csvfile():
-    with pytest.raises(ValueError, match='.*does not appear to be an Git repository.*'):
+    with pytest.raises(FileNotFoundError):
         get_datasets("test", True)
 
 

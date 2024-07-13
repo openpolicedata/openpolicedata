@@ -27,7 +27,7 @@ def get_datasets(csvfile=None,use_changed_rows=False):
             cmd =f'git -C {os.path.dirname(csvfile)} remote -v'
             result = subprocess.run(cmd, stdout=subprocess.PIPE).stdout.decode('utf-8')
             if "opd-data.git" not in result:
-                 raise ValueError(f"{csvfile} does not appear to be an Git repository for opd-data")
+                 raise FileNotFoundError(f"{csvfile} does not appear to be an Git repository for opd-data")
             csv_path = os.path.dirname(csvfile)
         else:
             csv_path = os.path.join('..','opd-data')
