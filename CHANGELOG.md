@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
+## v0.7.2 - 2024-07-13
+### Added
+- Added id_contains input to get_count, load_iter, load, and load_from_csv of Source class to help distinguish between multiple datasets matching a data request (along with previously added url_contains)
+- Added SEARCHES, WARNINGS, STOPS_INCIDENTS, and STOPS_SUBJECTS table types
+
 ## v0.7.1 - 2024-06-01
 ### Added
 - Added subject and officer name to standardization fields for officer-involved shootings only
@@ -20,9 +25,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Year column in the OPD source table has been moved to the left to make it more visible
 ### Deprecated
 - Usage of iloc with datasets table is now discouraged due to change in location of Year column
-### Removed
-### Fixed
-### Security
 
 ## v0.7 - 2024-05-10
 ### Added

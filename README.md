@@ -31,25 +31,30 @@ OpenPoliceData provides access to police data with 2 simple lines of code:
 ![alt text](https://github.com/openpolicedata/opd-data/blob/main/OPD_Datasets_Map.png?raw=true)
 
 ## Latest Datasets Added to OPD
-- Louisville, KY: Officer-involved shootings data
-- Norwich, CT: Officer-involved shootings data
-- Fairfax County, VA: 2023 arrests, traffic citations, and traffic warnings
-- Asheville, NC: arrests, citations, complaints, incidents, pointing weapon, traffic stops, use of force, and 2023 calls for service
-- Sacramento, CA: 2024 calls for service, 2021-2024 incidents, and 2023-2024 citations   
-- Albemarle County, VA: Stops
-- Norman, OK: Crashes, incidents, and traffic stops data (new) and most recent arrests, complaints and use of force data
-- Oakland, CA: Stops
-- Washington D.C.: Lawsuits against MPD
-- Bloomington, IN: Use of Force and Citations
+- Austin, TX: Arrests, incidents, searches, use of force, and warnings
+- New York, NY: Latest pedestrian stops dataset
+- Chicago, IL: Latest pedestrian stops dataset
+- Washington D.C.: Latest use of force dataset
+- Oakland, CA: Latest use of force dataset
+- Los Angeles, CA: Latest stops dataset
+- Columbia, MO: Latest traffic stops dataset
+- Sparks, NV: Latest officer-involved shootings dataset
+- Wallkill, NY: Latest stops dataset
+- Charleston, SC: Latest citations dataset
+- Denver, CO: Crashes
+- Mesa, AZ: Latest calls for service dataset
+- Wichita, KS: Latest crashes datasets
+- Baltimore, MD: Added calls for service datasets
+- Pittsfield, MA: Latests arrests, calls for service, and crashes datasets
+- Minnesapolis, MN: Incidents
+- St. Paul, MN: Incidents
+- Durham, NC: Latest calls for service dataset
+- Philadelphia, PA: Latests crashes dataset
 
-## v0.7.1 - 2024-06-01
+## v0.7.2 - 2024-07-13
 ### Added
-- Added subject and officer name to standardization fields for officer-involved shootings only
-- Added capability to handle more formats for storing data in Excel files (different ways of storing data across sheets and multiple tables in a single sheet)
-### Changed
-- Year column in the OPD source table has been moved to the left to make it more visible
-### Deprecated
-- Usage of iloc with datasets table is now discouraged due to change in location of Year column
+- Added id_contains input to get_count, load_iter, load, and load_from_csv of Source class to help distinguish between multiple datasets matching a data request (along with previously added url_contains)
+- Added SEARCHES, WARNINGS, STOPS_INCIDENTS, and STOPS_SUBJECTS table types
 
 Complete change log available at: https://github.com/openpolicedata/openpolicedata/blob/main/CHANGELOG.md
 
