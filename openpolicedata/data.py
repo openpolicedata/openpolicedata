@@ -804,7 +804,8 @@ class Source:
                      table_type: str | defs.TableType | None = None, 
                      year: str | int | None = None, 
                      partial_name: str | None = None,
-                     url_contains: str | None = None
+                     url_contains: str | None = None,
+                     id_contains: str | None = None
                      ) -> list[str]:
         '''Get agencies available for 1 or more datasets
 
@@ -820,7 +821,9 @@ class Source:
             (Optional)  If set, only returns agencies containing the substring
             partial_name for datasets that contain multiple agencies
         url_contains - str | None
-            (Optional) If set, URL must contain this string. Can be used when multiple datasets match a set of inputs.
+            (Optional) If set, URL must contain this string. Can be used in combination with id_contains when multiple datasets match a set of inputs.
+        id_contains - str | None
+            (Optional) If set, dataset ID must contain this string. Can be used in combination with url_contains when multiple datasets match a set of inputs.
 
         Returns
         -------
@@ -832,6 +835,9 @@ class Source:
 
         if url_contains:
             src = src[src['URL'].str.contains(url_contains, regex=False)]
+
+        if pd.notnull(id_contains):
+            src = src[src['dataset_id'].str.contains(id_contains, regex=False)]
 
         if year != None:
             src = src[src["Year"] == year]
@@ -884,7 +890,8 @@ class Source:
                   agency: str | None = None, 
                   force: bool = False,
                   verbose: bool | str = False,
-                  url_contains: str | None = None
+                  url_contains: str | None = None,
+                  id_contains: str | None = None
                   ) -> int:
         '''Get number of records for a data request
 
@@ -908,7 +915,9 @@ class Source:
             If True, details of data loading will be logged. If a filename, details will
             be logged to that file., by default False
         url_contains - str | None
-            (Optional) If set, URL must contain this string. Can be used when multiple datasets match a set of inputs.
+            (Optional) If set, URL must contain this string. Can be used in combination with id_contains when multiple datasets match a set of inputs.
+        id_contains - str | None
+            (Optional) If set, dataset ID must contain this string. Can be used in combination with url_contains when multiple datasets match a set of inputs.
 
         Returns
         -------
@@ -916,7 +925,8 @@ class Source:
             Table object containing the requested data
         '''
 
-        return self.__load(table_type, year, agency, True, pbar=False, return_count=True, force=force, verbose=verbose, url_contains=url_contains)
+        return self.__load(table_type, year, agency, True, pbar=False, return_count=True, force=force, verbose=verbose, 
+                           url_contains=url_contains, id_contains=id_contains)
     
     @input_swap([0,1], ['table_type','year'], [defs.TableType, {'values':[defs.NA, defs.MULTI], 'types':[list, int]}], error=True, opt1=None)
     def load_iter(self,
@@ -929,6 +939,7 @@ class Source:
                 force: bool =False,
                 verbose: bool | str = False,
                 url_contains: str | None = None,
+                id_contains: str | None = None,
                 format_date: bool = True
                 ) -> Iterator[Table]:
         '''Get generator to load data from URL in batches
@@ -959,7 +970,9 @@ class Source:
             If True, details of data loading will be logged. If a filename, details will
             be logged to that file., by default False
         url_contains - str | None
-            (Optional) If set, URL must contain this string. Can be used when multiple datasets match a set of inputs.
+            (Optional) If set, URL must contain this string. Can be used in combination with id_contains when multiple datasets match a set of inputs.
+        id_contains - str | None
+            (Optional) If set, dataset ID must contain this string. Can be used in combination with url_contains when multiple datasets match a set of inputs.
         format_date : bool, optional
             If True, known date columns (based on presence of date_field in datasets table or data type information provided by dataset owner) will be automatically formatted
             to be pandas datetimes (or pandas Period in rare cases), by default True
@@ -970,10 +983,10 @@ class Source:
             generates Table objects containing the requested data
         '''
 
-        count = self.get_count(table_type, year, agency, force, verbose=verbose, url_contains=url_contains)
+        count = self.get_count(table_type, year, agency, force, verbose=verbose, url_contains=url_contains, id_contains=id_contains)
         for k in range(offset, count, nbatch):
             yield self.__load(table_type, year, agency, True, pbar, nrows=min(nbatch, count-k), offset=k, 
-                              verbose=verbose, url_contains=url_contains, format_date=format_date)
+                              verbose=verbose, url_contains=url_contains, id_contains=id_contains, format_date=format_date)
     
     @deprecated("load_from_url_gen is deprecated and will be removed in a future release. Please use load_iter instead. "+
                 "load_iter uses the same inputs except table_type now comes before year.")
@@ -1006,6 +1019,7 @@ class Source:
             sortby=None,
             verbose: bool | str = False,
             url_contains: str | None = None,
+            id_contains: str | None = None,
             format_date: bool = True
             ) -> Table:
         '''Load data from URL
@@ -1033,7 +1047,9 @@ class Source:
             If True, details of data loading will be logged. If a filename, details will
             be logged to that file., by default False
         url_contains - str | None
-            (Optional) If set, URL must contain this string. Can be used when multiple datasets match a set of inputs.
+            (Optional) If set, URL must contain this string. Can be used in combination with id_contains when multiple datasets match a set of inputs.
+        id_contains - str | None
+            (Optional) If set, dataset ID must contain this string. Can be used in combination with url_contains when multiple datasets match a set of inputs.
         format_date : bool, optional
             If True, known date columns (based on presence of date_field in datasets table or data type information provided by dataset owner) will be automatically formatted
             to be pandas datetimes (or pandas Period in rare cases), by default True
@@ -1045,7 +1061,7 @@ class Source:
         '''
 
         return self.__load(table_type, year, agency, True, pbar, nrows=nrows, offset=offset, sortby=sortby, 
-                           verbose=verbose, url_contains=url_contains, format_date=format_date)
+                           verbose=verbose, url_contains=url_contains, id_contains=id_contains, format_date=format_date)
 
     
     @deprecated("load_from_url is deprecated and will be removed in a future release. Please use load instead. "+
@@ -1075,7 +1091,7 @@ class Source:
 
         return src
     
-    def __filter_for_source(self, table_type, year, url_contains, errors=True):
+    def __filter_for_source(self, table_type, year, url_contains, id_contains, errors=True):
         orig_src = self.__find_datasets(table_type)
         src = orig_src.copy()
 
@@ -1084,6 +1100,9 @@ class Source:
         
         if url_contains:
             src = src[src['URL'].str.contains(url_contains, regex=False)]
+
+        if pd.notnull(id_contains):
+            src = src[src['dataset_id'].str.contains(id_contains, regex=False)]
 
         matchingYears = src["Year"]==year if not isinstance(year, list) else pd.Series(False, src.index)
 
@@ -1114,13 +1133,13 @@ class Source:
                     contains[k] = True
             src = src[contains]
 
-        if len(src)>0 and isinstance(year,list) and not url_contains:
+        if len(src)>0 and isinstance(year,list) and not url_contains and pd.isnull(id_contains):
             # Ensure that year range does not also match a single year dataset
             if (orig_src['Year'].apply(lambda x: x!=defs.MULTI and x>=year_filter[0] and x<=year_filter[1])).any():
                 raise ValueError(f"Year range cannot contain the year corresponding to a single year dataset.\n "
                                  f"A dataset exists for the year {year}\n "+
-                                 "If the requested year range was correct, the url_contains input can be used to specify a dataset in ambiguous cases "+
-                                 "by setting url_contains to a unique substring of the desired dataset's URL. The URL(s) for the datasets matching "+
+                                 "If the requested year range was correct, the url_contains or id_contains input can be used to specify a dataset in ambiguous cases "+
+                                 "by setting url_contains to a unique substring of the desired dataset's URL or id_contains to the dataset ID. The URL(s) for the datasets matching "+
                                  f"the current inputs are {list(src['URL'])}")
             
         if isinstance(src, pd.core.frame.DataFrame):
@@ -1128,29 +1147,33 @@ class Source:
                 err_msg = f"There are no sources matching {table_type=} and {year=}"
                 if url_contains:
                     err_msg+=f" and {url_contains=}"
+                if pd.notnull(id_contains):
+                    err_msg+=f" and {id_contains=}"
                 raise ValueError(err_msg)
             elif len(src) > 1:
                 if errors:
                     err_msg = f"There is more than one source matching {table_type=} and {year=}"
                     if url_contains:
                         err_msg+=f" and {url_contains=}"
+                    if pd.notnull(id_contains):
+                        err_msg+=f" and {id_contains=}"
                     if isinstance(year, list):
                         raise ValueError(err_msg+" It is possible that the year range covers more the one dataset." +
-                                        " Set the year input to not contain years for multiple datasets and/or use the url_contains "+
+                                        " Set the year input to not contain years for multiple datasets and/or use the url_contains or id_contains "+
                                         "input to specify a single dataset "+
-                                        "by setting url_contains to a unique substring of the desired dataset's URL. "
+                                        "by setting url_contains to a unique substring of the desired dataset's URL or id_contains to the dataset ID. "
                                         f"The URL(s) for the datasets matching the current inputs are {list(src['URL'])}")
                     elif year==defs.MULTI:
                         raise ValueError(err_msg+f" Therea are multiple multi-year datasets with year={defs.MULTI}." +
-                                        " Use the url_contains "+
+                                        " Use the url_contains or id_contains "+
                                         "input to specify a single dataset "+
-                                        "by setting url_contains to a unique substring of the desired dataset's URL. "
+                                        "by setting url_contains to a unique substring of the desired dataset's URL or id_contains to the dataset ID. "
                                         f"The URL(s) for the datasets matching the current inputs are {list(src['URL'])}")
                     else:
                         raise ValueError(err_msg+
                                         " Set the year input to a single year or a year range and/or "+
-                                        "use the url_contains input to specify a single dataset "+
-                                        "by setting url_contains to a unique substring of the desired dataset's URL. "
+                                        "use the url_contains or id_contains input to specify a single dataset "+
+                                        "by setting url_contains to a unique substring of the desired dataset's URL or id_contains to the dataset ID. "
                                         f"The URL(s) for the datasets matching the current inputs are {list(src['URL'])}")
                 else:
                     # This is only for testing
@@ -1162,11 +1185,11 @@ class Source:
 
 
     def __load(self, table_type, year, agency, load_table, pbar=True, return_count=False, force=False, 
-               nrows=None, offset=0, sortby=None, verbose=False, url_contains=None, format_date=True):
+               nrows=None, offset=0, sortby=None, verbose=False, url_contains=None, id_contains=None, format_date=True):
         # Make copy so original isn't changed
         year = year.copy() if isinstance(year, list) else year
 
-        src, filter_by_year = self.__filter_for_source(table_type, year, url_contains)
+        src, filter_by_year = self.__filter_for_source(table_type, year, url_contains, id_contains)
 
         # Load data from URL. For year or agency equal to opd.defs.MULTI, filtering can be done
         url = src["URL"]
@@ -1269,6 +1292,7 @@ class Source:
                       agency: str | None = None,
                       zip: bool =False,
                       url_contains: str | None = None,
+                      id_contains: str | None = None,
                       format_date: bool = True,
                       filename: str | None = None
                       ) -> Table:
@@ -1291,7 +1315,9 @@ class Source:
         zip - bool
             (Optional) Set to true if CSV is in a zip file with the same filename. Default: False
         url_contains - str | None
-            (Optional) If set, URL must contain this string. Can be used when multiple datasets match a set of inputs.
+            (Optional) If set, URL must contain this string. Can be used in combination with id_contains when multiple datasets match a set of inputs.
+        id_contains - str | None
+            (Optional) If set, dataset ID must contain this string. Can be used in combination with url_contains when multiple datasets match a set of inputs.
         format_date : bool, optional
             If True, known date columns (based on presence of date_field in datasets table or data type information provided by dataset owner) will be automatically formatted
             to be pandas datetimes (or pandas Period in rare cases), by default True
@@ -1304,7 +1330,7 @@ class Source:
             Table object containing the requested data
         '''
 
-        table = self.__load(table_type, year, agency, False, url_contains=url_contains, format_date=format_date)
+        table = self.__load(table_type, year, agency, False, url_contains=url_contains, id_contains=id_contains, format_date=format_date)
 
         if not filename:
             filename = table.get_csv_filename()
@@ -1383,7 +1409,8 @@ class Source:
                          output_dir: str | None = None, 
                          table_type: str | defs.TableType | None = None,
                          agency: str | None = None,
-                         url_contains: str | None = None
+                         url_contains: str | None = None,
+                         id_contains: str | None = None
                          ) -> str:
         '''Get auto-generated CSV filename
         
@@ -1402,7 +1429,9 @@ class Source:
             (Optional) If set, for datasets containing multiple agencies, data will
             only be returned for this agency
         url_contains - str | None
-            (Optional) If set, URL must contain this string. Can be used when multiple datasets match a set of inputs.
+            (Optional) If set, URL must contain this string. Can be used in combination with id_contains when multiple datasets match a set of inputs.
+        id_contains - str | None
+            (Optional) If set, dataset ID must contain this string. Can be used in combination with url_contains when multiple datasets match a set of inputs.
 
         Returns
         -------
@@ -1410,7 +1439,7 @@ class Source:
             Auto-generated CSV filename
         '''
 
-        table = self.__load(table_type, year, agency, False, url_contains=url_contains)
+        table = self.__load(table_type, year, agency, False, url_contains=url_contains, id_contains=id_contains)
 
         filename = table.get_csv_filename()
         if output_dir != None:

@@ -100,7 +100,7 @@ def test_single_year_filter():
 	if check_for_dataset('Phoenix', opd.defs.TableType.CALLS_FOR_SERVICE):
 		src = data.Source('Phoenix')
 		year = 2017
-		dataset, filter_by_year = src._Source__filter_for_source(opd.defs.TableType.CALLS_FOR_SERVICE, year, None)
+		dataset, filter_by_year = src._Source__filter_for_source(opd.defs.TableType.CALLS_FOR_SERVICE, year, None, None)
 		assert not filter_by_year
 		assert dataset['Year']==year
 		assert dataset['TableType']==opd.defs.TableType.CALLS_FOR_SERVICE
@@ -109,13 +109,13 @@ def test_single_year_range_filter():
 	if check_for_dataset('Phoenix', opd.defs.TableType.CALLS_FOR_SERVICE):
 		src = data.Source('Phoenix')
 		with pytest.raises(ValueError, match="There are no sources matching"):
-			src._Source__filter_for_source(opd.defs.TableType.CALLS_FOR_SERVICE, [2017,2018], None)
+			src._Source__filter_for_source(opd.defs.TableType.CALLS_FOR_SERVICE, [2017,2018], None, None)
 
 @pytest.mark.parametrize('year, exp_filt_by_year', [(2017,True), (opd.defs.MULTI,False)])
 def test_multi_year_filter(year,exp_filt_by_year):
 	if check_for_dataset('Norristown', opd.defs.TableType.USE_OF_FORCE):
 		src = data.Source('Norristown')
-		dataset, filter_by_year = src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, None)
+		dataset, filter_by_year = src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, None, None)
 		assert filter_by_year == exp_filt_by_year
 		assert dataset['Year']==opd.defs.MULTI
 		assert dataset['TableType']==opd.defs.TableType.USE_OF_FORCE
@@ -125,21 +125,21 @@ def test_multi_year_range_filter_includes_single_year():
 		src = data.Source('Norristown')
 		year = [2016,2018]
 		with pytest.raises(ValueError, match="Year range cannot contain the year corresponding to a single year"):
-			src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, None)
+			src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, None, None)
 
 def test_bad_year_range():
 	if check_for_dataset('Norristown', opd.defs.TableType.USE_OF_FORCE):
 		src = data.Source('Norristown')
 		year = [2016,2018, 2017]
 		with pytest.raises(ValueError, match="year input must either be a single year or a list containing a start and stop year"):
-			src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, None)
+			src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, None, None)
 
 @pytest.mark.parametrize('year, url_contains', [(2019, "APDUseOfForce/FeatureServer/0"), 
 												([2018,2019], "APDUseOfForce/FeatureServer/0"), (2021, "APD_UseOfForce2021/FeatureServer/0")])
 def test_multiple_multiple_year_filter(all_datasets, year, url_contains):
 	if check_for_dataset('Asheville', opd.defs.TableType.USE_OF_FORCE):
 		src = data.Source('Asheville')
-		dataset, filter_by_year = src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, None)
+		dataset, filter_by_year = src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, None, None)
 		assert filter_by_year
 		assert dataset['Year']==opd.defs.MULTI
 		assert dataset['TableType']==opd.defs.TableType.USE_OF_FORCE
@@ -151,22 +151,31 @@ def test_multiple_multiple_year_filter(all_datasets, year, url_contains):
 def test_overlapping_multi_and_single(all_datasets, year, url_contains, url_contains_test):
 	if check_for_dataset('Louisville', opd.defs.TableType.TRAFFIC):
 		src = data.Source('Louisville')
-		dataset, filter_by_year = src._Source__filter_for_source(opd.defs.TableType.TRAFFIC, year, url_contains)
+		dataset, filter_by_year = src._Source__filter_for_source(opd.defs.TableType.TRAFFIC, year, url_contains, None)
 		assert url_contains_test in dataset['URL']
+
+@pytest.mark.parametrize('year, id_contains, id_contains_test', [(2020, None, 'ex94-c5ad'), 
+												(2021, None, 'izhu-764k'),
+												([2020,2021], 'izhu-764k', 'izhu-764k')])
+def test_overlapping_multi_and_single_with_id(all_datasets, year, id_contains, id_contains_test):
+	if check_for_dataset('Mesa', opd.defs.TableType.CALLS_FOR_SERVICE):
+		src = data.Source('Mesa')
+		dataset, filter_by_year = src._Source__filter_for_source(opd.defs.TableType.CALLS_FOR_SERVICE, year, None, id_contains)
+		assert id_contains_test == dataset['dataset_id']
 
 @pytest.mark.parametrize('year', [2020, [2020,2021], opd.defs.MULTI])
 def test_multiple_bad_multiple_year_filter(all_datasets, year):
 	if check_for_dataset('Asheville', opd.defs.TableType.USE_OF_FORCE):
 		src = data.Source('Asheville')
 		with pytest.raises(ValueError, match="There is more than one source matching "):
-			src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, None)
+			src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, None, None)
 
 @pytest.mark.parametrize('year, exp_filt_by_year', [([2021,2022], True), (opd.defs.MULTI, False)])
 def test_url_contains(all_datasets, year, exp_filt_by_year):
 	if check_for_dataset('Asheville', opd.defs.TableType.USE_OF_FORCE):
 		src = data.Source('Asheville')
 		url_contains = "APDUseOfForce/FeatureServer/0"
-		dataset, filter_by_year = src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, url_contains)
+		dataset, filter_by_year = src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, url_contains, None)
 		assert filter_by_year == exp_filt_by_year
 		assert dataset['Year']==opd.defs.MULTI
 		assert dataset['TableType']==opd.defs.TableType.USE_OF_FORCE
@@ -244,11 +253,13 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 			nrows = 20 if datasets.iloc[i]['DataType']!='Excel' else None
 
 			# Handle cases where URL is required to disambiguate requested dataset
-			ds_filter, _ = src._Source__filter_for_source(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], None, errors=False)
+			ds_filter, _ = src._Source__filter_for_source(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], None, None, errors=False)
 			url_contains = datasets.iloc[i]['URL'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
+			id_contains = datasets.iloc[i]['dataset_id'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
 
 			try:
-				table = src.load(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], pbar=False, nrows=nrows, url_contains=url_contains)
+				table = src.load(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], pbar=False, nrows=nrows, 
+					 url_contains=url_contains, id_contains=id_contains)
 			except warn_errors as e:
 				e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"])
 				caught_exceptions_warn.append(e)
@@ -457,7 +468,7 @@ def log_errors_to_file(*args):
 if __name__ == "__main__":
 	from test_utils import get_datasets
 	# For testing
-	use_changed_rows = True
+	use_changed_rows = False
 	csvfile = None
 	# csvfile = os.path.join(r"..",'opd-data','opd_source_table.csv')
 	start_idx = 0

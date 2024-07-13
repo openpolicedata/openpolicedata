@@ -116,7 +116,7 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 		src = data.Source(srcName, state=state)
 
 		# Handle cases where URL is required to disambiguate requested dataset
-		ds_filter, _ = src._Source__filter_for_source(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], None, errors=False)
+		ds_filter, _ = src._Source__filter_for_source(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], None, None, errors=False)
 		ds_input = datasets.iloc[[i]] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
 
 		if ds_input is None:
@@ -388,10 +388,15 @@ def test_source_download_not_limitable(datasets, source, start_idx, skip, query=
 			year = datasets.iloc[i]["Year"]
 			table_type = datasets.iloc[i]["TableType"]
 
+			# Handle cases where URL is required to disambiguate requested dataset
+			ds_filter, _ = src._Source__filter_for_source(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], None, None, errors=False)
+			url_contains = datasets.iloc[i]['URL'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
+			id_contains = datasets.iloc[i]['dataset_id'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
+
 			now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
 			print(f"{now} Testing {i+1} of {len(datasets)}: {srcName}, {state} {table_type} table for {year}")
 			try:
-				table = src.load(table_type, year, pbar=False)
+				table = src.load(table_type, year, pbar=False, url_contains=url_contains, id_contains=id_contains)
 			except OPD_FutureError:
 				continue
 			except:
@@ -440,7 +445,7 @@ def log_errors_to_file(*args):
 if __name__ == "__main__":
 	from test_utils import get_datasets
 	# For testing
-	use_changed_rows = True
+	use_changed_rows = False
 	csvfile = None
 	# csvfile = os.path.join('..','opd-data', 'opd_source_table.csv')
 	start_idx = 0
@@ -455,4 +460,4 @@ if __name__ == "__main__":
 
 	test_load_year(datasets, source, start_idx, skip, False, query=query) 
 	start_idx = 0
-	# test_source_download_not_limitable(datasets, source, start_idx, skip) 
+	test_source_download_not_limitable(datasets, source, start_idx, skip) 
