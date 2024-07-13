@@ -35,7 +35,7 @@ def convert(converter, col, source_name="", cats=None, std_map=None, delim=None,
     
     is_boolean_cols = False
     if len(col.shape)==2: # More than 1 column was passed in
-        is_boolean_cols = (col.isnull() | col.isin(['True','False','true','false', True, False])).all().all()
+        is_boolean_cols = (col.isnull() | col.isin(['True','False','true','false', True, False,'Yes','No'])).all().all()
         if is_boolean_cols and mult_type!=MultType.SINGLE:
             raise NotImplementedError(f"Multi-column input is not possible for {mult_type} case. "+
                                       "Please submit an issue: https://github.com/openpolicedata/openpolicedata/issues")
@@ -73,18 +73,24 @@ def convert(converter, col, source_name="", cats=None, std_map=None, delim=None,
                 words = utils.split_words(c)
                 last = ""
                 v = []
+                is_latino = False
                 for w in words:
                     w = w.lower()
                     if last=='non':
                         last = ''
                     elif w=='non':
                         last = w
-                    elif w not in ['suspect', 'race', 'gender']:
+                    elif w in ['hispanic','latino']:
+                        is_latino = True
+                    elif w not in ['suspect', 'race', 'gender','perceived']:
                         v.append(w)
 
-                if len(v)==0:
+                if len(v)==0 and not is_latino:
                     raise ValueError(f"Unable to parse column name {c}")
-                vals.append(', '.join(v))
+                v = ' '.join(v)
+                if is_latino:
+                    v = v +", Latino" if len(v) else 'Latino'
+                vals.append(v)
 
         for x in vals:
             std_map[x] = converter(x, no_id, source_name, cats, agg_cat)
@@ -97,7 +103,7 @@ def convert(converter, col, source_name="", cats=None, std_map=None, delim=None,
             def convert_bools(x):
                 out = set()
                 for c in x.index:
-                    if x[c] in ['true','True'] or x[c]==True:
+                    if x[c] in ['true','True', 'Yes', 'yes'] or x[c]==True:
                         if isinstance(std_map[c],list):
                             out.update(std_map[c])
                         else:
@@ -462,7 +468,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
     if has_unspecified and (x in ["MISSING","NOT SPECIFIED", "", "NOT RECORDED","N/A", "NOT REPORTED", "NONE"] or \
         (type(x)==str and ("NO DATA" in x or ("NOT APP" in x and x not in ["NOT APPLICABLE (NONUS)",'NOT APPLICABLE (NON US)']) or "NO RACE" in x or "NULL" in x))):
         return race_cats[defs._race_keys.UNSPECIFIED]
-    if has_white and x_no_space in ["W", "CAUCASIAN", "WN", "WHITE", "WHTE", "WHITE,OTHER"]:  # WN = White-Non-Hispanic
+    if has_white and x_no_space in ["W", "CAUCASIAN", "WN", "WHITE", "WHTE", "WHITE,OTHER", 'WHT']:  # WN = White-Non-Hispanic
         return race_cats[defs._race_keys.WHITE]
     if has_black and (x in ["B", "AFRICAN AMERICAN", "BLCK", "BLK", "BLACE",'AFR AMERICAN'] or \
                       x_no_space in ["AFRICANAMERICAN"] or \
@@ -489,7 +495,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
         else:
             return race_cats[defs._race_keys.ASIAN] if has_asian else race_cats[defs._race_keys.AAPI]
     if (has_pi or has_aapi) and ("HAWAI" in x or "PACIFIC" in x_no_space or \
-                                 "PACISL" in x_no_space or x in ['PI']):
+                                 "PACISL" in x_no_space or x in ['PI', 'NHPI']): # NHPI = Native Hawaiian, and Pacific Islander
         return race_cats[defs._race_keys.PACIFIC_ISLANDER] if has_pi else race_cats[defs._race_keys.AAPI]
     if has_latino and x in ["H", "WH", "HISPANIC", "LATINO", "HISPANIC OR LATINO", "LATINO OR HISPANIC", 
                             "HISPANIC/LATINO", "LATINO/HISPANIC",'HISPANIC/LATIN/MEXICAN','HISP']:
@@ -541,6 +547,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
                      'NOT AVAILABLE'] or \
                 (source_name in ["Chapel Hill","Lansing","Fayetteville"] and x in ["S","P"]) or \
                 (source_name=="Burlington" and x in ["EXPUNGED"]) or \
+                (source_name=="Minneapolis" and x in ["NO CONTACT"]) or \
                 (source_name in ["Cincinnati","San Diego"] and x in ["F","S","P"]) or \
                 (source_name in ["Columbia"] and x in ["M","P",'34']) or \
                 (source_name in ["Urbana"] and x in ["BUSINESS OR OTHER"]) or \
@@ -664,7 +671,7 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
         return gender_cats[defs._gender_keys.GENDER_NONBINARY]
     elif defs._gender_keys.TRANSGENDER_OR_GENDER_NONCONFORMING in gender_cats and (x in [
         "Gender Diverse (gender non-conforming and/or transgender)".upper().replace("-","").replace(" ",""),
-        "GENDERNONCONFORMING"] or "TGNC" in x):
+        "GENDERNONCONFORMING",'NONCONFORMING','GENDERDIVERSE'] or "TGNC" in x):
         return gender_cats[defs._gender_keys.TRANSGENDER_OR_GENDER_NONCONFORMING]
     elif defs._gender_keys.TRANSGENDER_MALE in gender_cats and (x in ["TRANSGENDER MALE".replace(" ","")] or \
         "TRANSGENDERMAN" in x or \
@@ -680,6 +687,9 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
     elif defs._gender_keys.UNKNOWN in gender_cats and \
         (x in ["U","UK", "UNABLE TO DETERMINE".replace(" ","")] or "UNK" in x):
         return gender_cats[defs._gender_keys.UNKNOWN]
+    elif defs._gender_keys.UNSPECIFIED_OR_ANOTHER in gender_cats and x in 'X':
+        # https://www.state.gov/x-gender-marker-available-on-u-s-passports-starting-april-11/
+        return gender_cats[defs._gender_keys.UNSPECIFIED_OR_ANOTHER]
     
     if no_id=="test":
         bad_data = ["BLACK","WHITE",'HISPANIC','ASIAN','FEMALE10','DUPLICATE']
@@ -687,13 +697,13 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
             return orig
         elif x in bad_data or \
             (source_name=="New York City" and (x=="Z" or x.isdigit())) or \
-            (source_name=="New York" and x in ["Organization".upper(), "X"]) or \
+            (source_name=="New York" and x in ["Organization".upper()]) or \
             (source_name=="Baltimore" and x in ["Y","Z"]) or \
             (source_name=="Urbana" and x in ["."]) or \
             (source_name=="Greensboro" and x in ["ASIAN"]) or \
             (source_name=="Columbia" and x in ["B"]) or \
             (source_name=="Burlington" and x in ["EXPUNGED"]) or \
-            (source_name=="Fairfax County" and x in ["X",'O']) or \
+            (source_name=="Fairfax County" and x in ['O']) or \
             (source_name=='Albemarle County' and x in ['N']) or \
             (source_name in ["Seattle","New Orleans","Menlo Park","Rutland"] and x in ["D","N"]) or \
             (source_name=="Los Angeles County" and x=="0") or \
@@ -705,11 +715,11 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
             (x=="P" and source_name=="Fayetteville") or \
             (x in ['B'] and source_name=="Louisville") or \
             (x=="5" and source_name=="Lincoln") or \
+            (source_name=="Minneapolis" and x in ["NOCONTACT"]) or \
             (x in ["MALE,MALE"] and source_name=="Chattanooga") or \
             (x=="PENDINGRELEASE" and source_name=="Portland") or \
             (x in ["N","H"] and source_name=="Los Angeles") or \
             (source_name=='Bremerton' and x in ['B', 'W', 'A','I']) or \
-            (x=="X" and source_name in ["Sacramento", "State Police", "Washington D.C.","Northampton"]) or \
             "DOG" in x or \
             x in ["UNDISCLOSE","UNDISCLOSED","PREFER TO SELF DESCRIBE".replace(" ",""),'NONBINARY/THIRDGENDER',
                   "PREFER NOT TO SAY".replace(" ",""),"TGNC/OTHER","REFUSED",'UNVERIFIED','NONBINARY/OTHERX','UNOCCUPIEDVEHICLE'] or \
@@ -733,6 +743,7 @@ def _create_injury_lut(x, no_id, source_name, cats, *args, **kwargs):
         else:
             return "INJURED" if x>0 else "NO INJURY"
     orig = x
+    x = re.sub(r'^\d+\s*\-\s*','',x)
     x = x.upper().replace('-',' ').replace('*','').replace('SUBJECT','').replace('  ',' ').strip()
     x = re.sub(r'OF[FI]{2}CER','', x).strip()  # Handle misspelling officer
     x = re.sub(r'\s{2,10}',' ',x)

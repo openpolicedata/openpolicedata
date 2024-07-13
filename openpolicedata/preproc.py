@@ -810,6 +810,10 @@ class Standardizer:
                 defs.columns.RACE_OFFICER_SUBJECT,
                 specific_cases=[_case("California", defs.TableType.USE_OF_FORCE_SUBJECTS_OFFICERS, "Race_Ethnic_Group", defs.columns.RACE_OFFICER_SUBJECT),
                                 _case("Minneapolis", defs.TableType.STOPS, "race", defs.columns.RACE_SUBJECT),
+                                _case("Los Angeles", defs.TableType.STOPS_SUBJECTS, 
+                                      [['perceived_asian','perceived_black_african','perceived_hispanic_latino',
+                                        'perceived_middle_eastern','perceived_native_american','perceived_pacific_islander',
+                                        'perceived_white']], [defs.columns.RACE_SUBJECT]),
                                 _case("Austin", defs.TableType.USE_OF_FORCE_SUBJECTS, "subject_race_ethnicity", defs.columns.RACE_SUBJECT),
                                 _case("Fairfax County", defs.TableType.ARRESTS, ["ArresteeRa","OfficerRac"], [defs.columns.RACE_SUBJECT, defs.columns.RACE_OFFICER], year=range(2016,2021)),
                                 _case("Fairfax County", defs.TableType.TRAFFIC_CITATIONS, ["Person_Rac","OfficerRac"], [defs.columns.RACE_SUBJECT, defs.columns.RACE_OFFICER]),
@@ -925,6 +929,7 @@ class Standardizer:
                 defs.columns.INJURY_SUBJECT, defs.columns.INJURY_OFFICER, 
                 defs.columns.INJURY_OFFICER_SUBJECT,
                 specific_cases=[_case("Indianapolis", defs.TableType.USE_OF_FORCE, ['CIT_COND_TYPE','OFF_COND_TYPE'], [defs.columns.INJURY_SUBJECT, defs.columns.INJURY_OFFICER]),
+                                _case("Austin", defs.TableType.USE_OF_FORCE, ['highest_subject_injury_by'], [defs.columns.INJURY_SUBJECT]),
                                 _case("South Bend", defs.TableType.USE_OF_FORCE, ['Force Caused Injury','Officer Injured'], [defs.columns.INJURY_SUBJECT, defs.columns.INJURY_OFFICER])]
                 )
 

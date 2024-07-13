@@ -142,7 +142,10 @@ class _case:
     
     def findcols(self, columns):
         for k in range(len(self.old_name)):
-            if self.old_name[k] not in columns:
+            if isinstance(self.old_name[k],list):
+                if any(x not in columns for x in self.old_name[k]):
+                    return False
+            elif self.old_name[k] not in columns:
                 return False
         return True
 

@@ -404,6 +404,7 @@ class _Genders(_ToDict_Mixin):
     OTHER = "OTHER"
     UNKNOWN = "UNKNOWN"
     UNSPECIFIED = "UNSPECIFIED"
+    UNSPECIFIED_OR_ANOTHER = "UNSPECIFIED_OR_ANOTHER_GENDER_IDENTITY" # https://www.state.gov/x-gender-marker-available-on-u-s-passports-starting-april-11/
 
 _gender_keys = _Genders()
 
@@ -419,6 +420,7 @@ _genders = {
     _gender_keys.OTHER:_Label("OTHER"),
     _gender_keys.UNKNOWN:_Label("UNKNOWN","UNKNOWN"),
     _gender_keys.UNSPECIFIED:_Label(UNSPECIFIED,UNSPECIFIED),
+    _gender_keys.UNSPECIFIED_OR_ANOTHER:_Label('UNSPECIFIED_OR_ANOTHER_GENDER_IDENTITY','X'),
 }
 
 class _PersonTypes(_ToDict_Mixin):
