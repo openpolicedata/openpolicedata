@@ -28,7 +28,7 @@ dependencies = [
     "openpyxl",
     "numpy<2.0.0",
     "packaging",
-    "pandas<3.0.0",
+    "pandas >= 2.0.0, <3.0.0",
     "requests",
     "sodapy",
     "tqdm",
