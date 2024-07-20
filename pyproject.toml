@@ -28,7 +28,7 @@ dependencies = [
     "openpyxl",
     "numpy<2.0.0",
     "packaging",
-    "pandas >= 2.0.0, <3.0.0",
+    "pandas[html] >= 2.0.0, <3.0.0",
     "requests",
     "sodapy",
     "tqdm",
@@ -81,3 +81,4 @@ filterwarnings = [
     "ignore:Passing a SingleBlockManager to Series.*:DeprecationWarning:geopandas:",
     "ignore:Mismatched null-like values.*:FutureWarning::",
 ]
+addopts = "--csvfile='..\\opd-data\\opd_source_table.csv' --runslow --use-changed-rows"

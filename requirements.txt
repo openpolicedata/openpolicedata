@@ -1,5 +1,5 @@
 sodapy
-pandas<3.0.0
+pandas[html]<3.0.0
 rapidfuzz
 numpy<2.0.0
 requests

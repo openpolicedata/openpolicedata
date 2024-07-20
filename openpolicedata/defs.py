@@ -12,12 +12,14 @@ import warnings
 # They all have corresponding data loaders in data_loaders.py
 # When new data loaders are added, this list should be updated.
 class DataType(str, Enum):
-    EXCEL = "Excel"
-    CSV = "CSV"
     ArcGIS = "ArcGIS"
-    SOCRATA = "Socrata"
     CARTO = "Carto"
     CKAN = 'CKAN'
+    CSV = "CSV"
+    EXCEL = "Excel"
+    HTML = 'HTML'
+    SOCRATA = "Socrata"
+    
 
 # These are the types of tables currently available in opd.
 # Add to this list when datasets do not correspond to the below data types

@@ -330,7 +330,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
     x = x.strip().upper()
 
     if source_name in ["Austin", "Bloomington", "New York City", "St. John", "Louisville", "Charleston", 
-                        "Los Angeles", "Dallas","Chicago"]:
+                        "Los Angeles", "Dallas","Chicago", 'Cedar Lake', 'Griffith']:
         # Handling dataset-specific letter codes
         if source_name=="Austin":
             # Per email with Kruemcke, Adrian <Adrian.Kruemcke@austintexas.gov> on 2022-06-17
@@ -355,9 +355,9 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
         elif source_name == "New York City":
             # https://www.nyc.gov/assets/nypd/downloads/zip/analysis_and_planning/stop-question-frisk/SQF-File-Documentation.zip
             map_dict = {"P":"Black-Hispanic", "Q":"White-Hispanic", "X":"Unknown","Z":"Other"}
-        elif source_name == "St. John":
-            # https://stjohnin.gov/PD/PDI/Warnings/2019Warnings.php
-            map_dict = {"L":"White/Hispanic/Latin","M":"Multiracial","N":"Asian Indian"}
+        elif source_name in ["St. John",'Cedar Lake', 'Griffith']:
+            # https://www.openpolicedata.com/StJohnIN/Arrests/2014Arrests.php
+            map_dict = {"K":"Black/Hispanic", "L":"White/Hispanic/Latin","M":"Multiracial","N":"Asian Indian"}
         elif source_name == "Louisville":
             map_dict = {"A":"Asian/Pacific Islander", "U":"Undeclared", "IB":"Indian/India/Burmese", "M":"Middle Eastern Descent","AN":"Alaskan Native"}
         elif source_name=="Charleston":
@@ -713,7 +713,7 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
             (x in ['UI'] and source_name=="Norwich") or \
             (x=="MA" and source_name in ["Lincoln"]) or \
             (x=="P" and source_name=="Fayetteville") or \
-            (x in ['B'] and source_name=="Louisville") or \
+            (x in ['B'] and source_name in ["Louisville",'Griffith']) or \
             (x=="5" and source_name=="Lincoln") or \
             (source_name=="Minneapolis" and x in ["NOCONTACT"]) or \
             (x in ["MALE,MALE"] and source_name=="Chattanooga") or \

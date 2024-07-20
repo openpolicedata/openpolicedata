@@ -250,7 +250,7 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 			now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
 			print(f"{now} Testing {i} of {len(datasets)-1}: {srcName} {table_print} table")
 
-			nrows = 20 if datasets.iloc[i]['DataType']!='Excel' else None
+			nrows = 20 if datasets.iloc[i]['DataType'] not in ['Excel','HTML'] else None
 
 			# Handle cases where URL is required to disambiguate requested dataset
 			ds_filter, _ = src._Source__filter_for_source(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], None, None, errors=False)
@@ -430,7 +430,7 @@ def test_load_gen(source, year, table_type, nrows, agency):
 def can_be_limited(data_type, url):
 	if (data_type == DataType.CSV and ".zip" in url):
 		return False
-	elif data_type in [DataType.ArcGIS, DataType.SOCRATA, DataType.CSV, DataType.EXCEL, DataType.CARTO, DataType.CKAN]:
+	elif data_type in [DataType.ArcGIS, DataType.SOCRATA, DataType.CSV, DataType.EXCEL, DataType.CARTO, DataType.CKAN, DataType.HTML]:
 		return True
 	else:
 		raise ValueError("Unknown table type")
@@ -468,10 +468,10 @@ def log_errors_to_file(*args):
 if __name__ == "__main__":
 	from test_utils import get_datasets
 	# For testing
-	use_changed_rows = False
+	use_changed_rows = True
 	csvfile = None
 	# csvfile = os.path.join(r"..",'opd-data','opd_source_table.csv')
-	start_idx = 0
+	start_idx = 37
 	skip = None
 	# skip = "Sacramento"
 	source = None

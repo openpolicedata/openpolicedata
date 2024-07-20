@@ -858,7 +858,7 @@ class Source:
                 raise NotImplementedError(f"Unable to get agencies for {src['DataType']}")
             elif src['DataType'] ==defs.DataType.ArcGIS:
                 raise NotImplementedError(f"Unable to get agencies for {src['DataType']}")
-            elif src["DataType"] ==defs.DataType.EXCEL:
+            elif src["DataType"] in [defs.DataType.EXCEL, defs.DataType.HTML]:
                 df = loader.load(year)
                 return df[src["agency_field"]].unique().tolist()
             elif src['DataType'] ==defs.DataType.SOCRATA:
@@ -1475,6 +1475,8 @@ class Source:
                 loader = data_loaders.Carto(url, dataset_id, date_field=date_field, query=query)
             elif data_type ==defs.DataType.CKAN:
                 loader = data_loaders.Ckan(url, dataset_id, date_field=date_field, query=query)
+            elif data_type==defs.DataType.HTML:
+                loader = data_loaders.Html(url, date_field=date_field, agency_field=agency_field)
             else:
                 raise ValueError(f"Unknown data type: {data_type}")
 

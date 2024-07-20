@@ -234,7 +234,7 @@ def test_to_csv():
 
 def is_filterable(data_type):
 	data_type = DataType(data_type)
-	if data_type in [DataType.CSV, DataType.EXCEL]:
+	if data_type in [DataType.CSV, DataType.EXCEL, DataType.HTML]:
 		return False
 	elif data_type in [DataType.ArcGIS, DataType.SOCRATA, DataType.CARTO, DataType.CKAN]:
 		return True
@@ -275,7 +275,7 @@ if __name__ == "__main__":
 	# For testing
 	# (csvfile, source, last, skip, loghtml)
 
-	use_changed_rows = False
+	use_changed_rows = True
 
 	csvfile = None
 	# csvfile = os.path.join("..","opd-data","opd_source_table.csv")
