@@ -2778,14 +2778,14 @@ class Ckan(Data_Loader):
 
             if filter_year:
                 start_date, stop_date = _process_date(year, date_field=self.date_field, force_year=True)
-                where = ''
+                where = '('
                 for y in range(int(start_date),int(stop_date)+1):
                     # %25 is % wildcard symbol
                     where+='"' + self.date_field + '"' + rf" LIKE '%{y}%' OR "
-                where = where[:-4]
+                where = where[:-4] + ')'
             else:
                 start_date, stop_date = _process_date(year, date_field=self.date_field, datetime_format=datetime_format)
-                where = f""""{self.date_field}" >= '{start_date}' AND "{self.date_field}" <= '{stop_date}'"""
+                where = f"""("{self.date_field}" >= '{start_date}' AND "{self.date_field}" <= '{stop_date}')"""
         else:
             where = None
 

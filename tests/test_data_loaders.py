@@ -1,3 +1,4 @@
+from datetime import datetime
 from io import BytesIO
 import pytest
 import re
@@ -154,6 +155,7 @@ def test_ckan():
     df = loader.load(year=year, pbar=False, opt_filter=opt_filter)
 
     assert len(df)==count
+    assert (df[agency_field]==agency).all()
 
     offset = 1
     nrows = count - 2
@@ -177,6 +179,11 @@ def test_ckan():
     df_comp = df_comp.drop(columns=['_id','_full_text'])
     
     assert df.equals(df_comp)
+
+    cur_year = datetime.now().year
+    year_range = [cur_year-1, cur_year]
+    df = loader.load(year=year_range, pbar=False, opt_filter=opt_filter)
+    assert (df[agency_field]==agency).all()
 
     data_loaders._default_limit = lim
 
@@ -387,11 +394,9 @@ def test_arcgis_text_date(url, year, date_field):
 
 def test_arcgis_geopandas():
     if _has_gpd:
-        url = "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_CRIME_STOPS_P/FeatureServer/32/"
-        date_field = "TIME_PHONEPICKUP"
-        year_filter = 2020
+        url = "https://services9.arcgis.com/kYvfX7YK8OobHItA/arcgis/rest/services/ARREST_CHARGES_2018_LAYER/FeatureServer/0"
         nrows = 1000
-        df = data_loaders.Arcgis(url, date_field=date_field).load(year=year_filter, nrows=nrows)
+        df = data_loaders.Arcgis(url).load(nrows=nrows)
 
         assert type(df) == gpd.GeoDataFrame
     else:
@@ -450,11 +455,28 @@ def test_socrata_pandas():
     # Ensure that count updates properly with different call (most recent count is cached)
     assert count!=count2
 
+def test_socrata_agency_filter():
+    url = "data.ct.gov/"
+    dataset = "nahi-zqrt"
+    date_field = "interventiondatetime"
+    agency_field = 'department_name'
+    loader = data_loaders.Socrata(url, dataset, date_field)
+
+    agency='Winsted'
+    opt_filter = 'LOWER(' + agency_field + ") = '" + agency.lower() + "'"
+    df = loader.load(year=2018, opt_filter=opt_filter)
+
+    assert (df[agency_field]==agency).all()
+
+    df = loader.load(year=[2018,2019], opt_filter=opt_filter)
+
+    assert (df[agency_field]==agency).all()
+
 def test_socrata():
     lim = data_loaders._default_limit
     data_loaders._default_limit = 500
-    url = "data.austintexas.gov"
-    data_set = "sc8s-w4ka"
+    url = "www.transparentrichmond.org"
+    data_set = "asfd-zcvn"
     loader = data_loaders.Socrata(url, data_set)
     df =loader.load(pbar=False)
     assert not loader.isfile()
@@ -483,9 +505,12 @@ def test_socrata():
     assert len(df) == count
     assert rows.equals(df)
 
-def test_csv():
-    url = "https://www.denvergov.org/media/gis/DataCatalog/denver_police_officer_involved_shootings/csv/denver_police_officer_involved_shootings.csv"
-    date_field = "INCIDENT_DATE"
+# Another CSV with newline characters: https://raw.githubusercontent.com/openpolicedata/opd-datasets/main/data/Texas_Austin_OFFICER-INVOLVED_SHOOTINGS-INCIDENTS.csv
+@pytest.mark.parametrize('url, date_field',[
+    ('https://public.tableau.com/views/PPBOpenDataDownloads/OIS-All.csv?:showVizHome=no', 'Day of Date Time'),
+    ("https://opendata.jaxsheriff.org/OIS/Export", "IncidentDate")
+])
+def test_csv(url, date_field):
     loader = data_loaders.Csv(url, date_field=date_field)
     assert loader.isfile()
     df = loader.load(pbar=False)
@@ -566,10 +591,12 @@ def test_html():
     df = df.astype({date_field: 'datetime64[ns]'})
     assert list(df[date_field].dt.year.sort_values(ascending=True).dropna().unique()) == years
 
-
-def test_csv_year_filter():
-    url = "https://www.denvergov.org/media/gis/DataCatalog/denver_police_officer_involved_shootings/csv/denver_police_officer_involved_shootings.csv"
-    loader = data_loaders.Csv(url, date_field="INCIDENT_DATE")
+@pytest.mark.parametrize('url, date_field',[
+    ('https://public.tableau.com/views/PPBOpenDataDownloads/OIS-All.csv?:showVizHome=no', 'Day of Date Time'),
+    ("https://opendata.jaxsheriff.org/OIS/Export", "IncidentDate")
+])
+def test_csv_year_filter(url, date_field):
+    loader = data_loaders.Csv(url, date_field=date_field)
     year = 2020
     df = loader.load(year=year, pbar=False)
     with pytest.raises(ValueError):
