@@ -1300,7 +1300,7 @@ class Arcgis(Data_Loader):
         meta = self.__request()
 
         if 'type' not in meta and meta['status']=='error':
-            raise OPD_DataUnavailableError(self.url, meta['messages'])
+            raise OPD_DataUnavailableError(self.url, meta['messages'], _url_error_msg.format(self.url))
 
         if "maxRecordCount" in meta:
             self.max_record_count = meta["maxRecordCount"] if meta['maxRecordCount']<self.__max_maxRecordCount else self.__max_maxRecordCount
@@ -1348,9 +1348,9 @@ class Arcgis(Data_Loader):
             except Exception as e:
                 if len(e.args)>0:
                     if "Error Code: 500" in e.args[0]:
-                        raise OPD_DataUnavailableError(self.url, e.args)
+                        raise OPD_DataUnavailableError(self.url, e.args, _url_error_msg.format(self.url))
                     elif "A general error occurred: 'authInfo'" in e.args[0]:
-                        raise OPD_arcgisAuthInfoError(self.url, e.args)
+                        raise OPD_arcgisAuthInfoError(self.url, e.args, _url_error_msg.format(self.url))
                 raise e
             except: raise
 
@@ -1476,7 +1476,7 @@ class Arcgis(Data_Loader):
         except requests.HTTPError as e:
             if len(e.args)>0:
                 if "503 Server Error" in e.args[0]:
-                    raise OPD_DataUnavailableError(self.url, e.args)
+                    raise OPD_DataUnavailableError(self.url, e.args, _url_error_msg.format(self.url))
 
             else: raise e
         except Exception as e: 
@@ -1490,7 +1490,7 @@ class Arcgis(Data_Loader):
                 if not hasattr(v,'__len__') or len(v)>0:
                     v = v[0] if isinstance(v,list) and len(v)==1 else v
                     args += (k,v)
-            raise OPD_DataUnavailableError(url, 'Error returned by ArcGIS query', *args)
+            raise OPD_DataUnavailableError(url, 'Error returned by ArcGIS query', *args, _url_error_msg.format(self.url))
         
         return result
 
@@ -2724,14 +2724,14 @@ class Ckan(Data_Loader):
         try:
             r = requests.get(self.url, params=params)
         except requests.exceptions.SSLError as e:
-            raise OPD_DataUnavailableError(self.url, e.args, self.get_api_url())
+            raise OPD_DataUnavailableError(self.url, e.args, _url_error_msg.format(self.get_api_url()))
 
         try:
             r.raise_for_status()
         except requests.HTTPError as e:
             if len(e.args)>0:
                 if "503 Server Error" in e.args[0]:
-                    raise OPD_DataUnavailableError(self.url, e.args, self.get_api_url())
+                    raise OPD_DataUnavailableError(self.url, e.args, _url_error_msg.format(self.get_api_url()))
                 else:
                     raise
 
