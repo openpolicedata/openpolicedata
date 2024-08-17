@@ -594,8 +594,8 @@ class Csv(Data_Loader):
                 except Exception as e:
                     raise e
                 
-        if len(table.columns)==1 and '?xml' in table.columns[0] and len(table)==1 and 'Error' in table.iloc[0,0]:
-            # Read data was not a CSV file. It was an error code where the line breaks were interpreted as single column data by load_csv
+        if len(table.columns)==1 and ('?xml' in table.columns[0] or re.search(r'^\<.+\>', table.columns[0])):
+            # Read data was not a CSV file. It was an error code or HTML
             raise OPD_DataUnavailableError(table.iloc[0,0], _url_error_msg.format(self.url))
         
         table = filter_dataframe(table, date_field=self.date_field, year_filter=year, 
@@ -1568,6 +1568,7 @@ class Arcgis(Data_Loader):
                     "{} LIKE '%[0-9][/-][0-9][/-]{}%' OR {} LIKE '%[0-9][0-9][/-][0-9][/-]{}%'"),  # mm/dd/yyyy or mm-dd-yyyy
                 DateParseParams(re.compile(r"^\d{4}[-/]\d{1,2}$"), "{} LIKE '{}[-/][0-9][0-9]' OR {} LIKE '{}[-/][0-9]'", full_date=False),  # YYYY-MM or YYYY/M
                 DateParseParams(re.compile(r"^\d{4}$"), "{} = '{}'", full_date=False),  # YYYY
+                DateParseParams(re.compile(r"^\d{1,2}[-/]\d{4}$"), "{} LIKE '[0-9][0-9][-/]{}' OR {} LIKE '[0-9][-/]{}'", full_date=False),  # MM-YYYY or MM/YYYY
             ]
 
             hi = 0.0
