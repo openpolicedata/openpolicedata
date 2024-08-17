@@ -1,3 +1,4 @@
+from datetime import datetime
 import pandas as pd
 import os
 import subprocess
@@ -40,7 +41,29 @@ def get_datasets(csvfile=None,use_changed_rows=False):
         opd.datasets.reload(csvfile)
 
     return opd.datasets.query()
-    
+
+
+def get_outage_datasets(datasets):
+    # Hard-coding location for now as being in opd-data folder in same folder as openpolicedata folder
+    outages_file = os.path.join('..', 'opd-data', 'outages.csv')
+    assert os.path.exists(outages_file)
+
+    outages = pd.read_csv(outages_file)
+    outages["Year"] = [int(x) if isinstance(x,str) and x.isdigit() else x for x in outages["Year"]]
+
+    outage_cols = ["State","SourceName","Agency","TableType","Year",'AgencyFull','source_url','URL','dataset_id']
+    matches = pd.Series(False, datasets.index)
+    for _, row in outages[outage_cols].iterrows():
+        x = ((row == datasets[outage_cols]) | (pd.isnull(row) & pd.isnull(datasets[outage_cols]))).all(axis=1)
+        if not x.any():
+            # URL may have changed
+            new_cols = outage_cols.copy()
+            new_cols.remove('URL')
+            x = ((row[new_cols] == datasets[new_cols]) | (pd.isnull(row[new_cols]) & pd.isnull(datasets[new_cols]))).all(axis=1)
+        assert x.any()
+        matches = matches | x
+
+    return datasets[matches]
 
 
 def get_line_numbers(result):
@@ -94,3 +117,40 @@ def check_for_dataset(source, table_type, warn=True):
 	elif warn:
 		warnings.warn(f"No data found for {source} {table_type}")
 	return False
+
+already_warned = [False]
+def update_outages(outages_file, dataset, is_outage, e=None):
+    if not os.path.exists(outages_file) and not already_warned[0]:
+        warnings.warn(f'Outages file not found at {outages_file}')
+        already_warned[0] = True
+        return
+    
+    outages = pd.read_csv(outages_file)
+    outages["Year"] = [int(x) if isinstance(x,str) and x.isdigit() else x for x in outages["Year"]]
+
+    outage_cols = ["State","SourceName","Agency","TableType","Year",'AgencyFull','source_url','URL','dataset_id']
+    match = ((outages[outage_cols] == dataset[outage_cols]) | (pd.isnull(outages[outage_cols]) & pd.isnull(dataset[outage_cols]))).all(axis=1)
+    if is_outage:
+        if match.any():
+            outages.loc[match, 'Last Outage Confirmation'] = datetime.now().strftime('%Y-%m-%d')
+        else:
+            new_outage = dataset[outage_cols]
+            new_outage['Error'] = str(e.args[1:])
+            new_outage['Date Outage Started'] = datetime.now().strftime('%Y-%m-%d')
+            new_outage['Last Outage Confirmation'] = new_outage['Date Outage Started']
+
+            outages = pd.concat([outages, new_outage.to_frame().T])
+    elif not match.any():
+        new_cols = outage_cols.copy()
+        new_cols.remove('URL')
+        match = ((outages[new_cols] == dataset[new_cols]) | (pd.isnull(outages[new_cols]) & pd.isnull(dataset[new_cols]))).all(axis=1)
+        if match.any():
+             outages = outages.drop(index=outages.loc[match].index)
+        else:
+            return
+    else:
+        outages = outages.drop(index=outages.loc[match].index)
+
+    outages.to_csv(outages_file, index=False)
+    
+

@@ -1,5 +1,5 @@
 import pytest
-from test_utils import get_datasets
+from test_utils import get_datasets, get_outage_datasets
 
 
 def pytest_addoption(parser):
@@ -23,6 +23,7 @@ def pytest_addoption(parser):
     )
 
     parser.addoption("--use-changed-rows", action="store_true", help="Run tests only on changed rows")
+    parser.addoption("--outages", action="store_true", help="Run tests only on datasets in outages table")
 
 
 
@@ -76,9 +77,11 @@ def use_changed_rows(request):
     return request.config.option.use_changed_rows
 
 @pytest.fixture(scope='session')
-def datasets(request, all_datasets, use_changed_rows):
+def outages(request):
+    return request.config.option.outages
+
+@pytest.fixture(scope='session')
+def datasets(request, all_datasets, use_changed_rows, outages):
     csvfile = request.config.option.csvfile
-    if use_changed_rows:
-        return get_datasets(csvfile, use_changed_rows)
-    else:
-        return all_datasets
+    ds = get_datasets(csvfile, use_changed_rows) if use_changed_rows else all_datasets
+    return get_outage_datasets(ds) if outages else ds
