@@ -17,9 +17,9 @@ import os
 import pathlib
 import sys
 sys.path.append(pathlib.Path(__file__).parent.resolve())
-from test_utils import check_for_dataset
+from test_utils import check_for_dataset, update_outages
 
-sleep_time = 0.1
+base_sleep_time = 0.1
 
 # Set Arcgis data loader to validate queries with arcgis package if installed
 data_loaders._verify_arcgis = True
@@ -223,7 +223,7 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 	max_num_stanford = 1  # This data is standardized. Probably no need to test more than 1
 	caught_exceptions = []
 	caught_exceptions_warn = []
-		
+	last_source = None
 	for i in range(len(datasets)):
 		if user_request_skip(datasets, i, skip, start_idx, source):
 			continue
@@ -262,11 +262,13 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 					 url_contains=url_contains, id_contains=id_contains)
 			except warn_errors as e:
 				e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"])
+				update_outages(outages_file, datasets.iloc[i], True, e)
 				caught_exceptions_warn.append(e)
 				continue
 			except (OPD_TooManyRequestsError, OPD_arcgisAuthInfoError) as e:
 				# Catch exceptions related to URLs not functioning
 				e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"])
+				update_outages(outages_file, datasets.iloc[i], True, e)
 				caught_exceptions.append(e)
 				continue
 			except:
@@ -275,9 +277,12 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 			if len(table.table)==0 and has_outages and \
 				(outages[["State","SourceName","Agency","TableType","Year"]] == datasets.iloc[i][["State","SourceName","Agency","TableType","Year"]]).all(axis=1).any():
 				caught_exceptions_warn.append(f'Outage continues for {str(datasets.iloc[i][["State","SourceName","Agency","TableType","Year"]])}')
+				update_outages(outages_file, datasets.iloc[i], True, e)
 				continue
 			else:
 				assert len(table.table)>0
+
+			update_outages(outages_file, datasets.iloc[i], False)
 
 			if isinstance(datasets.iloc[i]['dataset_id'], str) and ';' in datasets.iloc[i]['dataset_id']:
 				# A year-long dataset is generated from multiple datasets. Check that whole year is covered
@@ -332,7 +337,12 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 				assert datasets.iloc[i]["agency_field"] in table.table
 
 			# Adding a pause here to prevent issues with requesting from site too frequently
-			sleep(sleep_time)
+			if last_source!=srcName:
+				last_source = srcName
+				sleep_time = base_sleep_time
+			else:
+				sleep(sleep_time)
+				sleep_time+=base_sleep_time
 
 	if loghtml:
 		log_errors_to_file(caught_exceptions, caught_exceptions_warn)
@@ -470,8 +480,8 @@ if __name__ == "__main__":
 	# For testing
 	use_changed_rows = True
 	csvfile = None
-	# csvfile = os.path.join(r"..",'opd-data','opd_source_table.csv')
-	start_idx = 37
+	csvfile = os.path.join(r"..",'opd-data','opd_source_table.csv')
+	start_idx = 0
 	skip = None
 	# skip = "Sacramento"
 	source = None

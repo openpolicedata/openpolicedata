@@ -406,7 +406,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
             not x.lower().startswith("some other") and \
             x.lower().replace(" ","") not in ["hawaiian/pacific", "middleeastern/southasian", 'n/a',
                                               'asian/pacis','unk/oth','oth/unk', 'black/africanamerican','hispanic/latino',
-                                              "americanindian/alaskanative",'a/indian'] and \
+                                              "americanindian/alaskanative",'a/indian', 'non-hispanic/latino'] and \
             not any([x.lower() in ['unknown','other'] for x in x.split(delim[0])]):
             # Treat this as a list of races
             delim = delim[0]
@@ -470,7 +470,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
         return race_cats[defs._race_keys.UNSPECIFIED]
     if has_white and x_no_space in ["W", "CAUCASIAN", "WN", "WHITE", "WHTE", "WHITE,OTHER", 'WHT']:  # WN = White-Non-Hispanic
         return race_cats[defs._race_keys.WHITE]
-    if has_black and (x in ["B", "AFRICAN AMERICAN", "BLCK", "BLK", "BLACE",'AFR AMERICAN'] or \
+    if has_black and (x in ["B", "AFRICAN AMERICAN", "BLCK", "BLK", "BLACE",'AFR AMERICAN', 'AFR AM'] or \
                       x_no_space in ["AFRICANAMERICAN"] or \
                       re.search("BLACK?($|[^A-Za-z])",x)) \
                       and not is_latino(x):
@@ -547,6 +547,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
                      'NOT AVAILABLE'] or \
                 (source_name in ["Chapel Hill","Lansing","Fayetteville"] and x in ["S","P"]) or \
                 (source_name=="Burlington" and x in ["EXPUNGED"]) or \
+                (source_name=="Menlo Park" and x in ["S",'F','P','J','L']) or \
                 (source_name=="Minneapolis" and x in ["NO CONTACT"]) or \
                 (source_name in ["Cincinnati","San Diego"] and x in ["F","S","P"]) or \
                 (source_name in ["Columbia"] and x in ["M","P",'34']) or \
@@ -566,7 +567,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
                 (x=="N" and source_name=="Bremerton") or \
                 (x=="W\nW" and source_name=="Sparks") or \
                 (x in ['UI'] and source_name=="Norwich") or \
-                (x in ['E','P'] and source_name=="Tucson") or \
+                (x in ['E','P','5'] and source_name=="Tucson") or \
                 ("DOG" in x) or \
                 (source_name in ["New Orleans"] and "NOT APPLICABLE (NON" in x) or \
                 (source_name in ["Detroit", "Fairfax County"] and x in ["N","SELECT","UNVERIFIED",'240','160','180','P','120']) or \
@@ -714,6 +715,7 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
             (x=="MA" and source_name in ["Lincoln"]) or \
             (x=="P" and source_name=="Fayetteville") or \
             (x in ['B'] and source_name in ["Louisville",'Griffith']) or \
+            x in ['MULTIPLESUBJECTS'] or \
             (x=="5" and source_name=="Lincoln") or \
             (source_name=="Minneapolis" and x in ["NOCONTACT"]) or \
             (x in ["MALE,MALE"] and source_name=="Chattanooga") or \

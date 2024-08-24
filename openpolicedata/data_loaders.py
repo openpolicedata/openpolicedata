@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from io import BytesIO
+import itertools
 import json
 import logging
 import numbers
@@ -1479,6 +1480,8 @@ class Arcgis(Data_Loader):
                     raise OPD_DataUnavailableError(self.url, e.args, _url_error_msg.format(self.url))
 
             else: raise e
+        except requests.exceptions.ConnectTimeout as e:
+            raise OPD_DataUnavailableError(self.url, e.args, _url_error_msg.format(self.url))
         except Exception as e: 
             raise e
 
@@ -1663,7 +1666,7 @@ class Arcgis(Data_Loader):
                 except Exception as e:
                     if len(e.args)>0 and "Error Code: 429" in e.args[0]:
                         raise OPD_TooManyRequestsError(self.url, *e.args, _url_error_msg.format(self.url))
-                    elif len(e.args)>0 and (any([x in e.args[0] for x in query_err_msg]) or any([x in e.args[-1] for x in query_err_msg])):
+                    elif any([x in y for x,y in itertools.product(query_err_msg, e.args) if isinstance(y,str)]):
                         # This query throws an error for this dataset. Try another one below
                         pass
                     else:

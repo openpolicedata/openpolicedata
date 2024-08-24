@@ -1112,7 +1112,7 @@ class Standardizer:
                 self.table_type in [defs.TableType.USE_OF_FORCE_INCIDENTS, defs.TableType.SHOOTINGS_INCIDENTS, 
                                     defs.TableType.CALLS_FOR_SERVICE, 
                                     defs.TableType.CRASHES, defs.TableType.CRASHES_INCIDENTS, defs.TableType.CRASHES_VEHICLES, 
-                                    defs.TableType.CRASHES_SUBJECTS, defs.TableType.CRASH_NONMOTORIST,
+                                    defs.TableType.CRASHES_SUBJECTS, defs.TableType.CRASHES_NONMOTORIST,
                                     defs.TableType.INCIDENTS, defs.TableType.COMPLAINTS_BACKGROUND,
                                     defs.TableType.COMPLAINTS_ALLEGATIONS, defs.TableType.COMPLAINTS_PENALTIES]:
                 return col_names, []

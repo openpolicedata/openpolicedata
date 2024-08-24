@@ -516,7 +516,7 @@ def test_csv(url, date_field):
     df = loader.load(pbar=False)
 
     offset = 1
-    nrows = len(df)-offset-1
+    nrows = len(df)-offset
     df_offset = loader.load(offset=offset,nrows=nrows, pbar=False)
     assert df_offset.equals(df.iloc[offset:nrows+offset].reset_index(drop=True))
     

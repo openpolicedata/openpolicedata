@@ -170,14 +170,20 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 			else:
 				years = years[:1]
 
+		# Handle cases where URL is required to disambiguate requested dataset
+		ds_filter, _ = src._Source__filter_for_source(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], None, None, errors=False)
+		url_contains = datasets.iloc[i]['URL'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
+		id_contains = datasets.iloc[i]['dataset_id'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
+
 		tables = []
 		future_error = False
 		for year in years:
 			try:
 				table = src.load(datasets.iloc[i]["TableType"], year, 
-										agency=agency, pbar=False, 
-										sortby="date",
-										nrows=max_count if datasets.iloc[i]["DataType"] not in ["CSV","Excel"] else None)
+								agency=agency, pbar=False, 
+								sortby="date",
+								nrows=max_count if datasets.iloc[i]["DataType"] not in ["CSV","Excel"] else None, 
+					 			url_contains=url_contains, id_contains=id_contains)
 			except OPD_FutureError as e:
 				future_error = True
 				break
@@ -448,7 +454,7 @@ if __name__ == "__main__":
 	use_changed_rows = True
 	csvfile = None
 	# csvfile = os.path.join('..','opd-data', 'opd_source_table.csv')
-	start_idx = 0
+	start_idx = 1
 	skip = None
 	# skip = "Sacramento,Beloit,Rutland"
 	source = None

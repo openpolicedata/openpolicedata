@@ -1102,7 +1102,7 @@ class Source:
             src = src[src['URL'].str.contains(url_contains, regex=False)]
 
         if pd.notnull(id_contains):
-            src = src[src['dataset_id'].str.contains(id_contains, regex=False)]
+            src = src[src['dataset_id'].str.contains(id_contains, regex=False, na=False)]
 
         matchingYears = src["Year"]==year if not isinstance(year, list) else pd.Series(False, src.index)
 

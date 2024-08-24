@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
+## v0.8 - 2024-08-24
+### Added
+- Added data loader for HTML tables
+### Changed
+- Changed error messages so that more errors in data loading point the user to the list of data site outages
+### Fixed
+- Fixed bug in CKAN data loader when user requests a range of years
+
 ## v0.7.2 - 2024-07-13
 ### Added
 - Added id_contains input to get_count, load_iter, load, and load_from_csv of Source class to help distinguish between multiple datasets matching a data request (along with previously added url_contains)

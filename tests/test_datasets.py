@@ -37,7 +37,7 @@ def test_reload(file):
 
 
 def test_duplicates(all_datasets):
-    assert not all_datasets.duplicated(subset=['State', 'SourceName', 'Agency', 'TableType','Year','source_url','dataset_id']).any()
+    assert not all_datasets.duplicated(subset=['State', 'SourceName', 'Agency', 'TableType','Year','URL','dataset_id']).any()
 
 
 def test_check_columns(datasets):
@@ -194,9 +194,7 @@ def test_summary_functions():
 def test_get_table_types(all_datasets):   # Passing in all_datasets to ensure that local changes are used if csvfile is set 
     opd.datasets.get_table_types()
     stops_tables = opd.datasets.get_table_types(contains="STOPS")
-    exp_stops_tables = ["PEDESTRIAN STOPS","STOPS","TRAFFIC STOPS",
-                        "TRAFFIC STOPS - INCIDENTS", 'TRAFFIC STOPS - SUBJECTS',
-                        "STOPS - INCIDENTS", 'STOPS - SUBJECTS']
+    exp_stops_tables = all_datasets['TableType'][all_datasets['TableType'].str.contains('STOPS')].unique()
     assert len(stops_tables) == len(exp_stops_tables)
     assert all([x in exp_stops_tables for x in stops_tables])
 

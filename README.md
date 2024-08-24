@@ -2,7 +2,7 @@
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://openpolicedata.streamlit.app)
 
 # OpenPoliceData
-The OpenPoliceData (OPD) Python library is the most comprehensive centralized public access point for incident-level police data in the United States. OPD provides easy access to 425+ incident-level datasets for about 4850 police agencies. Types of data include traffic stops, use of force, officer-involved shootings, and complaints. 
+The OpenPoliceData (OPD) Python library is the most comprehensive centralized public access point for incident-level police data in the United States. OPD provides easy access to 425+ incident-level datasets for about 4865 police agencies. Types of data include traffic stops, use of force, officer-involved shootings, and complaints. 
 
 Users request data by department name and type of data, and the data is returned as a [pandas DataFrame](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.html). There is no need to manually find the data online or to know how to work with open data APIs (ArcGIS, Socrata, etc.). When data is loaded by OPD, the returned data is unmodified (with the exception of formatting known date fields) from what appears on the source's site, and OPD provides links to the original data for transparency.
 
@@ -31,30 +31,24 @@ OpenPoliceData provides access to police data with 2 simple lines of code:
 ![alt text](https://github.com/openpolicedata/opd-data/blob/main/OPD_Datasets_Map.png?raw=true)
 
 ## Latest Datasets Added to OPD
+- Washington D.C.: Historical (2010-2017) stops data
+- South Bend, IN: Complaints involving administrative investigations
+- Tucson, AZ: Added additional years of arrests
+- Sacramento, CA: Calls for service and citations
+- Cedar Lake, IN: Arrests, calls for service, and citations data
+- Griffith, IN: Arrests, calls for service, and citations data
 - Austin, TX: Arrests, incidents, searches, use of force, and warnings
 - New York, NY: Latest pedestrian stops dataset
 - Chicago, IL: Latest pedestrian stops dataset
 - Washington D.C.: Latest use of force dataset
-- Oakland, CA: Latest use of force dataset
-- Los Angeles, CA: Latest stops dataset
-- Columbia, MO: Latest traffic stops dataset
-- Sparks, NV: Latest officer-involved shootings dataset
-- Wallkill, NY: Latest stops dataset
-- Charleston, SC: Latest citations dataset
-- Denver, CO: Crashes
-- Mesa, AZ: Latest calls for service dataset
-- Wichita, KS: Latest crashes datasets
-- Baltimore, MD: Added calls for service datasets
-- Pittsfield, MA: Latests arrests, calls for service, and crashes datasets
-- Minnesapolis, MN: Incidents
-- St. Paul, MN: Incidents
-- Durham, NC: Latest calls for service dataset
-- Philadelphia, PA: Latests crashes dataset
 
-## v0.7.2 - 2024-07-13
+## v0.8 - 2024-08-24
 ### Added
-- Added id_contains input to get_count, load_iter, load, and load_from_csv of Source class to help distinguish between multiple datasets matching a data request (along with previously added url_contains)
-- Added SEARCHES, WARNINGS, STOPS_INCIDENTS, and STOPS_SUBJECTS table types
+- Added data loader for HTML tables
+### Changed
+- Changed error messages so that more errors in data loading point the user to the list of data site outages
+### Fixed
+- Fixed bug in CKAN data loader when user requests a range of years
 
 Complete change log available at: https://github.com/openpolicedata/openpolicedata/blob/main/CHANGELOG.md
 
