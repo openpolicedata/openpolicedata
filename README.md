@@ -42,6 +42,10 @@ OpenPoliceData provides access to police data with 2 simple lines of code:
 - Chicago, IL: Latest pedestrian stops dataset
 - Washington D.C.: Latest use of force dataset
 
+## v0.8.1 - 2024-09-02
+### Fixed
+- Fixed bug in get_count function for CSV files where count was wrong if there were quotes containing new line characters
+
 ## v0.8 - 2024-08-24
 ### Added
 - Added data loader for HTML tables

@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
+## v0.8.1 - 2024-09-02
+### Fixed
+- Fixed bug in get_count function for CSV files where count was wrong if there were quotes containing new line characters
+
 ## v0.8 - 2024-08-24
 ### Added
 - Added data loader for HTML tables

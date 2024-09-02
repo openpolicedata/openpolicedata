@@ -24,21 +24,23 @@ def pytest_addoption(parser):
 
     parser.addoption("--use-changed-rows", action="store_true", help="Run tests only on changed rows")
     parser.addoption("--outages", action="store_true", help="Run tests only on datasets in outages table")
+    parser.addoption("--onetime", action="store_true", help="Run tests only meant to be run once or rarely")
 
 
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "slow: mark test as slow to run")
+    config.addinivalue_line("markers", "onetime: mark test as slow to run")
 
 
-def pytest_collection_modifyitems(config, items):
-    if config.getoption("--runslow"):
-        # --runslow given in cli: do not skip slow tests
-        return
+def pytest_collection_modifyitems(config, items):            
     skip_slow = pytest.mark.skip(reason="need --runslow option to run")
+    skip_onetime = pytest.mark.skip(reason="need --onetime option to run")
     for item in items:
-        if "slow" in item.keywords:
+        if not config.getoption("--runslow") and "slow" in item.keywords:
             item.add_marker(skip_slow)
+        elif not config.getoption("--onetime") and "onetime" in item.keywords:
+            item.add_marker(skip_onetime)
 
 
 # Define fixtures for each command line option

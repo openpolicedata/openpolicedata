@@ -443,9 +443,28 @@ class Csv(Data_Loader):
         if ".zip" not in self.url and year==None and agency==None:
             count = 0
             logger.debug(f"Loading file from {self.url}")
+            open_quote = False
+            no_quotes = True
             with requests.get(self.url, stream=True) as r:
                 for chunk in r.iter_content(chunk_size=2**16):
-                    count += chunk.count(b"\n")
+                    if no_quotes and chunk.count(b"\"")==0: # No need to worry about quotes
+                        count += chunk.count(b"\n")
+                    else: # Handle possible newlines in quotes
+                        no_quotes = False
+                        prev_end = chunk.find(b'\"') if open_quote else -1
+                        any_quotes = False
+                        while (next_start:=chunk.find(b'\"', prev_end+1))!=-1:
+                            any_quotes = True
+                            count += chunk[prev_end+1:next_start].count(b"\n")
+                            prev_end = chunk.find(b'\"', next_start+1)
+                            if prev_end==-1:
+                                open_quote = True
+                                break
+                        else:
+                            open_quote = False if any_quotes or prev_end!=-1 else open_quote # If not quotes found, leave unchanged
+                        
+                        if not open_quote:
+                            count+=chunk[prev_end+1:].count(b"\n")
 
             # Subtract off trailing newlines in last row
             newline = int.from_bytes(b"\n", "big")

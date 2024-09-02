@@ -20,10 +20,10 @@ python -m build
 - [ ] Create and activate a new environment: 
 ```sh
 conda create -n v{#}-test python=3.12
+conda activate v{#}-test
 ```
 - [ ] Install new version
 ```sh
-python -m pip install .\dist\openpolicedata-{version}-py3-none-any.whl[optional,test]
 - [ ] Copy tests into a new folder outside openpolicedata folder
 - [ ] cd to that folder
 - [ ] Run tests: python -m pytest
@@ -32,9 +32,9 @@ python -m pip install .\dist\openpolicedata-{version}-py3-none-any.whl[optional,
 python -m pip install --upgrade twine
 python -m twine upload dist/*
 ```
+- [ ] Update switcher.json file
 - [ ] Add version to GitHub and attach whl and .tar.gz files
 - [ ] Commit updated sources table
-- [ ] Update switcher.json file
 
 
 To delete env: 
