@@ -18,11 +18,11 @@ troubleshooting/index.md
 citations/index.md
 ```
 
+> **OPD User Survey**: We would love to hear how you are using OpenPoliceData! [Please take a moment to fill out this short survey.](https://docs.google.com/forms/d/e/1FAIpQLScvhcKQwvPmUK6wV0YKQipGsTsz0uzyVdT8FQsQ5g2RBvNh0g/viewform?usp=pp_url)
+
 # OpenPoliceData
 
 Welcome to the *new* OpenPoliceData documentation. The **OpenPoliceData (OPD)** Python library is the most comprehensive centralized public access point for incident-level police data in the United States. OPD provides easy access to 425+ incident-level datasets for about 4865 police agencies. Types of data include traffic stops, use of force, officer-involved shootings, and complaints. It provides a simple interface for finding publically available data and downloading data into [pandas](https://pandas.pydata.org/) DataFrames.
-
-> **NEW IN VERSION 0.6**: OPD now provides tools for automated data standardization. Applying these tools allow you to start your analysis more quickly by replacing column names and data with standard values for some common column types. [Learn how it works and how to use it here.](getting_started/index.ipynb#Data-Standardization)
 
 <!-- https://fontawesome.com/icons?d=gallery&amp%3Bm=free -->
 
