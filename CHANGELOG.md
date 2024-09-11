@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 ### Added
+- Added ability to load an Excel file from a zip file containing multiple files
+- Adding ability to handle datasets containing data from multiple states
 ### Changed
 ### Deprecated
 ### Removed
