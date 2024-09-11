@@ -699,7 +699,7 @@ class Excel(Data_Loader):
         agency_field : str
             (Optional) Name of the column that contains the agency name (i.e. name of the police departments)
         data_set : str
-            (Optional) Excel sheet to use. If not provided, an error will be thrown when loading data if there is more than 1 sheet
+            (Optional) Excel sheet to use or name of Excel file in zip file. If not provided, an error will be thrown when loading data if there is more than 1 sheet
         '''
         
         self.url = url
@@ -713,15 +713,16 @@ class Excel(Data_Loader):
         
         try:
             if ".zip" in self.url:
-                # Download file to temporary file
-                r = requests.get(url)
-                r.raise_for_status()
-                with tempfile.TemporaryFile(suffix=".zip") as fp:
-                    fp.write(r.content)
-                    fp.seek(0)
+                self.sheet = None
+                url = urllib.request.urlopen(url)
+                with ZipFile(BytesIO(url.read()), 'r') as z:
+                    if not data_set:
+                        if len(z.namelist())>1:
+                            raise ValueError(f"More than one file found in zip file at {url}. One file must be specified if there is more than one file.")
+                        else:
+                            data_set = z.namelist()[0]
 
-                    z = ZipFile(fp, 'r')
-                    self.excel_file = pd.ExcelFile(BytesIO(z.read(z.namelist()[0])))
+                    self.excel_file = pd.ExcelFile(BytesIO(z.read(data_set)))
             else:
                 self.excel_file = pd.ExcelFile(url)
         except urllib.error.HTTPError as e:
