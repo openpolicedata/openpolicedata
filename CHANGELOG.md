@@ -7,10 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 ### Added
 - Added ability to load an Excel file from a zip file containing multiple files
+- Adding ability to load multiple CSV files from the same year from a zip file
 - Adding ability to handle datasets containing data from multiple states
 ### Changed
+- No longer throwing error if state field is not a known state. Enables multi-state datasets, which will break pre-v0.6 that do not allow for compatibility tables
 ### Deprecated
 ### Removed
+- No longer updating datasets table when data load finds a capitalization error in the date field
 ### Fixed
 ### Security
 
