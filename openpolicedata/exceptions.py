@@ -70,3 +70,6 @@ class DateFilterException(OPD_GeneralError):
 
 class CompatSourceTableLoadError(OPD_GeneralError):
     pass
+
+class MultiAgencySourceError(OPD_GeneralError):
+    pass

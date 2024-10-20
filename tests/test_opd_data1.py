@@ -5,6 +5,7 @@ if __name__ == "__main__":
 	sys.path.append('../openpolicedata')
 from openpolicedata import data, data_loaders
 from openpolicedata.defs import DataType, TableType
+from openpolicedata import exceptions
 from openpolicedata.exceptions import OPD_DataUnavailableError, OPD_TooManyRequestsError,  \
 	OPD_MultipleErrors, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError, OPD_FutureError, OPD_MinVersionError
 import openpolicedata as opd
@@ -134,6 +135,26 @@ def test_bad_year_range():
 		with pytest.raises(ValueError, match="year input must either be a single year or a list containing a start and stop year"):
 			src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, None, None)
 
+@pytest.mark.parametrize('src_name, state, agency', [('ERROR',None,None), ('ERROR','Arizona',None), ('Chandler','Arizona', 'ERROR'),
+													 ('Chandler','ERROR', None)])
+def test_no_source_match(all_datasets, src_name, state, agency):
+	with pytest.raises(ValueError):
+		data.Source(src_name, state, agency)
+
+def test_single_agency(all_datasets):
+	if check_for_dataset('Chandler', opd.defs.TableType.ARRESTS):
+		data.Source('Chandler')
+
+def test_multiple_agency_same_source_name_error(all_datasets):
+	if check_for_dataset('Contra Costa County', opd.defs.TableType.STOPS):
+		with pytest.raises(exceptions.MultiAgencySourceError):
+			data.Source('Contra Costa County')
+
+@pytest.mark.parametrize('agency', ['MULTIPLE', 'Contra Costa County'])
+def test_multiple_agency_same_source_name(all_datasets, agency):
+	if check_for_dataset('Contra Costa County', opd.defs.TableType.STOPS):
+		data.Source('Contra Costa County', agency=agency)
+
 @pytest.mark.parametrize('year, url_contains', [(2019, "APDUseOfForce/FeatureServer/0"), 
 												([2018,2019], "APDUseOfForce/FeatureServer/0"), (2021, "APD_UseOfForce2021/FeatureServer/0")])
 def test_multiple_multiple_year_filter(all_datasets, year, url_contains):
@@ -201,7 +222,7 @@ def check_excel_sheets(datasets, source, start_idx, skip):
 
 		srcName = datasets.iloc[i]["SourceName"]
 		state = datasets.iloc[i]["State"]
-		src = data.Source(srcName, state=state)
+		src = data.Source(srcName, state=state, agency=datasets.iloc[i]["Agency"])
 
 		table_print = datasets.iloc[i]["TableType"]
 		now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
@@ -219,8 +240,6 @@ def check_excel_sheets(datasets, source, start_idx, skip):
 
 
 def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, query={}):
-	num_stanford = 0
-	max_num_stanford = 1  # This data is standardized. Probably no need to test more than 1
 	caught_exceptions = []
 	caught_exceptions_warn = []
 	last_source = None
@@ -230,10 +249,6 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 
 		has_date_field = not pd.isnull(datasets.iloc[i]["date_field"])
 		if can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]) or has_date_field:
-			if is_stanford(datasets.iloc[i]["URL"]):
-				num_stanford += 1
-				if num_stanford > max_num_stanford:
-					continue
 			match = True
 			for k,v in query.items():
 				if datasets.iloc[i][k]!=v:
@@ -244,30 +259,32 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 
 			srcName = datasets.iloc[i]["SourceName"]
 			state = datasets.iloc[i]["State"]
-			src = data.Source(srcName, state=state)
+			src = data.Source(srcName, state=state, agency=datasets.iloc[i]["Agency"])
 
-			table_print = datasets.iloc[i]["TableType"]
+			table_type = datasets.iloc[i]["TableType"]
 			now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
-			print(f"{now} Testing {i} of {len(datasets)-1}: {srcName} {table_print} table")
+			print(f"{now} Testing {i} of {len(datasets)-1}: {srcName} {table_type} table")
 
-			nrows = 20 if datasets.iloc[i]['DataType'] not in ['Excel','HTML'] else None
+			limit_rows =  datasets.iloc[i]['DataType'] not in ['Excel','HTML'] and \
+				(not isinstance(datasets.iloc[i]['dataset_id'], str) or ';' not in datasets.iloc[i]['dataset_id'])
+			nrows = 20 if limit_rows else None
 
 			# Handle cases where URL is required to disambiguate requested dataset
-			ds_filter, _ = src._Source__filter_for_source(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], None, None, errors=False)
+			ds_filter, _ = src._Source__filter_for_source(table_type, datasets.iloc[i]["Year"], None, None, errors=False)
 			url_contains = datasets.iloc[i]['URL'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
 			id_contains = datasets.iloc[i]['dataset_id'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
 
 			try:
-				table = src.load(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], pbar=False, nrows=nrows, 
+				table = src.load(table_type, datasets.iloc[i]["Year"], pbar=True, nrows=nrows, 
 					 url_contains=url_contains, id_contains=id_contains)
 			except warn_errors as e:
-				e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"])
+				e.prepend(f"Iteration {i}", srcName, table_type, datasets.iloc[i]["Year"])
 				update_outages(outages_file, datasets.iloc[i], True, e)
 				caught_exceptions_warn.append(e)
 				continue
 			except (OPD_TooManyRequestsError, OPD_arcgisAuthInfoError) as e:
 				# Catch exceptions related to URLs not functioning
-				e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"])
+				e.prepend(f"Iteration {i}", srcName, table_type, datasets.iloc[i]["Year"])
 				update_outages(outages_file, datasets.iloc[i], True, e)
 				caught_exceptions.append(e)
 				continue
@@ -283,6 +300,10 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 				assert len(table.table)>0
 
 			update_outages(outages_file, datasets.iloc[i], False)
+
+			if 'data-openjustice.doj.ca.gov' in datasets.iloc[i]['URL'].lower() and \
+				'ripa' in datasets.iloc[i]['URL'].lower():
+				assert (datasets.iloc[i]['Agency']==opd.defs.MULTI) + (len(table.table['AGENCY_NAME'].unique())==1)==1
 
 			if isinstance(datasets.iloc[i]['dataset_id'], str) and ';' in datasets.iloc[i]['dataset_id']:
 				# A year-long dataset is generated from multiple datasets. Check that whole year is covered
@@ -305,6 +326,9 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 					if srcName=='Wallkill' and datasets.iloc[i]["Year"]==2016:
 						# Only has last 3 quarters of data
 						missing_months = [x for x in missing_months if x not in [1,2,3]]
+					elif state=='California' and datasets.iloc[i]["Year"]==2018:
+						# Only has last 3 quarters of data
+						missing_months = [x for x in missing_months if x not in range(1,7)]
 					elif srcName=='Albemarle County' and datasets.iloc[i]["Year"]==2021:
 						# August and Sept data does not have date field
 						missing_months = [x for x in missing_months if x not in [8,9]]
@@ -316,8 +340,8 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 						assert df_check['DATE'].apply(lambda x: (int(x[:2]) if isinstance(x,str) else x.month) !=m).all()
 
 			if not pd.isnull(datasets.iloc[i]["date_field"]):
-				if datasets.iloc[i]["date_field"] not in table.table:
-					table = src.load(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], pbar=False, nrows=2000)
+				if datasets.iloc[i]["date_field"] not in table.table or table.table[datasets.iloc[i]["date_field"]].isnull().all():
+					table = src.load(table_type, datasets.iloc[i]["Year"], pbar=False, nrows=2000)
 				assert datasets.iloc[i]["date_field"] in table.table
 				#assuming a Pandas string dtype('O').name = object is okay too
 				assert (table.table[datasets.iloc[i]["date_field"]].dtype.name in ['datetime64[ns]', 'datetime64[ns, UTC]', 
@@ -329,12 +353,12 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 				# New Orleans complaints dataset has many empty dates
 				# "Seattle and Minneapolis starts with bad date data"
 				if len(dts)>0 or srcName not in ["Seattle","New Orleans",'Minneapolis','St. Paul'] or \
-					datasets.iloc[i]["TableType"] not in [TableType.COMPLAINTS, TableType.INCIDENTS]:
+					table_type not in [TableType.COMPLAINTS, TableType.INCIDENTS]:
 					assert len(dts) > 0   # If not, either all dates are bad or number of rows requested needs increased
 					assert dts.iloc[0].year <= datetime.now().year if isinstance(dts.iloc[0], (pd.Timestamp,pd.Period)) else \
 						dts.iloc[1].year <= datetime.now().year
 			if not pd.isnull(datasets.iloc[i]["agency_field"]):
-				assert datasets.iloc[i]["agency_field"] in table.table
+				assert datasets.iloc[i]["agency_field"] in table.table or "RAW_"+datasets.iloc[i]["agency_field"] in table.table
 
 			# Adding a pause here to prevent issues with requesting from site too frequently
 			if last_source!=srcName:
@@ -366,14 +390,14 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 	(data_loaders.Excel, 'Rutland', "USE OF FORCE", None, []),
 	(data_loaders.Carto, "Philadelphia", 'STOPS', None, [2021, [2020, 2022]])
 	])
-def test_get_count(loader, source, table_type, agency, years):
+def test_get_count(datasets, loader, source, table_type, agency, years):
 	if check_for_dataset(source, table_type):
 		print(f"Testing {loader} source")
 		src = opd.Source(source)
 		i = src.datasets["TableType"] == table_type
 		i = i[i].index[0]
 		if pd.notnull(src.datasets.loc[i]["dataset_id"]):
-			loader = loader(src.datasets.loc[i]["URL"], src.datasets.loc[i]["dataset_id"], date_field=src.datasets.loc[i]["date_field"])
+			loader = loader(src.datasets.loc[i]["URL"], data_set=src.datasets.loc[i]["dataset_id"], date_field=src.datasets.loc[i]["date_field"])
 		else:
 			loader = loader(src.datasets.loc[i]["URL"], date_field=src.datasets.loc[i]["date_field"])
 		if len(years)==0:
@@ -438,16 +462,13 @@ def test_load_gen(source, year, table_type, nrows, agency):
 
 
 def can_be_limited(data_type, url):
-	if (data_type == DataType.CSV and ".zip" in url):
+	if ".zip" in url:
 		return False
 	elif data_type in [DataType.ArcGIS, DataType.SOCRATA, DataType.CSV, DataType.EXCEL, DataType.CARTO, DataType.CKAN, DataType.HTML]:
 		return True
 	else:
 		raise ValueError("Unknown table type")
 	
-
-def is_stanford(url):
-	return "stanford.edu" in url
 
 def log_errors_to_file(*args):
 	if not os.path.exists(log_folder):
@@ -478,16 +499,16 @@ def log_errors_to_file(*args):
 if __name__ == "__main__":
 	from test_utils import get_datasets
 	# For testing
-	use_changed_rows = True
+	use_changed_rows = False
 	csvfile = None
 	csvfile = os.path.join(r"..",'opd-data','opd_source_table.csv')
-	start_idx = 0
+	start_idx = 1325
 	skip = None
 	# skip = "Sacramento"
 	source = None
 	# source = "Bremerton" #"Washington D.C." #"Wallkill"
 	query = {}
-	# query = {'DataType':'Excel'}
+	# query = {'SourceName':'San Francisco'}
 
 	datasets = get_datasets(csvfile, use_changed_rows)
 

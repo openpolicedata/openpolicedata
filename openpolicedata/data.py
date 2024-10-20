@@ -697,7 +697,8 @@ class Source:
 
     def __init__(self, 
                 source_name: str, 
-                state: str | None =None
+                state: str | None = None,
+                agency: str | None = None
                 ) -> None:
         '''Constructor for Source class
 
@@ -707,18 +708,24 @@ class Source:
             Source name from datasets table
         state - str
             (Optional) Name of state. Only necessary if source_name is not unique.
+        agency - bool
+            (Optional) Name of agency. agency=None does not filter for agency. Resulting
+            source must contain only one agency
 
         Returns
         -------
         Source object
         '''
-        self.datasets = datasets.query(source_name=source_name, state=state)
+        self.datasets = datasets.query(source_name=source_name, state=state, agency=agency)
 
         # Ensure that all sources are from the same state
         if len(self.datasets) == 0:
             raise ValueError(f"No Sources Found for {source_name}")
         elif self.datasets["State"].nunique() > 1:
             raise ValueError(f"There are multiple sources matching the source name {source_name}. Please specify the state of the desired location in the 2nd argument.")
+        elif self.datasets["Agency"].nunique() > 1 and \
+            not self.datasets["Agency"].isin([defs.MULTI, defs.NA]).all():
+            raise exceptions.MultiAgencySourceError(f"There are multiple sources matching the source name {source_name}. Please specify an agency (likely agency=source_name or agency='MULTIPLE')")
 
 
     def __repr__(self) -> str:
@@ -1224,7 +1231,7 @@ class Source:
         if load_table:
             _check_version(src)
             loader = self.__get_loader(src['DataType'], url, src['query'], dataset_id=dataset_id, 
-                                       date_field=date_field, agency_field=agency_field)
+                                       date_field=date_field, agency_field=agency_field, pbar=pbar)
 
             opt_filter = None
             if agency != None and agency_field != None:
@@ -1447,7 +1454,7 @@ class Source:
 
         return filename
 
-    def __get_loader(self, data_type, url, query, dataset_id=None, date_field=None, agency_field=None):
+    def __get_loader(self, data_type, url, query, dataset_id=None, date_field=None, agency_field=None, pbar=True):
         if pd.isnull(dataset_id):
             dataset_id = None
         params = (data_type, url, dataset_id, date_field, agency_field)
@@ -1457,9 +1464,9 @@ class Source:
         if dataset_id and ';' in dataset_id:
             # Multiple dataset IDs
             if data_type ==defs.DataType.CSV:
-                loader = data_loaders.CombinedDataset(data_loaders.Csv, url, dataset_id, date_field=date_field, agency_field=agency_field)
+                loader = data_loaders.CombinedDataset(data_loaders.Csv, url, dataset_id, date_field=date_field, agency_field=agency_field, pbar=pbar)
             elif data_type ==defs.DataType.EXCEL:
-                loader = data_loaders.CombinedDataset(data_loaders.Excel, url, dataset_id, date_field=date_field, agency_field=agency_field)
+                loader = data_loaders.CombinedDataset(data_loaders.Excel, url, dataset_id, date_field=date_field, agency_field=agency_field, pbar=pbar)
             else:
                 raise ValueError(f"Not supported data type for CombinedDataset: {data_type}")
         else:

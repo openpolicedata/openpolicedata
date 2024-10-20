@@ -65,6 +65,10 @@ def test_bloomington_citations():
 		assert count==sum(count_by_year)
 
 @pytest.mark.slow(reason="This is a slow test that should be run before a major commit.")
+def test_zip():
+	raise NotImplementedError('Ensure that California RIPA is not run in test_source_download_limitable')
+
+@pytest.mark.slow(reason="This is a slow test that should be run before a major commit.")
 def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 	max_count = 1e5
 		
@@ -113,7 +117,7 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 		now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
 		print(f"{now} Testing {i} of {len(datasets)-1}: {srcName} {table_print} table")
 
-		src = data.Source(srcName, state=state)
+		src = data.Source(srcName, state=state, agency=datasets.iloc[i]["Agency"])
 
 		# Handle cases where URL is required to disambiguate requested dataset
 		ds_filter, _ = src._Source__filter_for_source(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], None, None, errors=False)
@@ -152,7 +156,7 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 
 		years_orig = years.copy()
 		for y in src.datasets[src.datasets["TableType"] == datasets.iloc[i]["TableType"]]["Year"]:
-			if y != MULTI:
+			if y != MULTI and y in years:
 				years.remove(y)
 
 		if len(years)==0:
@@ -389,7 +393,7 @@ def test_source_download_not_limitable(datasets, source, start_idx, skip, query=
 
 			srcName = datasets.iloc[i]["SourceName"]
 			state = datasets.iloc[i]["State"]
-			src = data.Source(srcName, state=state)
+			src = data.Source(srcName, state=state, agency=datasets.iloc[i]["Agency"])
 
 			year = datasets.iloc[i]["Year"]
 			table_type = datasets.iloc[i]["TableType"]
@@ -451,14 +455,14 @@ def log_errors_to_file(*args):
 if __name__ == "__main__":
 	from test_utils import get_datasets
 	# For testing
-	use_changed_rows = True
+	use_changed_rows = False
 	csvfile = None
-	# csvfile = os.path.join('..','opd-data', 'opd_source_table.csv')
-	start_idx = 1
+	csvfile = os.path.join('..','opd-data', 'opd_source_table.csv')
+	start_idx = 0
 	skip = None
 	# skip = "Sacramento,Beloit,Rutland"
 	source = None
-	# source = "Asheville"
+	source = "Chicago"
 	query = {}
 	# query = {'DataType':'CSV'}
 

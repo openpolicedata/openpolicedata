@@ -145,6 +145,25 @@ def read_zipped_csv(url, pbar=True, block_size=2**20, data_set=None):
         return pd.read_csv(BytesIO(z.read(z.namelist()[0])), encoding_errors='surrogateescape')
 
 
+class UrlIoContextManager:
+    def __init__(self, url) -> None:
+        self.url = url
+        try:
+            self.file = httpio.open(url)
+            self.ishttp = True
+        except httpio.HTTPIOError:
+            open_url =  urllib.request.urlopen(url)
+            self.file = BytesIO(open_url.read())
+            self.ishttp = False
+
+    def __enter__(self):
+        return self.file
+    
+    def __exit__(self, exc_type, exc_value, exc_tb):
+        if self.ishttp:
+            self.file.close()
+
+
 class Data_Loader(ABC):
     """Base class for data loaders
 
@@ -252,7 +271,7 @@ class CombinedDataset(Data_Loader):
         Get years contained in data set
     """
 
-    def __init__(self, data_class, url, datasets, *args, **kwargs):
+    def __init__(self, data_class, url, datasets, *args, pbar=True, **kwargs):
         """CombinedDataset constructor
 
         Parameters
@@ -278,23 +297,30 @@ class CombinedDataset(Data_Loader):
             
         self.loaders = []
         url = url[:-1] if url[-1]=='/' else url
-        for k, ds in enumerate(datasets):
-            kwargs = {}
+        iter = tqdm(datasets, desc='Building Data Loaders', leave=False) if pbar else datasets
+        for k, ds in enumerate(iter):
+            loc_kwargs = kwargs.copy()
             if 'raw.githubusercontent.com/openpolicedata/opd-datasets' in ds and ds.endswith('.csv'):
-                self.loaders.append(Csv(ds, *args, **kwargs))
+                self.loaders.append(Csv(ds, *args, **loc_kwargs))
             else:
                 ds = ds.strip()
                 ds = ds[1:] if ds[0]=='/' else ds
-                ds = url + '/' + ds
+                if url.endswith('.zip'):
+                    # datasets is name of file in zip file
+                    loc_kwargs['data_set'] = ds
+                    ds = url
+                else:
+                    ds = url + '/' + ds
+                    
                 if sheets:
-                    kwargs['data_set'] = sheets[min(k, len(sheets)-1)]
+                    loc_kwargs['data_set'] = sheets[min(k, len(sheets)-1)]
                 try:
-                    self.loaders.append(data_class(ds, *args, **kwargs))
+                    self.loaders.append(data_class(ds, *args, **loc_kwargs))
                 except ValueError as e:
                     if str(e)=='Excel file format cannot be determined, you must specify an engine manually.':
                         try:
                             # This may be a CSV file instead of an Excel file
-                            self.loaders.append(Csv(ds, *args, **kwargs))
+                            self.loaders.append(Csv(ds, *args, **loc_kwargs))
                         except:
                             raise e
                         
@@ -312,7 +338,7 @@ class CombinedDataset(Data_Loader):
         '''
         return True
     
-    def load(self, **kwargs):
+    def load(self, pbar=True, **kwargs):
         """Load data for query. 
 
         **kwargs will be passed to the load function of the data_class
@@ -324,8 +350,11 @@ class CombinedDataset(Data_Loader):
 
         dfs = []
         date_warn = force_subject_warn = force_officer_warn = False
-        for loader in self.loaders:
-            dfs.append(loader.load(**kwargs))
+        first_time = True
+        iter = tqdm(self.loaders, desc='Loading data files', leave=False) if pbar else self.loaders
+        for loader in iter:
+            dfs.append(loader.load(_first_time=first_time, **kwargs))
+            first_time = False
             if loader!=self.loaders[-1]:
                 sleep(0.5)  # Reduce likelihood of timeout due to repeated requests
 
@@ -362,8 +391,10 @@ class CombinedDataset(Data_Loader):
         """
 
         count = 0
+        first_time = True
         for loader in self.loaders:
-            count+=loader.get_count(*args, **kwargs)
+            count+=loader.get_count(*args, _first_time=first_time, **kwargs)
+            first_time = False
 
         return count
     
@@ -722,7 +753,7 @@ class Excel(Data_Loader):
         self.url = url
         self.date_field = date_field
         self.agency_field = agency_field
-        self.sheet = data_set
+        self.sheet = data_set if pd.notnull(data_set) else None
 
         if self.sheet is not None and re.match(r'^[“”"].+[“”"]$', self.sheet):
             # Sheet name was put in quotes due to it being a number to prevent Excel from dropping any zeros from the front
@@ -731,15 +762,16 @@ class Excel(Data_Loader):
         try:
             if ".zip" in self.url:
                 self.sheet = None
-                url = urllib.request.urlopen(url)
-                with ZipFile(BytesIO(url.read()), 'r') as z:
-                    if not data_set:
-                        if len(z.namelist())>1:
-                            raise ValueError(f"More than one file found in zip file at {url}. One file must be specified if there is more than one file.")
-                        else:
-                            data_set = z.namelist()[0]
 
-                    self.excel_file = pd.ExcelFile(BytesIO(z.read(data_set)))
+                with UrlIoContextManager(url) as fp:
+                    with ZipFile(fp, 'r') as z:
+                        if not data_set:
+                            if len(z.namelist())>1:
+                                raise ValueError(f"More than one file found in zip file at {url}. One file must be specified if there is more than one file.")
+                            else:
+                                data_set = z.namelist()[0]
+
+                        self.excel_file = pd.ExcelFile(BytesIO(z.read(data_set)))
             else:
                 self.excel_file = pd.ExcelFile(url)
         except urllib.error.HTTPError as e:
@@ -780,6 +812,8 @@ class Excel(Data_Loader):
                 r.raise_for_status()
                 file_like = BytesIO(r.content)
                 self.excel_file = pd.ExcelFile(file_like)
+            elif isinstance(e.args[0],TimeoutError):
+                raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(self.url))
             else:
                 raise e
         except XLRDError as e:
@@ -824,7 +858,7 @@ class Excel(Data_Loader):
         return True
 
 
-    def get_count(self, year=None, *,  agency=None, force=False, **kwargs):
+    def get_count(self, year=None, *,  agency=None, force=False, _first_time=True, **kwargs):
         '''Get number of records for a Excel data request
         
         Parameters
@@ -847,7 +881,7 @@ class Excel(Data_Loader):
             logger.debug("Request matches previous count request. Returning saved count.")
             return self._last_count[1]
         elif force:
-            count = len(self.load(year=year, agency=agency))
+            count = len(self.load(year=year, agency=agency, _first_time=_first_time))
             self._last_count = ((self.url, year, agency), count)
             return count
         else:
@@ -897,7 +931,7 @@ class Excel(Data_Loader):
         return names, False
 
 
-    def load(self, year=None, nrows=None, offset=0, *, agency=None, format_date=True, **kwargs):
+    def load(self, year=None, nrows=None, offset=0, *, agency=None, format_date=True, _first_time=True, **kwargs):
         '''Download Excel file to pandas DataFrame
         
         Parameters
@@ -1002,7 +1036,20 @@ class Excel(Data_Loader):
                 table = pd.read_excel(self.excel_file, nrows=nrows_read, sheet_name=sheet_name)
                 dfs.append(table)
             table = pd.concat(dfs, ignore_index=True)
-            table = self.__clean(table)               
+
+            if _first_time and \
+                self.url=='https://data-openjustice.doj.ca.gov/sites/default/files/dataset/2023-12/RIPA-Stop-Data-2022.zip':
+                # According to https://data-openjustice.doj.ca.gov/sites/default/files/dataset/2024-01/RIPA Dataset Read Me 2022.pdf,
+                # cases need to be added in that did not originally upload
+                with httpio.open(self.url) as fp:
+                    with ZipFile(fp) as z:
+                        df = pd.read_excel(BytesIO(z.read('12312022 Supplement RIPA SD.xlsx')))
+
+                df = df[df['AGENCY_NAME'].isin(table['AGENCY_NAME'].unique())]
+                if len(df)>0:
+                    table = pd.concat([table,df], ignore_index=True)
+
+            table = self.__clean(table)
 
         # Check for empty rows at the bottom
         num_empty = table.isnull().sum(axis=1)
@@ -1080,7 +1127,9 @@ class Excel(Data_Loader):
             # First columns are likely in first row of data
             col_row = 0
             new_cols = [x for x in df.iloc[0]]
-            while not all([isinstance(x, str) or pd.isnull(x) for x in new_cols]) or all([pd.isnull(x) for x in new_cols[1:]]):  # First column often has text while rest don't in non-data sections
+            while not all([isinstance(x, str) or pd.isnull(x) for x in new_cols]) or \
+                all([pd.isnull(x) for x in new_cols[1:]]) or \
+                ((ct:=sum(pd.notnull(x) for x in new_cols))<=2 and ct/len(new_cols)<0.4):  # Most column names are null
                 col_row+=1
                 new_cols = [x for x in df.iloc[col_row]]
             

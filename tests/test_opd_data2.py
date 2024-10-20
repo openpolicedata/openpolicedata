@@ -71,7 +71,7 @@ def test_get_years(datasets, source, start_idx, skip, loghtml, query={}):
 			if (srcName, state, datasets.iloc[i]["TableType"]) in already_ran:
 				continue
 
-			src = data.Source(srcName, state=state)
+			src = data.Source(srcName, state=state, agency=datasets.iloc[i]["Agency"])
 
 			table_print = datasets.iloc[i]["TableType"]
 			now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
@@ -83,7 +83,10 @@ def test_get_years(datasets, source, start_idx, skip, loghtml, query={}):
 					if pd.isnull(datasets.iloc[i]['date_field']):
 						continue
 				else:
-					loader = opd.data_loaders.Excel(datasets.iloc[i]["URL"])
+					try:
+						loader = opd.data_loaders.Excel(datasets.iloc[i]["URL"], data_set=datasets.iloc[i]["dataset_id"])
+					except OPD_DataUnavailableError:
+						continue
 					has_year_sheets = loader._Excel__get_sheets()[1]
 					if not has_year_sheets:
 						continue				
@@ -152,7 +155,7 @@ def test_get_agencies(datasets, source, start_idx, skip):
 		if is_filterable(datasets.iloc[i]["DataType"]) or datasets.iloc[i]["Agency"] != MULTI:
 			srcName = datasets.iloc[i]["SourceName"]
 			state = datasets.iloc[i]["State"]
-			src = data.Source(srcName, state=state)
+			src = data.Source(srcName, state=state, agency=datasets.iloc[i]["Agency"])
 
 			table_print = datasets.iloc[i]["TableType"]
 			now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
@@ -275,11 +278,11 @@ if __name__ == "__main__":
 	# For testing
 	# (csvfile, source, last, skip, loghtml)
 
-	use_changed_rows = True
+	use_changed_rows = False
 
 	csvfile = None
-	# csvfile = os.path.join("..","opd-data","opd_source_table.csv")
-	start_idx = 0
+	csvfile = os.path.join("..","opd-data","opd_source_table.csv")
+	start_idx = 1321
 	source = None
 	# source = "Burlington"
 	skip = None
@@ -288,7 +291,7 @@ if __name__ == "__main__":
 	datasets = get_datasets(csvfile, use_changed_rows)
 
 	# skip = "Corona"
-	test_get_agencies(datasets, source, start_idx, skip)
+	# test_get_agencies(datasets, source, start_idx, skip)
 	# test_agency_filter(datasets, None, None, skip, None)
 	# test_to_csv(datasets, None, None, skip, None)
 	test_get_years(datasets, source, start_idx, skip, None)

@@ -40,6 +40,26 @@ def test_load_single_file_csv_zip(url):
             }
     df_true = pd.read_csv(url,encoding_errors='surrogateescape', storage_options=headers)
     assert df.equals(df_true)
+
+def test_load_multi_excel_file_zip():
+    url = 'https://cdn.muckrock.com/foia_files/2024/05/29/evidence.com_case_P008746_package_1_of_1_created_2024-05-28T12_58_42Z.zip'
+    file = 'data1.xlsx'
+    loader = data_loaders.Excel(url, data_set=file)
+    df = loader.load(pbar=False)
+
+    r = requests.get(url, stream=True)
+    r.raise_for_status()
+    b = BytesIO()
+    for data in r.iter_content(100000):
+        b.write(data)
+
+    b.seek(0)
+    z = ZipFile(b, 'r')
+    df_true = pd.read_excel(BytesIO(z.read(file)))
+    df_true = df_true.convert_dtypes()
+
+    assert df.equals(df_true)
+
 def test_process_date_input_empty():
     with pytest.raises(ValueError):
         data_loaders._process_date([])
