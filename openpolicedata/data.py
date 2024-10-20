@@ -1496,9 +1496,6 @@ class Source:
             any([x.lower()==date_field.lower() for x in table.columns]):
             # Instances have been found where capitalization changes
             date_field = [x for x in table.columns if x.lower()==date_field.lower()][0]
-            # Correct date field in tables
-            self.datasets.loc[loc, "date_field"] = date_field
-            datasets.datasets.loc[loc, "date_field"] = date_field
 
         return date_field
 
