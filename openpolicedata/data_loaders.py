@@ -33,10 +33,12 @@ except:
     _has_gpd = False
 
 try:
+    from . import httpio
     from .datetime_parser import to_datetime
     from .exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError, DateFilterException
     from .utils import is_str_number
 except:
+    import httpio
     from datetime_parser import to_datetime
     from exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError, DateFilterException
 
@@ -105,30 +107,42 @@ def get_legacy_session():
     session.mount('https://', CustomHttpAdapter(ctx))
     return session
 
-def read_zipped_csv(url, pbar=True, block_size=2**20):
-    r = requests.get(url, stream=True)
-    r.raise_for_status()
-    total_size = int(r.headers.get("Content-Length", 0))
-    pbar = pbar and total_size > block_size
-    if pbar:
-        bar = tqdm(
-            desc=f"Downloading zip file: {url}",
-            total=total_size,
-            unit="iB",
-            unit_scale=True,
-            unit_divisor=1024,
-            leave=False
-        )
-    b = BytesIO()
-    for data in r.iter_content(block_size):
-        b.write(data)
+def read_zipped_csv(url, pbar=True, block_size=2**20, data_set=None):
+
+    if data_set:
+        # Load only requested dataset to minimize download size
+        with httpio.open(url, block_size=block_size) as fp:
+            with ZipFile(fp, 'r') as z:
+                return pd.read_csv(BytesIO(z.read(data_set)), encoding_errors='surrogateescape')
+    else:
+        # Load entire dataset so that progress feedback can be provided
+        r = requests.get(url, stream=True)
+        r.raise_for_status()
+        total_size = int(r.headers.get("Content-Length", 0))
+        pbar = pbar and total_size > block_size
         if pbar:
-            bar.update(len(data))
-    if pbar:
-        bar.close()
-    b.seek(0)
-    z = ZipFile(b, 'r')
-    return pd.read_csv(BytesIO(z.read(z.namelist()[0])), encoding_errors='surrogateescape')
+            bar = tqdm(
+                desc=f"Downloading zip file: {url}",
+                total=total_size,
+                unit="iB",
+                unit_scale=True,
+                unit_divisor=1024,
+                leave=False
+            )
+        b = BytesIO()
+        for data in r.iter_content(block_size):
+            b.write(data)
+            if pbar:
+                bar.update(len(data))
+        if pbar:
+            bar.close()
+        b.seek(0)
+        z = ZipFile(b, 'r')
+
+        if len(z.namelist())>1:
+            raise ValueError(f"More than 1 file found in {url} but no file was specified by the user. Please specify 1 or more files in the dataset input.")
+
+        return pd.read_csv(BytesIO(z.read(z.namelist()[0])), encoding_errors='surrogateescape')
 
 
 class Data_Loader(ABC):
@@ -390,7 +404,7 @@ class Csv(Data_Loader):
         Get years contained in data set
     """
 
-    def __init__(self, url, date_field=None, agency_field=None):
+    def __init__(self, url, date_field=None, agency_field=None, data_set=None):
         '''Create Csv object
 
         Parameters
@@ -401,11 +415,14 @@ class Csv(Data_Loader):
             (Optional) Name of the column that contains the date
         agency_field : str
                 (Optional) Name of the column that contains the agency name (i.e. name of the police departments)
+        data_set : str
+            (Optional) Name of CSV file in zip file if input is a zip file. Required if input is a zip file with more than one file.
         '''
         
         self.url = url
         self.date_field = date_field
         self.agency_field = agency_field
+        self.data_set = data_set
 
 
     def isfile(self):
@@ -517,7 +534,7 @@ class Csv(Data_Loader):
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", category=pd.errors.DtypeWarning)
                 try:
-                    table = read_zipped_csv(self.url, pbar=pbar)
+                    table = read_zipped_csv(self.url, pbar=pbar, data_set=self.data_set)
                 except requests.exceptions.HTTPError as e:
                     if len(e.args) and 'Forbidden' in e.args[0]:
                         headers = {

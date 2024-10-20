@@ -2,6 +2,7 @@ from __future__ import absolute_import
 
 import re
 import requests
+import urllib.request
 
 from io import BufferedIOBase
 
@@ -13,6 +14,20 @@ __all__ = ["open", "HTTPIOError", "HTTPIOFile"]
 
 # The expected exception from unimplemented IOBase operations
 IOBaseError = OSError if PY3 else IOError
+
+req_headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:106.0) Gecko/20100101 Firefox/106.0',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            # 'Accept-Encoding': 'gzip, deflate, br',
+            'DNT': '1',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+        }
 
 
 def open(url, block_size=-1, **kwargs):
@@ -61,14 +76,32 @@ class SyncHTTPIOFile(BufferedIOBase):
         self._assert_not_closed()
         if not self._closing and self._session is None:
             self._session = requests.Session()
+            
             response = self._session.head(self.url, **self._kwargs)
-            response.raise_for_status()
             try:
-                self.length = int(response.headers['Content-Length'])
-            except KeyError:
-                raise HTTPIOError("Server does not report content length")
-            if response.headers.get('Accept-Ranges', '').lower() != 'bytes':
-                raise HTTPIOError("Server does not accept 'Range' headers")
+                response.raise_for_status()
+            except requests.exceptions.HTTPError as e:
+                if 'headers' in self._kwargs:
+                    for k,v in req_headers:
+                        if k not in self._kwargs['headers']:  # Don't overwrite caller's headers
+                            self._kwargs['headers'][k] = v
+                else:
+                    self._kwargs['headers'] = req_headers
+
+                self._session = _UrlSession(self.url, self._kwargs['headers'])
+                response = self._session.response
+            except:
+                raise
+
+            if self.length==None:
+                self.length = response.headers.get('Content-Length', None)
+                if self.length:
+                    self.length = int(self.length)
+                else:
+                    raise HTTPIOError("Server does not report content length")
+                
+                if response.headers.get('Accept-Ranges', '').lower() != 'bytes':
+                    raise HTTPIOError("Server does not accept 'Range' headers")
 
     def close(self):
         self._closing = True
@@ -227,3 +260,29 @@ class SyncHTTPIOFile(BufferedIOBase):
 
 class HTTPIOFile(SyncHTTPIOFile):
     pass
+
+class _UrlResponse:
+    def __init__(self, content) -> None:
+        self.content = content
+
+    def raise_for_status(self):
+        pass
+
+class _UrlSession:
+    def __init__(self, url, headers) -> None:
+        req_info = urllib.request.Request(url, headers=headers)
+        self.response = urllib.request.urlopen(req_info)
+
+    def get(self, url, *args, **kwargs):
+        req_info = urllib.request.Request(url, *args, **kwargs)
+        with urllib.request.urlopen(req_info) as r:
+            content = r.read()
+
+        return _UrlResponse(content)
+
+    def close(self):
+        self.response.close()
+
+if __name__ == "__main__":
+    with HTTPIOFile('http://www.example.com/test/', 1024):
+        pass

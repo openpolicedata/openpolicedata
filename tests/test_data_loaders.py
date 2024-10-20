@@ -3,6 +3,8 @@ from io import BytesIO
 import pytest
 import re
 import requests
+from zipfile import ZipFile
+
 if __name__ == "__main__":
 	import sys
 	sys.path.append('../openpolicedata')
@@ -17,6 +19,27 @@ except:
 import warnings
 warnings.filterwarnings(action='ignore', module='arcgis')
 
+@pytest.mark.parametrize('url',['https://stacks.stanford.edu/file/druid:yg821jf8611/yg821jf8611_ar_little_rock_2020_04_01.csv.zip',
+                                'https://www.chicagopolice.org/wp-content/uploads/legacy/2016-ISR.zip'])
+def test_load_single_file_csv_zip(url):
+    loader = data_loaders.Csv(url)
+    df = loader.load(pbar=False)
+
+    headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:106.0) Gecko/20100101 Firefox/106.0',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                # 'Accept-Encoding': 'gzip, deflate, br',
+                'DNT': '1',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'none',
+                'Sec-Fetch-User': '?1',
+            }
+    df_true = pd.read_csv(url,encoding_errors='surrogateescape', storage_options=headers)
+    assert df.equals(df_true)
 def test_process_date_input_empty():
     with pytest.raises(ValueError):
         data_loaders._process_date([])
