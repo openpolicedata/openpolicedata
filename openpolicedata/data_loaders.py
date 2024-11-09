@@ -1716,6 +1716,9 @@ class Arcgis(Data_Loader):
             if date_delim=='':
                 start_date = start_date.replace('-','')
                 stop_date = stop_date.replace('-','')
+            elif date_delim=='/':
+                start_date = start_date.replace('-','/')
+                stop_date = stop_date.replace('-','/')
             elif date_delim!='-':
                 raise NotImplementedError("Unable to handle this delimiter")
             
@@ -2820,7 +2823,7 @@ class Ckan(Data_Loader):
             r.raise_for_status()
         except requests.HTTPError as e:
             if len(e.args)>0:
-                if "503 Server Error" in e.args[0]:
+                if any(x in e.args[0] for x in ["503 Server Error", '409 Client Error']):
                     raise OPD_DataUnavailableError(self.url, e.args, _url_error_msg.format(self.get_api_url()))
                 else:
                     raise

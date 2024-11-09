@@ -306,7 +306,7 @@ def test_arcgis():
     lim = data_loaders._default_limit
     data_loaders._default_limit = 500
     data_loaders._verify_arcgis = True
-    url = "https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPD/MapServer/16"
+    url = "https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPDEmployeeDemographics/MapServer/0"
     gis = data_loaders.Arcgis(url)
     assert not gis.isfile()
     try:
@@ -410,9 +410,9 @@ def test_arcgis():
     ('https://services.arcgis.com/aJ16ENn1AaqdFlqx/arcgis/rest/services/APDUseOfForce/FeatureServer/0', None, 'date_occurred'), # MONTH, D, YYYY
     ('https://publicgis.tucsonaz.gov/open/rest/services/OpenData/OpenData_PublicSafety/MapServer/34/', None, 'INCI_DATE'),  # YYYY-MM-DDTHH:MM:SS.SSSZ
     ('https://gis.charlottenc.gov/arcgis/rest/services/ODP/CMPD_Calls_for_Service/MapServer/0', 2022, 'CALENDAR_YEAR'),  # YYYY
-    ('https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPD/MapServer/11', None, 'YEAR_MONTH'),      # YYYY-MM
-    ("https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPD/MapServer/14", 2020, 'Month_of_Stop'),
-    ('https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPD/MapServer/13', None, 'YR'),   # Numeric year
+    ('https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPDOfficerInvolvedShootings_Incidents/MapServer/0', None, 'Year_Month'),      # YYYY-MM
+    ("https://gis.charlottenc.gov/arcgis/rest/services/CMPD/Officer_Traffic_Stop/MapServer/0", 2020, 'Month_of_Stop'),
+    ('https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPDOfficerInvolvedShootings_Officers/MapServer/0', None, 'YR'),   # Numeric year
 ])
 def test_arcgis_text_date(url, year, date_field):
     loader = data_loaders.Arcgis(url, date_field=date_field)

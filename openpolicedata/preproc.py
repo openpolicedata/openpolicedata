@@ -200,6 +200,10 @@ def find_id_column(df1, df2, std_id, keep_raw):
                  (df2[c2].isin(df1[c1].unique()).mean()>0.98 or df1[c1].isin(df2[c2].unique()).mean()>0.98):  # Norman crashes dataset
                 id_col1 = c1
                 id_col2 = c2
+            elif 'dr_no' in possible_cols:
+                # Known ID #
+                id_col1 = [x for x in df1.columns if x.lower()=='dr_no'][0]
+                id_col2 = [x for x in df2.columns if x.lower()=='dr_no'][0]
             else:
                 return default_result         
     
@@ -438,7 +442,7 @@ class Standardizer:
                 if isinstance(p[1], list):
                     matches = [x for x in select_cols if any([x.lower()==y.lower() for y in p[1]])]
                 else:
-                    matches = [x for x in select_cols if x.lower() == p[1].lower()]
+                    matches = [x for x in select_cols if isinstance(x,str) and x.lower() == p[1].lower()]
             elif p[0].lower() == "not equal":
                 matches = [x for x in select_cols if x.lower() != p[1].lower()]
             elif p[0].lower() == "does not contain":
@@ -543,7 +547,7 @@ class Standardizer:
             civilian_found = False
             officer_found = False
             for s in match_substr:
-                new_matches = [x for x in self.df.columns if s.lower() in x.lower()]
+                new_matches = [x for x in self.df.columns if isinstance(x,str) and s.lower() in x.lower()]
                 new_matches = [x for x in new_matches if x not in match_cols]
                 new_matches = self._remove_excluded(new_matches, exclude_col_names, match_substr)
                 if len(new_matches)>0 and len(split_words(s))==1:
@@ -795,7 +799,7 @@ class Standardizer:
                 logger.info(f"Column {match_cols[0]} identified as a {defs.columns.SUBJECT_OR_OFFICER} column")
                 self.col_map[defs.columns.SUBJECT_OR_OFFICER] = match_cols[0]
 
-            match_cols = self._find_col_matches("race", ["race", "citizen_demographics","officer_demographics","ethnicity","re_grp"],
+            match_cols = self._find_col_matches("race", ["race", "citizen_demographics","officer_demographics","ethnicity","rae_full","re_grp"],  # RAE_FULL used by CA stops
                                                 known_col_names=[self.known_cols[x] for x in [defs.columns.RACE_OFFICER,defs.columns.RACE_OFFICER_SUBJECT, 
                                                                                               defs.columns.RACE_SUBJECT]],
                                                 validator=_race_validator, 
@@ -872,7 +876,7 @@ class Standardizer:
                 defs.columns.AGE_RANGE_SUBJECT, defs.columns.AGE_RANGE_OFFICER,
                 defs.columns.AGE_RANGE_OFFICER_SUBJECT)
             
-            match_cols = self._find_col_matches("gender", ["gender", "gend", "sex","citizen_demographics","officer_demographics"],
+            match_cols = self._find_col_matches("gender", ['g_full',"gender", "gend", "sex","citizen_demographics","officer_demographics"], # G_FULL used by CA stops
                                                 known_col_names=[self.known_cols[x] for x in [defs.columns.GENDER_OFFICER,defs.columns.GENDER_OFFICER_SUBJECT, 
                                                                                               defs.columns.GENDER_SUBJECT]],
                                                 exclude_col_names=[("does not contain", ["prosecutor"])],
@@ -884,8 +888,7 @@ class Standardizer:
             self._id_demographic_column(match_cols,
                 defs.columns.GENDER_SUBJECT, defs.columns.GENDER_OFFICER, 
                 defs.columns.GENDER_OFFICER_SUBJECT,
-                specific_cases=[_case("California", defs.TableType.STOPS, "G_FULL", defs.columns.GENDER_SUBJECT),
-                                _case("Lansing", defs.TableType.SHOOTINGS, ["Race_Sex","Officer"], [defs.columns.GENDER_SUBJECT, defs.columns.GENDER_OFFICER]),
+                specific_cases=[_case("Lansing", defs.TableType.SHOOTINGS, ["Race_Sex","Officer"], [defs.columns.GENDER_SUBJECT, defs.columns.GENDER_OFFICER]),
                                 _case("Fairfax County", defs.TableType.ARRESTS, ["ArresteeSe","OfficerSex"], [defs.columns.GENDER_SUBJECT, defs.columns.GENDER_OFFICER]),
                                 _case("Dallas", defs.TableType.SHOOTINGS, "officer_s", defs.columns.GENDER_OFFICER),
                                 _case("Chicago", defs.TableType.TRAFFIC_CITATIONS, "OFF SEX", defs.columns.GENDER_SUBJECT)
@@ -1144,7 +1147,7 @@ class Standardizer:
                         (any([x in w for x in off_words]) and not any([x in w for x in not_off_words])) or \
                         (is_officer_table and "suspect" not in w and "supsect" not in w)
                         ):
-                        if w=='off':
+                        if w=='off' and not is_officer_table:
                             possible_ambiguity = True
                         types.append(officer_col_name)
                         break
@@ -1398,6 +1401,9 @@ class Standardizer:
             self.df[defs.columns.AGENCY] = self.df[self.col_map[defs.columns.AGENCY]]
             if self.source_name=='California':
                 self.df[defs.columns.AGENCY] = california_ori2agency(self.df[defs.columns.AGENCY], self.year)
+            elif self.source_name=='Washington Post':
+                self.df[defs.columns.AGENCY] = washingtonpost_id2agency(self.df[defs.columns.AGENCY])
+            
             self.data_maps.append(DataMapping(orig_column_name=self.col_map.get_original(defs.columns.AGENCY), new_column_name=defs.columns.AGENCY,
                                     orig_column=self.df[self.col_map[defs.columns.AGENCY]]))
 
@@ -1408,7 +1414,7 @@ class Standardizer:
         
     def sort_columns(self):
         # Reorder columns so standardized columns are first and any old columns are last
-        old_cols = [x for x in self.df.columns if x.startswith(_OLD_COLUMN_INDICATOR)]
+        old_cols = [x for x in self.df.columns if isinstance(x,str) and x.startswith(_OLD_COLUMN_INDICATOR)]
         reordered_cols = [x.new_column_name for x in self.data_maps if x.new_column_name in self.df.columns and x.new_column_name not in old_cols]
         reordered_cols.extend([x for x in self.df.columns if x not in old_cols and x not in reordered_cols])
         reordered_cols.extend([x for x in old_cols])
@@ -1444,7 +1450,7 @@ class Standardizer:
                                 max_count = m
                 std_map = {}
                 mult_type = mult.type if mult.type not in exclude_mult_type else None
-                self.df[col] = convert.convert(converter, self.df[self.col_map[col]], self.source_name, 
+                self.df[col] = convert.convert(converter, self.df[self.col_map[col]], self.source_name, self.state,
                                                 cats=cats,
                                                 std_map=std_map, no_id=self.no_id, 
                                                 mult_type=mult_type,
@@ -1831,7 +1837,7 @@ class Standardizer:
             col = getattr(defs.columns, col_prop)
             if col in self.col_map:
                 map = {}
-                self.df[col] = convert.convert(convert._create_age_range_lut, self.df[self.col_map[col]], source_name=self.source_name,
+                self.df[col] = convert.convert(convert._create_age_range_lut, self.df[self.col_map[col]], source_name=self.source_name, state=self.state,
                                                std_map=map, delim=mult.delim_age, mult_type=mult.type, no_id=self.no_id)
                 
                 # Check for age ranges
@@ -1846,10 +1852,16 @@ class Standardizer:
                             new_col_prop = col_prop.replace("_RANGE","")
                             if hasattr(defs.columns, new_col_prop):
                                 new_col_name = getattr(defs.columns, new_col_prop)
-                                self.col_map.replace(col, new_col_name)
-                                self.df.rename(columns={col:new_col_name}, inplace=True)
-                                col = new_col_name
-                                map = None
+                                if new_col_name not in self.col_map:
+                                    self.col_map.replace(col, new_col_name)
+                                    self.df.rename(columns={col:new_col_name}, inplace=True)
+                                    col = new_col_name
+                                    map = None
+                                else:
+                                    # Standardized column already exists
+                                    self.df = self.df.drop(columns=col)
+                                    self.col_map.pop(col)
+                                    return
                         else:
                             raise NotImplementedError()
                     except:
@@ -2172,7 +2184,7 @@ def _gender_validator(df, match_cols_test, source_name):
             col = df[col_name]
             # Verify gender column
             gender_cats = defs.get_gender_cats()
-            col = convert.convert(convert._create_gender_lut, col, source_name, gender_cats)
+            col = convert.convert(convert._create_gender_lut, col, source_name, cats=gender_cats)
 
             counts = col.value_counts()
 
@@ -2327,6 +2339,34 @@ def cleanup_column(df, col_name, keep_raw):
         logger.info(f"Removing raw column {col_name}")
         df.drop(col_name, axis=1, inplace=True)
         return None
+    
+def washingtonpost_id2agency(col, unknown='ignore'):
+    assert(unknown in ['ignore','error'])
+
+    df = pd.read_csv('https://raw.githubusercontent.com/washingtonpost/data-police-shootings/refs/heads/master/v2/fatal-police-shootings-agencies.csv')
+
+    col = col.apply(lambda x: int(x) if isinstance(x,str) and x.isdigit() else x)
+
+    def to_agency(x):
+        if isinstance(x, str):
+            x = x.split(';')
+        else:
+            x = [x]
+
+        result = []
+        for y in x:
+            y = int(y) if isinstance(y,str) and y.isdigit() else y
+            if (m:=df['id']==y).sum()==1:
+                result.append(df['name'][m].iloc[0])
+            elif unknown=='error':
+                raise ValueError(f'Unknown agency: {y}')
+            else:
+                result.append(str(y))
+
+        return ', '.join(result)
+    
+    return col.apply(to_agency)
+
     
 def california_ori2agency(col, year, unknown='ignore'):
     assert(unknown in ['ignore','error'])

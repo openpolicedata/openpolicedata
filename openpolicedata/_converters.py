@@ -26,7 +26,7 @@ _p_age_range = re.compile(r"""
 _p_nonlatino = re.compile(r'[\s,]*NON\-?(HISPANIC|LATINO)(\s|$)+')
 
 
-def convert(converter, col, source_name="", cats=None, std_map=None, delim=None, mult_type=None, item_num=None, 
+def convert(converter, col, source_name="", state=None, cats=None, std_map=None, delim=None, mult_type=None, item_num=None, 
             no_id="keep", agg_cat=False):
     std_map = {} if std_map is None else std_map
     no_id = no_id.lower()
@@ -53,17 +53,17 @@ def convert(converter, col, source_name="", cats=None, std_map=None, delim=None,
     counts = col.value_counts(dropna=False)
     vals = counts.index
     if mult_type == MultType.DICT:
-        return std_dict(col, std_map, converter, no_id, source_name, cats, agg_cat)
+        return std_dict(col, std_map, converter, no_id, source_name, state, cats, agg_cat)
     elif mult_type == MultType.DEMO_COL:
-        return std_demo_col(col, vals, std_map, item_num, converter, no_id, source_name, cats, agg_cat)
+        return std_demo_col(col, vals, std_map, item_num, converter, no_id, source_name, state, cats, agg_cat)
     elif mult_type == MultType.COUNTS:
-        return std_counts(col, vals, std_map, delim, converter, no_id, source_name, cats, agg_cat)
+        return std_counts(col, vals, std_map, delim, converter, no_id, source_name, state, cats, agg_cat)
     elif mult_type == MultType.DELIMITED:
-        return std_list(col, vals, std_map, delim, converter, no_id, source_name, cats, agg_cat, known_single=True)
+        return std_list(col, vals, std_map, delim, converter, no_id, source_name, state, cats, agg_cat, known_single=True)
     elif mult_type == MultType.WITH_NAME:
-        return std_with_names(col, vals, std_map, item_num, converter, no_id, source_name, cats, agg_cat)
+        return std_with_names(col, vals, std_map, item_num, converter, no_id, source_name, state, cats, agg_cat)
     elif mult_type == MultType.WITH_COUNTS:
-        return std_with_counts(col, vals, std_map, delim, converter, no_id, source_name, cats, agg_cat)
+        return std_with_counts(col, vals, std_map, delim, converter, no_id, source_name, state, cats, agg_cat)
     else:
         if is_boolean_cols:
             # This currently has only been tested on and needed for Bloomington use of force data
@@ -93,7 +93,7 @@ def convert(converter, col, source_name="", cats=None, std_map=None, delim=None,
                 vals.append(v)
 
         for x in vals:
-            std_map[x] = converter(x, no_id, source_name, cats, agg_cat)
+            std_map[x] = converter(x, no_id, source_name, state, cats, agg_cat)
             if isinstance(std_map[x], list):
                 std_map[x].sort()
                 std_map[x] = ", ".join(std_map[x])
@@ -212,7 +212,7 @@ def _create_age_range_lut(x, no_id, source_name, *args, **kwargs):
                 return ""
     
 
-def _create_ethnicity_lut(x, no_id, source_name, eth_cats, *args, **kwargs):
+def _create_ethnicity_lut(x, no_id, source_name, state, eth_cats, *args, **kwargs):
     # The below values is used in the Ferndale demographics data. Just use the data from the race column in that
     # case which includes if officer is Hispanic
     ferndale_eth_vals = ['NR', 'FRENCH/GERMAN', 'MEXICAN', 'HUNGARIAN', 'LEBANESE', 'POLISH/SCOTTISH', 'IRISH', 'SYRIAN', 'POLISH']
@@ -267,7 +267,7 @@ def _create_ethnicity_lut(x, no_id, source_name, eth_cats, *args, **kwargs):
         return orig if no_id=="keep" else ""
 
 
-def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_cat=False, known_single=False):
+def _create_race_lut(x, no_id, source_name, state, race_cats=defs.get_race_cats(), agg_cat=False, known_single=False):
     if race_cats is None:
         race_cats = defs.get_race_cats()
 
@@ -287,10 +287,10 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
 
     orig = x
 
-    if ((not isinstance(x, str) and pd.notnull(x)) or (isinstance(x, str) and x.isdigit())) and source_name in ["California", "Lincoln"]:
+    if ((not isinstance(x, str) and pd.notnull(x)) or (isinstance(x, str) and x.isdigit())) and (source_name in ["Lincoln"] or state=='California'):
         # Translate datasets with numeric codes for race
         default_cats = defs.get_race_cats(expand=True)
-        if source_name == "California":
+        if state == "California":
             # California stops data has a dictionary that can be applied. 
             # https://data-openjustice.doj.ca.gov/sites/default/files/dataset/2023-01/RIPA%20Dataset%20Read%20Me%202021%20Final%20rev%20011223.pdf
             map_dict = {
@@ -330,11 +330,15 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
     x = x.strip().upper()
 
     if source_name in ["Austin", "Bloomington", "New York City", "St. John", "Louisville", "Charleston", 
-                        "Los Angeles", "Dallas","Chicago", 'Cedar Lake', 'Griffith']:
+                        "Los Angeles", "Dallas","Chicago", 'Cedar Lake', 'Griffith','Washington Post']:
         # Handling dataset-specific letter codes
         if source_name=="Austin":
             # Per email with Kruemcke, Adrian <Adrian.Kruemcke@austintexas.gov> on 2022-06-17
             map_dict = {"M":"Middle Eastern", "P":"Pacific Islander/Native Hawaiian", "N":"Native American/Alaskan", "O":"Other"}
+        elif source_name=="Washington Post":
+            # https://github.com/washingtonpost/data-police-shootings/tree/master/v2
+            map_dict = {'W':'White','B':'Black', 'A':'Asian', 'N':' Native American', 'H':'Hispanic',
+                        'O':'Other', '--':'Unknown'}
         elif source_name=="Bloomington":
             # https://data.bloomington.in.gov/Police/Citizen-Complaints/kit3-8bua/about_data
             map_dict = {
@@ -412,10 +416,10 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
             delim = delim[0]
             race_list = []
             for v in x.split(delim):
-                if (v=="INDIAN" and "BURMESE" in x) or v=='N':  # N is non-Latino, which can be ignored
+                if (v=="INDIAN" and "BURMESE" in x) or (v=='N' and source_name!='Washington Post'):  # N is non-Latino, which can be ignored
                     # Handle special case to prevent setting someone from country of India to Indigenous
                     continue
-                new_val = _create_race_lut(v, no_id, source_name, race_cats, agg_cat, known_single=True)
+                new_val = _create_race_lut(v, no_id, source_name, state, race_cats, agg_cat, known_single=True)
                 if isinstance(new_val, list):
                     race_list.extend(new_val)
                 else:
@@ -465,7 +469,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
             return False
 
     x_no_space = x.replace(" ","")
-    if has_unspecified and (x in ["MISSING","NOT SPECIFIED", "", "NOT RECORDED","N/A", "NOT REPORTED", "NONE"] or \
+    if has_unspecified and (x in ["MISSING","NOT SPECIFIED", "", "NOT RECORDED","N/A", "NOT REPORTED", "NONE",'BLANK'] or \
         (type(x)==str and ("NO DATA" in x or ("NOT APP" in x and x not in ["NOT APPLICABLE (NONUS)",'NOT APPLICABLE (NON US)']) or "NO RACE" in x or "NULL" in x))):
         return race_cats[defs._race_keys.UNSPECIFIED]
     if has_white and x_no_space in ["W", "CAUCASIAN", "WN", "WHITE", "WHTE", "WHITE,OTHER", 'WHT']:  # WN = White-Non-Hispanic
@@ -494,7 +498,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
             return race_cats[defs._race_keys.AAPI] 
         else:
             return race_cats[defs._race_keys.ASIAN] if has_asian else race_cats[defs._race_keys.AAPI]
-    if (has_pi or has_aapi) and ("HAWAI" in x or "PACIFIC" in x_no_space or \
+    if (has_pi or has_aapi) and ("HAWAI" in x or "PACIF" in x_no_space or \
                                  "PACISL" in x_no_space or x in ['PI', 'NHPI']): # NHPI = Native Hawaiian, and Pacific Islander
         return race_cats[defs._race_keys.PACIFIC_ISLANDER] if has_pi else race_cats[defs._race_keys.AAPI]
     if has_latino and x in ["H", "WH", "HISPANIC", "LATINO", "HISPANIC OR LATINO", "LATINO OR HISPANIC", 
@@ -505,7 +509,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
         "NAT AMER" in x):
         return race_cats[defs._race_keys.INDIGENOUS] 
     if has_multiple and ("OR MORE" in x or "MULTI" in x or \
-        x_no_space in ["MIXED","BIRACIAL","MIXEDRACE","MORE THAN TWO RACES".replace(" ",""),
+        x_no_space in ['2ORMORE', "MIXED","BIRACIAL","MIXEDRACE","MORE THAN TWO RACES".replace(" ",""),
                               "MORE THAN 2 RACES".replace(" ","")]):
         return race_cats[defs._race_keys.MULTIPLE]
     if defs._race_keys.OTHER_UNKNOWN in race_cats and "UNK" in x and "OTH" in x:
@@ -544,7 +548,7 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
         elif no_id=="test":
             if x in ["MALE","FEMALE","GIVING ANYTHING OF VALUE","REFUSED", "NA","M","F","OTHER/NOT REPORTED", 
                      'UNOCCUPIED VEHICLE','MIDDLE EASTERN OR NORTH AFRICAN','P','PAKISTANI','DUPLICATE',
-                     'NOT AVAILABLE'] or \
+                     'NOT AVAILABLE', 'DECLINED TO ANSWER'] or \
                 (source_name in ["Chapel Hill","Lansing","Fayetteville"] and x in ["S","P"]) or \
                 (source_name=="Burlington" and x in ["EXPUNGED"]) or \
                 (source_name=="Menlo Park" and x in ["S",'F','P','J','L']) or \
@@ -587,12 +591,12 @@ def _create_race_lut(x, no_id, source_name, race_cats=defs.get_race_cats(), agg_
         return orig if no_id=="keep" else ""
 
 
-def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
+def _create_gender_lut(x, no_id, source_name, state, gender_cats, *args, **kwargs):
 
     orig = x
-    if pd.notnull(x) and (type(x) != str or x.isdigit()) and source_name in ["California", "Lincoln"]:
+    if pd.notnull(x) and (type(x) != str or x.isdigit()) and (source_name in ["Lincoln"] or state=='California'):
         default_cats = defs.get_gender_cats()
-        if source_name == "California":
+        if state == "California":
             # California stops data has a dictionary that can be applied. 
             # https://data-openjustice.doj.ca.gov/sites/default/files/dataset/2023-01/RIPA%20Dataset%20Read%20Me%202021%20Final%20rev%20011223.pdf
             map_dict = {
@@ -657,7 +661,7 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
         else:
             # Same result whether no_id is keep or null
             return ""
-    if has_unspecified and x in ["MISSING", "UNSPECIFIED", "",",",'NOTSPECIFIED',"NOTRECORDED","NONE"] or \
+    if has_unspecified and x in ["MISSING", "UNSPECIFIED", "",",",'NOTSPECIFIED',"NOTRECORDED","NONE", 'BLANK'] or \
         "NODATA" in x or "NOSEX" in x or "NULL" in x:
         return gender_cats[defs._gender_keys.UNSPECIFIED]
     elif defs._gender_keys.FEMALE in gender_cats and x in ["F", "FEMALE", "FEMAALE", "FFEMALE", "FEMAL", "FEMALE/WOMAN","WOMAN"]:
@@ -718,7 +722,7 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
             x in ['MULTIPLESUBJECTS'] or \
             (x=="5" and source_name=="Lincoln") or \
             (source_name=="Minneapolis" and x in ["NOCONTACT"]) or \
-            (x in ["MALE,MALE"] and source_name=="Chattanooga") or \
+            (source_name=="Chattanooga" and all(y in ['MALE','FEMALE'] for y in x.split(','))) or \
             (x=="PENDINGRELEASE" and source_name=="Portland") or \
             (x in ["N","H"] and source_name=="Los Angeles") or \
             (source_name=='Bremerton' and x in ['B', 'W', 'A','I']) or \
@@ -735,7 +739,7 @@ def _create_gender_lut(x, no_id, source_name, gender_cats, *args, **kwargs):
         return orig if no_id=="keep" else ""
     
 
-def _create_injury_lut(x, no_id, source_name, cats, *args, **kwargs):
+def _create_injury_lut(x, no_id, source_name, *args, **kwargs):
     if pd.isnull(x):
         return "UNSPECIFIED"
     elif isinstance(x,Number) or pd.api.types.is_bool(x) or x.isdigit():  # is_bool handles numpy.bool_ type
@@ -747,13 +751,14 @@ def _create_injury_lut(x, no_id, source_name, cats, *args, **kwargs):
     orig = x
     x = re.sub(r'^\d+\s*\-\s*','',x)
     x = x.upper().replace('-',' ').replace('*','').replace('SUBJECT','').replace('  ',' ').strip()
-    x = re.sub(r'OF[FI]{2}CER','', x).strip()  # Handle misspelling officer
+    x = re.sub(r'OF[FI]{2}CERS?','', x).strip()  # Handle misspelling officer
+    x = re.sub(r'^\d\s+','', x)  # Remove count
     x = re.sub(r'\s{2,10}',' ',x)
 
     if len(x)==0:
         return "UNSPECIFIED"
     elif len(words:=x.split('\n'))>1:
-        words = [_create_injury_lut(y, no_id, source_name, cats) for y in words]
+        words = [_create_injury_lut(y, no_id, source_name) for y in words]
         for m in ['FATAL','INJURED']:
             if m in words:
                 return m
@@ -770,21 +775,23 @@ def _create_injury_lut(x, no_id, source_name, cats, *args, **kwargs):
     elif x.startswith('NO INJUR') or x.startswith('NONE') or x.startswith('NO COMPLAINT') or\
         x in ["NOT INJURED",'NEITHER','NO','N', "MISS", 'SHOOT AND MISS','FALSE','NO VISIBLE INJURY','UNINJURED', 'SHOW OF FORCE']:
         return "NO INJURY"
+    elif x in ['SELF INFLICTED FATAL', 'DECEASED (SELF INFLICTED)','KILLED (SELF INFLICTED)', 'FATAL SUICIDE']:
+        return 'SELF-INFLICTED FATAL'
+    elif any([y in x for y in ['SELF INFLICTED GUNSHOT WOUND']]):
+        return 'SELF-INFLICTED INJURY'
     elif contains_yes or x in nonfatal_words or x in ['Y','YES','TRUE'] or \
         any([x.startswith(y) for y in ['COMPLAINED OF','COMPLAINT OF']]) or \
         any([y in x for y in ['WOUND','PAIN', "BLEEDING",'SWELLING','SCRAPE','PUNCTURE','LACERATION','BRUIS',
-                              'BROKEN','UNCONSCIOUS', 'FIRST AID', 'SHOT (INJURED ONLY)', 'INJURED INCIDENTALLY',
+                              'BROKEN','UNCONSCIOUS', 'FIRST AID', 'INJURED INCIDENTALLY',
                               'DISLOCATED','FRACTURED','ABBRASION','ABRASION','ABRAISON','ABRASSION','BUSTED','PULLED OUT','REDNESS','LOSS','RASH',
                               'SCRATCH','NUMBNESS','BREATHING','CUT','STUN', 'MARKS', 'EYE', 'PEELING', 'HURT', 'ELBOW', 'KNEE',
                               'SOFT TISSUE','BLOOD','HEAD','SORE','SHOULDER', 'MINOR INJUR', 'FINGER', 'IMPACT', 'FACE', 'ARM',
                               'MOUTH', 'BACK','RIB', 'THUMB','SHIN',' EAR', 'ACHILLES', 'STRUCK', 'LEG', 'SERIOUS',
                               'CONCUSSION','FRACTURE','CANINE BITE', 'MARK','BURN', 'MINOR', 'DISABL', 'PHYSICAL INJURY',
-                              'TREATED','TAKEN TO HOSPITAL']]):
+                              'TREATED','TAKEN TO HOSPITAL','SHOT', 'VISIBLE INJURY', 'BODILY INJURY']]):
         return "INJURED"
     elif 'NALOXONE' in x:
         return orig
-    elif x in ['SELF INFLICTED FATAL', 'DECEASED (SELF INFLICTED)','KILLED (SELF INFLICTED)', 'FATAL SUICIDE']:
-        return 'SELF-INFLICTED FATAL'
     elif x in ['UNKNOWN','UNKNWON']:
         return 'UNKNOWN'
     elif x in ['UNSPECIFIED', "NOT AVAILABLE", 'NOT SPECIFIED','(MISSING)','NA']:
@@ -793,14 +800,15 @@ def _create_injury_lut(x, no_id, source_name, cats, *args, **kwargs):
         return 'OTHER'
     elif no_id=='test':
         if source_name not in ['Indianapolis', 'Northampton','Minneapolis','Rutland'] and \
-            (x not in ['UI'] or source_name!="Norwich"):
+            (x not in ['UI'] or source_name!="Norwich") and \
+            (x not in ['BARRICADED ERT', 'SUICIDAL VICTIM, STABBED SELF'] or source_name!="Indiana"):
             raise ValueError(f"Unknown value in injury column: {orig}")
     elif no_id=='error':
         raise ValueError(f"Unknown value in injury column: {orig}")
     else:
         return orig if no_id=="keep" else ""
     
-def _create_fatal_lut(x, no_id, source_name, cats, *args, **kwargs):
+def _create_fatal_lut(x, no_id, source_name, *args, **kwargs):
     if pd.isnull(x):
         return "UNSPECIFIED"
     elif isinstance(x,Number) or x.isdigit():
@@ -831,7 +839,7 @@ def _create_fatal_lut(x, no_id, source_name, cats, *args, **kwargs):
         return orig if no_id=="keep" else ""
     
 
-def _create_firearm_lut(x, no_id, source_name, cats, *args, **kwargs):
+def _create_firearm_lut(x, no_id, *args, **kwargs):
     if pd.isnull(x):
         return "UNSPECIFIED"
     elif isinstance(x,Number) or x.isdigit():

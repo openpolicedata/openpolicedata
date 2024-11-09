@@ -1,3 +1,4 @@
+from zipfile import ZipFile
 import pandas as pd
 import numpy as np
 import os
@@ -61,7 +62,8 @@ def test_check_columns(datasets):
 
 def test_table_for_nulls(datasets):
     can_have_nulls = ["Description", "date_field", "dataset_id", "agency_field", "Year","readme","min_version",
-                        "AgencyFull","source_url","coverage_start","coverage_end",'query']
+                        "AgencyFull","source_url","coverage_start","coverage_end",'query',
+                        'agency_originated', 'supplying_entity']
 
     for col in datasets.columns:
         if not col in can_have_nulls:
@@ -75,7 +77,7 @@ def test_check_state_names(datasets):
         'Maryland', 'Massachusetts', 'Michigan', 'Minnesota', 'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire',
         'New Jersey', 'New Mexico', 'New York', 'North Carolina', 'North Dakota', 'Northern Mariana Islands', 'Ohio', 'Oklahoma', 'Oregon',
         'Pennsylvania', 'Puerto Rico', 'Rhode Island', 'South Carolina', 'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virgin Islands',
-        'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming'
+        'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming', 'MULTIPLE'
     ]
 
     assert len([x for x in datasets["State"] if x not in all_states]) == 0
@@ -90,6 +92,35 @@ def test_year(datasets):
     rem = datasets["Year"][[type(x)!=int for x in datasets["Year"]]]
     assert ((rem == opd.defs.MULTI) | (rem == opd.defs.NA)).all()
 
+def test_single_year_coverage(datasets):
+    for k in range(len(datasets)):
+        if not isinstance(datasets.iloc[k]['Year'], str):
+            year = datasets.iloc[k]['Year']
+            assert datasets.iloc[k]['coverage_start'].year==year
+            assert datasets.iloc[k]['coverage_end'].year==year
+
+def test_multi_year_coverage(datasets):
+    ds = datasets[datasets['Year']==opd.defs.MULTI]
+    assert (ds['coverage_start'].dt.year!=ds['coverage_end'].dt.year).all()
+
+@pytest.mark.parametrize('source', ['stanford','muckrock'])
+def test_3rd_party_source(datasets, source):
+    ds = datasets[datasets['URL'].str.lower().str.contains(source)]
+    assert (ds['agency_originated'].str.lower()=='yes').all()
+    assert (ds['supplying_entity'].str.lower().str.contains(source)).all()
+    assert (ds['source_url'].str.lower().str.contains(source)).all()
+
+@pytest.mark.parametrize('source', ['stanford','muckrock'])
+def test_not_3rd_party(datasets, source):
+    ds = datasets[~datasets['URL'].str.contains(source)]
+    assert not (ds['supplying_entity'].str.lower().str.contains(source)).any()
+    assert not ds['source_url'].str.lower().str.contains(source).any()
+
+def test_agency_multiple(datasets):
+    ds = datasets[datasets['Agency']==opd.defs.MULTI]
+    assert ds['agency_originated'].notnull().all()
+    assert ds['supplying_entity'].notnull().all()
+
 @pytest.mark.parametrize('data_type', [opd.defs.DataType.SOCRATA, opd.defs.DataType.CARTO, opd.defs.DataType.CKAN])
 def test_dataset_id(datasets, data_type):
     rem = datasets["dataset_id"][datasets["DataType"] == data_type]
@@ -101,11 +132,38 @@ def test_years_multi(datasets):
     df_null = datasets[pd.isnull(datasets["date_field"])]
     
     # This can only be allowed for certain Excel cases
-    assert (df_null["DataType"] == opd.defs.DataType.EXCEL.value).all()
+    assert df_null["DataType"].isin([opd.defs.DataType.EXCEL.value, opd.defs.DataType.CSV.value]).all()
 
 def test_agencies_multi(datasets):
     rem = datasets["agency_field"][datasets["Agency"] == opd.defs.MULTI]
-    assert pd.isnull(rem).sum() == 0
+    assert rem.notnull().all()
+
+def test_agencies_not_multi(datasets):
+    rem = datasets["agency_field"][(datasets["Agency"] != opd.defs.MULTI) & (~datasets['source_url'].str.contains('openjustice.doj.ca.gov',na=False))]
+    assert rem.isnull().all()
+
+def test_zip(datasets):
+    ds = datasets[datasets['URL'].str.endswith('zip')]
+    urls = ds['URL'].unique()
+    for url in urls:
+        df = ds[ds['URL']==url]
+        with opd.data_loaders.UrlIoContextManager(url) as fp:
+            with ZipFile(fp, 'r') as z:
+                for k in range(len(df)):
+                    if pd.notnull(df.iloc[k]['dataset_id']):
+                        ids = [x.strip() for x in df.iloc[k]['dataset_id'].split(';')]
+                        for id in ids:
+                            assert id in z.namelist()
+
+                            if df.iloc[k]['Agency']==opd.defs.MULTI and \
+                                'data-openjustice.doj.ca.gov' in df.iloc[k]['URL']:
+                                # Source should be county name
+                                assert df.iloc[k]['SourceName'].endswith(' County')
+                                county_name = df.iloc[k]['SourceName'].replace(' County','')
+                                assert county_name.lower() in id.lower()
+                    else:
+                        assert len(z.namelist())==1
+
 
 def test_arcgis_urls(datasets):
     urls = datasets["URL"]
