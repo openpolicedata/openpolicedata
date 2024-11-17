@@ -18,7 +18,7 @@ import os
 import pathlib
 import sys
 sys.path.append(pathlib.Path(__file__).parent.resolve())
-from test_utils import check_for_dataset, update_outages
+from test_utils import check_for_dataset, update_outages, user_request_skip
 
 base_sleep_time = 0.1
 
@@ -41,18 +41,6 @@ else:
 		pass
 
 warn_errors = (OPD_DataUnavailableError, OPD_SocrataHTTPError, OPD_FutureError, OPD_MinVersionError)
-
-def user_request_skip(datasets, i, skip, start_idx, source):
-	# Skip sources that the user requested to skip
-	if skip and datasets.iloc[i]["SourceName"] in skip:
-		return True
-	# User requested to start at start_idx
-	if i<start_idx:
-		return True
-	if source != None and datasets.iloc[i]["SourceName"] != source:
-		return True
-	
-	return False
 
 def check_table_type_warning(all_datasets):
 	sources = all_datasets.copy().iloc[0]
@@ -260,8 +248,7 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 		if user_request_skip(datasets, i, skip, start_idx, source):
 			continue
 
-		has_date_field = not pd.isnull(datasets.iloc[i]["date_field"])
-		if can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]) or has_date_field:
+		if can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]):
 			match = True
 			for k,v in query.items():
 				if datasets.iloc[i][k]!=v:
@@ -307,7 +294,7 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 			if len(table.table)==0 and has_outages and \
 				(outages[["State","SourceName","Agency","TableType","Year"]] == datasets.iloc[i][["State","SourceName","Agency","TableType","Year"]]).all(axis=1).any():
 				caught_exceptions_warn.append(f'Outage continues for {str(datasets.iloc[i][["State","SourceName","Agency","TableType","Year"]])}')
-				update_outages(outages_file, datasets.iloc[i], True, e)
+				update_outages(outages_file, datasets.iloc[i], True)
 				continue
 			else:
 				assert len(table.table)>0
@@ -480,7 +467,7 @@ def test_load_gen(source, year, table_type, nrows, agency):
 
 
 def can_be_limited(data_type, url):
-	if ".zip" in url:
+	if url.lower().endswith(".zip"):
 		return False
 	elif data_type in [DataType.ArcGIS, DataType.SOCRATA, DataType.CSV, DataType.EXCEL, DataType.CARTO, DataType.CKAN, DataType.HTML]:
 		return True
@@ -520,11 +507,11 @@ if __name__ == "__main__":
 	use_changed_rows = False
 	csvfile = None
 	csvfile = os.path.join(r"..",'opd-data','opd_source_table.csv')
-	start_idx = 1325
+	start_idx = 0
 	skip = None
 	# skip = "Sacramento"
 	source = None
-	# source = "Bremerton" #"Washington D.C." #"Wallkill"
+	source = "St. Paul" #"Washington D.C." #"Wallkill"
 	query = {}
 	# query = {'SourceName':'San Francisco'}
 

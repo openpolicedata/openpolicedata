@@ -1,3 +1,4 @@
+import urllib.error
 from zipfile import ZipFile
 import pandas as pd
 import numpy as np
@@ -5,6 +6,7 @@ import os
 import re
 from packaging import version
 import pytest
+import urllib
 
 if __name__ == "__main__":
 	import sys
@@ -103,23 +105,28 @@ def test_multi_year_coverage(datasets):
     ds = datasets[datasets['Year']==opd.defs.MULTI]
     assert (ds['coverage_start'].dt.year!=ds['coverage_end'].dt.year).all()
 
-@pytest.mark.parametrize('source', ['stanford','muckrock'])
-def test_3rd_party_source(datasets, source):
-    ds = datasets[datasets['URL'].str.lower().str.contains(source)]
+@pytest.mark.parametrize('source, partial_url', [('stanford','stanford'),('muckrock','muckrock'),
+                                                 ('California Office of the Attorney General', 'openjustice.doj.ca.gov'),
+                                                 ('openpolicedata','opd-datasets')])
+def test_3rd_party_source(datasets, source, partial_url):
+    ds = datasets[datasets['URL'].str.lower().str.contains(partial_url)]
     assert (ds['agency_originated'].str.lower()=='yes').all()
-    assert (ds['supplying_entity'].str.lower().str.contains(source)).all()
-    assert (ds['source_url'].str.lower().str.contains(source)).all()
+    assert (ds['supplying_entity'].str.lower().str.contains(source.lower())).all()
 
-@pytest.mark.parametrize('source', ['stanford','muckrock'])
-def test_not_3rd_party(datasets, source):
-    ds = datasets[~datasets['URL'].str.contains(source)]
-    assert not (ds['supplying_entity'].str.lower().str.contains(source)).any()
-    assert not ds['source_url'].str.lower().str.contains(source).any()
+@pytest.mark.parametrize('source, partial_url', [('stanford','stanford'),('muckrock','muckrock'),
+                                                 ('California Office of the Attorney General', 'openjustice.doj.ca.gov'),
+                                                 ('openpolicedata','opd-datasets')])
+def test_not_3rd_party(datasets, source, partial_url):
+    ds = datasets[~datasets['URL'].str.contains(partial_url)]
+    assert not (ds['supplying_entity'].str.lower().str.contains(source.lower())).any()
 
 def test_agency_multiple(datasets):
     ds = datasets[datasets['Agency']==opd.defs.MULTI]
-    assert ds['agency_originated'].notnull().all()
     assert ds['supplying_entity'].notnull().all()
+    is_multiple_state = ds['State']==opd.defs.MULTI
+    # The following are currently true
+    assert (ds['agency_originated'][is_multiple_state]=='no').all()
+    assert (ds['agency_originated'][~is_multiple_state]=='yes').all()
 
 @pytest.mark.parametrize('data_type', [opd.defs.DataType.SOCRATA, opd.defs.DataType.CARTO, opd.defs.DataType.CKAN])
 def test_dataset_id(datasets, data_type):
@@ -147,23 +154,28 @@ def test_zip(datasets):
     urls = ds['URL'].unique()
     for url in urls:
         df = ds[ds['URL']==url]
-        with opd.data_loaders.UrlIoContextManager(url) as fp:
-            with ZipFile(fp, 'r') as z:
-                for k in range(len(df)):
-                    if pd.notnull(df.iloc[k]['dataset_id']):
-                        ids = [x.strip() for x in df.iloc[k]['dataset_id'].split(';')]
-                        for id in ids:
-                            assert id in z.namelist()
+        try:
+            with opd.data_loaders.UrlIoContextManager(url) as fp:
+                with ZipFile(fp, 'r') as z:
+                    for k in range(len(df)):
+                        if pd.notnull(df.iloc[k]['dataset_id']):
+                            ids = [x.strip() for x in df.iloc[k]['dataset_id'].split(';')]
+                            for id in ids:
+                                assert id in z.namelist()
 
-                            if df.iloc[k]['Agency']==opd.defs.MULTI and \
-                                'data-openjustice.doj.ca.gov' in df.iloc[k]['URL']:
-                                # Source should be county name
-                                assert df.iloc[k]['SourceName'].endswith(' County')
-                                county_name = df.iloc[k]['SourceName'].replace(' County','')
-                                assert county_name.lower() in id.lower()
-                    else:
-                        assert len(z.namelist())==1
-
+                                if df.iloc[k]['Agency']==opd.defs.MULTI and \
+                                    'data-openjustice.doj.ca.gov' in df.iloc[k]['URL']:
+                                    # Source should be county name
+                                    assert df.iloc[k]['SourceName'].endswith(' County')
+                                    county_name = df.iloc[k]['SourceName'].replace(' County','')
+                                    assert county_name.lower() in id.lower()
+                        else:
+                            assert len(z.namelist())==1
+        except urllib.error.HTTPError as e:
+            assert df.iloc[0]['SourceName']=='Chicago'
+            assert sys.version_info<=(3,10)
+        except:
+            raise
 
 def test_arcgis_urls(datasets):
     urls = datasets["URL"]

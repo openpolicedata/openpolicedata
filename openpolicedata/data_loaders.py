@@ -1643,6 +1643,10 @@ class Arcgis(Data_Loader):
 
     def _build_date_query_string_type(self, year, data, date_range_error):
         if data != None:
+            if len(data['features'])==0:
+                warnings.warn("No data found in dataset. Unable to determine date format in order to generate query")
+                return "", 0
+            
             dates = [x['attributes'][self.date_field] for x in data['features']]
 
             # [regex for pattern, Arcgis Pattern OR date delimiter (punctuation between numbers), whether to use inquality to do comparison,

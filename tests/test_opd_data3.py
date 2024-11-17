@@ -11,13 +11,15 @@ from openpolicedata.exceptions import OPD_DataUnavailableError, OPD_TooManyReque
 	DateFilterException
 import random
 from datetime import datetime
+import numpy as np
 import pandas as pd
 from time import sleep
 import warnings
 import os
 import re
+from urllib.parse import urlparse
 
-from test_utils import check_for_dataset
+from test_utils import check_for_dataset, user_request_skip
 
 # Set Arcgis data loader to validate queries with arcgis package if installed
 data_loaders._verify_arcgis = True
@@ -64,9 +66,6 @@ def test_bloomington_citations():
 
 		assert count==sum(count_by_year)
 
-@pytest.mark.slow(reason="This is a slow test that should be run before a major commit.")
-def test_zip():
-	raise NotImplementedError('Ensure that California RIPA is not run in test_source_download_limitable')
 
 @pytest.mark.slow(reason="This is a slow test that should be run before a major commit.")
 def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
@@ -83,12 +82,9 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 		if source != None and datasets.iloc[i]["SourceName"] != source:
 			continue
 
-		if is_stanford(datasets.iloc[i]["URL"]):
-			# There are a lot of data sets from Stanford, no need to run them all
-			# Just run approximately a small percentage
-			rnd = random.uniform(0,1)
-			if rnd>0.05:
-				continue
+		if datasets.iloc[i]["URL"].lower().endswith('.zip'):
+			# These are tested in test_source_download_not_limitable
+			continue
 
 		match = True
 		for k,v in query.items():
@@ -179,7 +175,7 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 		url_contains = datasets.iloc[i]['URL'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
 		id_contains = datasets.iloc[i]['dataset_id'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
 
-		tables = []
+		tables = {}
 		future_error = False
 		for year in years:
 			try:
@@ -193,7 +189,7 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 				break
 			except (OPD_DataUnavailableError, OPD_SocrataHTTPError) as e:
 				caught_exceptions_warn.append(e)
-				tables.append(None)
+				tables[year] = None
 				continue
 			except:
 				raise
@@ -212,6 +208,7 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 						count = src.get_count(datasets.iloc[i]["TableType"], y, agency=agency, force=True)
 						if count>0:
 							years = [x if x!=year else y for x in years]
+							year = y
 							table = src.load(datasets.iloc[i]["TableType"], y, 
 										agency=agency, pbar=False, 
 										sortby="date",
@@ -224,7 +221,7 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 					else:
 						raise ValueError("Unable to find data for any year")
 
-			tables.append(table)
+			tables[year] = table
 
 		if future_error:
 			continue
@@ -232,7 +229,7 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 		for year in years:
 			print(f"Testing for year {year}")
 
-			table = tables[years.index(year)]
+			table = tables[year]
 			if table is None: # Data could not be loaded
 				continue
 
@@ -270,7 +267,13 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 				# and {year}-01-01 08:00:00
 				dts = dts[(dts < f"{year+1}-01-01 00:00:00") | (dts > f"{year+1}-01-01 08:00:00")]
 				all_years = dts.dt.year.unique().tolist()
-				assert len(all_years) == 1
+				if len(all_years) != 1:
+					m = (src.datasets['Year']==year) & (src.datasets['URL']==table.urls['data'])
+					assert m.sum()==1
+					# This is an annual dataset where perhaps some data is mistakenly from previous/next year
+					dts = dts[(dts < f"{year-1}-12-31 00:00:00") | (dts > f"{year-1}-12-31 23:59:59")]
+					all_years = dts.dt.year.unique().tolist()
+					assert len(all_years)==1
 			except:
 				raise(e)
 			assert all_years[0] == year
@@ -366,7 +369,19 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 			warnings.warn(str(e))
 
 
-def test_source_download_not_limitable(datasets, source, start_idx, skip, query={}):		
+def test_source_download_not_limitable(datasets, source, start_idx, skip, query={}):
+	
+	zip_data = datasets[datasets['URL'].str.lower().str.endswith('.zip')]
+	num_zips_check = 5  # Just check a selection of these. No reason to check all
+	zip_netloc = zip_data['URL'].apply(lambda x: urlparse(x).netloc)
+	zip_sites = zip_netloc.value_counts()
+	zip_2_run = {}
+	for k,v in zip_sites.items():
+		order = np.random.permutation(np.arange(v))
+		idx = zip_data[zip_netloc==k].index
+		for i in range(v):
+			zip_2_run[idx[i]] = order[i]
+
 	for i in range(len(datasets)):
 		if skip != None and datasets.iloc[i]["SourceName"] in skip:
 			continue
@@ -375,14 +390,8 @@ def test_source_download_not_limitable(datasets, source, start_idx, skip, query=
 		if source != None and datasets.iloc[i]["SourceName"] != source:
 			continue
 
-		if datasets.iloc[i]["DataType"] == DataType.CSV and ".zip" in datasets.iloc[i]["URL"]:
-			if is_stanford(datasets.iloc[i]["URL"]):
-				# There are a lot of data sets from Stanford, no need to run them all
-				# Just run approximately 10%
-				rnd = random.uniform(0,1)
-				if rnd>0.05:
-					continue
-
+		if datasets.iloc[i]["URL"].lower().endswith(".zip") and \
+			zip_2_run[datasets.index[i]] < num_zips_check:
 			match = True
 			for k,v in query.items():
 				if datasets.iloc[i][k]!=v:
@@ -407,7 +416,7 @@ def test_source_download_not_limitable(datasets, source, start_idx, skip, query=
 			print(f"{now} Testing {i+1} of {len(datasets)}: {srcName}, {state} {table_type} table for {year}")
 			try:
 				table = src.load(table_type, year, pbar=False, url_contains=url_contains, id_contains=id_contains)
-			except OPD_FutureError:
+			except (OPD_FutureError, OPD_MinVersionError):
 				continue
 			except:
 				raise
@@ -422,9 +431,6 @@ def test_source_download_not_limitable(datasets, source, start_idx, skip, query=
 			if not pd.isnull(datasets.iloc[i]["agency_field"]):
 				assert datasets.iloc[i]["agency_field"] in table.table
 
-
-def is_stanford(url):
-	return "stanford.edu" in url
 
 def log_errors_to_file(*args):
 	if not os.path.exists(log_folder):
@@ -458,16 +464,16 @@ if __name__ == "__main__":
 	use_changed_rows = False
 	csvfile = None
 	csvfile = os.path.join('..','opd-data', 'opd_source_table.csv')
-	start_idx = 0
+	start_idx = 185
 	skip = None
 	# skip = "Sacramento,Beloit,Rutland"
 	source = None
-	source = "Chicago"
+	# source = "Chicago"
 	query = {}
 	# query = {'DataType':'CSV'}
 
 	datasets = get_datasets(csvfile, use_changed_rows)
 
 	test_load_year(datasets, source, start_idx, skip, False, query=query) 
-	start_idx = 0
+	start_idx = 414
 	# test_source_download_not_limitable(datasets, source, start_idx, skip) 

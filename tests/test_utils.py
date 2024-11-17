@@ -154,3 +154,14 @@ def update_outages(outages_file, dataset, is_outage, e=None):
     outages.to_csv(outages_file, index=False)
     
 
+def user_request_skip(datasets, i, skip, start_idx, source):
+	# Skip sources that the user requested to skip
+	if skip and datasets.iloc[i]["SourceName"] in skip:
+		return True
+	# User requested to start at start_idx
+	if i<start_idx:
+		return True
+	if source != None and datasets.iloc[i]["SourceName"] != source:
+		return True
+	
+	return False
