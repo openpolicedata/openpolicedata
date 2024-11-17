@@ -97,6 +97,19 @@ def test_check_version(datasets):
 	ds["min_version"] = pd.NA
 	data._check_version(ds)
 
+def test_check_python_version(datasets):
+	ds = datasets.iloc[0].copy()
+	# Set min_version to create error
+	ds["py_min_version"] = "100000.0"
+	with pytest.raises(OPD_MinVersionError):
+		data._check_version(ds)
+
+	# These should pass
+	ds["py_min_version"] = "0.0"
+	data._check_version(ds)
+	ds["py_min_version"] = pd.NA
+	data._check_version(ds)
+
 def test_single_year_filter():
 	if check_for_dataset('Phoenix', opd.defs.TableType.CALLS_FOR_SERVICE):
 		src = data.Source('Phoenix')

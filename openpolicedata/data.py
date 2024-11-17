@@ -1649,12 +1649,13 @@ def get_csv_filename(
     return filename
 
 def _check_version(df):
+    src_name = df["SourceName"]
+    state = df["State"]
+    table_type = df["TableType"]
+    year = df["Year"]
+    
     min_version = df["min_version"] 
     if pd.notnull(min_version):
-        src_name = df["SourceName"]
-        state = df["State"]
-        table_type = df["TableType"]
-        year = df["Year"]
         if min_version.strip() == "-1":
             raise exceptions.OPD_FutureError(
                 f"Year {year} {table_type} data for {src_name} in {state} cannot be loaded in this version. " + \
@@ -1664,6 +1665,13 @@ def _check_version(df):
             raise exceptions.OPD_MinVersionError(
                 f"Year {year} {table_type} data for {src_name} in {state} cannot be loaded in version {__version__} of openpolicedata. " + \
                     f"Update OpenPoliceData to at least version {min_version} to access this data."
+            )
+        
+    py_min_version = df["py_min_version"] 
+    if pd.notnull(py_min_version):
+        if sys.version_info<=tuple(int(x) for x in py_min_version.split('.')):
+            raise exceptions.OPD_MinVersionError(
+                f"Year {year} {table_type} data for {src_name} in {state} cannot be loaded in version {py_min_version} of PYTHON."
             )
 
 def _get_years_to_check(years, cur_year, force, isfile):

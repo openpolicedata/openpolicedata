@@ -26,7 +26,8 @@ _column_types = {
         'dataset_id': pd.StringDtype(),
         'agency_field': pd.StringDtype(),
         'readme': pd.StringDtype(),
-        'min_version': pd.StringDtype()
+        'min_version': pd.StringDtype(),
+        'py_min_version':pd.StringDtype()
     }
 
 
