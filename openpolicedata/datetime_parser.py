@@ -589,6 +589,9 @@ def to_datetime(dates, ignore_errors=False, *args, **kwargs):
             elif ignore_errors and isinstance(dates, str) and re.search(r'Unknown(\sdatetime)? string format.+: \d+[-/]\d+[-/]\d+,?\s?\d+[-/]\d+[-/]\d+', str(e)):
                 # Comma separated list of dates. Just return value
                 return dates
+            elif re.search(r'year \d\d20\d\d is out of range: \d{1,2}/\d\d20\d\d', str(e)) and isinstance(dates, pd.Series):
+                dates = dates.apply(lambda x: re.sub(r'(\d\d)20(\d\d)', r'\1/20\2', x) if isinstance(x,str) else x)
+                return to_datetime(dates, ignore_errors=ignore_errors, *args, **kwargs)
             else:
                 raise
         except ValueError as e:
@@ -642,6 +645,9 @@ def to_datetime(dates, ignore_errors=False, *args, **kwargs):
             elif ignore_errors and re.search(r'Unknown string format: \d+[-/]\d+[-/]\d+,?\s?\d+[-/]\d+[-/]\d+', str(e)):
                 # Comma separated list of dates. Just return value
                 return dates
+            elif ignore_errors and re.search(r'time\s+data\s+\"\d{1,2}/\d\d20\d\d\"', str(e)) and isinstance(dates, pd.Series):
+                dates = dates.apply(lambda x: re.sub(r'(\d\d)20(\d\d)', r'\1/20\2', x) if isinstance(x,str) else x)
+                return to_datetime(dates, ignore_errors=ignore_errors, *args, **kwargs)
             elif isinstance(dates, pd.DataFrame) and dates.shape[1]==3 and (str(e)=='cannot convert NA to integer' or \
                     (re.search(r'Unable to parse string \"\d+(th|st|nd|rd)\"', str(e)) and \
                     dates.iloc[:,2][dates.iloc[:,2].notnull()].apply(lambda x: isinstance(x, numbers.Number) or is_str_number(x) or \

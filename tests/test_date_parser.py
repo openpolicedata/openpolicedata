@@ -20,7 +20,7 @@ def dates():
 # #   parse_time
 
 @pytest.mark.parametrize('format', ['%Y%m%d', '%Y%m%d.0', '%#m%d%Y.0', '%B %#d, %Y', '%#m/%#d/%y', '%#m/%#d/%Y',
-                                    '%m-%d-%Y', '%Y-%m-%d', '%m/%d/%Y  00:00', '%Y-%m-%d 00:00:00+00'])
+                                    '%m-%d-%Y', '%Y-%m-%d', '%m/%d/%Y  00:00', '%Y-%m-%d 00:00:00+00', '%#m/%d%Y'])
 def test_dates_to_datetime(dates, format):
     new_dates = dates.dt.strftime(format)
     dates_conv = opd.datetime_parser.to_datetime(new_dates)
