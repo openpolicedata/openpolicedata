@@ -435,7 +435,7 @@ class Csv(Data_Loader):
         Get years contained in data set
     """
 
-    def __init__(self, url, date_field=None, agency_field=None, data_set=None):
+    def __init__(self, url, date_field=None, agency_field=None, data_set=None, query=None):
         '''Create Csv object
 
         Parameters
@@ -448,12 +448,15 @@ class Csv(Data_Loader):
                 (Optional) Name of the column that contains the agency name (i.e. name of the police departments)
         data_set : str
             (Optional) Name of CSV file in zip file if input is a zip file. Required if input is a zip file with more than one file.
+        query : str, dict
+            (Optional) Keys are data columns to filter. Values are values to filter for in columns.
         '''
         
         self.url = url
         self.date_field = date_field
         self.agency_field = agency_field
         self.data_set = data_set
+        self.query = str2json(query)
 
 
     def isfile(self):
@@ -488,7 +491,7 @@ class Csv(Data_Loader):
         if self._last_count is not None and self._last_count[0] == (self.url, year, agency):
             logger.debug("Request matches previous count request. Returning saved count.")
             return self._last_count[1]
-        if ".zip" not in self.url and year==None and agency==None:
+        if ".zip" not in self.url and year==None and agency==None and not self.query:
             count = 0
             logger.debug(f"Loading file from {self.url}")
             open_quote = False
@@ -654,7 +657,8 @@ class Csv(Data_Loader):
                 try:
                     with warnings.catch_warnings():
                         warnings.filterwarnings("ignore", message=r"Columns \(.+\) have mixed types", category=pd.errors.DtypeWarning)
-                        table = pd.read_csv(TqdmReader(resp, pbar=pbar), nrows=offset+nrows if nrows is not None else None, 
+                        nrows_read = offset+nrows if nrows is not None and not self.query else None
+                        table = pd.read_csv(TqdmReader(resp, pbar=pbar), nrows=nrows_read, 
                             encoding_errors='surrogateescape', 
                             header=header)
                 except (urllib.error.HTTPError, pd.errors.ParserError) as e:
@@ -668,6 +672,10 @@ class Csv(Data_Loader):
         
         table = filter_dataframe(table, date_field=self.date_field, year_filter=year, 
             agency_field=self.agency_field, agency=agency, format_date=format_date)
+        
+        if bool(self.query):
+            for k,v in self.query.items():
+                table = table[table[k]==v].reset_index(drop=True)
 
         if offset>0:
             rows_limit = offset+nrows if nrows is not None and offset+nrows<len(table) else len(table)
@@ -704,7 +712,7 @@ class Csv(Data_Loader):
             if self.date_field.lower()=="year":
                 years = df[self.date_field].unique()
             else:
-                date_col = to_datetime(df[self.date_field])
+                date_col = to_datetime(df[self.date_field], ignore_errors=True)
                 years = list(date_col.dt.year.dropna().unique())
             years.sort()
             return [int(x) for x in years]
@@ -2079,7 +2087,7 @@ class Carto(Data_Loader):
             Dataset ID
         date_field : str
             (Optional) Name of the column that contains the date
-        query : str
+        query : str, dict
             (Optional) Additional query that will be added to each request
         '''
 
@@ -2705,7 +2713,7 @@ class Ckan(Data_Loader):
             Dataset ID
         date_field : str
             (Optional) Name of the column that contains the date
-        query : str
+        query : str, dict
             (Optional) Additional query that will be added to each request
         '''
 
@@ -3317,6 +3325,8 @@ def filter_dataframe(df, date_field=None, year_filter=None, agency_field=None, a
 def str2json(json_str):
     if pd.isnull(json_str):
         return {}
+    elif isinstance(json_str, dict):
+        return json_str
     # Remove any curly quotes
     json_str = json_str.replace('“','"').replace('”','"')
     return json.loads(json_str)

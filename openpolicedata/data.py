@@ -1471,7 +1471,7 @@ class Source:
                 raise ValueError(f"Not supported data type for CombinedDataset: {data_type}")
         else:
             if data_type ==defs.DataType.CSV:
-                loader = data_loaders.Csv(url, data_set=dataset_id, date_field=date_field, agency_field=agency_field)
+                loader = data_loaders.Csv(url, data_set=dataset_id, date_field=date_field, agency_field=agency_field, query=query)
             elif data_type ==defs.DataType.EXCEL:
                 loader = data_loaders.Excel(url, data_set=dataset_id, date_field=date_field, agency_field=agency_field) 
             elif data_type ==defs.DataType.ArcGIS:

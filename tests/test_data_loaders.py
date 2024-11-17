@@ -1,5 +1,6 @@
 from datetime import datetime
 from io import BytesIO
+import json
 import pytest
 import re
 import requests
@@ -549,12 +550,18 @@ def test_socrata():
     assert rows.equals(df)
 
 # Another CSV with newline characters: https://raw.githubusercontent.com/openpolicedata/opd-datasets/main/data/Texas_Austin_OFFICER-INVOLVED_SHOOTINGS-INCIDENTS.csv
-@pytest.mark.parametrize('url, date_field',[
-    ('https://public.tableau.com/views/PPBOpenDataDownloads/OIS-All.csv?:showVizHome=no', 'Day of Date Time'),
-    ("https://opendata.jaxsheriff.org/OIS/Export", "IncidentDate")
+@pytest.mark.parametrize('url, date_field, query',[
+    ('https://public.tableau.com/views/PPBOpenDataDownloads/OIS-All.csv?:showVizHome=no', 'Day of Date Time', None),
+    ("https://opendata.jaxsheriff.org/OIS/Export", "IncidentDate", None),
+    ('https://raw.githubusercontent.com/openpolicedata/opd-datasets/refs/heads/main/data/Wisconsin_Milwaukee_COMPLAINTS.csv', 'DateReported', '{“Department”:”Milwaukee Police Department”}')
 ])
-def test_csv(url, date_field):
-    loader = data_loaders.Csv(url, date_field=date_field)
+def test_csv(url, date_field, query):
+    if pd.notnull(query):
+        # Remove any curly quotes
+        query = query.replace('“','"').replace('”','"')
+        query = json.loads(query)
+
+    loader = data_loaders.Csv(url, date_field=date_field, query=query)
     assert loader.isfile()
     df = loader.load(pbar=False)
 
@@ -567,10 +574,18 @@ def test_csv(url, date_field):
     assert df_offset.equals(df.iloc[offset:].reset_index(drop=True))
 
     df_comp = pd.read_csv(url)
-    df_comp = df_comp.astype({date_field: 'datetime64[ns]'})
-    df = df.astype({date_field: 'datetime64[ns]'})
+    if bool(query):
+        for k,v in query.items():
+            df_comp = df_comp[df_comp[k]==v].reset_index(drop=True)
 
-    count = loader.get_count()
+    def convert_date_field(df):
+        df[date_field] = df[date_field].apply(lambda x: re.sub(r'(\d\d)20(\d\d)', r'\1/20\2', x) if isinstance(x,str) else x)
+        return df.astype({date_field: 'datetime64[ns]'})
+    
+    df_comp = convert_date_field(df_comp)
+    df = convert_date_field(df)
+
+    count = loader.get_count(force=True)
     assert len(df_comp) == count
     # Test using cached value
     assert count == loader.get_count()
@@ -582,14 +597,15 @@ def test_csv(url, date_field):
 
     years = loader.get_years(force=True)
 
-    df = df.astype({date_field: 'datetime64[ns]'})
+    df = convert_date_field(df)
     assert list(df[date_field].dt.year.sort_values(ascending=True).dropna().unique()) == years
 
-    nrows = 7
-    df = data_loaders.Csv(url).load(nrows=nrows)
-    df_comp = pd.read_csv(url, nrows=nrows)
+    if not query:
+        nrows = 7
+        df = data_loaders.Csv(url).load(nrows=nrows)
+        df_comp = pd.read_csv(url, nrows=nrows)
 
-    assert df_comp.equals(df)
+        assert df_comp.equals(df)
 
 def test_html():
     url = "https://www.openpolicedata.com/StJohnIN/Citations/2023Citations.php"

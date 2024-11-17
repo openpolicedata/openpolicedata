@@ -301,6 +301,11 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 
 			update_outages(outages_file, datasets.iloc[i], False)
 
+			if pd.notnull(datasets.iloc[i]['query']):
+				for k,v in data_loaders.str2json(datasets.iloc[i]['query']).items():
+					assert (table.table[k]==v).all()
+
+
 			if 'data-openjustice.doj.ca.gov' in datasets.iloc[i]['URL'].lower() and \
 				'ripa' in datasets.iloc[i]['URL'].lower():
 				assert (datasets.iloc[i]['Agency']==opd.defs.MULTI) + (len(table.table['AGENCY_NAME'].unique())==1)==1
