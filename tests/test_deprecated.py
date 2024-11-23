@@ -1,6 +1,8 @@
 if __name__ == "__main__":
 	import sys
 	sys.path.append('../openpolicedata')
+
+import os
 import pandas as pd
 import warnings
 import openpolicedata as opd
@@ -25,6 +27,11 @@ def fswap(table_type,year):
 @input_swap([0,1], ['table_type','year'], [TableType, {'values':[opd.defs.NA, opd.defs.MULTI], 'types':[list, int]}], error=True, opt1=None)
 def fswap_error(table_type,year):
 	fswap(table_type,year)
+
+class SwapClass:
+	@input_swap([1,2], ['table_type','year'], [TableType, {'values':[opd.defs.NA, opd.defs.MULTI], 'types':[list, int]}], error=True, opt1=None)
+	def fswap_error(self, table_type, year, arg3, arg4):
+		fswap(table_type,year)
 
 @pytest.mark.parametrize("year", [2019, [2019, 2020], opd.defs.NA, opd.defs.MULTI])
 @pytest.mark.parametrize("table_type", [TableType.ARRESTS, str(TableType.ARRESTS)])
@@ -61,6 +68,12 @@ def test_inputswap_error(year, table_type):
 	with pytest.raises(ValueError, match='have been swapped'):
 		fswap_error(year, table_type)
 
+@pytest.mark.parametrize("year", [2019, [2019, 2020], opd.defs.NA, opd.defs.MULTI])
+@pytest.mark.parametrize("table_type", [TableType.ARRESTS, str(TableType.ARRESTS)])
+def test_inputswap_class_error(year, table_type):
+	obj = SwapClass()
+	with pytest.raises(ValueError, match='have been swapped'):
+		obj.fswap_error(year, table_type)
 
 @deprecated("MSG")
 def fdep():
@@ -262,7 +275,7 @@ def test_tabletype_contains_no_subject():
 	assert len (t)>0
 
 def test_source_table_not_deprecated():
-	assert not check_compat_source_table(cur_ver='100.0')[0]
+	assert not check_compat_source_table(cur_ver='0.8.2')[0]
 
 def test_source_table_bad_df_compat():
 	assert not check_compat_source_table(df_compat=1)[0]
@@ -272,6 +285,20 @@ def test_source_table_deprecated():
 		loaded, df = check_compat_source_table(cur_ver='0.0')
 	assert loaded
 	assert len(df)==1  # Number of rows in 1st test source table
+
+@pytest.mark.parametrize('ver',['0.8','0.8.1'])
+def test_source_table_deprecated_local_file(ver):  # This is meant for testing compatibility tables before they are publically available
+	compat_versions_file = os.path.join(os.path.os.path.dirname(os.getcwd()), 'opd-data', 'compatibility', "compat_versions.csv")
+	if not os.path.exists(compat_versions_file):
+		return
+	
+	df_compat = pd.read_csv(compat_versions_file, dtype=str)
+	df_compat.loc[2,'csv_name'] = os.path.join(os.path.os.path.dirname(os.getcwd()), 'opd-data', 'compatibility', "opd_source_table_20241120_v0.8.1.csv")
+
+	with pytest.deprecated_call():
+		loaded, df = check_compat_source_table(cur_ver=ver, df_compat=df_compat, compat_versions_file="")
+	assert loaded
+	assert len(df)>1000
 
 def test_source_table_fail_not_req(df_compat):
 	df_compat = df_compat.copy(deep=True)

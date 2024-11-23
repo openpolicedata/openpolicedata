@@ -889,7 +889,7 @@ class Source:
             return [src["Agency"]]
 
 
-    @input_swap([0,1], ['table_type','year'], [defs.TableType, {'values':[defs.NA, defs.MULTI], 'types':[list, int]}], opt1=None)
+    @input_swap([1,2], ['table_type','year'], [defs.TableType, {'values':[defs.NA, defs.MULTI], 'types':[list, int]}], opt1=None)
     def get_count(self, 
                   table_type: str | defs.TableType | None = None,
                   year: str | int | list[int] | None = None, 
@@ -934,7 +934,7 @@ class Source:
         return self.__load(table_type, year, agency, True, pbar=False, return_count=True, force=force, verbose=verbose, 
                            url_contains=url_contains, id_contains=id_contains)
     
-    @input_swap([0,1], ['table_type','year'], [defs.TableType, {'values':[defs.NA, defs.MULTI], 'types':[list, int]}], error=True, opt1=None)
+    @input_swap([1,2], ['table_type','year'], [defs.TableType, {'values':[defs.NA, defs.MULTI], 'types':[list, int]}], error=True, opt1=None)
     def load_iter(self,
                 table_type: str | defs.TableType,
                 year: str | int | list[int],  
@@ -1014,7 +1014,7 @@ class Source:
             yield self.__load(table_type, year, agency, True, pbar, nrows=min(nbatch, count-k), offset=k, verbose=verbose)
 
     
-    @input_swap([0,1], ['table_type','year'], [defs.TableType, {'values':[defs.NA, defs.MULTI], 'types':[list, int]}], error=True, opt1=None)
+    @input_swap([1,2], ['table_type','year'], [defs.TableType, {'values':[defs.NA, defs.MULTI], 'types':[list, int]}], error=True, opt1=None)
     def load(self, 
             table_type: str | defs.TableType, 
             year: str | int | list[int], 
