@@ -859,6 +859,7 @@ class Source:
         # Otherwise return self.agency
         if src["Agency"] == defs.MULTI:
             _check_version(src)
+            year = None if year == defs.MULTI else year
             loader = self.__get_loader(src["DataType"], src["URL"], src['query'], dataset_id=src["dataset_id"], 
                                        date_field=src["date_field"], agency_field=src["agency_field"])
             if src["DataType"] ==defs.DataType.CSV:
@@ -872,7 +873,6 @@ class Source:
                 opt_filter = 'LOWER('+ src["agency_field"] + ") LIKE '%" + partial_name.lower() + "%'" if partial_name else None
 
                 select = "DISTINCT " + src["agency_field"]
-                year = None if year == defs.MULTI else year
 
                 agency_set = loader.load(year, opt_filter=opt_filter, select=select, output_type="set")
                 return list(agency_set)
@@ -880,7 +880,6 @@ class Source:
                 opt_filter = 'LOWER("'+ src["agency_field"] + '")' + " LIKE '%" + partial_name.lower() + "%'" if partial_name else None
 
                 select = 'DISTINCT "' + src["agency_field"] + '"'
-                year = None if year == defs.MULTI else year
 
                 agency_set = loader.load(year, opt_filter=opt_filter, select=select, output_type="set")
                 return list(agency_set)
