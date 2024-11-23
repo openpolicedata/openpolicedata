@@ -706,7 +706,7 @@ class Csv(Data_Loader):
                 "running load() with no arguments to load in the whole CSV file and manually finding the years will be more "
                 "efficient. If running get_years is still desired, set force=True")
         else:
-            if self.date_field==None:
+            if pd.isnull(self.date_field):
                 raise ValueError("No date field provided to access year information")
             df = self.load()
             if self.date_field.lower()=="year":
@@ -1326,7 +1326,7 @@ class Excel(Data_Loader):
                 "running load() with no arguments to load in the whole CSV file and manually finding the years will be more "
                 "efficient. If running get_years is still desired, set force=True")
         else:
-            if self.date_field==None:
+            if pd.isnull(self.date_field):
                 raise ValueError("No date field provided to access year information")
             df = self.load()
             if is_datetime(df[self.date_field]):
@@ -1645,6 +1645,7 @@ class Arcgis(Data_Loader):
         if data != None:
             if len(data['features'])==0:
                 warnings.warn("No data found in dataset. Unable to determine date format in order to generate query")
+                self._date_type = None  # Revert value so that data will not be set in the next call to this function since this function did not successfully run
                 return "", 0
             
             dates = [x['attributes'][self.date_field] for x in data['features']]
@@ -2565,6 +2566,8 @@ class Socrata(Data_Loader):
         if select == None:
             if self.date_field and isinstance(sortby,str) and sortby=="date":
                 order = self.date_field
+            elif sortby:
+                order = sortby
             else:
                 # order guarantees data order remains the same when paging
                 # Order by date if available otherwise the data ID. 
@@ -2734,6 +2737,7 @@ class Ckan(Data_Loader):
         self.data_set = data_set
         self.date_field = date_field
         self.query = str2json(query)
+        self._sort_by_date = False
 
     
     def isfile(self):
@@ -2889,6 +2893,7 @@ class Ckan(Data_Loader):
                     where+='"' + self.date_field + '"' + rf" LIKE '%{y}%' OR "
                 where = where[:-4] + ')'
             else:
+                self._sort_by_date = True
                 start_date, stop_date = _process_date(year, date_field=self.date_field, datetime_format=datetime_format)
                 where = f"""("{self.date_field}" >= '{start_date}' AND "{self.date_field}" <= '{stop_date}')"""
         else:
@@ -2974,6 +2979,10 @@ class Ckan(Data_Loader):
             # Get info on columns in order to exclude these columns from the returned data
             
             fields = [x['id'] for x in data['result']['fields'] if x['id'] not in ['_id','_full_text']]
+
+        if sortby=='date':
+            sortby = self.date_field if self._sort_by_date else None
+        sortby = self.date_field if self._sort_by_date and not sortby else sortby
             
         features = []
         for batch in range(num_batches):
