@@ -32,6 +32,7 @@ _column_types = {
 
 
 def _build(csv_file, error=False):
+    warnings.simplefilter('default', DeprecationWarning)
 
     loaded, df = check_compat_source_table(column_types=_column_types)
 

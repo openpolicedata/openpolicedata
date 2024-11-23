@@ -6,8 +6,8 @@ from ..exceptions import CompatSourceTableLoadError
 from .. import __version__
 
 
-def check_compat_source_table(column_types=None, df_compat=None, cur_ver=__version__):
-    compat_versions_file = 'https://github.com/openpolicedata/opd-data/raw/main/compatibility/compat_versions.csv'
+def check_compat_source_table(column_types=None, df_compat=None, cur_ver=__version__,
+                              compat_versions_file='https://github.com/openpolicedata/opd-data/raw/main/compatibility/compat_versions.csv'):
     idx = compat_versions_file.rfind('/')
     df = None
     success = False
