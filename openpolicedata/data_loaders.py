@@ -1926,7 +1926,16 @@ class Arcgis(Data_Loader):
         for batch in range(num_batches):
             bs = batch_size if batch<num_batches-1 else nrows-batch*batch_size
             try:
-                data = self.__request(where=where_query, offset=offset+batch*batch_size, count=bs)
+                try:
+                    data = self.__request(where=where_query, offset=offset+batch*batch_size, count=bs)
+                except:
+                    if batch>0:
+                        # There may have been an error due to too many requests over a short time. Wait and try again
+                        sleep(10)
+                        data = self.__request(where=where_query, offset=offset+batch*batch_size, count=bs)
+                    else:
+                        raise
+
                 features.extend(data["features"])
                 if self.verify:
                     layer_query_result_old = self.__active_layer.query(where=where_query, result_offset=batch*batch_size, 
