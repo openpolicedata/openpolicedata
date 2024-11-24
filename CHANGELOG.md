@@ -6,16 +6,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 ### Added
+### Changed
+### Deprecated
+### Removed
+### Fixed
+### Security
+
+## v0.9 - 2024-11-23
+### Added
 - Added ability to load an Excel file from a zip file containing multiple files
 - Adding ability to load multiple CSV files from the same year from a zip file
 - Adding ability to handle datasets containing data from multiple states
+- Adding ability for CSV files to have a query in the source table to only show relevant police data
+- Added minimum Python version to datasets
 ### Changed
 - No longer throwing error if state field is not a known state. Enables multi-state datasets, which will break pre-v0.6 that do not allow for compatibility tables
-### Deprecated
 ### Removed
 - No longer updating datasets table when data load finds a capitalization error in the date field
 ### Fixed
-### Security
+- sortby inputs to data loaders now all work
+- Fixed issue where input swap checks in Source methods were checking for swaps in the wrong in put.
+- Warnings were not being displayed when compatibility source table was being used
 
 ## v0.8.1 - 2024-09-02
 ### Fixed

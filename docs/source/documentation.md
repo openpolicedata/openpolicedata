@@ -18,11 +18,13 @@ troubleshooting/index.md
 citations/index.md
 ```
 
-> **OPD User Survey**: We would love to hear how you are using OpenPoliceData! [Please take a moment to fill out this short survey.](https://docs.google.com/forms/d/e/1FAIpQLScvhcKQwvPmUK6wV0YKQipGsTsz0uzyVdT8FQsQ5g2RBvNh0g/viewform?usp=pp_url)
+> **OPD User Survey**: We would love to hear how you are using OpenPoliceData and how we can make it better! [Please take a moment to fill out this short survey.](https://docs.google.com/forms/d/e/1FAIpQLScvhcKQwvPmUK6wV0YKQipGsTsz0uzyVdT8FQsQ5g2RBvNh0g/viewform?usp=pp_url)
+
+> Older OpenPoliceData versions (<0.6) must be upgraded. Data source table format changes that were not backward-compatible were introduced to provide access to more datasets. However, a methodology for providing older source table formats for older OPD versions was not introduced until version 0.6. Run `pip install openpolicedata --upgrade` from the command line to upgrade OPD.
 
 # OpenPoliceData
 
-Welcome to the *new* OpenPoliceData documentation. The **OpenPoliceData (OPD)** Python library is the most comprehensive centralized public access point for incident-level police data in the United States. OPD provides easy access to 425+ incident-level datasets for about 4865 police agencies. Types of data include traffic stops, use of force, officer-involved shootings, and complaints. It provides a simple interface for finding publically available data and downloading data into [pandas](https://pandas.pydata.org/) DataFrames.
+Welcome to the *new* OpenPoliceData documentation. The **OpenPoliceData (OPD)** Python library is the most comprehensive centralized public access point for incident-level police data in the United States. OPD provides easy access to 500+ incident-level datasets for about 4865 police agencies. Types of data include traffic stops, use of force, officer-involved shootings, and complaints. It provides a simple interface for finding publically available data and downloading data into [pandas](https://pandas.pydata.org/) DataFrames.
 
 <!-- https://fontawesome.com/icons?d=gallery&amp%3Bm=free -->
 

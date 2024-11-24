@@ -35,6 +35,7 @@ python -m twine upload dist/*
 - [ ] Update switcher.json file
 - [ ] Add version to GitHub and attach whl and .tar.gz files
 - [ ] Commit updated sources table
+- [ ] Update deprecated data sources table if necessary
 
 
 To delete env: 

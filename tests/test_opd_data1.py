@@ -346,7 +346,8 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 
 			if not pd.isnull(datasets.iloc[i]["date_field"]):
 				if datasets.iloc[i]["date_field"] not in table.table or table.table[datasets.iloc[i]["date_field"]].isnull().all():
-					table = src.load(table_type, datasets.iloc[i]["Year"], pbar=False, nrows=2000)
+					table = src.load(table_type, datasets.iloc[i]["Year"], pbar=False, nrows=2000,
+					 	url_contains=url_contains, id_contains=id_contains)
 				assert datasets.iloc[i]["date_field"] in table.table
 				#assuming a Pandas string dtype('O').name = object is okay too
 				assert (table.table[datasets.iloc[i]["date_field"]].dtype.name in ['datetime64[ns]', 'datetime64[ns, UTC]', 
@@ -511,7 +512,7 @@ if __name__ == "__main__":
 	skip = None
 	# skip = "Sacramento"
 	source = None
-	source = "St. Paul" #"Washington D.C." #"Wallkill"
+	# source = "St. Paul" #"Washington D.C." #"Wallkill"
 	query = {}
 	# query = {'SourceName':'San Francisco'}
 

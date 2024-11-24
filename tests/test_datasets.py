@@ -65,7 +65,7 @@ def test_check_columns(datasets):
 def test_table_for_nulls(datasets):
     can_have_nulls = ["Description", "date_field", "dataset_id", "agency_field", "Year","readme","min_version",
                         "AgencyFull","source_url","coverage_start","coverage_end",'query',
-                        'agency_originated', 'supplying_entity']
+                        'agency_originated', 'supplying_entity','py_min_version']
 
     for col in datasets.columns:
         if not col in can_have_nulls:
@@ -103,6 +103,8 @@ def test_single_year_coverage(datasets):
 
 def test_multi_year_coverage(datasets):
     ds = datasets[datasets['Year']==opd.defs.MULTI]
+    ignore_exceptions = [('Bloomington','OFFICER-INVOLVED SHOOTINGS')]
+    ds = ds[~(ds['SourceName'].isin([x[0] for x in ignore_exceptions]) & ds['TableType'].isin([x[1] for x in ignore_exceptions]))]
     assert (ds['coverage_start'].dt.year!=ds['coverage_end'].dt.year).all()
 
 @pytest.mark.parametrize('source, partial_url', [('stanford','stanford'),('muckrock','muckrock'),

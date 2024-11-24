@@ -2,7 +2,7 @@
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://openpolicedata.streamlit.app)
 
 # OpenPoliceData
-The OpenPoliceData (OPD) Python library is the most comprehensive centralized public access point for incident-level police data in the United States. OPD provides easy access to 425+ incident-level datasets for about 4865 police agencies. Types of data include traffic stops, use of force, officer-involved shootings, and complaints. 
+The OpenPoliceData (OPD) Python library is the most comprehensive centralized public access point for incident-level police data in the United States. OPD provides easy access to 500+ incident-level datasets for about 4865 police agencies. Types of data include traffic stops, use of force, officer-involved shootings, and complaints. 
 
 Users request data by department name and type of data, and the data is returned as a [pandas DataFrame](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.html). There is no need to manually find the data online or to know how to work with open data APIs (ArcGIS, Socrata, etc.). When data is loaded by OPD, the returned data is unmodified (with the exception of formatting known date fields) from what appears on the source's site, and OPD provides links to the original data for transparency.
 
@@ -18,8 +18,6 @@ OpenPoliceData provides access to police data with 2 simple lines of code:
 > data = src.load(table_type="USE OF FORCE", year=2022)
 ```
 
-> **NEW STARTING IN VERSION 0.6**: OPD now provides tools for automated data standardization. Applying these tools allow you to start your analysis more quickly by replacing column names and data with standard values for some common column types. [Learn how it works and how to use it here.](https://openpolicedata.readthedocs.io/en/stable/getting_started/index.html#Data-Standardization)
-
 - Documentation: https://openpolicedata.readthedocs.io/
 - Source Code: https://github.com/openpolicedata/openpolicedata
 - Bug Tracker: https://github.com/openpolicedata/openpolicedata/issues
@@ -31,28 +29,32 @@ OpenPoliceData provides access to police data with 2 simple lines of code:
 ![alt text](https://github.com/openpolicedata/opd-data/blob/main/OPD_Datasets_Map.png?raw=true)
 
 ## Latest Datasets Added to OPD
+- California: Stops data for all departments submitted for RIPA for 2018-2022
+- Mapping Police Violence police killings
+- Washington Post police killings
+- Indiana: Officer-Involved Shootings
+- Pittsburgh, PA: Complaints, traffic stops, and use of force
+- Fort Worth, TX: Traffic stops and use of force
+- Yakima County, WA: Use of force
 - Washington D.C.: Historical (2010-2017) stops data
 - South Bend, IN: Complaints involving administrative investigations
 - Tucson, AZ: Added additional years of arrests
-- Sacramento, CA: Calls for service and citations
-- Cedar Lake, IN: Arrests, calls for service, and citations data
-- Griffith, IN: Arrests, calls for service, and citations data
-- Austin, TX: Arrests, incidents, searches, use of force, and warnings
-- New York, NY: Latest pedestrian stops dataset
-- Chicago, IL: Latest pedestrian stops dataset
-- Washington D.C.: Latest use of force dataset
 
-## v0.8.1 - 2024-09-02
-### Fixed
-- Fixed bug in get_count function for CSV files where count was wrong if there were quotes containing new line characters
-
-## v0.8 - 2024-08-24
+## v0.9 - 2024-11-23
 ### Added
-- Added data loader for HTML tables
+- Added ability to load an Excel file from a zip file containing multiple files
+- Adding ability to load multiple CSV files from the same year from a zip file
+- Adding ability to handle datasets containing data from multiple states
+- Adding ability for CSV files to have a query in the source table to only show relevant police data
+- Added minimum Python version to datasets
 ### Changed
-- Changed error messages so that more errors in data loading point the user to the list of data site outages
+- No longer throwing error if state field is not a known state. Enables multi-state datasets, which will break pre-v0.6 that do not allow for compatibility tables
+### Removed
+- No longer updating datasets table when data load finds a capitalization error in the date field
 ### Fixed
-- Fixed bug in CKAN data loader when user requests a range of years
+- sortby inputs to data loaders now all work
+- Fixed issue where input swap checks in Source methods were checking for swaps in the wrong in put.
+- Warnings were not being displayed when compatibility source table was being used
 
 Complete change log available at: https://github.com/openpolicedata/openpolicedata/blob/main/CHANGELOG.md
 
