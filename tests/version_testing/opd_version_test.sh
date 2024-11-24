@@ -29,14 +29,15 @@ else
     pip install $whl > /dev/null 2>&1
 fi
 
-python -m opd_test_run
-
+# Test that packaging is installed
+python -m import_packaging
 if [ $? -ne 0 ]; then
     # Prior to to v0.5.4, packaging library was not included in requirements when it should have been.
     echo 'Installing packaging'
     pip install packaging > /dev/null 2>&1
-    python -m opd_test_run
 fi
+
+python -m opd_test_run
 
 conda deactivate
 conda remove --name $new_env --all -y > /dev/null 2>&1

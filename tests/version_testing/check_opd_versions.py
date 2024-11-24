@@ -45,6 +45,8 @@ for w in whls:
         print(f'{color.YELLOW}Arcgis dependency was removed in version 0.4{color.END}')
     elif version.parse(ver) == version.parse('0.5.4'):
         print(f'{color.YELLOW}packaging library was not in dependencies prior to version 0.5.4. Library manually installed for versions <0.5.4{color.END}')
+    elif version.parse(ver) == version.parse('0.6'):
+        print(f'{color.YELLOW}Compatibility tables were not introduced prior to version 0.6.{color.END}')
 
     if "ModuleNotFoundError: No module named 'openpolicedata'" in out.stderr:
         print(f'{color.RED}{ver}: FAILURE{color.END} to install version')
@@ -56,11 +58,41 @@ for w in whls:
             std_err = std_err[pkg_added+1:]
 
             assert version.parse(ver) < version.parse('0.5.4')
-            
-        future_warning = len(std_err)>0 and any(x in std_err[0] for x in pd_future_warnings)
+
+        # Parse std_err
+        warnings = set()
+        errors = []
+        idx = 0
+        std_err_copy = std_err.copy()
+        while idx<len(std_err_copy):
+            s = std_err_copy[idx]
+            if re.search(r'^(?:/[\w\.\-]+)+\.py',s):
+                m = re.search(r'^(?:/[\w\.\-]+)+\.py\:\d+\:\s+(\w+Warning)\:',s)
+                warnings.add(m.group(1))
+
+                # Remove message
+                std_err_copy.pop(idx)
+                while idx<len(std_err_copy) and \
+                    not (re.search(r'^(?:/[\w\.\-]+)+\.py',std_err_copy[idx]) or std_err_copy[idx].startswith('Traceback ')):
+                    std_err_copy.pop(idx)
+            elif s.startswith('Traceback '):
+                std_err_copy.pop(idx)
+                last_msg = None
+                while idx<len(std_err_copy) and \
+                    not (re.search(r'^(?:/[\w\.\-]+)+\.py',std_err_copy[idx]) or std_err_copy[idx].startswith('Traceback ')):
+                    last_msg = std_err_copy[idx]
+                    std_err_copy.pop(idx)
+
+                if not re.search(r'^[A-Z]+Error\:', last_msg, flags=re.IGNORECASE):
+                    raise ValueError(f"Unable to parse std_err: {std_err}")
+                errors.append(last_msg)
+            else:
+                raise ValueError(f"Unexpected message: {s}")
         
-        if future_warning:
-            print(f'{color.GREEN}{ver}: SUCCESS{color.END} with pandas FutureWarning')
+        if len(errors)>0:
+            print(f'{color.RED}{ver}: FAILURE{color.END} to import OPD: {", ".join(errors)}')
+        elif len(warnings)>0:
+            print(f'{color.GREEN}{ver}: SUCCESS{color.END} with warnings: {", ".join(warnings)}')
         elif len(std_err)==0:
             # Success!
             print(f'{color.GREEN}{ver}: SUCCESS{color.END}')
