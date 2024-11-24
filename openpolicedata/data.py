@@ -941,7 +941,8 @@ class Source:
                 agency: str | None = None, 
                 pbar: bool = False, 
                 nbatch: int = 10000, 
-                offset: int = 0, 
+                offset: int = 0,
+                sortby=None,
                 force: bool =False,
                 verbose: bool | str = False,
                 url_contains: str | None = None,
@@ -992,7 +993,7 @@ class Source:
         count = self.get_count(table_type, year, agency, force, verbose=verbose, url_contains=url_contains, id_contains=id_contains)
         for k in range(offset, count, nbatch):
             yield self.__load(table_type, year, agency, True, pbar, nrows=min(nbatch, count-k), offset=k, 
-                              verbose=verbose, url_contains=url_contains, id_contains=id_contains, format_date=format_date)
+                              verbose=verbose, url_contains=url_contains, id_contains=id_contains, format_date=format_date, sortby=sortby)
     
     @deprecated("load_from_url_gen is deprecated and will be removed in a future release. Please use load_iter instead. "+
                 "load_iter uses the same inputs except table_type now comes before year.")

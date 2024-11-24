@@ -2989,9 +2989,11 @@ class Ckan(Data_Loader):
             
             fields = [x['id'] for x in data['result']['fields'] if x['id'] not in ['_id','_full_text']]
 
-        if sortby=='date':
-            sortby = self.date_field if self._sort_by_date else None
-        sortby = self.date_field if self._sort_by_date and not sortby else sortby
+        if self.date_field and isinstance(sortby,str) and sortby=="date":
+            sortby = self.date_field
+        elif not sortby:
+            # order by_id guarantees data order remains the same when paging
+            sortby = "_id"
             
         features = []
         for batch in range(num_batches):
