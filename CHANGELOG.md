@@ -6,6 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 ### Added
+- Added test that all datasets associated with a loader were added after introduction of that loader
 ### Changed
 ### Deprecated
 ### Removed

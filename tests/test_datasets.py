@@ -249,6 +249,12 @@ def test_min_versions(datasets):
         if not (ver == "-1" or type(version.parse(ver)) == version.Version):
             raise ValueError(f"{ver} is an invalid value for min_version")
         
+@pytest.mark.parametrize('data_type, ver_added', [('Excel','0.3.1'), ('Carto','0.4.1'), ('CKAN','0.6'), ('HTML','0.7.3')])
+def test_loader_min_version(datasets, data_type, ver_added):
+    datasets = datasets[datasets['DataType'].str.lower()==data_type.lower()]
+    assert datasets['min_version'].isnull().sum()==0
+    assert datasets['min_version'].apply(lambda x: x=='-1' or version.parse(x)>=version.parse(ver_added)).all()
+        
 def test_summary_functions():
     opd.datasets.num_unique()
     opd.datasets.num_sources()
