@@ -254,6 +254,12 @@ def test_loader_min_version(datasets, data_type, ver_added):
     datasets = datasets[datasets['DataType'].str.lower()==data_type.lower()]
     assert datasets['min_version'].isnull().sum()==0
     assert datasets['min_version'].apply(lambda x: x=='-1' or version.parse(x)>=version.parse(ver_added)).all()
+
+def test_zip_multifile_min_version(datasets):
+    datasets = datasets[datasets['URL'].str.endswith('.zip')]
+    datasets = datasets[datasets['dataset_id'].notnull()]
+    assert datasets['min_version'].isnull().sum()==0
+    assert datasets['min_version'].apply(lambda x: x=='-1' or version.parse(x)>=version.parse('0.8.2')).all()
         
 def test_summary_functions():
     opd.datasets.num_unique()

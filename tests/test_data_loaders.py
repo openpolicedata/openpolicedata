@@ -721,7 +721,8 @@ def test_excel():
     ("Norwich", "https://www.norwichct.org/ArchiveCenter/ViewFile/Item/771", False), # 1st row is just the year and data type
     ("Norwich", "https://www.norwichct.org/ArchiveCenter/ViewFile/Item/882", False), # 1st row is just the year and data type
     ("Norwich", "https://www.norwichct.org/ArchiveCenter/ViewFile/Item/923", False), # 1st row is just the year and data type
-    ("Northampton", "https://northamptonpd.com/images/ODP%20Spreadsheets/2021/Use%20of%20Force.xlsx", False) # 1st row is just the year and data type
+    ("Northampton", "https://northamptonpd.com/images/ODP%20Spreadsheets/2021/Use%20of%20Force.xlsx", False), # 1st row is just the year and data type
+    ('Omaha', 'https://cdn.muckrock.com/outbound_request_attachments/OmahaPoliceDepartment/87672/OIS202010-2019202.xlsx', True)
 ])
 def test_1st_row_not_headers(skip, src, url, multitable):
     if src in skip:
@@ -744,10 +745,33 @@ def test_1st_row_not_headers(skip, src, url, multitable):
 
         return df
     
-    df_comp = pd.read_excel(url)
-    df_comp = clean_df(df_comp)
+    headers = {'User-agent' : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_3) AppleWebKit/537.75.14 (KHTML, like Gecko) Version/7.0.3 Safari/7046A194A'}
+    r = requests.get(url, stream=True, headers=headers)
+    df_comp = pd.read_excel(BytesIO(r.content))
+    if src=='Omaha':
+        reps = [7, 2, 1]
+        first_col_row = list(df_comp.loc[5])
+        ct = 0
+        rep_idx = 0
+        for k, x in enumerate(first_col_row):
+            if pd.notnull(x):
+                ct = 1
+            elif ct:
+                ct+=1
+                first_col_row[k] = first_col_row[k-1]
+                if ct==reps[rep_idx]:
+                    ct = 0
+                    rep_idx+=1
+    
+        df_comp.columns = [x+" "+y if pd.notnull(x) else y for x,y in zip(first_col_row, list(df_comp.loc[6]))]
+        df_comp = df_comp.loc[7:]
+        df_comp = df_comp[df_comp['VICTIM/SUSPECT GANG AFFIL'].notnull() | df_comp['OFFICER NAME'].notnull() | df_comp['OFFICER SERGEANT'].notnull()]
+        df_comp = df_comp[~df_comp['OFFICER SERGEANT'].isin(['OFFICER', 'SERGEANT'])]
+        df_comp = df_comp.reset_index(drop=True).convert_dtypes()
+    else:
+        df_comp = clean_df(df_comp)
 
-    assert df_comp.equals(df)
+    pd.testing.assert_frame_equal(df, df_comp)
 
 
 @pytest.mark.parametrize('src, url, date_field, yrs', [

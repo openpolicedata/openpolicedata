@@ -4,6 +4,7 @@ import itertools
 import json
 import logging
 import numbers
+import openpyxl
 import os
 import tempfile
 from datetime import date, datetime
@@ -1096,7 +1097,7 @@ class Excel(Data_Loader):
             raise ValueError(f"Sheet {cur_sheet} not found in Excel file at {self.url}")
 
 
-    def __find_column_names(self, df):
+    def __find_column_names(self, df, sheet_name):
         # Check if the entire column is null for any unnamed columns
         unnamed_cols = [x for x in df.columns if pd.isnull(x) or 'Unnamed' in x]
         delete_cols_tf = df[unnamed_cols].apply(lambda x: [pd.isnull(y) or (isinstance(y,str) and len(y.strip())==0) for y in x]).mean()==1  # Null or empty string
@@ -1142,6 +1143,41 @@ class Excel(Data_Loader):
                 new_cols = [x for x in df.iloc[col_row]]
             
             new_cols = [x.strip() if isinstance(x,str) else x for x in new_cols]
+            first_col_row = new_cols.copy()
+            last_col_row = None
+            if sum([pd.notnull(x) for x in new_cols]) / len(new_cols) < 0.2 and \
+                df.iloc[col_row+1].apply(lambda x: isinstance(x,str)).all():  # Most columns are null. Check if the next rows is all strings
+                # There are likely multiple rows of columns
+                r = requests.get(self.url)
+                r.raise_for_status()
+                wb = openpyxl.load_workbook(BytesIO(r.content))
+                if sheet_name:
+                    sheet = wb[sheet_name]
+                else:
+                    sheet = wb.active
+
+                merge_found = False
+                for x in sheet.merged_cells.ranges:
+                    # Loop over merged cells to find the ones corresponding to non-null values in new_cols
+                    cells = [y for y in x.cells]
+                    if cells[0][0] == col_row+2: # Accounts for 1st row being the column names and zero indexing
+                        if pd.notnull(new_cols[cells[0][1]-1]):
+                            # Expect rest of column names in range to be null
+                            if not all([pd.isnull(x) for x in new_cols[cells[0][1]:cells[-1][1]]]):
+                                raise ValueError("Merged cell has multiple non-empty columns")
+                            
+                            merge_found = True
+                            for k in range(cells[0][1], cells[-1][1]):
+                                new_cols[k] = new_cols[cells[0][1]-1]
+                        else:
+                            raise ValueError("Merged cell does not contain string")
+
+                if not merge_found:
+                    raise ValueError("Unable to find expected merged cell")
+                
+                last_col_row = list(df.iloc[col_row+1])
+                new_cols = [x+" "+y if pd.notnull(x) else y for x,y in zip(new_cols, df.iloc[col_row+1])]
+                col_row+=1
             
             logger.debug(f"Detected that first row does not contain column headers: {df.columns}")
             logger.debug(f"Making the  second row the column headers: {new_cols}")
@@ -1149,9 +1185,93 @@ class Excel(Data_Loader):
             df = df.iloc[col_row+1:]
 
             # Look for rows that are just the column names to find if there are multiple tables in the sheet
-            not_col_names = df.apply(lambda x: not all([y==df.columns[k] for k,y in enumerate(x)]), axis=1)
+            not_col_names = df.apply(lambda x: not all([y==first_col_row[k] or (pd.isnull(y) and pd.isnull(first_col_row[k])) for k,y in enumerate(x)]), axis=1)
             if not not_col_names.all():
-                df = df[not_col_names]
+                if last_col_row:
+                    if self.url != 'https://cdn.muckrock.com/outbound_request_attachments/OmahaPoliceDepartment/87672/OIS202010-2019202.xlsx':
+                        raise ValueError(f"Currently, this technique is tailored to the Omaha dataset not {self.url}. Please report this error.")
+                    nextrows = [x+1 for x in not_col_names.index[~not_col_names]]
+                    nextrow_check = df.loc[nextrows].apply(lambda x: all([y.lower()==last_col_row[k].lower() or (pd.isnull(y) and pd.isnull(last_col_row[k])) for k,y in enumerate(x)]), axis=1)
+                    if not nextrow_check.all():
+                        raise ValueError("Unable to match all rows of multi-row header")
+                    not_col_names.loc[nextrows] = False
+
+                    df = df[not_col_names]
+
+                    # Check columns that are above column headers
+                    header_rows = [k for k,x in not_col_names.items() if not x]
+                    rem_rows = []
+                    rem_patterns = {}
+                    for x in header_rows:
+                        for idx in range(x-1, -1, -1):
+                            if idx in rem_rows:
+                                break
+                            if idx not in df.index:
+                                continue
+
+                            # Look for cases where most columns are NaN and at least the first N columns are NaN
+                            notnulls = df.loc[idx].notnull()
+                            if notnulls.sum()==0:
+                                rem_rows.append(idx)
+                            elif notnulls.sum()==1:
+                                if notnulls.iloc[:2].any():
+                                    rem_rows.append(idx)
+                                else:
+                                    # This is a column that likely should have been merged with an above column
+                                    break
+                            elif notnulls.sum()==2 or (notnulls.sum()==3 and notnulls.iloc[0] and isinstance(df.loc[idx].iloc[0], str) and df.loc[idx].iloc[0][0]=='*'):
+                                # This is expected to be a total for some category so there should be a category name followed by a number
+                                # 2 cells should be adjacent when accounting for cell merging
+                                all_col_idx = [k for k,x in enumerate(notnulls) if x]
+                                # Ignore not indicated by asterisk
+                                col_idx = all_col_idx[1:] if len(all_col_idx)==3 else all_col_idx
+
+                                if not isinstance(df.loc[idx].iloc[col_idx[0]],str):
+                                    raise ValueError(f"{df.loc[idx].iloc[col_idx[0]]} was expected to be a label")
+                                
+                                if not isinstance(df.loc[idx].iloc[col_idx[1]],int):
+                                    raise ValueError(f"{df.loc[idx].iloc[col_idx[1]]} was expected to be a count")
+
+                                if col_idx[1]-col_idx[0] >1:
+                                    for x in sheet.merged_cells.ranges:
+                                        # Loop over merged cells to find the ones corresponding to non-null values in new_cols
+                                        cells = [y for y in x.cells]
+                                        if cells[0][0] == idx+2 and cells[0][1]==col_idx[0]+1: # +2 accounts for 1st row being the column names and zero indexing
+                                            if cells[-1][1]==col_idx[1]:
+                                                # Merged cell is adjacent to number
+                                                break    
+                                    else:
+                                        raise ValueError("Unable to find expected merged cell")
+                                    
+                                for k in all_col_idx:
+                                    if isinstance(df.loc[idx].iloc[k],str):
+                                        pattern = "".join([r'\d' if x.isdigit() else x for x in df.loc[idx].iloc[k]])
+                                        pattern = pattern.replace('*',r'\*')
+                                    elif isinstance(df.loc[idx].iloc[k],int):
+                                        pattern = r'\d+'
+                                    else:
+                                        raise ValueError(f"Unknown value {df.loc[idx].iloc[k]}")
+                                    if k not in rem_patterns:
+                                        rem_patterns[k] = set()
+                                    rem_patterns[k].add(pattern)
+                                rem_rows.append(idx)
+                            else:
+                                break
+                    df = df.drop(index=rem_rows)
+                    rem_rows = []
+                    for k in df.index:
+                        idx = [j for j,x in enumerate(df.loc[k].notnull()) if x]
+                        if len(idx)>0 and all(x in rem_patterns for x in idx):
+                            for i in idx:
+                                if not any([re.search(x, str(df.loc[k].iloc[i])) for x in rem_patterns[i]]):
+                                    break
+                            else:  # All rows match a pattern
+                                rem_rows.append(k)
+
+                    df = df.drop(index=rem_rows)
+                else:
+                    df = df[not_col_names]
+
                 # Look for gaps between tables and/or tables that don't contain any data (including ones with a row that just says there is no data)
                 df = df[df.iloc[:,2:].notnull().any(axis=1)]
         else:
@@ -1188,81 +1308,10 @@ class Excel(Data_Loader):
         df = df.reset_index(drop=True)
         return df
 
-        # Row names may not be the 1st row in which case columns need to be fixed
-        # max_drops = 5
-        # num_drops = 0
-        # updated_cols = False
-        # while sum([(pd.isnull(x) or "Unnamed" in x) for x in df.columns]) / len(df.columns) > 0.5:
-        #     if ((m:=df.isnull().mean())==1).any():
-        #         keep = []
-        #         found1 = False
-        #         num1 = 0
-        #         max1 = 3
-        #         for k,v in m.items():
-        #             if found1 and v!=1:
-        #                 raise ValueError(f"Unable to parse Excel table from {self.url}")
-        #             elif v==1:
-        #                 found1 = True
-        #                 num1+=1
-        #                 if num1>=max1:
-        #                     break
-        #             else:
-        #                 keep.append(k)
-        #         df = df[keep]
-        #     else:
-        #         new_cols = [x for x in df.iloc[0]]
-        #         if all([isinstance(x, str) or pd.isnull(x) for x in new_cols]):
-        #             logger.debug(f"Detect that first row does not contain column headers: {df.columns}")
-        #             logger.debug(f"Making the  second row the column headers: {new_cols}")
-        #             df.columns = new_cols
-        #             df.drop(index=df.index[0], inplace=True)
-        #             df.reset_index(drop=True, inplace=True)
-        #             num_drops+=1
-        #             updated_cols = True
-
-        #             if len(df)==0 or num_drops>=max_drops:
-        #                 raise ValueError("Unable to find column names")
-                    
-        # if sum([(pd.isnull(x) or "Unnamed" in x) for x in df.columns]) / len(df.columns) > 0.3 and \
-        #     len(df)>0:
-        #     # Check for multi-row column header with merged columns in first row of spreadsheet
-        #     is_multi_row = True
-        #     for k, c in enumerate(df.columns):
-        #         if 'Unnamed' in c:
-        #             if pd.isnull(df.loc[0,c]):
-        #                 raise ValueError(f"Unexpected condition in column {c} where first row is null")
-        #         elif pd.notnull(df.loc[0,c]):
-        #             if k == len(df.columns) or 'Unnamed' not in df.columns[k+1]:
-        #                 raise ValueError(f"Unexpected column pattern with columns {df.columns} and first row {df.iloc[0]}")
-                    
-        #     if is_multi_row:
-        #         # Merge 1st row with columns
-        #         new_cols = []
-        #         addon = ''
-        #         for k, c in enumerate(df.columns):
-        #             if pd.isnull(df.loc[0,c]):
-        #                 addon = ''
-        #                 new_cols.append(c)
-        #             elif c.lower().endswith('info'):
-        #                 addon = re.sub(r'[Ii]nfo', '', c).strip() + ' '
-        #                 new_cols.append(addon + df.loc[0,c])
-        #             else:
-        #                 new_cols.append(addon + df.loc[0,c])
-
-        #         df = df.copy() # Avoids any warnings from pandas
-        #         df.columns = new_cols
-        #         df = df.iloc[1:]
-
-        # if updated_cols:
-        #     # Remove any empty rows or repeated column headers. There may be multiple of the same table for different years
-        #     df = df.dropna(thresh=3)
-        #     df = df[df.apply(lambda x: not all([y==df.columns[k] for k,y in enumerate(x)]), axis=1)]
-
-
     def __clean(self, df, sheet_name=None, has_year_sheets=False):
         if any([(pd.isnull(x) or "Unnamed" in x) for x in df.columns]):
             # At least 1 column name was empty
-            df = self.__find_column_names(df)
+            df = self.__find_column_names(df, sheet_name)
 
         if has_year_sheets:
             if sheet_name and 'Year' not in df:
