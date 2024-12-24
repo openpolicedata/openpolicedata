@@ -5,7 +5,6 @@ import os.path as path
 import pandas as pd
 from datetime import datetime
 from dateutil.parser._parser import ParserError
-import logging
 from packaging import version
 import re
 from collections.abc import Iterator
@@ -18,12 +17,15 @@ import warnings
 
 from . import data_loaders
 from . import datasets
+from . import log
 from . import __version__
 from . import preproc
 from . import defs
 from . import exceptions
 from .deprecated._decorators import deprecated, input_swap
 from .datetime_parser import to_datetime
+
+logger = log.get_logger()
 
 class Table:
     """
@@ -538,7 +540,7 @@ class Table:
         gender_cats: dict | None = None,
         keep_raw: bool =True,
         known_cols: dict | None = None,
-        verbose: bool | str = False,
+        verbose: bool | str | int = False,
         no_id: Literal["keep", "null", "error", "test"] = "keep",
         race_eth_combo: Literal[False, "merge", "concat"] = "merge",
         merge_date_time: bool =True,
@@ -579,9 +581,10 @@ class Table:
             any known columns for this dataset ({opd.defs.columns.DATE:self.date_field, opd.defs.columns.AGENCY:self.agency_field}).
             If a dictionary, the keys of the dictionary must be available columns for standardization (defs.columns)
             and the values must be columns in the table.
-        verbose : bool | str, optional
-            If True, details of the standardization will be printed. If a filename, details of the standardization will
-            be logged to that file., by default False
+        verbose : bool | str | int, optional
+            If True, log level will be set to 'INFO' to print log messages. If a logging level ('WARNING', 'INFO', etc.), the log level
+            will be updated to the value of verbose. If any other string, verbose will specify the name of 
+            a file to log to with level 'INFO'
         no_id : Literal[&quot;keep&quot;, &quot;null&quot;, &quot;error&quot;], optional
             Determines how values that are not able to be standardized are handled during standardization of demographics:
             - 'keep' (default): Keep the original value
@@ -622,21 +625,8 @@ class Table:
             eth_cats = defs.get_eth_cats(compact=True) if eth_cats=="compact" else eth_cats
             gender_cats = gender_cats if gender_cats is not None else defs.get_gender_cats()
             gender_cats = defs.get_gender_cats(compact=True) if gender_cats=="compact" else gender_cats
-            if verbose:
-                logger = logging.getLogger("opd-std")
-                log_level = logger.level
-            if isinstance(verbose,str):
-                # verbose is a filename
-                fh = logging.FileHandler(verbose)
-                logger.addHandler(fh)
-                for handler in logger.handlers:
-                    if handler.name == "main":
-                        # Temporarily up level of stream handler so that only print to file
-                        handler.setLevel(logging.WARNING)
-            if verbose:
-                # Set logger to info so log messages in preproc.standardize will be displayed
-                logger.setLevel(logging.INFO)
-            try:                    
+            
+            with log.temp_logging_change(verbose):                    
                 self.table, self.__transforms = preproc.standardize(self.table, self.table_type, self.year,
                     known_cols=known_cols, 
                     source_name=self.source_name,
@@ -650,17 +640,6 @@ class Table:
                     race_eth_combo=race_eth_combo,
                     merge_date_time=merge_date_time,
                     empty_time=empty_time)
-            except Exception as e:
-                raise e
-            finally:
-                if verbose:
-                    logger.setLevel(log_level)
-                if isinstance(verbose,str):
-                    logger.removeHandler(fh)
-                    for handler in logger.handlers:
-                        if handler.name == "main":
-                            # Revert stream handler
-                            handler.setLevel(logging.NOTSET)
 
             self.is_std = True
         else:
@@ -895,7 +874,7 @@ class Source:
                   year: str | int | list[int] | None = None, 
                   agency: str | None = None, 
                   force: bool = False,
-                  verbose: bool | str = False,
+                  verbose: bool | str | int = False,
                   url_contains: str | None = None,
                   id_contains: str | None = None
                   ) -> int:
@@ -903,26 +882,27 @@ class Source:
 
         Parameters
         ----------
-        table_type - str or TableType enum
+        table_type : str or TableType enum
             (Optional) If set, requested dataset will be of this type
-        year (Optional) - int or length 2 list or the string opd.defs.MULTI or opd.defs.NONE
-            Used to identify the requested dataset if equal to its year value
+        year : int or length 2 list or the string opd.defs.MULTI or opd.defs.NONE
+            (Optional) Used to identify the requested dataset if equal to its year value
             Otherwise, for datasets containing multiple years, this filters 
             the return data for a specific year (int input) or a range of years
             [X,Y] to return data for years X to Y
-        agency - str
+        agency : str
             (Optional) If set, for datasets containing multiple agencies, data will
             only be returned for this agency
-        force - bool
+        force : bool
             (Optional) For file-based data, an exception will be thrown unless force 
             is true. It may be more efficient to load the data and extract the years
             manually
-        verbose - bool | str, optional
-            If True, details of data loading will be logged. If a filename, details will
-            be logged to that file., by default False
-        url_contains - str | None
+        verbose : bool | str | int, optional
+            (Optional) If True, log level will be set to 'DEBUG' to print log messages. If a logging level ('WARNING', 'INFO', etc.), the log level
+            will be updated to the value of verbose. If any other string, verbose will specify the name of 
+            a file to log to with level 'INFO'
+        url_contains : str | None
             (Optional) If set, URL must contain this string. Can be used in combination with id_contains when multiple datasets match a set of inputs.
-        id_contains - str | None
+        id_contains : str | None
             (Optional) If set, dataset ID must contain this string. Can be used in combination with url_contains when multiple datasets match a set of inputs.
 
         Returns
@@ -944,7 +924,7 @@ class Source:
                 offset: int = 0,
                 sortby=None,
                 force: bool =False,
-                verbose: bool | str = False,
+                verbose: bool | str | int = False,
                 url_contains: str | None = None,
                 id_contains: str | None = None,
                 format_date: bool = True
@@ -973,9 +953,11 @@ class Source:
         force - bool
             (Optional) For file-based data, an exception will be thrown unless force 
             is true. It will be more efficient to read the entire dataset all at once
-        verbose : bool | str, optional
-            If True, details of data loading will be logged. If a filename, details will
-            be logged to that file., by default False
+        verbose : bool | str | int, optional
+            bool | str, optional
+            (Optional) If True, log level will be set to 'DEBUG' to print log messages. If a logging level ('WARNING', 'INFO', etc.), the log level
+            will be updated to the value of verbose. If any other string, verbose will specify the name of 
+            a file to log to with level 'DEBUG'
         url_contains - str | None
             (Optional) If set, URL must contain this string. Can be used in combination with id_contains when multiple datasets match a set of inputs.
         id_contains - str | None
@@ -1005,7 +987,7 @@ class Source:
                           nbatch: int = 10000, 
                           offset: int = 0, 
                           force: bool =False,
-                          verbose: bool | str = False
+                          verbose: bool | str | int = False
                           ) -> Iterator[Table]:
         '''load_from_url_gen is deprecated. Please use load_iter instead.
         '''
@@ -1024,7 +1006,7 @@ class Source:
             nrows: int | None = None, 
             offset: int = 0,
             sortby=None,
-            verbose: bool | str = False,
+            verbose: bool | str | int = False,
             url_contains: str | None = None,
             id_contains: str | None = None,
             format_date: bool = True
@@ -1050,9 +1032,11 @@ class Source:
         offset - int
             (Optional) Number of records to offset from first record. Default is 0 
             to return records starting from the first.
-        verbose : bool | str, optional
-            If True, details of data loading will be logged. If a filename, details will
-            be logged to that file., by default False
+        verbose : bool | str | int, optional
+            bool | str, optional
+            (Optional) If True, log level will be set to 'DEBUG' to print log messages. If a logging level ('WARNING', 'INFO', etc.), the log level
+            will be updated to the value of verbose. If any other string, verbose will specify the name of 
+            a file to log to with level 'DEBUG'
         url_contains - str | None
             (Optional) If set, URL must contain this string. Can be used in combination with id_contains when multiple datasets match a set of inputs.
         id_contains - str | None
@@ -1081,7 +1065,7 @@ class Source:
                       nrows: int | None = None, 
                       offset: int = 0,
                       sortby=None,
-                      verbose: bool | str = False
+                      verbose: bool | str | int = False
                       ) -> Table:
         '''load_from_url is deprecated and will be removed in a future release. Please use load instead.
         '''
@@ -1242,30 +1226,15 @@ class Source:
                 else:
                     opt_filter = 'LOWER(' + agency_field + ") = '" + agency.lower() + "'"
 
-            logger = logging.getLogger("opd-load")
-            if verbose:
-                log_level = logger.level
-            if isinstance(verbose,str):
-                # verbose is a filename
-                fh = logging.FileHandler(verbose)
-                logger.addHandler(fh)
-                for handler in logger.handlers:
-                    if handler.name == "main":
-                        # Temporarily up level of stream handler so that only print to file
-                        handler.setLevel(logging.WARNING)
-            if verbose:
-                # Set logger to info so log messages in preproc.standardize will be displayed
-                logger.setLevel(logging.INFO)
+            with log.temp_logging_change(verbose, if_verbose_true_level='DEBUG') as logger:
+                logger.debug(f"Source URL: {src['source_url']}")
+                logger.debug(f"Data URL: {url}")
+                if dataset_id:
+                    logger.debug(f"]tDataset: {dataset_id}")
+                logger.debug(f"Data URL: {src['DataType']}")
+                if isinstance(src["readme"], str) and len(src["readme"].strip())>0:
+                    logger.debug(f"Data URL: {src['readme']}")
 
-            logger.debug(f"Source URL: {src['source_url']}")
-            logger.debug(f"Data URL: {url}")
-            if dataset_id:
-                logger.debug(f"]tDataset: {dataset_id}")
-            logger.debug(f"Data URL: {src['DataType']}")
-            if isinstance(src["readme"], str) and len(src["readme"].strip())>0:
-                logger.debug(f"Data URL: {src['readme']}")
-            
-            try:
                 if return_count:
                     return loader.get_count(year=year_filter, agency=agency, opt_filter=opt_filter, force=force)
                 else:
@@ -1274,18 +1243,6 @@ class Source:
                     if format_date:
                         date_field = self.__fix_date_field(table, date_field, src.name)
                         table = _check_date(table, date_field)
-            except:
-                raise
-            finally:
-                if verbose:
-                    logger.setLevel(log_level)
-                if isinstance(verbose,str):
-                    logger.removeHandler(fh)
-                    for handler in logger.handlers:
-                        if handler.name == "main":
-                            # Revert stream handler
-                            handler.setLevel(logging.NOTSET)
-
         else:
             table = None
 
@@ -1501,7 +1458,6 @@ class Source:
 
 
 def _check_date(table, date_field):
-    logger = logging.getLogger("opd-load")
     table = table.copy()
     if date_field != None and table is not None and len(table)>0 and date_field in table:
         dts = table[date_field]

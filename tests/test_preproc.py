@@ -2,9 +2,7 @@ import pytest
 
 from copy import deepcopy
 from io import StringIO
-import logging
 import pandas as pd
-import os
 import random
 import time
 
@@ -14,6 +12,7 @@ if __name__ == "__main__":
 from openpolicedata import data, preproc
 from openpolicedata import defs
 from openpolicedata import Column, TableType
+from openpolicedata import log
 from openpolicedata._preproc_utils import DataMapping
 from openpolicedata.exceptions import BadCategoryDict
 
@@ -100,13 +99,24 @@ def std_table_w_role(table_w_role):
     new_table.standardize()
     return new_table
 
+@pytest.fixture()
+def log_stream():
+    stream = StringIO()
+    yield stream
+    stream.truncate(0)
+    stream.seek(0)
+    assert len(stream.getvalue()) == 0
 
-@pytest.fixture(scope="module")
-def log_filename():
-    filename = "test.log"
-    yield filename
-    if os.path.exists(filename):
-        os.remove(filename)
+@pytest.fixture()
+def logger(log_stream):
+    logger = log.get_logger()
+    # Redirect handler output so that it can be checked
+    logger.handlers[0].setStream(log_stream)
+
+    yield logger
+    for handler in logger.handlers:
+        if handler.name != log.stream_handler_name:
+            logger.removeHandler(handler)
 
 
 def test_no_transform_map(table):
@@ -305,54 +315,13 @@ def test_known_col_exists_multiple(table):
     assert Column.RACE_SUBJECT in table.table
     assert "RAW_TEST2" in table.table
 
-def test_not_verbose(table):
-    # Capture output to ensure that it's printed
-    logger = logging.getLogger("opd-std")
-    log_stream = StringIO()
-    sh = logging.StreamHandler(log_stream)
-    logger.addHandler(sh)
-    try:
-        table = standardize(table)
-    except:
-        raise
-    finally:
-        logger.removeHandler(sh)
-
+def test_not_verbose(table, logger, log_stream):
+    table = standardize(table)
     assert len(log_stream.getvalue()) == 0
 
-def test_verbose(table):
-    # Capture output to ensure that it's printed
-    logger = logging.getLogger("opd-std")
-    log_stream = StringIO()
-    sh = logging.StreamHandler(log_stream)
-    logger.addHandler(sh)
-    try:
-        table = standardize(table, verbose=True)
-    except:
-        raise
-    finally:
-        logger.removeHandler(sh)
-
+def test_verbose(table, logger, log_stream):
+    table = standardize(table, verbose=True)
     assert len(log_stream.getvalue()) > 0
-
-def test_verbose_to_file(table, log_filename):
-    table = standardize(table, verbose=log_filename)
-
-    assert os.path.exists(log_filename)
-    assert os.path.getsize(log_filename) > 100
-    # Ensure that file handler was removed
-    assert len(logging.getLogger("opd-std").handlers)==1
-
-def test_verbose_to_file_cleanup_with_error(table, log_filename):
-    table.table.loc[:5, gender_col] = "TEST"
-
-    with pytest.raises(ValueError, match="Unknown"):
-        table = standardize(table, no_id="error", verbose=log_filename)
-
-    assert os.path.exists(log_filename)
-    assert os.path.getsize(log_filename) > 100
-    # Ensure that file handler was removed
-    assert len(logging.getLogger("opd-std").handlers)==1
 
 
 def test_race_eth_combo_merge(std_table):

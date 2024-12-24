@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add Excel loader code to handle complex Omaha officer-involved shootings datasets
 ### Changed
 - Improved removal of non-table data from Excel sheets
+- Improved logging when using verbose input in Source and Table methods
 ### Deprecated
 ### Removed
 ### Fixed

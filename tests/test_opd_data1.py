@@ -10,6 +10,7 @@ from openpolicedata.exceptions import OPD_DataUnavailableError, OPD_TooManyReque
 	OPD_MultipleErrors, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError, OPD_FutureError, OPD_MinVersionError
 import openpolicedata as opd
 from datetime import datetime
+from io import StringIO
 import pandas as pd
 from time import sleep
 import warnings
@@ -42,11 +43,46 @@ else:
 
 warn_errors = (OPD_DataUnavailableError, OPD_SocrataHTTPError, OPD_FutureError, OPD_MinVersionError)
 
+@pytest.fixture()
+def log_stream():
+    stream = StringIO()
+    yield stream
+    stream.truncate(0)
+    stream.seek(0)
+    assert len(stream.getvalue()) == 0
+
+@pytest.fixture()
+def logger(log_stream):
+    logger = opd.log.get_logger()
+    # Redirect handler output so that it can be checked
+    logger.handlers[0].setStream(log_stream)
+
+    yield logger
+    for handler in logger.handlers:
+        if handler.name != opd.log.stream_handler_name:
+            logger.removeHandler(handler)
+
 def check_table_type_warning(all_datasets):
 	sources = all_datasets.copy().iloc[0]
 	sources["TableType"] = "TEST"
 	with pytest.warns(UserWarning):
 		data.Table(sources)
+
+def test_not_verbose(logger, log_stream):
+	source = 'Lansing'
+	table = "OFFICER-INVOLVED SHOOTINGS"
+	if check_for_dataset(source, table):
+		src = opd.Source(source)
+		table = src.load(table, 'MULTIPLE')
+		assert len(log_stream.getvalue()) == 0
+
+def test_verbose(logger, log_stream):
+	source = 'Lansing'
+	table = "OFFICER-INVOLVED SHOOTINGS"
+	if check_for_dataset(source, table):
+		src = opd.Source(source)
+		table = src.load(table, 'MULTIPLE', verbose=True)
+		assert len(log_stream.getvalue())>0
 
 @pytest.mark.parametrize('source, table, year', [('Phoenix', "OFFICER-INVOLVED SHOOTINGS", 2022), 
 				('Orlando', "OFFICER-INVOLVED SHOOTINGS", 2022), ('Indianapolis', "OFFICER-INVOLVED SHOOTINGS", 2022),

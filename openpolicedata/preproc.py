@@ -12,6 +12,7 @@ from . import data_loaders
 from . import datetime_parser
 from . import defs
 from . import _converters as convert
+from . import log
 from ._converters import  _p_age_range
 from ._preproc_utils import _MultData, check_column, DataMapping, _case, MultType
 from .exceptions import BadCategoryDict
@@ -20,11 +21,7 @@ from .utils import camel_case_split, split_words, is_str_number
 _skip_tables = ["calls for service"]
 _OLD_COLUMN_INDICATOR = "RAW"
 
-logger = logging.getLogger("opd-std")
-logger.setLevel(logging.WARNING)
-sh = logging.StreamHandler()
-sh.name = 'main'
-logger.addHandler(sh)
+logger = log.get_logger()
 
 class _ColMapDict():
     def __init__(self):
