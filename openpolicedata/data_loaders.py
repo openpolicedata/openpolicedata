@@ -36,6 +36,7 @@ except:
 
 try:
     from . import httpio
+    from . import log
     from .datetime_parser import to_datetime
     from .exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError, DateFilterException
     from .utils import is_str_number
@@ -44,7 +45,7 @@ except:
     from datetime_parser import to_datetime
     from exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError, DateFilterException
 
-logger = logging.getLogger("opd-load")
+logger = log.get_logger()
 
 sleep_time = 0.1
 
@@ -112,11 +113,13 @@ def get_legacy_session():
 def read_zipped_csv(url, pbar=True, block_size=2**20, data_set=None):
 
     if data_set:
+        logging.debug('Load CSV from zip using httpio method')
         # Load only requested dataset to minimize download size
         with httpio.open(url, block_size=block_size) as fp:
             with ZipFile(fp, 'r') as z:
                 return pd.read_csv(BytesIO(z.read(data_set)), encoding_errors='surrogateescape')
     else:
+        logging.debug('Load CSV from zip by downloading and converting to pandas DataFrame')
         # Load entire dataset so that progress feedback can be provided
         r = requests.get(url, stream=True)
         r.raise_for_status()
@@ -136,15 +139,24 @@ def read_zipped_csv(url, pbar=True, block_size=2**20, data_set=None):
             b.write(data)
             if pbar:
                 bar.update(len(data))
+
+        logger.debug(f'Completed downloading CSV zip file: {url}')
         if pbar:
             bar.close()
         b.seek(0)
+
+        logger.debug('Creating zip file')
         z = ZipFile(b, 'r')
 
         if len(z.namelist())>1:
             raise ValueError(f"More than 1 file found in {url} but no file was specified by the user. Please specify 1 or more files in the dataset input.")
 
-        return pd.read_csv(BytesIO(z.read(z.namelist()[0])), encoding_errors='surrogateescape')
+        logger.debug('Reading from zip file')
+        zip_data = z.read(z.namelist()[0])
+        logger.debug('Converting to BytesIO')
+        zip_bytes_io = BytesIO(zip_data)
+        logger.debug('Converting BytesIO to DataFrame')
+        return pd.read_csv(zip_bytes_io, encoding_errors='surrogateescape')
 
 
 class UrlIoContextManager:
@@ -571,6 +583,7 @@ class Csv(Data_Loader):
                 warnings.simplefilter("ignore", category=pd.errors.DtypeWarning)
                 try:
                     table = read_zipped_csv(self.url, pbar=pbar, data_set=self.data_set)
+                    logger.debug("Completed reading CSV from zip file")
                 except requests.exceptions.HTTPError as e:
                     if len(e.args) and 'Forbidden' in e.args[0]:
                         headers = {
