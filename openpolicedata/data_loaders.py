@@ -120,6 +120,7 @@ def read_zipped_csv(url, pbar=True, block_size=2**20, data_set=None):
                 return pd.read_csv(BytesIO(z.read(data_set)), encoding_errors='surrogateescape')
     else:
         logging.debug('Load CSV from zip by downloading and converting to pandas DataFrame')
+        return pd.read_csv(url, encoding_errors='surrogateescape')
         # Load entire dataset so that progress feedback can be provided
         r = requests.get(url, stream=True)
         r.raise_for_status()
@@ -155,7 +156,7 @@ def read_zipped_csv(url, pbar=True, block_size=2**20, data_set=None):
             zip_data = z.read(z.namelist()[0])
             b.close()
             logger.debug('Converting to BytesIO')
-            
+
         zip_bytes_io = BytesIO(zip_data)
         logger.debug('Converting BytesIO to DataFrame')
         return pd.read_csv(zip_bytes_io, encoding_errors='surrogateescape')
