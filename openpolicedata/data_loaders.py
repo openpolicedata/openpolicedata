@@ -139,6 +139,7 @@ def read_zipped_csv(url, pbar=True, block_size=2**20, data_set=None):
             b.write(data)
             if pbar:
                 bar.update(len(data))
+        r.close()
 
         logger.debug(f'Completed downloading CSV zip file: {url}')
         if pbar:
@@ -146,14 +147,15 @@ def read_zipped_csv(url, pbar=True, block_size=2**20, data_set=None):
         b.seek(0)
 
         logger.debug('Creating zip file')
-        z = ZipFile(b, 'r')
+        with ZipFile(b, 'r') as z:
+            if len(z.namelist())>1:
+                raise ValueError(f"More than 1 file found in {url} but no file was specified by the user. Please specify 1 or more files in the dataset input.")
 
-        if len(z.namelist())>1:
-            raise ValueError(f"More than 1 file found in {url} but no file was specified by the user. Please specify 1 or more files in the dataset input.")
-
-        logger.debug('Reading from zip file')
-        zip_data = z.read(z.namelist()[0])
-        logger.debug('Converting to BytesIO')
+            logger.debug('Reading from zip file')
+            zip_data = z.read(z.namelist()[0])
+            b.close()
+            logger.debug('Converting to BytesIO')
+            
         zip_bytes_io = BytesIO(zip_data)
         logger.debug('Converting BytesIO to DataFrame')
         return pd.read_csv(zip_bytes_io, encoding_errors='surrogateescape')
