@@ -166,6 +166,10 @@ def read_zipped_csv(url, pbar=True, block_size=2**20, data_set=None):
         return pd.read_csv(zip_bytes_io, encoding_errors='surrogateescape')
         
 def count_csv_rows(chunk_iter):
+    if isinstance(chunk_iter, bytes):
+        # Convert to iterator
+        chunk_iter = [chunk_iter]
+        
     count = 0
     open_quote = False
     no_quotes = True
