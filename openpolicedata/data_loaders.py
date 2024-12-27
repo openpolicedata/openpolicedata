@@ -110,6 +110,45 @@ def get_legacy_session():
     session.mount('https://', CustomHttpAdapter(ctx))
     return session
 
+def download_zip_and_extract(url, block_size, pbar=True):
+    r = requests.get(url, stream=True)
+    r.raise_for_status()
+    total_size = int(r.headers.get("Content-Length", 0))
+    pbar = pbar and total_size > block_size
+    if pbar:
+        bar = tqdm(
+            desc=f"Downloading zip file: {url}",
+            total=total_size,
+            unit="iB",
+            unit_scale=True,
+            unit_divisor=1024,
+            leave=False
+        )
+    b = BytesIO()
+    for data in r.iter_content(block_size):
+        b.write(data)
+        if pbar:
+            bar.update(len(data))
+    r.close()
+
+    logger.debug(f'Completed downloading CSV zip file: {url}')
+    if pbar:
+        bar.close()
+    b.seek(0)
+
+    logger.debug('Creating zip file')
+    with ZipFile(b, 'r') as z:
+        if len(z.namelist())>1:
+            raise ValueError(f"More than 1 file found in {url} but no file was specified by the user. Please specify 1 or more files in the dataset input.")
+
+        logger.debug('Reading from zip file')
+        zip_data = z.read(z.namelist()[0])
+        b.close()
+        logger.debug('Converting to BytesIO')
+
+    return zip_data
+
+
 def read_zipped_csv(url, pbar=True, block_size=2**20, data_set=None):
 
     if data_set:
@@ -120,45 +159,46 @@ def read_zipped_csv(url, pbar=True, block_size=2**20, data_set=None):
                 return pd.read_csv(BytesIO(z.read(data_set)), encoding_errors='surrogateescape')
     else:
         logging.debug('Load CSV from zip by downloading and converting to pandas DataFrame')
-        # Load entire dataset so that progress feedback can be provided
-        r = requests.get(url, stream=True)
-        r.raise_for_status()
-        total_size = int(r.headers.get("Content-Length", 0))
-        pbar = pbar and total_size > block_size
-        if pbar:
-            bar = tqdm(
-                desc=f"Downloading zip file: {url}",
-                total=total_size,
-                unit="iB",
-                unit_scale=True,
-                unit_divisor=1024,
-                leave=False
-            )
-        b = BytesIO()
-        for data in r.iter_content(block_size):
-            b.write(data)
-            if pbar:
-                bar.update(len(data))
-        r.close()
 
-        logger.debug(f'Completed downloading CSV zip file: {url}')
-        if pbar:
-            bar.close()
-        b.seek(0)
-
-        logger.debug('Creating zip file')
-        with ZipFile(b, 'r') as z:
-            if len(z.namelist())>1:
-                raise ValueError(f"More than 1 file found in {url} but no file was specified by the user. Please specify 1 or more files in the dataset input.")
-
-            logger.debug('Reading from zip file')
-            zip_data = z.read(z.namelist()[0])
-            b.close()
-            logger.debug('Converting to BytesIO')
-            
+        zip_data = download_zip_and_extract(url, block_size, pbar)
         zip_bytes_io = BytesIO(zip_data)
         logger.debug('Converting BytesIO to DataFrame')
         return pd.read_csv(zip_bytes_io, encoding_errors='surrogateescape')
+        
+def count_csv_rows(chunk_iter):
+    count = 0
+    open_quote = False
+    no_quotes = True
+
+    for chunk in chunk_iter:
+        if no_quotes and chunk.count(b"\"")==0: # No need to worry about quotes
+            count += chunk.count(b"\n")
+        else: # Handle possible newlines in quotes
+            no_quotes = False
+            prev_end = chunk.find(b'\"') if open_quote else -1
+            any_quotes = False
+            while (next_start:=chunk.find(b'\"', prev_end+1))!=-1:
+                any_quotes = True
+                count += chunk[prev_end+1:next_start].count(b"\n")
+                prev_end = chunk.find(b'\"', next_start+1)
+                if prev_end==-1:
+                    open_quote = True
+                    break
+            else:
+                open_quote = False if any_quotes or prev_end!=-1 else open_quote # If not quotes found, leave unchanged
+            
+            if not open_quote:
+                count+=chunk[prev_end+1:].count(b"\n")
+
+    # Subtract off trailing newlines in last row
+    newline = int.from_bytes(b"\n", "big")
+    for c in reversed(chunk):
+        if c==newline:
+            count-=1
+        else:
+            break
+
+    return count
 
 
 class UrlIoContextManager:
@@ -508,38 +548,9 @@ class Csv(Data_Loader):
             logger.debug("Request matches previous count request. Returning saved count.")
             return self._last_count[1]
         if ".zip" not in self.url and year==None and agency==None and not self.query:
-            count = 0
-            logger.debug(f"Loading file from {self.url}")
-            open_quote = False
-            no_quotes = True
+            logger.debug(f"Loading file to count rows from {self.url}")
             with requests.get(self.url, stream=True) as r:
-                for chunk in r.iter_content(chunk_size=2**16):
-                    if no_quotes and chunk.count(b"\"")==0: # No need to worry about quotes
-                        count += chunk.count(b"\n")
-                    else: # Handle possible newlines in quotes
-                        no_quotes = False
-                        prev_end = chunk.find(b'\"') if open_quote else -1
-                        any_quotes = False
-                        while (next_start:=chunk.find(b'\"', prev_end+1))!=-1:
-                            any_quotes = True
-                            count += chunk[prev_end+1:next_start].count(b"\n")
-                            prev_end = chunk.find(b'\"', next_start+1)
-                            if prev_end==-1:
-                                open_quote = True
-                                break
-                        else:
-                            open_quote = False if any_quotes or prev_end!=-1 else open_quote # If not quotes found, leave unchanged
-                        
-                        if not open_quote:
-                            count+=chunk[prev_end+1:].count(b"\n")
-
-            # Subtract off trailing newlines in last row
-            newline = int.from_bytes(b"\n", "big")
-            for c in reversed(chunk):
-                if c==newline:
-                    count-=1
-                else:
-                    break
+                count = count_csv_rows(r.iter_content(chunk_size=2**16))
         elif force:
             count = len(self.load(year=year, agency=agency))
         else:
