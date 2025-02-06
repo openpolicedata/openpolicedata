@@ -15,7 +15,7 @@ except:
     from typing_extensions import Literal
 import warnings
 
-from . import data_loaders
+from . import data_loaders, dataset_id
 from . import datasets
 from . import log
 from . import __version__
@@ -175,7 +175,7 @@ class Table:
         self.url = source["URL"] if "URL" in source else None
         self._data_type = defs.DataType(source["DataType"]) if "DataType" in source else None  # Convert to Enum
 
-        if "dataset_id" in source and not pd.isnull(source["dataset_id"]):
+        if "dataset_id" in source and (isinstance(source["dataset_id"], list) or pd.notnull(source["dataset_id"])):
             self._dataset_id = source["dataset_id"]
 
         if "date_field" in source and not pd.isnull(source["date_field"]):
@@ -766,7 +766,7 @@ class Source:
             url = df["URL"]
             date_field = df["date_field"] if pd.notnull(df["date_field"]) else None
             
-            loader = self.__get_loader(df["DataType"], url, df['query'], dataset_id=df["dataset_id"], date_field=date_field)
+            loader = self.__get_loader(df["DataType"], url, df['query'], dataset=df["dataset_id"], date_field=date_field)
 
             if not manual and pd.notnull(df["coverage_start"]) and pd.notnull(df["coverage_end"]) and \
                 hasattr(df["coverage_start"], 'year') and hasattr(df["coverage_end"], 'year'):
@@ -839,7 +839,7 @@ class Source:
         if src["Agency"] == defs.MULTI:
             _check_version(src)
             year = None if year == defs.MULTI else year
-            loader = self.__get_loader(src["DataType"], src["URL"], src['query'], dataset_id=src["dataset_id"], 
+            loader = self.__get_loader(src["DataType"], src["URL"], src['query'], dataset=src["dataset_id"], 
                                        date_field=src["date_field"], agency_field=src["agency_field"])
             if src["DataType"] ==defs.DataType.CSV:
                 raise NotImplementedError(f"Unable to get agencies for {src['DataType']}")
@@ -1190,10 +1190,10 @@ class Source:
         else:
             year_filter = None
 
-        if not pd.isnull(src["dataset_id"]):
-            dataset_id = src["dataset_id"]
+        if isinstance(src["dataset_id"], list) or pd.notnull(src["dataset_id"]):
+            dataset = src["dataset_id"]
         else:
-            dataset_id = None
+            dataset = None
 
         table_year = None
         if not pd.isnull(src["date_field"]):
@@ -1214,7 +1214,7 @@ class Source:
         #It is assumed that each data loader method will return data with the proper data type so date type etc...
         if load_table:
             _check_version(src)
-            loader = self.__get_loader(src['DataType'], url, src['query'], dataset_id=dataset_id, 
+            loader = self.__get_loader(src['DataType'], url, src['query'], dataset=dataset, 
                                        date_field=date_field, agency_field=agency_field, pbar=pbar)
 
             opt_filter = None
@@ -1229,8 +1229,8 @@ class Source:
             with log.temp_logging_change(verbose, if_verbose_true_level='DEBUG') as logger:
                 logger.debug(f"Source URL: {src['source_url']}")
                 logger.debug(f"Data URL: {url}")
-                if dataset_id:
-                    logger.debug(f"]tDataset: {dataset_id}")
+                if dataset:
+                    logger.debug(f"]tDataset: {dataset}")
                 logger.debug(f"Data URL: {src['DataType']}")
                 if isinstance(src["readme"], str) and len(src["readme"].strip())>0:
                     logger.debug(f"Data URL: {src['readme']}")
@@ -1411,34 +1411,35 @@ class Source:
 
         return filename
 
-    def __get_loader(self, data_type, url, query, dataset_id=None, date_field=None, agency_field=None, pbar=True):
-        if pd.isnull(dataset_id):
-            dataset_id = None
-        params = (data_type, url, dataset_id, date_field, agency_field)
+    def __get_loader(self, data_type, url, query, dataset=None, date_field=None, agency_field=None, pbar=True):
+        if not isinstance(dataset, list) and pd.isnull(dataset):
+            dataset = None
+        params = (data_type, url, dataset, date_field, agency_field)
         if self.__loader is not None and self.__loader[0]==params:
             return self.__loader[1]
         
-        if dataset_id and ';' in dataset_id:
+        dataset = dataset_id.expand(dataset)
+        if dataset_id.is_combined_dataset(dataset):
             # Multiple dataset IDs
             if data_type ==defs.DataType.CSV:
-                loader = data_loaders.CombinedDataset(data_loaders.Csv, url, dataset_id, date_field=date_field, agency_field=agency_field, pbar=pbar)
+                loader = data_loaders.CombinedDataset(data_loaders.Csv, url, dataset, date_field=date_field, agency_field=agency_field, pbar=pbar)
             elif data_type ==defs.DataType.EXCEL:
-                loader = data_loaders.CombinedDataset(data_loaders.Excel, url, dataset_id, date_field=date_field, agency_field=agency_field, pbar=pbar)
+                loader = data_loaders.CombinedDataset(data_loaders.Excel, url, dataset, date_field=date_field, agency_field=agency_field, pbar=pbar)
             else:
                 raise ValueError(f"Not supported data type for CombinedDataset: {data_type}")
         else:
             if data_type ==defs.DataType.CSV:
-                loader = data_loaders.Csv(url, data_set=dataset_id, date_field=date_field, agency_field=agency_field, query=query)
+                loader = data_loaders.Csv(url, data_set=dataset, date_field=date_field, agency_field=agency_field, query=query)
             elif data_type ==defs.DataType.EXCEL:
-                loader = data_loaders.Excel(url, data_set=dataset_id, date_field=date_field, agency_field=agency_field) 
+                loader = data_loaders.Excel(url, data_set=dataset, date_field=date_field, agency_field=agency_field) 
             elif data_type ==defs.DataType.ArcGIS:
                 loader = data_loaders.Arcgis(url, date_field=date_field)
             elif data_type ==defs.DataType.SOCRATA:
-                loader = data_loaders.Socrata(url, dataset_id, date_field=date_field)
+                loader = data_loaders.Socrata(url, dataset, date_field=date_field)
             elif data_type ==defs.DataType.CARTO:
-                loader = data_loaders.Carto(url, dataset_id, date_field=date_field, query=query)
+                loader = data_loaders.Carto(url, dataset, date_field=date_field, query=query)
             elif data_type ==defs.DataType.CKAN:
-                loader = data_loaders.Ckan(url, dataset_id, date_field=date_field, query=query)
+                loader = data_loaders.Ckan(url, dataset, date_field=date_field, query=query)
             elif data_type==defs.DataType.HTML:
                 loader = data_loaders.Html(url, date_field=date_field, agency_field=agency_field)
             else:

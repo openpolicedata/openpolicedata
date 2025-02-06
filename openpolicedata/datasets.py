@@ -5,7 +5,7 @@ import re
 from typing import Optional, Union
 import warnings
 
-from . import defs
+from . import defs, dataset_id
 from .deprecated._pandas import DeprecationHandlerDataFrame
 from .deprecated.messages import CIV_DEPRECATION_MESSAGE, CIV_REPLACEMENT_MESSAGE
 from .deprecated.source_table_compat import check_compat_source_table
@@ -23,7 +23,6 @@ _column_types = {
         'DataType': pd.StringDtype(),
         'URL': pd.StringDtype(),
         'date_field': pd.StringDtype(),
-        'dataset_id': pd.StringDtype(),
         'agency_field': pd.StringDtype(),
         'readme': pd.StringDtype(),
         'min_version': pd.StringDtype(),
@@ -59,6 +58,8 @@ def _build(csv_file, error=False):
     df["Year"] = df["Year"].apply(lambda x: defs.MULTI if x=="MULTI" else x)
     df["SourceName"] = df["SourceName"].str.replace("Police Department", "")
     df["Agency"] = df["Agency"].str.replace("Police Department", "").apply(lambda x: defs.MULTI if x=="MULTI" else x)
+
+    df['dataset_id'] = dataset_id.parse(df['dataset_id'])
 
     for col in df.columns:
         df[col] = [x.strip() if isinstance(x, str) else x for x in df[col]]

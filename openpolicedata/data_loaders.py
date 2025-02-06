@@ -35,7 +35,7 @@ except:
     _has_gpd = False
 
 try:
-    from . import httpio
+    from . import httpio, dataset_id
     from . import log
     from .datetime_parser import to_datetime
     from .exceptions import OPD_TooManyRequestsError, OPD_DataUnavailableError, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError, DateFilterException
@@ -156,7 +156,7 @@ def read_zipped_csv(url, pbar=True, block_size=2**20, data_set=None):
         # Load only requested dataset to minimize download size
         with httpio.open(url, block_size=block_size) as fp:
             with ZipFile(fp, 'r') as z:
-                return pd.read_csv(BytesIO(z.read(data_set)), encoding_errors='surrogateescape')
+                return pd.read_csv(BytesIO(z.read(data_set['file'])), encoding_errors='surrogateescape')
     else:
         logging.debug('Load CSV from zip by downloading and converting to pandas DataFrame')
 
@@ -345,42 +345,33 @@ class CombinedDataset(Data_Loader):
 
         *args and **kwargs will be passed to the constructor of data_class
         """
+        self.url = url
         self.data_class = data_class
-        sheets = None
-        if isinstance(datasets, str):
-            if '|' in datasets:  # dataset names are separated from relative URLs by |
-                datasets = datasets.split('|')
-                assert len(datasets)==2
-                sheets = datasets[0].split(';')   # Different sheet names for each dataset are separated by ;. If multiple sheets for a given dataset, separate by &
-                datasets = datasets[1]
-            datasets = datasets.split(';')         # Multiple relative URLs are separated by ;
-            
+        self.datasets = datasets
+        
         self.loaders = []
         url = url[:-1] if url[-1]=='/' else url
         iter = tqdm(datasets, desc='Building Data Loaders', leave=False) if pbar else datasets
-        for k, ds in enumerate(iter):
+        for ds in iter:
+            if isinstance(ds, list):
+                # This case indicates tables that will be joined
+                self.loaders.append(CombinedDataset(data_class, url, ds, *args, pbar=False, **kwargs))
+                continue
+
             loc_kwargs = kwargs.copy()
-            if 'raw.githubusercontent.com/openpolicedata/opd-datasets' in ds and ds.endswith('.csv'):
-                self.loaders.append(Csv(ds, *args, **loc_kwargs))
-            else:
-                ds = ds.strip()
-                ds = ds[1:] if ds[0]=='/' else ds
-                if url.endswith('.zip'):
-                    # datasets is name of file in zip file
-                    loc_kwargs['data_set'] = ds
-                    ds = url
-                else:
-                    ds = url + '/' + ds
-                    
-                if sheets:
-                    loc_kwargs['data_set'] = sheets[min(k, len(sheets)-1)]
+            if 'url' in ds and 'raw.githubusercontent.com/openpolicedata/opd-datasets' in ds['url'] and ds['url'].endswith('.csv'):
+                # This dataset has been re-posted on our GitHub page after being taken down by the original poster
+                self.loaders.append(Csv(ds['url'], *args, **loc_kwargs))
+            else:               
+                cur_url = url + '/' + ds.pop('url') if 'url' in ds else url
+                loc_kwargs['data_set'] = ds
                 try:
-                    self.loaders.append(data_class(ds, *args, **loc_kwargs))
+                    self.loaders.append(data_class(cur_url, *args, **loc_kwargs))
                 except ValueError as e:
                     if str(e)=='Excel file format cannot be determined, you must specify an engine manually.':
                         try:
                             # This may be a CSV file instead of an Excel file
-                            self.loaders.append(Csv(ds, *args, **loc_kwargs))
+                            self.loaders.append(Csv(cur_url, *args, **loc_kwargs))
                         except:
                             raise e
                         
@@ -398,21 +389,24 @@ class CombinedDataset(Data_Loader):
         '''
         return True
     
-    def load(self, pbar=True, **kwargs):
+    def load(self, nrows=None, offset=None, pbar=True, **kwargs):
         """Load data for query. 
 
         **kwargs will be passed to the load function of the data_class
         """
 
-        # Handle these here. Less efficient but easier to implement
-        nrows = kwargs.pop('nrows') if 'nrows' in kwargs else None
-        offset = kwargs.pop('offset') if 'offset' in kwargs else None
-
         dfs = []
+        on = []
         date_warn = force_subject_warn = force_officer_warn = False
         first_time = True
+        if '_first_time' in kwargs:
+            kwargs.pop('_first_time')
         iter = tqdm(self.loaders, desc='Loading data files', leave=False) if pbar else self.loaders
-        for loader in iter:
+        for k, loader in enumerate(iter):
+            if isinstance(self.datasets[k],list):
+                # Tables in dfs will be merged
+                on.append(self.datasets[k][0]['on'])
+
             dfs.append(loader.load(_first_time=first_time, **kwargs))
             first_time = False
             if loader!=self.loaders[-1]:
@@ -436,7 +430,14 @@ class CombinedDataset(Data_Loader):
                         force_officer_warn = True
                         warnings.warn("Renaming force by officer column because name of column names changes in some of the monthly data files")
 
-        df = pd.concat(dfs, ignore_index=True)
+        if len(on)==0:
+            df = pd.concat(dfs, ignore_index=True)
+        else:
+            raise NotImplementedError("This code currently does not affect any dataset and the result should be reviewed prior to usage")
+            df = dfs[0]
+            for k in range(1,len(dfs)):
+                df = df.merge(dfs[k], how='outer', left_on=on[0], right_on=on[k])
+
         if offset!=None:
             df = df.iloc[offset:]
         if nrows!=None:
@@ -790,30 +791,28 @@ class Excel(Data_Loader):
             (Optional) Excel sheet to use or name of Excel file in zip file. If not provided, an error will be thrown when loading data if there is more than 1 sheet
         '''
         
-        self.url = url
+        self.url = url.replace(' ','%20')
         self.date_field = date_field
         self.agency_field = agency_field
-        self.sheet = data_set if pd.notnull(data_set) else None
 
-        if self.sheet is not None and re.match(r'^[“”"].+[“”"]$', self.sheet):
-            # Sheet name was put in quotes due to it being a number to prevent Excel from dropping any zeros from the front
-            self.sheet = self.sheet[1:-1]
+        is_zip = ".zip" in self.url
+        self.sheet, file_in_zip = dataset_id.parse_excel_dataset(is_zip, data_set)
         
         try:
-            if ".zip" in self.url:
-                self.sheet = None
-
-                with UrlIoContextManager(url) as fp:
+            if is_zip:
+                with UrlIoContextManager(self.url) as fp:
                     with ZipFile(fp, 'r') as z:
-                        if not data_set:
+                        if not file_in_zip:
                             if len(z.namelist())>1:
-                                raise ValueError(f"More than one file found in zip file at {url}. One file must be specified if there is more than one file.")
+                                raise ValueError(f"More than one file found in zip file at {self.url}. One file must be specified if there is more than one file.")
                             else:
-                                data_set = z.namelist()[0]
+                                file_in_zip = z.namelist()[0]
+                        elif file_in_zip not in z.namelist():
+                            raise ValueError(f'Unable to find file {file_in_zip} in {self.url}')
 
-                        self.excel_file = pd.ExcelFile(BytesIO(z.read(data_set)))
+                        self.excel_file = pd.ExcelFile(BytesIO(z.read(file_in_zip)))
             else:
-                self.excel_file = pd.ExcelFile(url)
+                self.excel_file = pd.ExcelFile(self.url)
         except urllib.error.HTTPError as e:
             if str(e) in ["HTTP Error 406: Not Acceptable", 'HTTP Error 403: Forbidden']:
                 # 406 error: https://stackoverflow.com/questions/34832970/http-error-406-not-acceptable-python-urllib2
@@ -833,7 +832,7 @@ class Excel(Data_Loader):
                     'Sec-Fetch-User': '?1',
                 }
                 for k, h in enumerate([headers, headers2]):
-                    r = requests.get(url, stream=True, headers=h)
+                    r = requests.get(self.url, stream=True, headers=h)
                     try:
                         r.raise_for_status()
                         break
@@ -847,7 +846,7 @@ class Excel(Data_Loader):
         except urllib.error.URLError as e:
             if "[SSL: UNSAFE_LEGACY_RENEGOTIATION_DISABLED] unsafe legacy renegotiation disabled" in str(e.args[0]):
                 with get_legacy_session() as session:
-                    r = session.get(url)
+                    r = session.get(self.url)
                     
                 r.raise_for_status()
                 file_like = BytesIO(r.content)
@@ -858,14 +857,14 @@ class Excel(Data_Loader):
                 raise e
         except XLRDError as e:
             if len(e.args)>0 and e.args[0] == "Workbook is encrypted" and \
-                any([url.startswith(x) for x in ["http://www.rutlandcitypolice.com"]]):  # Only perform on known datasets to prevent security issues
+                any([self.url.startswith(x) for x in ["http://www.rutlandcitypolice.com"]]):  # Only perform on known datasets to prevent security issues
                 try:
                     import msoffcrypto
                 except:
-                    raise ImportError(f"{url} is encrypted. OpenPoliceData may be able to open it if msoffcrypto-tool " + 
+                    raise ImportError(f"{self.url} is encrypted. OpenPoliceData may be able to open it if msoffcrypto-tool " + 
                         "(https://pypi.org/project/msoffcrypto-tool/) is installed (pip install msoffcrypto-tool)")
                 # Download file to temporary file
-                r = requests.get(url)
+                r = requests.get(self.url)
                 r.raise_for_status()
                 # https://stackoverflow.com/questions/22789951/xlrd-error-workbook-is-encrypted-python-3-2-3
                 fp_decrypt = tempfile.TemporaryFile(suffix=".xls")
@@ -1059,9 +1058,8 @@ class Excel(Data_Loader):
                     if nrows_read!=None and len(table)>=nrows_read:
                         break
         else:
-            sheets_load = self.sheet.split("&") if isinstance(self.sheet,str) else [self.sheet]
             dfs = []
-            for s in sheets_load:
+            for s in (self.sheet if self.sheet else [None]):
                 if isinstance(s,str):
                     s = s.strip()
                     if '*' in s:
@@ -1120,11 +1118,7 @@ class Excel(Data_Loader):
 
 
     def __check_sheet(self, cur_sheet, sheets):
-        if cur_sheet is None:
-            if not all([re.match(r"Sheet\d+",x) for x in sheets[1:]]):
-                # More than 1 sheet has non-default name so can't assume 1st sheet
-                raise ValueError(f"The Excel file at {self.url} has {len(sheets)} sheets but no dataset id is specified to indicate which to use.")
-        elif cur_sheet not in sheets:
+        if cur_sheet is not None and cur_sheet not in sheets:
             raise ValueError(f"Sheet {cur_sheet} not found in Excel file at {self.url}")
 
 

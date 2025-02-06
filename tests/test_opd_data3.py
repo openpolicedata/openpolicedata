@@ -369,10 +369,11 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 			warnings.warn(str(e))
 
 
-def test_source_download_not_limitable(datasets, source, start_idx, skip, query={}):
+def test_source_download_not_limitable(datasets, source, start_idx, skip, query={}, num_zips_check=5):
+
+	df_ori = pd.read_csv('https://data-openjustice.doj.ca.gov/sites/default/files/dataset/2024-07/UseofForce_ORI-Agency_Names_2023.csv')
 	
 	zip_data = datasets[datasets['URL'].str.lower().str.endswith('.zip')]
-	num_zips_check = 5  # Just check a selection of these. No reason to check all
 	zip_netloc = zip_data['URL'].apply(lambda x: urlparse(x).netloc)
 	zip_sites = zip_netloc.value_counts()
 	zip_2_run = {}
@@ -430,6 +431,27 @@ def test_source_download_not_limitable(datasets, source, start_idx, skip, query=
 				assert (table.table[table.date_field].dtype.name in ['datetime64[ns]', 'datetime64[ms]'])
 			if not pd.isnull(datasets.iloc[i]["agency_field"]):
 				assert datasets.iloc[i]["agency_field"] in table.table
+
+			if table.urls['source_url'] == 'https://openjustice.doj.ca.gov/data':
+				ori = table.table['AGENCY_ORI'].unique()
+				if table.agency==MULTI:
+					assert len(ori)>1
+				else:
+					assert len(ori)==1
+					if ori[0]=='CA0349902':
+						# This ORI is not found but is California Hwy Patrol
+						continue
+					df_sel = df_ori.loc[df_ori['ORI']==ori[0],'AGENCY_NAME']
+					assert len(df_sel)==1
+					name = df_sel.iloc[0].replace('PD','Police Department')\
+						.replace('SO','County Sheriff’s Department')\
+						.replace('SD','County Sheriff’s Department')\
+						.title()\
+						.replace("’S","’s").replace('’',"'")
+					if name.startswith('Csu'):
+						assert 'California State University' in datasets.iloc[i]['AgencyFull']
+					else:
+						assert datasets.iloc[i]['AgencyFull'].replace('Office','Department').replace('’',"'")==name
 
 
 def log_errors_to_file(*args):

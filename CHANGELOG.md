@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Improved removal of non-table data from Excel sheets
 - Improved logging when using verbose input in Source and Table methods
+- Changed some dataset IDs to be in JSON format instead of custom format
 ### Deprecated
 ### Removed
 ### Fixed
