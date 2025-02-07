@@ -138,6 +138,8 @@ class TableType(str, Enum):
     TRAFFIC_CITATIONS = ("TRAFFIC CITATIONS","Traffic stops leading to a citation.")
     TRAFFIC_WARNINGS = ("TRAFFIC WARNINGS","Traffic stops leading to a warning.")
     USE_OF_FORCE = ("USE OF FORCE","Documentation of physical force used against subjects.")
+    USE_OF_FORCE_ADDITIONAL = ("USE OF FORCE - ADDITIONAL",
+        "Table with additional use of force information")
     USE_OF_FORCE_SUBJECTS = ("USE OF FORCE - SUBJECTS",
         "Use of force data may be split into several tables due to the possibility that multiple "+
         "subjects and officers may be involved in an incident. This table contains data on subjects.")

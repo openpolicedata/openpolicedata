@@ -13,11 +13,7 @@ if __name__ == "__main__":
 	sys.path.append('../openpolicedata')
 import openpolicedata as opd
 
-import pathlib
 import sys
-sys.path.append(pathlib.Path(__file__).parent.resolve())
-from test_utils import get_datasets
-
 
 local_csv_file = os.path.join("..",'opd-data','opd_source_table.csv')
 

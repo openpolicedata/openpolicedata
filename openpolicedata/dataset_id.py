@@ -34,10 +34,7 @@ merged with the the Survey2 sheet from Spreadsheet2.xlsx using the Case Number a
 '''
 
 import json
-from math import exp
 import re
-
-from numpy import isin
 
 def parse(s):
     return s.apply(lambda x: json.loads(x) if isinstance(x,str) and len(x)>0 and x[0] in ['[','{'] else x)
