@@ -23,7 +23,7 @@ def check_level(level):
 
 def get_logger():
     logger = logging.getLogger(log_name)
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.WARNING)
     
     for h in logger.handlers:
         if h.name==stream_handler_name:
@@ -48,9 +48,11 @@ def revert_level(logger):
         if h.name==stream_handler_name:
             if hasattr(h, 'last_level'):
                 h.setLevel(h.last_level)
+                logger.setLevel(h.last_level)
 
 def add_file_handler(logger, filename, level='INFO'):
     # verbose is a filename
+    logger.setLevel(level)
     for handler in logger.handlers:
         if handler.name == file_handler_name:
             # Handler already exists
@@ -70,13 +72,16 @@ def rem_file_handler(logger):
 def update_logger_verbosity(logger, verbose, if_verbose_true_level='INFO'):
     if isinstance(verbose,str):
         if check_level(verbose):
+            logger.setLevel(verbose)
             set_main_level(logger, verbose)
         else:
             add_file_handler(logger, verbose)  # verbose will be a filename
             set_main_level(logger, logging.WARNING)
     elif isinstance(verbose, int) and not isinstance(verbose, bool):
+        logger.setLevel(verbose)
         set_main_level(logger, verbose)
     elif verbose:
+        logger.setLevel(if_verbose_true_level)
         set_main_level(logger, if_verbose_true_level)
 
 def revert_logger_verbosity(logger):
