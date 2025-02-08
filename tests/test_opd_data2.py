@@ -166,7 +166,7 @@ def test_get_agencies(datasets, source, start_idx, skip):
 			except ValueError as e:
 				if 'Inputs must filter for a single source' in str(e):
 					agencies = src.get_agencies(datasets.iloc[i]["TableType"], year=datasets.iloc[i]["Year"], 
-								 url_contains=datasets.iloc[i]["URL"], id_contains=datasets.iloc[i]["dataset_id"])
+								 url=datasets.iloc[i]["URL"], id=datasets.iloc[i]["dataset_id"])
 				else:
 					raise
 			except OPD_MinVersionError: continue

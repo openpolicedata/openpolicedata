@@ -172,8 +172,8 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 
 		# Handle cases where URL is required to disambiguate requested dataset
 		ds_filter, _ = src._Source__filter_for_source(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], None, None, errors=False)
-		url_contains = datasets.iloc[i]['URL'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
-		id_contains = datasets.iloc[i]['dataset_id'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
+		url = datasets.iloc[i]['URL'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
+		id = datasets.iloc[i]['dataset_id'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
 
 		tables = {}
 		future_error = False
@@ -183,7 +183,7 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 								agency=agency, pbar=False, 
 								sortby="date",
 								nrows=max_count if datasets.iloc[i]["DataType"] not in ["CSV","Excel"] else None, 
-					 			url_contains=url_contains, id_contains=id_contains)
+					 			url=url, id=id)
 			except OPD_FutureError as e:
 				future_error = True
 				break
@@ -410,13 +410,13 @@ def test_source_download_not_limitable(datasets, source, start_idx, skip, query=
 
 			# Handle cases where URL is required to disambiguate requested dataset
 			ds_filter, _ = src._Source__filter_for_source(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], None, None, errors=False)
-			url_contains = datasets.iloc[i]['URL'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
-			id_contains = datasets.iloc[i]['dataset_id'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
+			url = datasets.iloc[i]['URL'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
+			id = datasets.iloc[i]['dataset_id'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
 
 			now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
 			print(f"{now} Testing {i+1} of {len(datasets)}: {srcName}, {state} {table_type} table for {year}")
 			try:
-				table = src.load(table_type, year, pbar=False, url_contains=url_contains, id_contains=id_contains)
+				table = src.load(table_type, year, pbar=False, url=url, id=id)
 			except (OPD_FutureError, OPD_MinVersionError):
 				continue
 			except:

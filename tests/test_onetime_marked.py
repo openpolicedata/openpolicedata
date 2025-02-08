@@ -47,17 +47,17 @@ def test_csv_get_count(all_datasets, source, start_idx):
 
         # Handle cases where URL is required to disambiguate requested dataset
         ds_filter, _ = src._Source__filter_for_source(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], None, None, errors=False)
-        url_contains = datasets.iloc[i]['URL'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
-        id_contains = datasets.iloc[i]['dataset_id'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
+        url = datasets.iloc[i]['URL'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
+        id = datasets.iloc[i]['dataset_id'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
 
         try:
             t = time.time()
             count = src.get_count(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], 
-                    url_contains=url_contains, id_contains=id_contains)
+                    url=url, id=id)
             print(f"Count: {time.time() - t}")
             t = time.time()
             table = src.load(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], pbar=False, 
-                    url_contains=url_contains, id_contains=id_contains)
+                    url=url, id=id)
             print(f"Load: {time.time() - t}")
         except warn_errors as e:
             e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"])

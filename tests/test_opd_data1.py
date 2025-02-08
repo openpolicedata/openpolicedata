@@ -192,34 +192,34 @@ def test_multiple_agency_same_source_name(all_datasets, agency):
 	if check_for_dataset('Contra Costa County', opd.defs.TableType.STOPS):
 		data.Source('Contra Costa County', agency=agency)
 
-@pytest.mark.parametrize('year, url_contains', [(2019, "APDUseOfForce/FeatureServer/0"), 
+@pytest.mark.parametrize('year, url', [(2019, "APDUseOfForce/FeatureServer/0"), 
 												([2018,2019], "APDUseOfForce/FeatureServer/0"), (2021, "APD_UseOfForce2021/FeatureServer/0")])
-def test_multiple_multiple_year_filter(all_datasets, year, url_contains):
+def test_multiple_multiple_year_filter(all_datasets, year, url):
 	if check_for_dataset('Asheville', opd.defs.TableType.USE_OF_FORCE):
 		src = data.Source('Asheville')
 		dataset, filter_by_year = src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, None, None)
 		assert filter_by_year
 		assert dataset['Year']==opd.defs.MULTI
 		assert dataset['TableType']==opd.defs.TableType.USE_OF_FORCE
-		assert url_contains in dataset['URL']
+		assert url in dataset['URL']
 
-@pytest.mark.parametrize('year, url_contains, url_contains_test', [(2020, None, 'LMPD_STOPS_DATA_(2)'), 
+@pytest.mark.parametrize('year, url, url_test', [(2020, None, 'LMPD_STOPS_DATA_(2)'), 
 												(2021, None, 'LMPD_STOP_DATA_2021'),
 												(2021, 'LMPD_STOPS_DATA_(2)', 'LMPD_STOPS_DATA_(2)')])
-def test_overlapping_multi_and_single(all_datasets, year, url_contains, url_contains_test):
+def test_overlapping_multi_and_single(all_datasets, year, url, url_test):
 	if check_for_dataset('Louisville', opd.defs.TableType.TRAFFIC):
 		src = data.Source('Louisville')
-		dataset, filter_by_year = src._Source__filter_for_source(opd.defs.TableType.TRAFFIC, year, url_contains, None)
-		assert url_contains_test in dataset['URL']
+		dataset, filter_by_year = src._Source__filter_for_source(opd.defs.TableType.TRAFFIC, year, url, None)
+		assert url_test in dataset['URL']
 
-@pytest.mark.parametrize('year, id_contains, id_contains_test', [(2020, None, 'ex94-c5ad'), 
+@pytest.mark.parametrize('year, id, id_test', [(2020, None, 'ex94-c5ad'), 
 												(2021, None, 'izhu-764k'),
 												([2020,2021], 'izhu-764k', 'izhu-764k')])
-def test_overlapping_multi_and_single_with_id(all_datasets, year, id_contains, id_contains_test):
+def test_overlapping_multi_and_single_with_id(all_datasets, year, id, id_test):
 	if check_for_dataset('Mesa', opd.defs.TableType.CALLS_FOR_SERVICE):
 		src = data.Source('Mesa')
-		dataset, filter_by_year = src._Source__filter_for_source(opd.defs.TableType.CALLS_FOR_SERVICE, year, None, id_contains)
-		assert id_contains_test == dataset['dataset_id']
+		dataset, filter_by_year = src._Source__filter_for_source(opd.defs.TableType.CALLS_FOR_SERVICE, year, None, id)
+		assert id_test == dataset['dataset_id']
 
 @pytest.mark.parametrize('year', [2020, [2020,2021], opd.defs.MULTI])
 def test_multiple_bad_multiple_year_filter(all_datasets, year):
@@ -229,15 +229,15 @@ def test_multiple_bad_multiple_year_filter(all_datasets, year):
 			src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, None, None)
 
 @pytest.mark.parametrize('year, exp_filt_by_year', [([2021,2022], True), (opd.defs.MULTI, False)])
-def test_url_contains(all_datasets, year, exp_filt_by_year):
+def test_url_input(all_datasets, year, exp_filt_by_year):
 	if check_for_dataset('Asheville', opd.defs.TableType.USE_OF_FORCE):
 		src = data.Source('Asheville')
-		url_contains = "APDUseOfForce/FeatureServer/0"
-		dataset, filter_by_year = src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, url_contains, None)
+		url = "APDUseOfForce/FeatureServer/0"
+		dataset, filter_by_year = src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, url, None)
 		assert filter_by_year == exp_filt_by_year
 		assert dataset['Year']==opd.defs.MULTI
 		assert dataset['TableType']==opd.defs.TableType.USE_OF_FORCE
-		assert url_contains in dataset['URL']
+		assert url in dataset['URL']
 
 
 def test_offsets_and_nrows():
@@ -307,12 +307,12 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 
 			# Handle cases where URL is required to disambiguate requested dataset
 			ds_filter, _ = src._Source__filter_for_source(table_type, datasets.iloc[i]["Year"], None, None, errors=False)
-			url_contains = datasets.iloc[i]['URL'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
-			id_contains = datasets.iloc[i]['dataset_id'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
+			url = datasets.iloc[i]['URL'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
+			id = datasets.iloc[i]['dataset_id'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
 
 			try:
 				table = src.load(table_type, datasets.iloc[i]["Year"], pbar=True, nrows=nrows, 
-					 url_contains=url_contains, id_contains=id_contains)
+					 url=url, id=id)
 			except warn_errors as e:
 				e.prepend(f"Iteration {i}", srcName, table_type, datasets.iloc[i]["Year"])
 				update_outages(outages_file, datasets.iloc[i], True, e)
@@ -383,7 +383,7 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 			if not pd.isnull(datasets.iloc[i]["date_field"]):
 				if datasets.iloc[i]["date_field"] not in table.table or table.table[datasets.iloc[i]["date_field"]].isnull().all():
 					table = src.load(table_type, datasets.iloc[i]["Year"], pbar=False, nrows=2000,
-					 	url_contains=url_contains, id_contains=id_contains)
+					 	url=url, id=id)
 				assert datasets.iloc[i]["date_field"] in table.table
 				#assuming a Pandas string dtype('O').name = object is okay too
 				assert (table.table[datasets.iloc[i]["date_field"]].dtype.name in ['datetime64[ns]', 'datetime64[ns, UTC]', 
