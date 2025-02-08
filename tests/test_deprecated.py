@@ -10,7 +10,6 @@ from openpolicedata.defs import TableType
 from openpolicedata.deprecated._decorators import deprecated, input_swap
 from openpolicedata.deprecated.datasetsCompat import datasets_query
 from openpolicedata.deprecated._pandas import DeprecationHandlerDataFrame, DeprecationHandlerSeries
-from openpolicedata.deprecated.source_table_compat import check_compat_source_table
 import pytest
 
 @pytest.fixture(scope='module')
@@ -273,46 +272,6 @@ def test_tabletype_contains_no_subject():
 		warnings.simplefilter("error")
 		t = opd.datasets.get_table_types(contains="- SUBJECTS")
 	assert len (t)>0
-
-def test_source_table_not_deprecated():
-	assert not check_compat_source_table(cur_ver='0.8.2')[0]
-
-def test_source_table_bad_df_compat():
-	assert not check_compat_source_table(df_compat=1)[0]
-
-def test_source_table_deprecated():
-	with pytest.deprecated_call():
-		loaded, df = check_compat_source_table(cur_ver='0.0')
-	assert loaded
-	assert len(df)==1  # Number of rows in 1st test source table
-
-@pytest.mark.parametrize('ver',['0.8','0.8.1'])
-def test_source_table_deprecated_local_file(ver):  # This is meant for testing compatibility tables before they are publically available
-	compat_versions_file = os.path.join(os.path.os.path.dirname(os.getcwd()), 'opd-data', 'compatibility', "compat_versions.csv")
-	if not os.path.exists(compat_versions_file):
-		return
-	
-	df_compat = pd.read_csv(compat_versions_file, dtype=str)
-	df_compat.loc[2,'csv_name'] = os.path.join(os.path.os.path.dirname(os.getcwd()), 'opd-data', 'compatibility', "opd_source_table_20241120_v0.8.1.csv")
-
-	with pytest.deprecated_call():
-		loaded, df = check_compat_source_table(cur_ver=ver, df_compat=df_compat, compat_versions_file="")
-	assert loaded
-	assert len(df)>1000
-
-def test_source_table_fail_not_req(df_compat):
-	df_compat = df_compat.copy(deep=True)
-	df_compat.loc[0, 'csv_name'] = '?!~notafile.csv'
-	with pytest.deprecated_call():
-		loaded, df = check_compat_source_table(df_compat=df_compat, cur_ver='0.0')
-	assert loaded
-	assert len(df)==2  # Number of rows in 2nd test source table
-
-def test_source_table_fail_req(df_compat):
-	df_compat = df_compat.copy(deep=True)
-	df_compat.loc[1, 'csv_name'] = '?!~notafile.csv'
-	with pytest.raises(opd.exceptions.CompatSourceTableLoadError):
-		check_compat_source_table(df_compat=df_compat, cur_ver='0.0.1')
 
 @pytest.mark.parametrize("y", [7, 13, range(0,8), [6, 7,13], slice(0,8)])
 @pytest.mark.filterwarnings("error::DeprecationWarning")

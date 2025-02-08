@@ -33,19 +33,20 @@ _column_types = {
 def _build(csv_file, error=False):
     warnings.simplefilter('default', DeprecationWarning)
 
-    loaded, df = check_compat_source_table(column_types=_column_types)
-
     if isinstance(csv_file, pd.DataFrame):
         df = csv_file.copy()
-    elif not loaded:
-        try:
-            df = pd.read_csv(csv_file, dtype=_column_types)
-        except:
-            if error:
-                raise
-            warnings.warn(f"Unable to load CSV file from {csv_file}. " +
-                "This may be due to a bad internet connection or bad filename/URL.")
-            return None
+    else:
+        loaded, df, _ = check_compat_source_table(column_types=_column_types)
+
+        if not loaded:
+            try:
+                df = pd.read_csv(csv_file, dtype=_column_types)
+            except:
+                if error:
+                    raise
+                warnings.warn(f"Unable to load CSV file from {csv_file}. " +
+                    "This may be due to a bad internet connection or bad filename/URL.")
+                return None
 
     if "Jurisdiction" in df:
         df.rename(columns={
