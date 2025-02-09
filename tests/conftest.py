@@ -70,8 +70,13 @@ def loghtml(request):
 
 
 @pytest.fixture(scope='session')
-def all_datasets(request):
-    return get_datasets(request.config.option.csvfile)
+def req_csvfile(request):
+    return request.config.option.csvfile
+
+
+@pytest.fixture(scope='session')
+def all_datasets(request, req_csvfile):
+    return get_datasets(req_csvfile)
 
 
 @pytest.fixture(scope='session')
@@ -83,7 +88,6 @@ def outages(request):
     return request.config.option.outages
 
 @pytest.fixture(scope='session')
-def datasets(request, all_datasets, use_changed_rows, outages):
-    csvfile = request.config.option.csvfile
-    ds = get_datasets(csvfile, use_changed_rows) if use_changed_rows else all_datasets
+def datasets(request, all_datasets, use_changed_rows, outages, req_csvfile):
+    ds = get_datasets(req_csvfile, use_changed_rows) if use_changed_rows else all_datasets
     return get_outage_datasets(ds) if outages else ds

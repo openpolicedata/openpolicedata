@@ -9,7 +9,6 @@ from openpolicedata.defs import MULTI, DataType
 from openpolicedata.exceptions import OPD_DataUnavailableError, OPD_TooManyRequestsError,  \
 	OPD_MultipleErrors, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError, OPD_FutureError, OPD_MinVersionError, \
 	DateFilterException
-import random
 from datetime import datetime
 import numpy as np
 import pandas as pd
@@ -19,7 +18,7 @@ import os
 import re
 from urllib.parse import urlparse
 
-from test_utils import check_for_dataset, user_request_skip
+from test_utils import check_for_dataset
 
 # Set Arcgis data loader to validate queries with arcgis package if installed
 data_loaders._verify_arcgis = True
@@ -374,6 +373,9 @@ def test_source_download_not_limitable(datasets, source, start_idx, skip, query=
 	df_ori = pd.read_csv('https://data-openjustice.doj.ca.gov/sites/default/files/dataset/2024-07/UseofForce_ORI-Agency_Names_2023.csv')
 	
 	zip_data = datasets[datasets['URL'].str.lower().str.endswith('.zip')]
+	zip_data = zip_data[~zip_data['SourceName'].isin(skip)] if skip!=None else zip_data
+	zip_data = zip_data[zip_data.index>=start_idx]
+	zip_data = zip_data[zip_data['SourceName']==source] if source!=None else zip_data
 	zip_netloc = zip_data['URL'].apply(lambda x: urlparse(x).netloc)
 	zip_sites = zip_netloc.value_counts()
 	zip_2_run = {}
@@ -486,7 +488,7 @@ if __name__ == "__main__":
 	use_changed_rows = False
 	csvfile = None
 	csvfile = os.path.join('..','opd-data', 'opd_source_table.csv')
-	start_idx = 185
+	start_idx = 0
 	skip = None
 	# skip = "Sacramento,Beloit,Rutland"
 	source = None
@@ -497,5 +499,5 @@ if __name__ == "__main__":
 	datasets = get_datasets(csvfile, use_changed_rows)
 
 	test_load_year(datasets, source, start_idx, skip, False, query=query) 
-	start_idx = 414
-	# test_source_download_not_limitable(datasets, source, start_idx, skip) 
+	start_idx = 0
+	test_source_download_not_limitable(datasets, source, start_idx, skip) 

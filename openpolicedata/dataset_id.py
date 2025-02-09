@@ -36,8 +36,11 @@ merged with the the Survey2 sheet from Spreadsheet2.xlsx using the Case Number a
 import json
 import re
 
+def parse_id(x):
+    return json.loads(x) if isinstance(x,str) and x.startswith(('[','{')) else x
+
 def parse(s):
-    return s.apply(lambda x: json.loads(x) if isinstance(x,str) and len(x)>0 and x[0] in ['[','{'] else x)
+    return s.apply(parse_id)
 
 def expand(id):
     if not isinstance(id, list) and not isinstance(id, dict):
