@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
+import re
 
-import openpolicedata as opd
 from openpolicedata.dataset_id import parse_id, expand, is_combined_dataset, parse_excel_dataset
 
 def test_parse_null():
@@ -191,3 +191,91 @@ def test_parse_excel_dataset_file_and_sheet(is_zip_file, input):
 
     assert file_in_zip==input['file']
     assert sheet==(input['sheets'] if isinstance(input['sheets'], list) else [input['sheets']])
+
+
+def test_all_dataset_ids(datasets):
+    notnull = datasets['dataset_id'].notnull()
+    for k in datasets[notnull].index:
+        dataset = expand(datasets.loc[k, 'dataset_id'])
+
+        if datasets.loc[k, 'DataType'] not in ["Excel", 'CSV']:
+            assert dataset==datasets.loc[k, 'dataset_id']
+            assert not is_combined_dataset(dataset)
+        elif isinstance(datasets.loc[k, 'dataset_id'], str):
+            assert datasets.loc[k, 'dataset_id'][0] not in ['[', '{']
+            assert dataset==datasets.loc[k, 'dataset_id']
+            assert not is_combined_dataset(dataset)
+            if datasets.loc[k, 'DataType']=='Excel':
+                is_zip = datasets.loc[k, 'URL'].endswith('.zip')
+                sheet, file_in_zip = parse_excel_dataset(is_zip, dataset)
+                if is_zip:
+                    assert pd.isnull(sheet)
+                    assert file_in_zip==dataset
+                else:
+                    assert pd.isnull(file_in_zip)
+                    if re.match(r'^[“”"].+[“”"]$', dataset):
+                        dataset = dataset[1:-1]
+                    assert sheet==[dataset]
+        elif isinstance(datasets.loc[k, 'dataset_id'], dict) and \
+            set(datasets.loc[k, 'dataset_id'].keys())=={'files'} and \
+            len(datasets.loc[k, 'dataset_id']['files'])>1:
+            assert is_combined_dataset(dataset)
+            if datasets.loc[k, 'DataType']=='Excel':
+                is_zip = datasets.loc[k, 'URL'].endswith('.zip')
+                for ds in dataset:
+                    sheet, file_in_zip = parse_excel_dataset(is_zip, ds)
+                    if is_zip:
+                        assert pd.isnull(sheet)
+                        assert file_in_zip==ds['file']
+                    else:
+                        raise NotImplementedError()
+        elif isinstance(datasets.loc[k, 'dataset_id'], dict) and \
+            set(datasets.loc[k, 'dataset_id'].keys())=={'urls'}:
+            assert is_combined_dataset(dataset)
+        elif isinstance(datasets.loc[k, 'dataset_id'], dict) and \
+            set(datasets.loc[k, 'dataset_id'].keys())=={'sheets'}:
+            assert not is_combined_dataset(dataset)
+            assert datasets.loc[k, 'DataType']=='Excel'
+            sheet, file_in_zip = parse_excel_dataset(False, dataset)
+            assert pd.isnull(file_in_zip)
+            assert sheet==datasets.loc[k, 'dataset_id']['sheets']
+        elif isinstance(datasets.loc[k, 'dataset_id'], dict) and \
+            set(datasets.loc[k, 'dataset_id'].keys())=={'files','sheets'} and \
+            (isinstance(datasets.loc[k, 'dataset_id']['files'],str) or len(datasets.loc[k, 'dataset_id']['files'])==1):
+            assert not is_combined_dataset(dataset)
+            assert datasets.loc[k, 'DataType']=='Excel'
+            
+            is_zip = datasets.loc[k, 'URL'].endswith('.zip')
+            assert is_zip
+            assert len(dataset)==1
+            sheet, file_in_zip = parse_excel_dataset(is_zip, dataset)
+
+            assert sheet==dataset[0]['sheets'] or sheet==[dataset[0]['sheets']]
+            assert file_in_zip==dataset[0]['file']
+        elif isinstance(datasets.loc[k, 'dataset_id'], list) and \
+            all(set(x.keys())=={'urls','sheets'} for x in datasets.loc[k, 'dataset_id']):
+            assert is_combined_dataset(dataset)
+            assert datasets.loc[k, 'DataType']=='Excel'
+
+            is_zip = datasets.loc[k, 'URL'].endswith('.zip')
+            for d in dataset:
+                sheet, file_in_zip = parse_excel_dataset(is_zip, d)
+                if not is_zip:
+                    assert sheet==d['sheets']
+                    assert pd.isnull(file_in_zip)
+                else:
+                    raise NotImplementedError()
+        elif isinstance(datasets.loc[k, 'dataset_id'], dict) and \
+            set(datasets.loc[k, 'dataset_id'].keys())=={'urls','sheets'}:
+            assert is_combined_dataset(dataset)
+            assert datasets.loc[k, 'DataType']=='Excel'
+
+            is_zip = datasets.loc[k, 'URL'].endswith('.zip')
+            sheet, file_in_zip = parse_excel_dataset(is_zip, d)
+            if not is_zip:
+                assert sheet==d['sheets']
+                assert pd.isnull(file_in_zip)
+            else:
+                raise NotImplementedError()
+        else:
+            raise NotImplementedError()

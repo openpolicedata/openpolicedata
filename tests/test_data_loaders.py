@@ -553,7 +553,8 @@ def test_socrata():
 @pytest.mark.parametrize('url, date_field, query',[
     ('https://public.tableau.com/views/PPBOpenDataDownloads/OIS-All.csv?:showVizHome=no', 'Day of Date Time', None),
     ("https://opendata.jaxsheriff.org/OIS/Export", "IncidentDate", None),
-    ('https://raw.githubusercontent.com/openpolicedata/opd-datasets/refs/heads/main/data/Wisconsin_Milwaukee_COMPLAINTS.csv', 'DateReported', '{“Department”:”Milwaukee Police Department”}')
+    ('https://raw.githubusercontent.com/openpolicedata/opd-datasets/refs/heads/main/data/Wisconsin_Milwaukee_COMPLAINTS.csv', 'DateReported', '{“Department”:”Milwaukee Police Department”}'),
+    ('https://raw.githubusercontent.com/openpolicedata/opd-datasets/main/data/Texas_Austin_OFFICER-INVOLVED_SHOOTINGS-INCIDENTS.csv', 'date', None),
 ])
 def test_csv(url, date_field, query):
     if pd.notnull(query):
