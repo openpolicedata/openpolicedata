@@ -435,6 +435,23 @@ def test_arcgis_text_date(url, year, date_field):
     else:
         assert all([x in un_months for x in range(1,13)])
 
+def test_arcgis_query():
+    url = 'https://services1.arcgis.com/JLuzSHjNrLL4Okwb/arcgis/rest/services/Gilbert_Demographics/FeatureServer/0'
+
+    loader = data_loaders.Arcgis(url)
+    data = loader.load(pbar=False)
+    data = data[data['Department']=='Police Department'.upper()].reset_index(drop=True)
+
+    loader_query = data_loaders.Arcgis(url, query='{“Department”: “Police Department”}')
+    data_query = loader_query.load(pbar=False)
+    count = loader_query.get_count()
+
+    loader_query = data_loaders.Arcgis(url, query='{“Department”: “Police Department”}')
+    count2 = loader_query.get_count()
+
+    assert len(data)==count
+    assert count==count2
+    pd.testing.assert_frame_equal(data, data_query)
 
 def test_arcgis_geopandas():
     if _has_gpd:

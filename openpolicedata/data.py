@@ -1457,7 +1457,7 @@ class Source:
             elif data_type ==defs.DataType.EXCEL:
                 loader = data_loaders.Excel(url, data_set=dataset, date_field=date_field, agency_field=agency_field) 
             elif data_type ==defs.DataType.ArcGIS:
-                loader = data_loaders.Arcgis(url, date_field=date_field)
+                loader = data_loaders.Arcgis(url, date_field=date_field, query=query)
             elif data_type ==defs.DataType.SOCRATA:
                 loader = data_loaders.Socrata(url, dataset, date_field=date_field)
             elif data_type ==defs.DataType.CARTO:

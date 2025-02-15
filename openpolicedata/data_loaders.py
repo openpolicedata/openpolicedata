@@ -1496,7 +1496,7 @@ class Arcgis(Data_Loader):
     # Based on https://developers.arcgis.com/rest/services-reference/online/feature-layer.htm
     __max_maxRecordCount = 32000
     
-    def __init__(self, url, date_field=None):
+    def __init__(self, url, date_field=None, query=None):
         '''Create Arcgis object
 
         Parameters
@@ -1505,12 +1505,15 @@ class Arcgis(Data_Loader):
             URL for ArcGIS data
         date_field : str
             (Optional) Name of the column that contains the date
+        query : str, dict
+            (Optional) Additional query that will be added to each request
         '''
 
         self._date_type = None
         self._date_format = None
         self.date_field = date_field
         self.verify = False
+        self.query = str2json(query)
 
         # Table vs. Layer: https://developers.arcgis.com/rest/services-reference/enterprise/layer-feature-service-.htm
         # The layer resource represents a single feature layer or a nonspatial table in a feature service. 
@@ -1723,7 +1726,10 @@ class Arcgis(Data_Loader):
 
 
     def __construct_where(self, year=None, date_range_error=True):
-        where_query = ""
+        if self.query:
+            where_query = " AND ".join([f"{k} = '{v}'" for k,v in self.query.items()])
+        else:
+            where_query = ""
         self.__accurate_count = True
         if self._last_count is not None and self._last_count[0]==(year,None):
             record_count = self._last_count[1]
@@ -1731,7 +1737,7 @@ class Arcgis(Data_Loader):
         elif self.date_field!=None and year!=None:
             where_query, record_count = self._build_date_query(year, date_range_error)
         else:
-            where_query = '1=1'
+            where_query = '1=1' if len(where_query)==0 else where_query
             try:
                 record_count = self.__request(where=where_query, return_count=True)["count"]
                 if self.verify:
