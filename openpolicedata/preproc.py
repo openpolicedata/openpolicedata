@@ -1546,16 +1546,16 @@ class Standardizer:
     def check_for_multiple(self):        
         self._check_for_multiple(self.mult_civilian, defs.columns.RACE_SUBJECT, defs.columns.AGE_SUBJECT, 
                                  defs.columns.GENDER_SUBJECT, defs.columns.ETHNICITY_SUBJECT,
-                                 defs.columns.AGE_RANGE_SUBJECT)
+                                 defs.columns.AGE_RANGE_SUBJECT, defs.columns.NAME_SUBJECT)
         self._check_for_multiple(self.mult_officer, defs.columns.RACE_OFFICER, defs.columns.AGE_OFFICER, 
                                  defs.columns.GENDER_OFFICER, defs.columns.ETHNICITY_OFFICER,
-                                 defs.columns.AGE_RANGE_OFFICER)
+                                 defs.columns.AGE_RANGE_OFFICER, defs.columns.NAME_OFFICER)
         self._check_for_multiple(self.mult_both, defs.columns.RACE_OFFICER_SUBJECT, defs.columns.AGE_OFFICER_SUBJECT, 
                                  defs.columns.GENDER_OFFICER_SUBJECT, defs.columns.ETHNICITY_OFFICER_SUBJECT,
-                                 defs.columns.AGE_RANGE_OFFICER_SUBJECT)
+                                 defs.columns.AGE_RANGE_OFFICER_SUBJECT, defs.columns.NAME_OFFICER_SUBJECT)
     
 
-    def _check_for_multiple(self, mult_data, race_col, age_col, gender_col, eth_col, age_range_col):
+    def _check_for_multiple(self, mult_data, race_col, age_col, gender_col, eth_col, age_range_col, name_col):
         all_dict = True
         any_cols = False
         any_dict = False
@@ -1684,7 +1684,7 @@ class Standardizer:
                 def expand(x, d):
                     if isinstance(x,str):
                         result = 0
-                        for val in x.split(d):
+                        for val in re.split(d, x):
                             y = val.lower().split("x")
                             if len(y)==2 and y[1].strip().isdigit():
                                 result+=int(y[1])
@@ -1695,8 +1695,13 @@ class Standardizer:
                         return result
                     else:
                         return 1
+                    
+                delims = [r",", r"\|", r";", r"/",r"\n"]
+                    
+                if name_col in self.col_map and self.df[self.col_map[name_col]].str.contains(r'\s{2,}').any():
+                    # Name column appears to be delimited by multiple spaces
+                    delims.append(r'\s{2,}')
 
-                delims = [",", "|", ";", "/","\n"]
                 max_count = pd.Series({x:-1 for x in cols})
                 delim_found = pd.Series({x:"" for x in cols})
                 max_num_vals = pd.DataFrame()
