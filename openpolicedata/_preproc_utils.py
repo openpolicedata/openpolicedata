@@ -21,6 +21,43 @@ class DataMapping:
         if not isinstance(other, DataMapping):
             return False
         
+        if self.orig_column_name != other.orig_column_name:
+            return False
+        
+        if self.new_column_name != other.new_column_name:
+            return False
+        
+        if self.data_maps is not None or other.data_maps is not None:
+            if self.data_maps is None or other.data_maps is None:
+                return False
+            
+            d = other.data_maps.copy()
+            for k,v in self.data_maps.items():
+                if k in d:
+                    if d[k]!=v:
+                        return False
+                    else:
+                        d.pop(k)
+                elif pd.isnull(k):
+                    # Find the null key in d
+                    m = [x for x in d.keys() if pd.isnull(x) or (isinstance(x,str) and x=='')]
+                    if len(m)>0:
+                        if v!=d[m[0]]:
+                            raise NotImplementedError()
+                        else:
+                            d.pop(m[0])
+                    else:
+                        if len(d)==0:
+                            continue
+                        return False
+                elif isinstance(k,str) and k.lower() not in ['unknown']:
+                    return False
+            
+            if len(d)>0:
+                return False
+            
+        return True
+        
         tf_data_maps = self.data_maps == other.data_maps
         if not tf_data_maps:
             if (self.data_maps is None and other.data_maps is not None) or \
@@ -165,6 +202,7 @@ class _MultData:
     delim_age = None
     delim_gender = None
     delim_eth = None
+    delim_name = None
     item_race = None
     item_age = None
     item_gender = None

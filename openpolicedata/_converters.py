@@ -19,7 +19,8 @@ _p_age_range = re.compile(r"""
     (\d+)               # Lower bound of age range. Capture for reuse.
     \s?(-|_|TO)-?\s?          # - or _ between lower and upper bound with optional spaces 
     (\d+)               # Upper bound of age range. Capture for reuse.
-    (\s?[-_]\s?\1\s?[-_]\s?\3)?  # Optional mistaken repeat of same pattern. 
+    (\s?[-_]\s?\1\s?[-_]\s?\3)?  # Optional mistaken repeat of same pattern.
+    \;?                 # Optional ends in semi-colon
     $                   # End of string
     """, re.VERBOSE)
 
@@ -142,17 +143,34 @@ def convert_off_or_civ(x, no_id, *args, **kwargs):
         return orig if no_id=="keep" else ""
     
 
-def _create_age_range_lut(x, no_id, source_name, *args, **kwargs):
+def _create_age_range_lut(x, no_id, source_name, state, *args, **kwargs):
     if isinstance(x,str) and "," in x:
         # Look for ages of multiple people
         out = {}
         for k,y in enumerate(x.split(',')):
             try:
-                out[k] = _create_age_range_lut(y, "error", source_name)
+                out[k] = _create_age_range_lut(y, "error", source_name, state)
             except Exception as e:
                 break
         else:
             return out
+        
+    if state=='California' and isinstance(x, Number) and pd.notnull(x):
+        if x > 9:
+            raise ValueError(f"Unknown age group: {x}")
+        
+        ca_age_groups = {
+            1:'1-9',
+            2:'10-14',
+            3:'15-17',
+            4:'18-24',
+            5:'25-34',
+            6:'35-44',
+            7:'45-54',
+            8:'55-64',
+            9:'65-120'
+        }
+        return ca_age_groups[int(x)]
 
     p_plus = re.compile(r"(\d+)\+\s?-?\s?(\1\+)?",re.IGNORECASE)
     p_plus2 = re.compile(r"(\d+)\s*plus",re.IGNORECASE)
@@ -250,17 +268,20 @@ def _create_ethnicity_lut(x, no_id, source_name, state, eth_cats, *args, **kwarg
         return eth_cats[defs._eth_keys.NONLATINO]
     if has_latino and (x in ["H","HIS","LAT"] or "HISPANIC" in x or "LATINO" in x):
         return eth_cats[defs._eth_keys.LATINO]
-    if defs._eth_keys.UNKNOWN in eth_cats and x in ["U", "UNKNOWN"]:
+    if defs._eth_keys.UNKNOWN in eth_cats and x in ["U"] or 'UNKNOWN' in x:
         return eth_cats[defs._eth_keys.UNKNOWN]
-    if defs._eth_keys.UNSPECIFIED in eth_cats and ("NODATA" in x or x in ["MISSING", "", "NOTREPORTED",'NOTAPPICABLE(NONINDIVIDUAL)']):
+    if defs._eth_keys.UNSPECIFIED in eth_cats and ("NODATA" in x or 
+        x in ["MISSING", "", "NOTREPORTED",'NOTAPPICABLE(NONINDIVIDUAL)','BLANK','NOTAVAILABLE']):
         return eth_cats[defs._eth_keys.UNSPECIFIED]
     if defs._eth_keys.MIDDLE_EASTERN and x in ["M"] and source_name == "Connecticut":
         return eth_cats[defs._eth_keys.MIDDLE_EASTERN]
     if no_id=="test":
-        if "EXEMPT" in x:
+        if any(y in x for y in ["EXEMPT",'EASTAFRICA','BLACK','UI','CAUCASIAN','X','HN','ASIA', 'LAT', 'PACF','AFR','M','F','B']):
             return orig
         elif x in ["W","A"] or x in ferndale_eth_vals:
             return eth_cats[defs._eth_keys.NONLATINO]
+        else:
+            raise NotImplementedError()
     elif no_id=="error":
         raise ValueError(f"Unknown value in ethnicity column: {orig}")
     else:
@@ -502,7 +523,7 @@ def _create_race_lut(x, no_id, source_name, state, race_cats=defs.get_race_cats(
                                  "PACISL" in x_no_space or x in ['PI', 'NHPI']): # NHPI = Native Hawaiian, and Pacific Islander
         return race_cats[defs._race_keys.PACIFIC_ISLANDER] if has_pi else race_cats[defs._race_keys.AAPI]
     if has_latino and x in ["H", "WH", "HISPANIC", "LATINO", "HISPANIC OR LATINO", "LATINO OR HISPANIC", 
-                            "HISPANIC/LATINO", "LATINO/HISPANIC",'HISPANIC/LATIN/MEXICAN','HISP']:
+                            "HISPANIC/LATINO", "LATINO/HISPANIC",'HISPANIC/LATIN/MEXICAN','HISP', 'HIS']:
         return race_cats[defs._race_keys.LATINO] 
     if has_indigenous and (x in ["I", "INDIAN", "ALASKAN NATIVE", "AN", "AI", "AL NATIVE","A/INDIAN", "NAT AM"] or "AMERICAN IND" in x.replace("II","I") or \
         "NATIVE AM" in x or  "AMERIND" in x_no_space or "ALASK" in x or "AMIND" in x_no_space or \
@@ -748,6 +769,13 @@ def _create_injury_lut(x, no_id, source_name, *args, **kwargs):
             return x
         else:
             return "INJURED" if x>0 else "NO INJURY"
+        
+    if source_name=='Omaha':
+        map_dict = {'F':'Fatal','NF':'NON FATAL', 'ICD':'In-Custody Death/Suicide', 
+                    'EPC ICD':'In-Custody Death/Suicide'}
+        if x in map_dict:
+            x = map_dict[x]
+
     orig = x
     x = re.sub(r'^\d+\s*\-\s*','',x)
     x = x.upper().replace('-',' ').replace('*','').replace('SUBJECT','').replace('  ',' ').strip()
@@ -764,7 +792,7 @@ def _create_injury_lut(x, no_id, source_name, *args, **kwargs):
                 return m
 
     contains_yes = x.replace(',',' ').startswith('YES ')
-    nonfatal_words = ["INJURED", 'NON FATAL', 'NON FATAL','NON FATAL INJURY', 'INJURY'] 
+    nonfatal_words = ["INJURED", 'NON FATAL','NON FATAL INJURY', 'INJURY'] 
     contains_nonfatal = any([y in x for y in nonfatal_words])
     fatal_words = ["FATAL","KILLED",'DECEASED',"DEATH", 'FATAL INJURY']
     contains_fatal = any([y in x for y in fatal_words])
@@ -798,18 +826,22 @@ def _create_injury_lut(x, no_id, source_name, *args, **kwargs):
         return 'UNSPECIFIED'
     elif x=='OTHER':
         return 'OTHER'
+    elif x=='In Custody Death/Suicide'.upper():
+        return 'In-Custody Death/Suicide'.upper()
     elif no_id=='test':
         if source_name not in ['Indianapolis', 'Northampton','Minneapolis','Rutland'] and \
             (x not in ['UI'] or source_name!="Norwich") and \
             (x not in ['BARRICADED ERT', 'SUICIDAL VICTIM, STABBED SELF'] or source_name!="Indiana"):
             raise ValueError(f"Unknown value in injury column: {orig}")
+        else:
+            return orig
     elif no_id=='error':
         raise ValueError(f"Unknown value in injury column: {orig}")
     else:
         return orig if no_id=="keep" else ""
     
 def _create_fatal_lut(x, no_id, source_name, *args, **kwargs):
-    if pd.isnull(x):
+    if pd.isnull(x) or (isinstance(x,str) and x.strip()==''):
         return "UNSPECIFIED"
     elif isinstance(x,Number) or x.isdigit():
         x = int(x)
@@ -1017,7 +1049,7 @@ def std_list(col, vals, map_dict, delim, converter, *args, **kwargs):
                 new_str = delim.join([m.group(2) for _ in range(int(m.group(1)))])
                 x = x.replace(m.group(0), new_str)
 
-            items = x.split(delim)
+            items = re.split(delim, x)
             new_val = {}
             for k, i in enumerate(items):
                 if i == "ISL":  # LA County code for AAPI is ASIAN-PACIFIC,ISL
