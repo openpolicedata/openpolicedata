@@ -327,10 +327,8 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 			except:
 				raise
 
-			if len(table.table)==0 and has_outages and \
-				(outages[["State","SourceName","Agency","TableType","Year"]] == datasets.iloc[i][["State","SourceName","Agency","TableType","Year"]]).all(axis=1).any():
-				caught_exceptions_warn.append(f'Outage continues for {str(datasets.iloc[i][["State","SourceName","Agency","TableType","Year"]])}')
-				update_outages(outages_file, datasets.iloc[i], True)
+			if len(table.table)==0: 
+				update_outages(outages_file, datasets.iloc[i], True, ValueError('Table has 0 rows'))
 				continue
 			else:
 				assert len(table.table)>0

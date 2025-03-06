@@ -78,7 +78,7 @@ def test_get_years(datasets, source, start_idx, skip, loghtml, query={}):
 			print(f"{now} Testing {i+1} of {len(datasets)}: {srcName} {table_print} table")
 
 			if datasets.iloc[i]["DataType"] == DataType.EXCEL.value:
-				if pd.notnull(datasets.iloc[i]['dataset_id']) and ';' in datasets.iloc[i]['dataset_id']:
+				if type(datasets.iloc[i]["dataset_id"]) in [list, dict]:
 					# Multi-dataset table
 					if pd.isnull(datasets.iloc[i]['date_field']):
 						continue

@@ -362,7 +362,8 @@ class CombinedDataset(Data_Loader):
             if 'url' in ds and 'raw.githubusercontent.com/openpolicedata/opd-datasets' in ds['url'] and ds['url'].endswith('.csv'):
                 # This dataset has been re-posted on our GitHub page after being taken down by the original poster
                 self.loaders.append(Csv(ds['url'], *args, **loc_kwargs))
-            else:               
+            else:
+                ds = ds.copy()
                 cur_url = url + '/' + ds.pop('url') if 'url' in ds else url
                 loc_kwargs['data_set'] = ds
                 try:
@@ -1712,7 +1713,12 @@ class Arcgis(Data_Loader):
         except Exception as e: 
             raise e
 
-        result = r.json()
+        try:
+            result = r.json()
+        except requests.exceptions.JSONDecodeError:
+            # Just raising for now. May add additional messaging later
+            # This case is occurring in Charlotte OIS-Incidents data when the where query has OR keyword
+            raise
 
         if isinstance(result, dict) and len(result.keys()) and "error" in result:
             args = ()
@@ -3126,7 +3132,7 @@ class Ckan(Data_Loader):
             fields = [x['id'] for x in data['result']['fields'] if x['id'] not in ['_id','_full_text']]
 
         if self.date_field and isinstance(sortby,str) and sortby=="date":
-            sortby = self.date_field
+            sortby = self.date_field if self.date_field else "_id"
         elif not sortby:
             # order by_id guarantees data order remains the same when paging
             sortby = "_id"

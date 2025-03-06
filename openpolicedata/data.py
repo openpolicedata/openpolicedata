@@ -351,8 +351,10 @@ class Table:
                 df2 = df2_new
                 self.__transforms.append(mapping)
 
-        df = pd.merge(df1, df2, on=on, how=how, left_on=left_on, right_on=right_on, suffixes=(None, '_FromMerged'), **kwargs)
-        new_table = copy.deepcopy(self)
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore",category=DeprecationWarning, message='Passing a BlockManager')
+            df = pd.merge(df1, df2, on=on, how=how, left_on=left_on, right_on=right_on, suffixes=(None, '_FromMerged'), **kwargs)
+            new_table = copy.deepcopy(self)
         new_table.table = df
         if right_is_table and right.is_std:
             new_table._Table__transforms.extend(right.get_transform_map())
@@ -389,7 +391,10 @@ class Table:
         if not isinstance(self.table, pd.core.frame.DataFrame):
             raise ValueError("There is no table to save to CSV")
 
-        self.table.to_csv(filename, index=False, errors="surrogateescape")
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore",category=DeprecationWarning, message='Passing a BlockManager')
+            warnings.filterwarnings("ignore",category=DeprecationWarning, message="__array__ implementation doesn't accept a copy keyword")
+            self.table.to_csv(filename, index=False, errors="surrogateescape")
 
         return filename
 
@@ -470,16 +475,22 @@ class Table:
                     expand_cols.append(t.new_column_name)
 
         if len(expand_cols)>0:
-            new_df = self.table.copy()
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore",category=DeprecationWarning, message='Passing a BlockManager')
+                new_df = self.table.copy()
             for c in expand_cols:
                 new_df[c] = new_df[c].apply(lambda x: x.values() if isinstance(x,dict) else x)
 
             try:
-                self.table = new_df.explode(expand_cols, ignore_index=True)
+                with warnings.catch_warnings():
+                    warnings.filterwarnings("ignore",category=DeprecationWarning, message='Passing a BlockManager')
+                    self.table = new_df.explode(expand_cols, ignore_index=True)
             except AttributeError as e:
                 # This is an issue with geopandas when exploding lists of columns
                 if len(expand_cols)==1:
-                    self.table = new_df.explode(expand_cols[0], ignore_index=True)
+                    with warnings.catch_warnings():
+                        warnings.filterwarnings("ignore",category=DeprecationWarning, message='Passing a BlockManager')
+                        self.table = new_df.explode(expand_cols[0], ignore_index=True)
                 else:
                     warnings.warn("Original table is a geopandas DataFrame, which has a known bug when expanding. "+
                                     "Converting to pandas DataFrame.")
@@ -826,8 +837,8 @@ class Source:
         if url:
             src = src[src['URL'].str.contains(url, regex=False)]
 
-        if pd.notnull(id):
-            src = src[src['dataset_id'].str.contains(id, regex=False)]
+        if dataset_id.notnull(id):
+            src = src[src['dataset_id'].apply(lambda x: x==id)]
 
         if year != None:
             src = src[src["Year"] == year]
@@ -1108,8 +1119,8 @@ class Source:
         if url:
             src = src[src['URL'].str.contains(url, regex=False)]
 
-        if pd.notnull(id):
-            src = src[src['dataset_id'].str.contains(id, regex=False, na=False)]
+        if dataset_id.notnull(id):
+            src = src[src['dataset_id'].apply(lambda x: x==id)]
 
         matchingYears = src["Year"]==year if not isinstance(year, list) else pd.Series(False, src.index)
 
@@ -1154,7 +1165,7 @@ class Source:
                 err_msg = f"There are no sources matching {table_type=} and {year=}"
                 if url:
                     err_msg+=f" and {url=}"
-                if pd.notnull(id):
+                if dataset_id.notnull(id):
                     err_msg+=f" and {id=}"
                 raise ValueError(err_msg)
             elif len(src) > 1:
@@ -1162,7 +1173,7 @@ class Source:
                     err_msg = f"There is more than one source matching {table_type=} and {year=}"
                     if url:
                         err_msg+=f" and {url=}"
-                    if pd.notnull(id):
+                    if dataset_id.notnull(id):
                         err_msg+=f" and {id=}"
                     if isinstance(year, list):
                         raise ValueError(err_msg+" It is possible that the year range covers more the one dataset." +
@@ -1483,7 +1494,9 @@ class Source:
 
 
 def _check_date(table, date_field):
-    table = table.copy()
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore",category=DeprecationWarning, message='Passing a BlockManager')
+        table = table.copy()
     if date_field != None and table is not None and len(table)>0 and date_field in table:
         dts = table[date_field]
         dts = dts[dts.notnull()]

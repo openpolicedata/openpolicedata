@@ -289,12 +289,12 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 
 			try:
 				table_start = src.load(datasets.iloc[i]["TableType"], [start_date, stop_date], 
-												agency=agency, pbar=False)
+												agency=agency, pbar=False, url=url, id=id)
 			except ValueError as e:
 				if str(e).startswith('Year range cannot contain the year corresponding to a single year dataset'):
 					start_date  = str(year) + "-01-01"
 					table_start = src.load(datasets.iloc[i]["TableType"], [start_date, stop_date], 
-												agency=agency, pbar=False)
+												agency=agency, pbar=False, url=url, id=id)
 				else:
 					raise
 			except DateFilterException as e:
@@ -327,13 +327,13 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 
 			try:
 				table_stop = src.load(datasets.iloc[i]["TableType"], [start_date, stop_date], 
-												agency=agency, pbar=False)
+												agency=agency, pbar=False, url=url, id=id)
 			except ValueError as e:
 				if str(e).startswith('There is more than one source matching') or \
 					str(e).startswith('Year range cannot contain the year corresponding to a single year dataset'):
 					stop_date  = str(year) + "-12-31"  
 					table_stop = src.load(datasets.iloc[i]["TableType"], [start_date, stop_date], 
-												agency=agency, pbar=False)
+												agency=agency, pbar=False, url=url, id=id)
 				else:
 					raise
 			sleep(sleep_time)

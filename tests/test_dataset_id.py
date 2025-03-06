@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import pytest
 import re
@@ -12,7 +13,10 @@ def test_parse_str():
     assert string == parse_id(string)
 
 def test_parse_json(req_csvfile):
-    df = pd.read_csv(req_csvfile)
+    if os.path.exists(f:=req_csvfile.replace('\\','/')):
+        df = pd.read_csv(f)
+    else:
+        df = pd.read_csv(req_csvfile)
 
     ids = df['dataset_id'][df['dataset_id'].notnull()]
     ids = ids[ids.str.startswith('[') | ids.str.startswith('{')]

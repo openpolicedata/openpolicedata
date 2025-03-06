@@ -34,7 +34,14 @@ merged with the the Survey2 sheet from Spreadsheet2.xlsx using the Case Number a
 '''
 
 import json
+import pandas as pd
 import re
+
+def notnull(x):
+    return isinstance(x, list) or pd.notnull(x)
+
+def isnull(x):
+    return not notnull(x)
 
 def parse_id(x):
     return json.loads(x) if isinstance(x,str) and x.startswith(('[','{')) else x

@@ -4,12 +4,12 @@ import json
 import pytest
 import re
 import requests
+import sys
 from zipfile import ZipFile
 
 if __name__ == "__main__":
-	import sys
 	sys.path.append('../openpolicedata')
-from openpolicedata import data_loaders
+from openpolicedata import data_loaders, dataset_id
 import pandas as pd
 try:
     import geopandas as gpd
@@ -22,7 +22,14 @@ warnings.filterwarnings(action='ignore', module='arcgis')
 
 @pytest.mark.parametrize('url',['https://stacks.stanford.edu/file/druid:yg821jf8611/yg821jf8611_ar_little_rock_2020_04_01.csv.zip',
                                 'https://www.chicagopolice.org/wp-content/uploads/legacy/2016-ISR.zip'])
-def test_load_single_file_csv_zip(url):
+def test_load_single_file_csv_zip(all_datasets, url):
+    ds = all_datasets[all_datasets['URL']==url]
+    assert len(ds)==1
+    if pd.notnull(ds['py_min_version'].iloc[0]):
+        if sys.version_info<=tuple(int(x) for x in ds['py_min_version'].iloc[0].split('.')):
+            # Dataset does not work in this Python version
+            return
+
     loader = data_loaders.Csv(url)
     df = loader.load(pbar=False)
 
@@ -39,7 +46,10 @@ def test_load_single_file_csv_zip(url):
                 'Sec-Fetch-Site': 'none',
                 'Sec-Fetch-User': '?1',
             }
-    df_true = pd.read_csv(url,encoding_errors='surrogateescape', storage_options=headers)
+    try:
+        df_true = pd.read_csv(url)
+    except:
+        df_true = pd.read_csv(url,encoding_errors='surrogateescape', storage_options=headers)
     assert df.equals(df_true)
 
 def test_load_multi_excel_file_zip():
@@ -77,37 +87,47 @@ def test_process_dates_year_input_wrong_order():
 
 @pytest.mark.parametrize("url, dataset", [
     ("https://wallkillpd.org/document-center/data/vehicle-a-pedestrian-stops/2016-vehicle-a-pedestrian-stops", 
-        "147-2016-2nd-quarter-vehicle-a-pedestrian-stops/file.html; 148-2016-3rd-quarter-vehicle-a-pedestrian-stops/file.html; 167-2016-4th-quarter-vehicle-pedestrian-stops/file.html"), 
+    '{"urls": ["147-2016-2nd-quarter-vehicle-a-pedestrian-stops/file.html", "148-2016-3rd-quarter-vehicle-a-pedestrian-stops/file.html", "167-2016-4th-quarter-vehicle-pedestrian-stops/file.html"]}'), 
     ("http://www.bremertonwa.gov/DocumentCenter/View", 
-        "*arrest*| 4713/January-2017-XLSX; 4873/February-2017-XLSX; 4872/March-2017-XLSX; https://raw.githubusercontent.com/openpolicedata/opd-datasets/main/data/Washington_Bremerton_ARRESTS_April_2017.csv; 5026/May-2017-XLSX; 5153/June-2017-XLSX; 5440/July-2017-XLSX; 5441/August-2017-XLSX; 5477/September-2017-XLSX; 5548/October-2017-XLSX; 5608/November-2017-XLSX; 5607/December-2017-XLSX"),
+    '{"sheets": "*arrest*", "urls": ["4713/January-2017-XLSX", "4873/February-2017-XLSX", "4872/March-2017-XLSX", "https://raw.githubusercontent.com/openpolicedata/opd-datasets/main/data/Washington_Bremerton_ARRESTS_April_2017.csv", "5026/May-2017-XLSX", "5153/June-2017-XLSX", "5440/July-2017-XLSX", "5441/August-2017-XLSX", "5477/September-2017-XLSX", "5548/October-2017-XLSX", "5608/November-2017-XLSX", "5607/December-2017-XLSX"]}'),
     ("https://mpdc.dc.gov/sites/default/files/dc/sites/mpdc/publication/attachments", 
-        'Open YTD & Closed YTD; New Lawsuits & Closed Lawsuits & New Claims & Closed Claims| New%20and%20Closed%20Lawsuits%20CY%202023%20as%20of%207.20.2023.xlsx; New%20and%20Closed%20Lawsuits%20and%20Claims%202023%20July-December%20External.xlsx')
+    '[{"urls": ["New and Closed Lawsuits CY 2023 as of 7.20.2023.xlsx"], "sheets": ["Open YTD", "Closed YTD"]}, {"urls": ["New and Closed Lawsuits and Claims 2023 July-December External.xlsx"], "sheets": ["New Lawsuits", "Closed Lawsuits", "New Claims", "Closed Claims"]}]')
     ]
     )
 def test_combined(url, dataset):
-    loader = data_loaders.CombinedDataset(data_loaders.Excel, url, dataset)
+    dataset_dict = dataset_id.parse_id(dataset)
+    exp_datasets = dataset_id.expand(dataset_dict)
+    assert dataset_id.is_combined_dataset(exp_datasets)
+    loader = data_loaders.CombinedDataset(data_loaders.Excel, url, exp_datasets, pbar=False)
 
     assert loader.isfile()
 
-    sheets = None
-    if '|' in dataset:
-        dataset = dataset.split('|')
-        assert len(dataset)==2
-        sheets = dataset[0].split(';')
-        dataset = dataset[1]
+    dataset_dict_gt = json.loads(dataset)
+    if isinstance(dataset_dict_gt, dict) and set(dataset_dict_gt.keys())=={'urls'}:
+        exp_datasets_gt = [{'url':x} for x in dataset_dict_gt['urls']]
+    elif isinstance(dataset_dict_gt, dict) and set(dataset_dict_gt.keys())=={'urls','sheets'}:
+        exp_datasets_gt = [{'url':x, 'sheets':[dataset_dict_gt['sheets']]} for x in dataset_dict_gt['urls']]
+    elif isinstance(dataset_dict_gt, list) and set(dataset_dict_gt[0].keys())=={'urls','sheets'} and len(dataset_dict_gt[0]['urls'])==1:
+        exp_datasets_gt = [{'url':x['urls'][0], 'sheets':x['sheets']} for x in dataset_dict_gt]
+    else:
+        raise NotImplementedError()
 
     dfs = []
-    for k,ds in enumerate(dataset.split(';')):
-        ds = ds.strip()
+    for ds in exp_datasets_gt:
         headers = {'User-agent' : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_3) AppleWebKit/537.75.14 (KHTML, like Gecko) Version/7.0.3 Safari/7046A194A'}
-        for s in sheets[min(k,len(sheets)-1)].split('&') if sheets else [0]:
-            if ds.endswith('.csv'):
-                df = pd.read_csv(ds)
-            else:
-                r = requests.get(url + '/' + ds, stream=True, headers=headers)
-                r.raise_for_status()
-                file_like = BytesIO(r.content)
-                if isinstance(s,str):
+        if 'url' in ds and ds['url'].endswith('.csv'):
+            dfcur = pd.read_csv(ds['url'])
+            cols = [x for x in dfcur.columns if not x.startswith('Unnamed')]
+            dfcur = dfcur[cols]
+            dfs.append(dfcur)
+        else:
+            url_cur = url + '/' + ds['url'] if 'url' in ds else url
+            r = requests.get(url_cur, stream=True, headers=headers)
+            r.raise_for_status()
+            file_like = BytesIO(r.content)
+            sheets = ds['sheets'] if 'sheets' in ds else [0]
+            for s in sheets:
+                if isinstance(s, str):
                     s = s.strip()
                     if '*' in s:
                         all_sheets = pd.ExcelFile(file_like).sheet_names
@@ -115,17 +135,20 @@ def test_combined(url, dataset):
                         s = [x for x in all_sheets if re.search(p,x)]
                         assert len(s)==1
                         s = s[0]
-                df = pd.read_excel(file_like, sheet_name=s)
-            cols = [x for x in df.columns if not x.startswith('Unnamed')]
-            df = df[cols]
-            dfs.append(df)
+
+                dfcur = pd.read_excel(file_like, sheet_name=s)
+
+                cols = [x for x in dfcur.columns if not x.startswith('Unnamed')]
+                dfcur = dfcur[cols]
+                dfs.append(dfcur)
+        
     df_true = pd.concat(dfs, ignore_index=True).convert_dtypes()
 
     count = loader.get_count(force=True)
+    df = loader.load().convert_dtypes()
 
     assert len(df_true) == count
-
-    df = loader.load().convert_dtypes()
+    
     pd.testing.assert_frame_equal(df, df_true)
 
     offset = 3000
@@ -761,6 +784,8 @@ def test_1st_row_not_headers(skip, src, url, multitable):
         df = df.convert_dtypes()
         df.columns = [x.strip() if isinstance(x, str) else x for x in df.columns]
 
+        df = df.dropna(axis=0, thresh=2).reset_index(drop=True)
+
         return df
     
     headers = {'User-agent' : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_3) AppleWebKit/537.75.14 (KHTML, like Gecko) Version/7.0.3 Safari/7046A194A'}
@@ -888,7 +913,7 @@ def test_excel_year_sheets(skip, src, url, date_field, yrs):
 
 
 def test_excel_header():
-    url = "https://cms7files1.revize.com/sparksnv/Document_Center/Sparks%20Police/IA%20Data/2000-2022-SPD-OIS-Incidents%20(3).xlsx"
+    url = "https://www.cityofsparks.us/2000-2024-SPD-OIS-Incidents%20(3).xlsx"
 
     loader = data_loaders.Excel(url)
     df = loader.load(pbar=False)

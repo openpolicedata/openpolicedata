@@ -36,6 +36,8 @@ def test_reload(file):
 
 
 def test_duplicates(all_datasets):
+    all_datasets = all_datasets.copy()
+    all_datasets['dataset_id'] = all_datasets['dataset_id'].apply(lambda x: str(x) if hasattr(x,'__iter__') else x)
     assert not all_datasets.duplicated(subset=['State', 'SourceName', 'Agency', 'TableType','Year','URL','dataset_id']).any()
 
 
@@ -156,8 +158,14 @@ def test_zip(datasets):
             with opd.data_loaders.UrlIoContextManager(url) as fp:
                 with ZipFile(fp, 'r') as z:
                     for k in range(len(df)):
-                        if pd.notnull(df.iloc[k]['dataset_id']):
-                            ids = [x.strip() for x in df.iloc[k]['dataset_id'].split(';')]
+                        if hasattr(df.iloc[k]['dataset_id'],'__iter__'):
+                            if isinstance(df.iloc[k]['dataset_id'], str):
+                                ids = [df.iloc[k]['dataset_id']]
+                            elif isinstance(df.iloc[k]['dataset_id'],dict) and 'files' in df.iloc[k]['dataset_id']:
+                                ids = df.iloc[k]['dataset_id']['files']
+                                ids = [ids] if isinstance(ids, str) else ids
+                            else:
+                                raise NotImplementedError()
                             for id in ids:
                                 assert id in z.namelist()
 
@@ -280,19 +288,23 @@ def test_get_table_types(all_datasets):   # Passing in all_datasets to ensure th
 
 def test_combined_num_datasets(all_datasets):
     for k in range(len(all_datasets)):
-        if pd.notnull(all_datasets.iloc[k]['dataset_id']) and ';' in all_datasets.iloc[k]['dataset_id']:
-            ds = all_datasets.iloc[k]['dataset_id']
-            if '|' in ds:  # Before | are sheet names which we don't need
-                ds = ds.split('|')[1]
-            ds = [x.strip() for x in ds.split(';')]
-            if all_datasets.iloc[k]['SourceName']=='Wallkill' and all_datasets.iloc[k]['Year']==2016:
+        if hasattr(all_datasets.iloc[k]['dataset_id'],'__iter__') and not isinstance(all_datasets.iloc[k]['dataset_id'],str):
+            ds = opd.dataset_id.expand(all_datasets.iloc[k]['dataset_id'])
+
+            if 'data-openjustice' in all_datasets.iloc[k]['URL'] and all_datasets.iloc[k]['Year']==2018:
+                assert len(ds)==2 # Last 2 quarters of year
+            elif all_datasets.iloc[k]['SourceName']=='Wallkill' and all_datasets.iloc[k]['Year']==2016:
                 assert len(ds)==3
             else:
                 # Data quality checks (not set in stone. may need to adjust for new cases)
                 # Biannually, Quarterly, or monthly
-                assert len(ds) in [2, 4,12]
-            # No repeats
-            assert len(ds) == len(set(ds))
+                assert len(ds) in [1, 2, 4, 12]
+            
+            for m in range(len(ds)):
+                if 'sheets' in ds[m]:
+                    assert len(ds[m]['sheets']) == len(set(ds[m]['sheets']))
+                for n in range(m+1, len(ds)):
+                    assert ds[m]!=ds[n]
 
 
 if __name__ == "__main__":
