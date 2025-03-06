@@ -1,7 +1,7 @@
 sodapy
 pandas[html]>=2.1, <3.0.0
 rapidfuzz
-numpy<2.0.0
+numpy
 requests
 packaging
 tqdm
