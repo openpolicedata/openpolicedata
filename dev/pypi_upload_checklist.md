@@ -1,6 +1,7 @@
 - [ ] Update version number in _version.txt
 - [ ] Update dataset dates with update_dates in update_table.py in opd-data repo
 - [ ] Test code with min and max Python versions and Ubuntu
+- [ ] Review outages
 - [ ] Run data cleaning script
 - [ ] Update readme with changelog 
 - [ ] Update readme and website (datasets/index) latest datasets
@@ -19,10 +20,10 @@ python -m build
 ```
 - [ ] Create and activate a new environment: 
 ```sh
-conda create -n v{#}-test python=3.12
+conda create -n v{#}-test python=3.13 -y
 conda activate v{#}-test
 ```
-- [ ] Install new version
+- [ ] Install new version: pip install ..\openpolicedata\dist\openpolicedata-{#}-py3-none-any.whl[optional,test]
 ```sh
 - [ ] Copy tests into a new folder outside openpolicedata folder
 - [ ] cd to that folder

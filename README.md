@@ -29,32 +29,27 @@ OpenPoliceData provides access to police data with 2 simple lines of code:
 ![alt text](https://github.com/openpolicedata/opd-data/blob/main/OPD_Datasets_Map.png?raw=true)
 
 ## Latest Datasets Added to OPD
+- Washington D.C.: 2023 Use of Force
+- Rochester, NY: Use of Force and Officer-Involved Shootings
+- Omaha, NE: Officer-Involved Shootings, Complaints, and Traffic Stops
+- Merced, CA: Use of Force and Complaints
+- St. Paul, MN: 2023 Citations
+- Philadelphia: 2023 Crashes
 - California: Stops data for all departments submitted for RIPA for 2018-2022
 - Mapping Police Violence police killings
 - Washington Post police killings
 - Indiana: Officer-Involved Shootings
 - Pittsburgh, PA: Complaints, traffic stops, and use of force
-- Fort Worth, TX: Traffic stops and use of force
-- Yakima County, WA: Use of force
-- Washington D.C.: Historical (2010-2017) stops data
-- South Bend, IN: Complaints involving administrative investigations
-- Tucson, AZ: Added additional years of arrests
 
-## v0.9 - 2024-11-23
+## v0.10 - 2025-03-09
 ### Added
-- Added ability to load an Excel file from a zip file containing multiple files
-- Adding ability to load multiple CSV files from the same year from a zip file
-- Adding ability to handle datasets containing data from multiple states
-- Adding ability for CSV files to have a query in the source table to only show relevant police data
-- Added minimum Python version to datasets
+- Added test that all datasets associated with a loader were added after introduction of that loader
+- Add Excel loader code to handle complex Omaha officer-involved shootings datasets
+- Add query capability to Arcgis loader
 ### Changed
-- No longer throwing error if state field is not a known state. Enables multi-state datasets, which will break pre-v0.6 that do not allow for compatibility tables
-### Removed
-- No longer updating datasets table when data load finds a capitalization error in the date field
-### Fixed
-- sortby inputs to data loaders now all work
-- Fixed issue where input swap checks in Source methods were checking for swaps in the wrong in put.
-- Warnings were not being displayed when compatibility source table was being used
+- Improved removal of non-table data from Excel sheets
+- Improved logging when using verbose input in Source and Table methods
+- Changed some dataset IDs to be in JSON format instead of custom format
 
 Complete change log available at: https://github.com/openpolicedata/openpolicedata/blob/main/CHANGELOG.md
 

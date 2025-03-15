@@ -17,6 +17,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
+## v0.10 - 2025-03-09
+### Added
+- Added test that all datasets associated with a loader were added after introduction of that loader
+- Add Excel loader code to handle complex Omaha officer-involved shootings datasets
+- Add query capability to Arcgis loader
+### Changed
+- Improved removal of non-table data from Excel sheets
+- Improved logging when using verbose input in Source and Table methods
+- Changed some dataset IDs to be in JSON format instead of custom format
+
 ## v0.9 - 2024-11-23
 ### Added
 - Added ability to load an Excel file from a zip file containing multiple files

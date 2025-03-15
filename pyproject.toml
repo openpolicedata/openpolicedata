@@ -29,7 +29,7 @@ classifiers = [
 ]
 dependencies = [
     "openpyxl",
-    "numpy<2.0.0",
+    "numpy",
     "packaging",
     "pandas[html] >= 2.1.0, <3.0.0",
     "requests",

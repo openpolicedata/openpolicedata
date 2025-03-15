@@ -44,7 +44,11 @@ def isnull(x):
     return not notnull(x)
 
 def parse_id(x):
-    return json.loads(x) if isinstance(x,str) and x.startswith(('[','{')) else x
+    if isinstance(x,str) and x.startswith(('[','{')):
+        x = x.replace('“','"').replace('”','"')  # json cannot handle curly quotes
+        return json.loads(x)
+    else:
+        return x
 
 def parse(s):
     return s.apply(parse_id)
