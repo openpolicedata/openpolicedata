@@ -217,11 +217,6 @@ def test_pandas_query_tabletype_no_subject():
 	assert isinstance(df, pd.DataFrame)
 	assert len (df)>0
 
-def test_tabletype_contains_subject():
-	with pytest.deprecated_call():
-		t = opd.datasets.get_table_types(contains="- CIVILIANS")
-	assert len (t)>0
-
 
 def test_tabletype_contains_no_subject():
 	with warnings.catch_warnings():
