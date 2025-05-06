@@ -84,4 +84,4 @@ filterwarnings = [
     "ignore:Passing a SingleBlockManager to Series.*:DeprecationWarning:geopandas:",
     "ignore:Mismatched null-like values.*:FutureWarning::",
 ]
-addopts = "--csvfile='..\\opd-data\\opd_source_table.csv' --runslow --use-changed-rows"
+# addopts = "--csvfile='..\\opd-data\\opd_source_table.csv' --runslow --use-changed-rows"  #  
