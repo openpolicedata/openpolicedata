@@ -40,22 +40,6 @@ class TableType(str, Enum):
     def __str__(self):
         return self.value
     
-    
-    @classmethod
-    def _missing_(cls, value):
-        # https://stackoverflow.com/questions/37444002/overriding-enum-call-method
-        # Handles deprecation of CIVILIANS usage to SUBJECTS
-        if "- CIVILIANS" in value:
-            new_value = value.replace("- CIVILIANS", "- SUBJECTS")
-            if new_value in TableType._value2member_map_:
-                warnings.warn(
-                    f"TableType {value} is deprecated. CIVILIAN has been replaced with SUBJECT in TableType names. Requested TableType has been automatically updated to {new_value}.",
-                    DeprecationWarning,
-                )
-                return TableType(new_value)
-        
-        return super()._missing_(value)
-
     # Below tuples are (value, description)
     ARRESTS = ("ARRESTS", "Seizures or forcible restraints by police")
     CALLS_FOR_SERVICE = ("CALLS FOR SERVICE", "Includes dispatched calls (911 or non-emergency #) and officer-initiated calls")
