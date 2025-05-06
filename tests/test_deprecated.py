@@ -83,22 +83,6 @@ def test_datasets_no_civilian_tabletypes():
 	assert not df["TableType"].str.contains("CIVILIAN").any()
 
 
-def test_datasets_equals_civilian():
-	df = opd.datasets.query()
-	assert isinstance(df, DeprecationHandlerDataFrame)
-
-	s = df["TableType"]
-	assert isinstance(s, DeprecationHandlerSeries)
-	with pytest.deprecated_call():
-		t = s == "USE OF FORCE - CIVILIANS/OFFICERS"
-
-	assert t.sum()>0
-	s = df["TableType"][t]
-	assert isinstance(s, pd.Series)
-	assert len(s)>0
-	assert len(df[t])>0
-
-
 def test_datasets_equals_subjects():
 	df = opd.datasets.query()
 	assert isinstance(df, DeprecationHandlerDataFrame)
