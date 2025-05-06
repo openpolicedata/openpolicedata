@@ -4,4 +4,3 @@ from . import defs
 from .import datasets
 from .defs import TableType
 from .defs import columns as Column
-from .deprecated.datasetsCompat import datasets_query

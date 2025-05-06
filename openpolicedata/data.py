@@ -1000,26 +1000,6 @@ class Source:
             yield self.__load(table_type, year, agency, True, pbar, nrows=min(nbatch, count-k), offset=k, 
                               verbose=verbose, url_contains=url, id=id, format_date=format_date, sortby=sortby)
     
-    @deprecated("load_from_url_gen is deprecated and will be removed in a future release. Please use load_iter instead. "+
-                "load_iter uses the same inputs except table_type now comes before year.")
-    def load_from_url_gen(self, 
-                          year: str | int | list[int], 
-                          table_type: str | defs.TableType | None = None, 
-                          agency: str | None = None, 
-                          pbar: bool = False, 
-                          nbatch: int = 10000, 
-                          offset: int = 0, 
-                          force: bool =False,
-                          verbose: bool | str | int = False
-                          ) -> Iterator[Table]:
-        '''load_from_url_gen is deprecated. Please use load_iter instead.
-        '''
-
-        count = self.get_count(table_type, year, agency, force, verbose=verbose)
-        for k in range(offset, count, nbatch):
-            yield self.__load(table_type, year, agency, True, pbar, nrows=min(nbatch, count-k), offset=k, verbose=verbose)
-
-    
     @input_swap([1,2], ['table_type','year'], [defs.TableType, {'values':[defs.NA, defs.MULTI], 'types':[list, int]}], error=True, opt1=None)
     def load(self, 
             table_type: str | defs.TableType, 
@@ -1082,23 +1062,6 @@ class Source:
                            verbose=verbose, url_contains=url, id=id, format_date=format_date)
 
     
-    @deprecated("load_from_url is deprecated and will be removed in a future release. Please use load instead. "+
-                "load uses the same inputs except table_type now comes before year.")
-    def load_from_url(self, 
-                      year: str | int | list[int], 
-                      table_type: str | defs.TableType | None = None, 
-                      agency: str | None = None,
-                      pbar: bool = True,
-                      nrows: int | None = None, 
-                      offset: int = 0,
-                      sortby=None,
-                      verbose: bool | str | int = False
-                      ) -> Table:
-        '''load_from_url is deprecated and will be removed in a future release. Please use load instead.
-        '''
-
-        return self.__load(table_type, year, agency, True, pbar, nrows=nrows, offset=offset, sortby=sortby, verbose=verbose)
-
     def __find_datasets(self, table_type, src=None):
         if src is None:
             src = self.datasets.copy()

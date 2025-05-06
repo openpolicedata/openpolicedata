@@ -8,7 +8,6 @@ import warnings
 import openpolicedata as opd
 from openpolicedata.defs import TableType
 from openpolicedata.deprecated._decorators import deprecated, input_swap
-from openpolicedata.deprecated.datasetsCompat import datasets_query
 from openpolicedata.deprecated._pandas import DeprecationHandlerDataFrame, DeprecationHandlerSeries
 import pytest
 
@@ -77,12 +76,6 @@ def test_inputswap_class_error(year, table_type):
 @deprecated("MSG")
 def fdep():
 	pass
-
-@pytest.mark.parametrize("func", [fdep, datasets_query])
-def test_deprecated_decorator(func):
-	with pytest.deprecated_call():
-		func()
-
 
 @pytest.mark.parametrize("type1, type2", [("COMPLAINTS - SUBJECTS", 'COMPLAINTS - CIVILIANS'),
 										  ("USE OF FORCE - SUBJECTS/OFFICERS", 'USE OF FORCE - CIVILIANS/OFFICERS')])
