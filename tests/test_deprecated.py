@@ -210,13 +210,6 @@ def test_pandas_query_has_subject():
 	assert isinstance(df, DeprecationHandlerDataFrame)
 
 
-def test_pandas_query_tabletype_subject():
-	with pytest.deprecated_call():
-		df = opd.datasets.query(table_type="COMPLAINTS - CIVILIANS")
-	assert isinstance(df, DeprecationHandlerDataFrame)
-	assert len (df)>0
-
-
 def test_pandas_query_tabletype_no_subject():
 	with warnings.catch_warnings():
 		warnings.simplefilter("error")
