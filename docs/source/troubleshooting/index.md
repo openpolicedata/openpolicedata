@@ -7,9 +7,12 @@ html_theme.sidebar_secondary.remove: true
 ---
 
 # Troubleshooting
-- [Dataset Will Not Load](#dataset-will-not-load)
-- [Deprecations](#deprecations)
-- [Report Issues](#report-issues)
+- [Troubleshooting](#troubleshooting)
+  - [Dataset Will Not Load](#dataset-will-not-load)
+  - [Deprecations](#deprecations)
+    - [Deprecation Warnings](#deprecation-warnings)
+    - [Current Deprecations](#current-deprecations)
+  - [Report Issues](#report-issues)
 
 ## Dataset Will Not Load
 OpenPoliceData (OPD) accesses data from many different websites, and occasionally, some websites will be unavailable due to temporary maintenance, data being removed, or data being reposted to a new URL. When unavailable datasets are requested, the resulting error often includes an [HTTP error code](https://en.wikipedia.org/wiki/List_of_HTTP_status_codes#4xx_client_errors) such as `404 Not Found` error. OPD tries to catch these errors to provide tips to the user on how to determine if the error is due to an unavailable website:
@@ -52,12 +55,7 @@ True
 ```
 
 ### Current Deprecations
-The following are deprecated and will be removed in OPD Version 1.0:
-- The word 'CIVILIAN' has been replaced by 'SUBJECT' in table type names
-- Function `opd.datasets_query` has been replaced by `opd.datasets.query`
-- Class function `opd.Source.load_from_url` has been replaced by `opd.Source.load_from_url`
-- Class function `opd.Source.load_from_url_gen` has been replaced by `opd.Source.load_iter`
-- All functions of `opd.Source` where the `year` input was before the `table_type` input, i.e. opd.Source.get_count(year, table_type), will now have those inputs reversed, i.e. opd.Source.get_count(table_type, year)
+There are currently no deprecated features. All previously deprecated functionality has been removed in version 1.0.
 
 ## Report Issues
 Report issues with OPD by [creating an issue](https://github.com/openpolicedata/openpolicedata/issues) or [emailing us](mailto:openpolicedata@gmail.com).
