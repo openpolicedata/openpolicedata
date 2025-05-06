@@ -282,41 +282,6 @@ def test_datasets_iloc_warning(all_datasets, y):
 	with pytest.deprecated_call():
 		all_datasets.iloc[0,y]
 
-@pytest.mark.parametrize("x, y", [(None, 'Test'), ('Test', 'Test')])
-def test_url_contains_warning(x,y):
-	with pytest.deprecated_call():
-		result,_ = opd.data._handle_deprecated_filters(url=x, url_contains=y, id=None, id_contains=None)
-
-	assert result==y
-
-@pytest.mark.parametrize("x, y", [(None, 'Test'), ('Test', 'Test')])
-def test_id_contains_warning(x,y):
-	with pytest.deprecated_call():
-		_,result = opd.data._handle_deprecated_filters(url=None, url_contains=None, id=x, id_contains=y)
-
-	assert result==y
-
-def test_url_contains_error():
-	with pytest.raises(ValueError):
-		opd.data._handle_deprecated_filters(url='TEST', url_contains='TEST2', id=None, id_contains=None)
-
-def test_id_contains_error():
-	with pytest.raises(ValueError):
-		opd.data._handle_deprecated_filters(url=None, url_contains=None, id='TEST', id_contains='TEST2')
-
-
-def test_url_success():
-	url = 'TEST'
-	result,_ = opd.data._handle_deprecated_filters(url=url, url_contains=None, id=None, id_contains=None)
-
-	assert result==url
-
-def test_id_success():
-	id = 'TEST'
-	_, result = opd.data._handle_deprecated_filters(url=None, url_contains=None, id=id, id_contains=None)
-
-	assert result==id
-
 if __name__ == "__main__":
 	csvfile = None
 	csvfile = "C:\\Users\\matth\\repos\\opd-data\\opd_source_table.csv"
