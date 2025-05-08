@@ -7,7 +7,6 @@ import warnings
 
 from . import defs, dataset_id
 from .deprecated._pandas import DeprecationHandlerDataFrame
-from .deprecated.messages import CIV_DEPRECATION_MESSAGE, CIV_REPLACEMENT_MESSAGE
 from .deprecated.source_table_compat import check_compat_source_table
 
 # Location of table where datasets available in opd are stored
@@ -141,11 +140,6 @@ def query(
         query_str += "Agency == '" + agency + "' and " 
 
     if table_type != None:
-        if "CIVILIAN" in str(table_type):
-            new_table_type = str(table_type).replace("CIVILIAN", "SUBJECT")
-            warnings.warn(CIV_DEPRECATION_MESSAGE + CIV_REPLACEMENT_MESSAGE.format(table_type, new_table_type),
-                            DeprecationWarning)
-            table_type = new_table_type
         query_str += "TableType == '" + table_type + "' and "
 
     if len(query_str) == 0:
@@ -314,11 +308,6 @@ def get_table_types(contains=None):
     df = query()
     table_types = df["TableType"].unique()
     if contains is not None:
-        if "CIVILIAN" in contains:
-            new_contains = str(contains).replace("CIVILIAN", "SUBJECT")
-            warnings.warn(CIV_DEPRECATION_MESSAGE + CIV_REPLACEMENT_MESSAGE.format(contains, new_contains),
-                            DeprecationWarning)
-            contains = new_contains
         table_types = [x for x in table_types if contains.lower() in x.lower()]
     table_types.sort()
     return table_types

@@ -1,7 +1,6 @@
 import warnings
 from pandas import DataFrame, Series
 from pandas.core.indexing import _iLocIndexer, _LocIndexer
-from .messages import CIV_DEPRECATION_MESSAGE, CIV_REPLACEMENT_MESSAGE
 
 def _cast_if_necessary(result):
     if isinstance(result, Series) and result.name == 'TableType' and \
@@ -43,22 +42,10 @@ class _LocIndexerSub(_LocIndexer):
 
 class DeprecationHandlerSeries(Series):
     def _cmp_method(self, other, op):
-        if 'CIVILIAN' in other:
-            new_other = other.replace("CIVILIAN","SUBJECT")
-            warnings.warn(CIV_DEPRECATION_MESSAGE + CIV_REPLACEMENT_MESSAGE.format(other, new_other),
-                            DeprecationWarning,
-                            stacklevel=1)
-            other = new_other
-
         return super()._cmp_method(other, op)
  
 
     def isin(self, values) -> Series:
-        if self.name == 'TableType' and any(["CIVILIAN" in x for x in values]):
-            new_values = [x.replace("CIVILIAN","SUBJECT") for x in values]
-            warnings.warn(DeprecationWarning(CIV_DEPRECATION_MESSAGE + CIV_REPLACEMENT_MESSAGE.format(values, new_values)))
-            values = new_values
-
         return super().isin(values)       
 
 
