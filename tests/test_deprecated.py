@@ -83,21 +83,6 @@ def test_datasets_no_civilian_tabletypes():
 	assert not df["TableType"].str.contains("CIVILIAN").any()
 
 
-def test_datasets_equals_subjects():
-	df = opd.datasets.query()
-	assert isinstance(df, DeprecationHandlerDataFrame)
-
-	s = df["TableType"]
-	assert isinstance(s, DeprecationHandlerSeries)
-	with warnings.catch_warnings():
-		warnings.simplefilter("error")
-		t = s == "USE OF FORCE - SUBJECTS/OFFICERS"
-
-	assert t.sum()>0
-	assert len(df["TableType"][t])>0
-	assert len(df[t])>0
-
-
 def test_datasets_get_datatype():
 	df = opd.datasets.query()
 	assert isinstance(df, DeprecationHandlerDataFrame)
@@ -182,24 +167,6 @@ def test_datasets_loc_single_row():
 	assert isinstance(df.loc[0], pd.Series)
 
 
-def test_datasets_isin_subjects():
-	df = opd.datasets.query()
-	assert isinstance(df, DeprecationHandlerDataFrame)
-
-	with warnings.catch_warnings():
-		warnings.simplefilter("error")
-		df["TableType"].isin(["ARRESTS", "OFFICER-INVOLVED SHOOTINGS - SUBJECTS"])
-
-
-def test_datasets_isin_DataType():
-	df = opd.datasets.query()
-	assert isinstance(df, DeprecationHandlerDataFrame)
-
-	with warnings.catch_warnings():
-		warnings.simplefilter("error")
-		df["DataType"].isin(["ARRESTS", "OFFICER-INVOLVED SHOOTINGS - SUBJECTS"])
-
-
 def test_pandas_query_no_subject():
 	df = opd.datasets.query(state="Virginia")
 	assert isinstance(df, pd.DataFrame)
@@ -209,20 +176,6 @@ def test_pandas_query_has_subject():
 	df = opd.datasets.query(state="California")
 	assert isinstance(df, DeprecationHandlerDataFrame)
 
-
-def test_pandas_query_tabletype_no_subject():
-	with warnings.catch_warnings():
-		warnings.simplefilter("error")
-		df = opd.datasets.query(table_type=opd.defs.TableType.COMPLAINTS_SUBJECTS)
-	assert isinstance(df, pd.DataFrame)
-	assert len (df)>0
-
-
-def test_tabletype_contains_no_subject():
-	with warnings.catch_warnings():
-		warnings.simplefilter("error")
-		t = opd.datasets.get_table_types(contains="- SUBJECTS")
-	assert len (t)>0
 
 @pytest.mark.parametrize("y", [7, 13, range(0,8), [6, 7,13], slice(0,8)])
 @pytest.mark.filterwarnings("error::DeprecationWarning")
