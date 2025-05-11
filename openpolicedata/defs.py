@@ -9,7 +9,7 @@ from sys import version_info
 import warnings
 
 # These are the types of data currently available in opd.
-# They all have corresponding data loaders in data_loaders.py
+# They all have corresponding data loaders.
 # When new data loaders are added, this list should be updated.
 class DataType(str, Enum):
     ArcGIS = "ArcGIS"

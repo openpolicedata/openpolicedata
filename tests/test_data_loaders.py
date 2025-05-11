@@ -73,17 +73,17 @@ def test_load_multi_excel_file_zip():
 
 def test_process_date_input_empty():
     with pytest.raises(ValueError):
-        data_loaders._process_date([])
+        data_loaders.data_loader._process_date([])
     
 def test_process_date_too_many():
     year = [2021, 2022, 2023]
     with pytest.raises(ValueError):
-        data_loaders._process_date(year)
+        data_loaders.data_loader._process_date(year)
 
 def test_process_dates_year_input_wrong_order():
     year = [2023, 2021]
     with pytest.raises(ValueError):
-        data_loaders._process_date(year)
+        data_loaders.data_loader._process_date(year)
 
 @pytest.mark.parametrize("url, dataset", [
     ("https://wallkillpd.org/document-center/data/vehicle-a-pedestrian-stops/2016-vehicle-a-pedestrian-stops", 
@@ -164,8 +164,8 @@ def test_combined(url, dataset):
     
 
 def test_ckan():
-    lim = data_loaders._default_limit
-    data_loaders._default_limit = 500
+    lim = data_loaders.data_loader._default_limit
+    data_loaders.data_loader._default_limit = 500
     url = "https://data.virginia.gov"
     dataset = "60506bbb-685f-4360-8a8c-30e137ce3615"
     date_field = "STOP_DATE"
@@ -252,12 +252,12 @@ def test_ckan():
     df = loader.load(year=year_range, pbar=False, opt_filter=opt_filter)
     assert (df[agency_field]==agency).all()
 
-    data_loaders._default_limit = lim
+    data_loaders.data_loader._default_limit = lim
 
 
 def test_carto():
-    lim = data_loaders._default_limit
-    data_loaders._default_limit = 500
+    lim = data_loaders.data_loader._default_limit
+    data_loaders.data_loader._default_limit = 500
     url = "phl"
     dataset = "shootings"
     date_field = "date_"
@@ -313,13 +313,13 @@ def test_carto():
 
     assert df.equals(df_comp)
 
-    data_loaders._default_limit = lim
+    data_loaders.data_loader._default_limit = lim
 
-    if data_loaders._has_gpd:
+    if _has_gpd:
         assert type(df) == gpd.GeoDataFrame
-        data_loaders._has_gpd = False
+        data_loaders.carto._has_gpd = False
         df = loader.load(year=year, nrows=nrows, pbar=False)
-        data_loaders._has_gpd = True
+        data_loaders.carto._has_gpd = True
         assert isinstance(df, pd.DataFrame)
 
     url2 = "https://phl.carto.com/api/v2/sql?"
@@ -327,8 +327,8 @@ def test_carto():
     assert loader.url==loader2.url
 
 def test_arcgis():
-    lim = data_loaders._default_limit
-    data_loaders._default_limit = 500
+    lim = data_loaders.data_loader._default_limit
+    data_loaders.data_loader._default_limit = 500
     data_loaders._verify_arcgis = True
     url = "https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPDEmployeeDemographics/MapServer/0"
     gis = data_loaders.Arcgis(url)
@@ -364,7 +364,7 @@ def test_arcgis():
     df_offset = gis.load(offset=offset)
     assert df_offset.equals(df.iloc[offset:].reset_index(drop=True))
     
-    data_loaders._default_limit = lim
+    data_loaders.data_loader._default_limit = lim
 
     try:
         from arcgis.features import FeatureLayerCollection
@@ -557,8 +557,8 @@ def test_socrata_agency_filter():
     assert (df[agency_field]==agency).all()
 
 def test_socrata():
-    lim = data_loaders._default_limit
-    data_loaders._default_limit = 500
+    lim = data_loaders.data_loader._default_limit
+    data_loaders.data_loader._default_limit = 500
     url = "www.transparentrichmond.org"
     data_set = "asfd-zcvn"
     loader = data_loaders.Socrata(url, data_set)
@@ -580,9 +580,9 @@ def test_socrata():
     df_offset = df_offset[df.columns]
     assert df_offset.equals(df.iloc[offset:].reset_index(drop=True))
     
-    data_loaders._default_limit = lim
+    data_loaders.data_loader._default_limit = lim
 
-    client = data_loaders.SocrataClient(url, data_loaders.default_sodapy_key, timeout=60)
+    client = data_loaders.socrata.SocrataClient(url, data_loaders.socrata.default_sodapy_key, timeout=60)
     results = client.get(data_set, order=":id", limit=100000)
     rows = pd.DataFrame.from_records(results)
 
@@ -980,7 +980,8 @@ def test_excel_xls_protected():
 
     fp.close()
 
-    df_comp = pd.read_excel(open(file_path_decrypted, 'rb'))
+    with open(file_path_decrypted, 'rb') as f:
+        df_comp = pd.read_excel(f)
 
     os.remove(file_path)
     os.remove(file_path_decrypted)

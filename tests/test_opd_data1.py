@@ -336,7 +336,7 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 			update_outages(outages_file, datasets.iloc[i], False)
 
 			if pd.notnull(datasets.iloc[i]['query']):
-				for k,v in data_loaders.str2json(datasets.iloc[i]['query']).items():
+				for k,v in data_loaders.data_loader.str2json(datasets.iloc[i]['query']).items():
 					assert (table.table[k]==v).all()
 
 

@@ -2490,7 +2490,7 @@ def california_ori2agency(col, year, unknown='ignore'):
     try:
         ori_df = reader(data[0], index_col=data[2])
     except urllib.error.URLError:
-        with data_loaders.get_legacy_session() as session:
+        with data_loaders.data_loader.get_legacy_session() as session:
             r = session.get(data[0])
             
         r.raise_for_status()
