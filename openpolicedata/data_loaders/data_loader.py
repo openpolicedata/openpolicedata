@@ -44,9 +44,6 @@ def _process_date(date, date_field=None, force_year=False, datetime_format=None,
 
     if len(date)!=2:
         raise ValueError("date should be a list of length 2: [startYear, stopYear]")
-
-    if date[0] > date[1]:
-        raise ValueError('date[0] needs to be smaller than or equal to date[1]')
     
     is_year = force_year or (date_field != None and 'year' in date_field.lower())
     if is_year:
@@ -76,6 +73,9 @@ def _process_date(date, date_field=None, force_year=False, datetime_format=None,
     if datetime_format:
         start_date = datetime.strftime(pd.to_datetime(start_date), datetime_format)
         stop_date = datetime.strftime(pd.to_datetime(stop_date), datetime_format)
+
+    if start_date > stop_date:
+        raise ValueError(f'Start date {start_date} needs to be less than or equal to stop date {stop_date}')
 
     return start_date, stop_date
 
