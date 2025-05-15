@@ -206,6 +206,21 @@ def test_source_list_by_source_name(datasets, use_changed_rows):
     assert use_changed_rows or len(df)>0
     pd.testing.assert_frame_equal(df_truth, df)
 
+
+def test_source_list_by_source_name_fuzzy(all_datasets):
+    source_name_partial = "Charlotte"
+    source_name = 'Charlotte-Mecklenburg'
+    df = opd.datasets.query(source_name=source_name_partial, fuzzy_source=True)
+    df_truth = all_datasets[all_datasets["SourceName"]==source_name]
+    pd.testing.assert_frame_equal(df_truth, df)
+
+
+def test_source_list_by_source_name_not_fuzzy_bad_source():
+    source_name_partial = "Charlotte"
+    df = opd.datasets.query(source_name=source_name_partial, fuzzy_source=False)
+    assert len(df)==0
+
+
 def test_source_list_by_agency(datasets, use_changed_rows):
     agency = "Fairfax County"
     df = opd.datasets.query(agency=agency)

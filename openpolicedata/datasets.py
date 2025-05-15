@@ -1,6 +1,7 @@
 from __future__ import annotations  # This should not be necessary once Python 3.7 is no longer supported
 import pandas as pd
 import numpy as np
+from rapidfuzz import fuzz
 import re
 from typing import Optional, Union
 import warnings
@@ -108,7 +109,8 @@ def query(
     source_name: Optional[str] = None, 
     state: Optional[str] = None, 
     agency: Optional[str] = None,
-    table_type: Union[str,defs.TableType,None] = None
+    table_type: Union[str,defs.TableType,None] = None,
+    fuzzy_source: bool = False
 ) -> pd.DataFrame:
     """Query for available datasets.
     Request a DataFrame containing available datasets based on input filters.
@@ -124,6 +126,8 @@ def query(
         OPTIONAL name of agency to filter by agency
     table_type : str or TableType enum
         OPTIONAL name of table type to filter by type of data
+    fuzzy_source: bool
+        OPTIONAL Whether to accept fuzzy/partial matches for source_name
 
     RETURNS
     -------
@@ -133,7 +137,7 @@ def query(
     if state != None:
         query_str += "State == '" + state + "' and "
 
-    if source_name != None:
+    if source_name != None and not fuzzy_source:
         query_str += "SourceName == '" + source_name + "' and "
 
     if agency != None:
@@ -143,9 +147,16 @@ def query(
         query_str += "TableType == '" + table_type + "' and "
 
     if len(query_str) == 0:
-        return datasets.copy()
+        result = datasets.copy()
     else:
-        return datasets.query(query_str[0:-5]).copy()
+        result = datasets.query(query_str[0:-5]).copy()
+
+    if source_name != None and fuzzy_source:
+        match = result['SourceName'].apply(fuzz.partial_ratio, args=(source_name,))
+        result = result[match>90]
+
+    return result
+
 
 def num_unique() -> int:
     """_summary_

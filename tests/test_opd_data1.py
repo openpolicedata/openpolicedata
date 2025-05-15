@@ -68,6 +68,13 @@ def check_table_type_warning(all_datasets):
 	with pytest.warns(UserWarning):
 		data.Table(sources)
 
+
+def test_source_bad_source_name(all_datasets):
+	source_name_partial = "Charlotte"
+	with pytest.raises(ValueError, match='No sources found'):
+		opd.Source(source_name_partial)
+
+
 def test_not_verbose(logger, log_stream):
 	source = 'Lansing'
 	table = "OFFICER-INVOLVED SHOOTINGS"

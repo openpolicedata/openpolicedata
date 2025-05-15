@@ -706,16 +706,26 @@ class Source:
         -------
         Source object
         '''
-        self.datasets = datasets.query(source_name=source_name, state=state, agency=agency)
+        ds = datasets.query(source_name=source_name, state=state, agency=agency)
 
         # Ensure that all sources are from the same state
-        if len(self.datasets) == 0:
-            raise ValueError(f"No Sources Found for {source_name}")
-        elif self.datasets["State"].nunique() > 1:
-            raise ValueError(f"There are multiple sources matching the source name {source_name}. Please specify the state of the desired location in the 2nd argument.")
-        elif self.datasets["Agency"].nunique() > 1 and \
-            not self.datasets["Agency"].isin([defs.MULTI, defs.NA]).all():
-            raise exceptions.MultiAgencySourceError(f"There are multiple sources matching the source name {source_name}. Please specify an agency (likely agency=source_name or agency='MULTIPLE')")
+        if len(ds) == 0:
+            possible_datasets = datasets.query(source_name=source_name, state=state, agency=agency, fuzzy_source=True)
+            if len(possible_datasets)>0:
+                raise ValueError(f"No sources found for {source_name}. Did you mean {', '.join(possible_datasets['SourceName'].unique())}?")
+            else:
+                raise ValueError(f"No sources found for {source_name}")
+        elif ds["State"].nunique() > 1:
+            raise ValueError(f"There are multiple sources matching the source name {source_name}. "+\
+                             "Please specify the state of the desired location in the 2nd argument.")
+        elif ds["Agency"].nunique() > 1 and \
+            not ds["Agency"].isin([defs.MULTI, defs.NA]).all():
+            raise exceptions.MultiAgencySourceError(f"There are multiple sources matching the source name {source_name}. "+\
+                                                    "Please specify an agency (likely agency=source_name or agency='MULTIPLE')")
+        elif ds["SourceName"].nunique() > 1:
+            raise ValueError(f"Multiple sources found for {source_name}: {', '.join(ds['SourceName'].unique())}")
+        
+        self.datasets = ds
 
 
     def __repr__(self) -> str:
