@@ -58,4 +58,10 @@ True
 There are currently no deprecated features. All previously deprecated functionality has been removed in version 1.0.
 
 ## Report Issues
-Report issues with OPD by [creating an issue](https://github.com/openpolicedata/openpolicedata/issues) or [emailing us](mailto:openpolicedata@gmail.com).
+Report issues with OPD by [creating an issue](https://github.com/openpolicedata/openpolicedata/issues) or [emailing us](mailto:openpolicedata@gmail.com). 
+
+Please notify us of both issues with OPD itself and issues with the underlying datasets that OPD accesses. While issues loading datasets may be due to issues with the website that hosts the data, notifying us of these issues will allow us to do one or more of the following:
+ - Verify the issue is not with OPD
+ - Notify the data owner to try to resolve issues with the data
+ - Remove datasets that no longer work from our data source list
+ - Post a backup of the data so that the data remains accessible
