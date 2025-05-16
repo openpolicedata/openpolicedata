@@ -8,7 +8,7 @@
 - [ ] Update datasets tables in datasets/index
 - [ ] Update # of datasets in pyproject.toml, README, index.md, documentation.md, and GitHub about using num_unique in datasets.py
 - [ ] Update list of datasets that are modified when loaded by OPD
-- [ ] Update number of agencies (README, index.md, documentation.md, pyproject.toml, and datasets/index) using count_agencies in update_table.py in opd-data repo
+- [ ] Update number of agencies (README, index.md, documentation.md, pyproject.toml, and datasets/index) using num_sources in datasets module
 - [ ] Rerun jupyter notebooks as needed
 - [ ] Update map image using gen_sources_map.ipynb in opd-date repo
 - [ ] Update version number and date in citations/index.md
