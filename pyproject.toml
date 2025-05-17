@@ -61,7 +61,7 @@ repository = "https://github.com/openpolicedata/openpolicedata"
 tracker = "https://github.com/openpolicedata/openpolicedata/issues"
 
 [project.optional-dependencies]
-optional = ['rapidfuzz', 'msoffcrypto-tool']
+optional = ['msoffcrypto-tool']
 geopandas = ['geopandas']
 test = ['pytest']
 

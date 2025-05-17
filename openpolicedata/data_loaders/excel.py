@@ -5,6 +5,7 @@ import openpyxl
 import pandas as pd
 from pandas.api.types import is_numeric_dtype
 from pandas.api.types import is_datetime64_any_dtype as is_datetime
+from rapidfuzz import fuzz
 import re
 import requests
 import tempfile
@@ -299,11 +300,6 @@ class Excel(Data_Loader):
                                     for k in col_matches[m]:
                                         if table.columns[k]==df.columns[m]:
                                             break
-                                        try:
-                                            from rapidfuzz import fuzz
-                                        except:
-                                            raise ImportError(f"{self.url} requires installation of rapidfuzz " + 
-                                                "(https://pypi.org/project/rapidfuzz/) to load data from multiple years (pip install rapidfuzz)")
 
                                         if fuzz.ratio(table.columns[k], df.columns[m]) > 80 or \
                                             fuzz.token_sort_ratio(table.columns[k], df.columns[m])>90:
