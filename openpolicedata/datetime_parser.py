@@ -515,6 +515,9 @@ def to_datetime(dates, ignore_errors=False, *args, **kwargs):
             return pd.to_datetime(x, *args, **kwargs)
         except:
             return pd.NaT if coerce else x  # Coerce input to pd.to_datetime should return NaT if cannot convert to datetime
+        
+    if isinstance(dates, str):
+        dates = dates.strip()
 
     if isinstance(dates, pd.DataFrame) and \
         (dates.isnull().any().any() or dates.apply(lambda x: isinstance(x,str)).any()):

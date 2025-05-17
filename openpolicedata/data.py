@@ -1470,17 +1470,11 @@ def _check_date(table, date_field):
                 else:
                     table[date_field] = table[date_field].apply(pd.Period, args=('Y'))
             elif isinstance(one_date, str):
-                p = re.compile(r'^Unknown string format: \d{4}-(\d{2}|__)-(\d{2}|__) present at position \d+$')
                 def to_datetime_local(x):
                     try:
                         return to_datetime(x, ignore_errors=True)
-                    except ParserError as e:
-                        if len(e.args)>0 and p.match(e.args[0]) != None:
-                            return pd.NaT
-                        else:
-                            raise
                     except:
-                        raise
+                        return x
 
                 if logger:
                     logger.debug(f"Converting values in column {date_field} to datetime objects")
