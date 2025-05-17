@@ -87,7 +87,7 @@ class TableType(str, Enum):
                           "Incidents data may be split into several tables due to the possibility that multiple "+
                         "subjects may be involved in an incident. This table contains data on subjects.")
     LAWSUITS = ("LAWSUITS", "Lawsuits against a police department")
-    PEDESTRIAN = ("PEDESTRIAN STOPS","Stops of pedestrians based on 'reasonable suspicion'. May lead to a frisk.")
+    PEDESTRIAN_STOPS = ("PEDESTRIAN STOPS","Stops of pedestrians based on 'reasonable suspicion'. May lead to a frisk.")
     PEDESTRIAN_ARRESTS = ("PEDESTRIAN ARRESTS","Pedestrian stops leading to an arrest")
     PEDESTRIAN_CITATIONS = ("PEDESTRIAN CITATIONS","Pedestrian stops leading to a citation")
     PEDESTRIAN_WARNINGS = ("PEDESTRIAN WARNINGS","Pedestrian stops leading to a warning")
