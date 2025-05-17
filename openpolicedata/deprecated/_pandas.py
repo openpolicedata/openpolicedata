@@ -6,7 +6,7 @@ def _cast_if_necessary(result):
     if isinstance(result, Series) and result.name == 'TableType' and \
         result.str.contains("SUBJECT").any():
         result = DeprecationHandlerSeries(result)
-    elif isinstance(result, DataFrame) and 'TableType' in result and \
+    elif isinstance(result, DataFrame) and len(result)>0 and 'TableType' in result and \
         result["TableType"].str.contains("SUBJECT").any():
         result = DeprecationHandlerDataFrame(result)
 
