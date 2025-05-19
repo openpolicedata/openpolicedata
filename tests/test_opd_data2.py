@@ -239,7 +239,7 @@ def is_filterable(data_type):
 	data_type = DataType(data_type)
 	if data_type in [DataType.CSV, DataType.EXCEL, DataType.HTML]:
 		return False
-	elif data_type in [DataType.ArcGIS, DataType.SOCRATA, DataType.CARTO, DataType.CKAN]:
+	elif data_type in [DataType.ArcGIS, DataType.SOCRATA, DataType.CARTO, DataType.CKAN, DataType.OPENDATASOFT]:
 		return True
 	else:
 		raise ValueError("Unknown table type")

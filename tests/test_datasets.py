@@ -108,16 +108,16 @@ def test_multi_year_coverage(datasets):
 @pytest.mark.parametrize('source, partial_url', [('stanford','stanford'),('muckrock','muckrock'),
                                                  ('California Office of the Attorney General', 'openjustice.doj.ca.gov'),
                                                  ('openpolicedata','opd-datasets')])
-def test_3rd_party_source(datasets, source, partial_url):
-    ds = datasets[datasets['URL'].str.lower().str.contains(partial_url)]
+def test_3rd_party_source(all_datasets, source, partial_url):
+    ds = all_datasets[all_datasets['URL'].str.lower().str.contains(partial_url)]
     assert (ds['agency_originated'].str.lower()=='yes').all()
     assert (ds['supplying_entity'].str.lower().str.contains(source.lower())).all()
 
 @pytest.mark.parametrize('source, partial_url', [('stanford','stanford'),('muckrock','muckrock'),
                                                  ('California Office of the Attorney General', 'openjustice.doj.ca.gov'),
                                                  ('openpolicedata','opd-datasets')])
-def test_not_3rd_party(datasets, source, partial_url):
-    ds = datasets[~datasets['URL'].str.contains(partial_url)]
+def test_not_3rd_party(all_datasets, source, partial_url):
+    ds = all_datasets[~all_datasets['URL'].str.contains(partial_url)]
     assert not (ds['supplying_entity'].str.lower().str.contains(source.lower())).any()
 
 def test_agency_multiple(datasets):
@@ -128,7 +128,7 @@ def test_agency_multiple(datasets):
     assert (ds['agency_originated'][is_multiple_state]=='no').all()
     assert (ds['agency_originated'][~is_multiple_state]=='yes').all()
 
-@pytest.mark.parametrize('data_type', [opd.defs.DataType.SOCRATA, opd.defs.DataType.CARTO, opd.defs.DataType.CKAN])
+@pytest.mark.parametrize('data_type', [opd.defs.DataType.SOCRATA, opd.defs.DataType.CARTO, opd.defs.DataType.CKAN, opd.defs.DataType.OPENDATASOFT])
 def test_dataset_id(datasets, data_type):
     rem = datasets["dataset_id"][datasets["DataType"] == data_type]
     assert pd.isnull(rem).sum() == 0
@@ -254,7 +254,7 @@ def test_source_list_by_multi(datasets, use_changed_rows):
     pd.testing.assert_frame_equal(df_truth, df)
 
 def test_table_types(datasets):
-    for t in datasets["TableType"]:
+    for t in datasets["TableType"].unique():
         # Try to convert to an enum
         opd.defs.TableType(t)
 
@@ -268,7 +268,7 @@ def test_min_versions(datasets):
         if not (ver == "-1" or type(version.parse(ver)) == version.Version):
             raise ValueError(f"{ver} is an invalid value for min_version")
         
-@pytest.mark.parametrize('data_type, ver_added', [('Excel','0.3.1'), ('Carto','0.4.1'), ('CKAN','0.6'), ('HTML','0.7.3')])
+@pytest.mark.parametrize('data_type, ver_added', [('Excel','0.3.1'), ('Carto','0.4.1'), ('CKAN','0.6'), ('HTML','0.7.3'), ('Opendatasoft','1.0')])
 def test_loader_min_version(datasets, data_type, ver_added):
     datasets = datasets[datasets['DataType'].str.lower()==data_type.lower()]
     assert datasets['min_version'].isnull().sum()==0
@@ -295,7 +295,6 @@ def test_summary_functions():
         opd.datasets.summary_by_table_type()
 
 def test_get_table_types(all_datasets):   # Passing in all_datasets to ensure that local changes are used if csvfile is set 
-    opd.datasets.get_table_types()
     stops_tables = opd.datasets.get_table_types(contains="STOPS")
     exp_stops_tables = all_datasets['TableType'][all_datasets['TableType'].str.contains('STOPS')].unique()
     assert len(stops_tables) == len(exp_stops_tables)

@@ -18,6 +18,7 @@ class DataType(str, Enum):
     CSV = "CSV"
     EXCEL = "Excel"
     HTML = 'HTML'
+    OPENDATASOFT = 'Opendatasoft'
     SOCRATA = "Socrata"
     
 

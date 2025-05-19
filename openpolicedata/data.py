@@ -22,7 +22,7 @@ from . import __version__
 from . import preproc
 from . import defs
 from . import exceptions
-from .deprecated._decorators import deprecated, input_swap
+from .deprecated._decorators import input_swap
 from .datetime_parser import to_datetime
 
 logger = log.get_logger()
@@ -1418,6 +1418,8 @@ class Source:
                 loader = data_loaders.Excel(url, data_set=dataset, date_field=date_field, agency_field=agency_field) 
             elif data_type ==defs.DataType.ArcGIS:
                 loader = data_loaders.Arcgis(url, date_field=date_field, query=query)
+            elif data_type ==defs.DataType.OPENDATASOFT:
+                loader = data_loaders.Opendatasoft(url, data_set=dataset, date_field=date_field, query=query)
             elif data_type ==defs.DataType.SOCRATA:
                 loader = data_loaders.Socrata(url, dataset, date_field=date_field)
             elif data_type ==defs.DataType.CARTO:

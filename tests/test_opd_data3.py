@@ -186,7 +186,7 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 			except OPD_FutureError as e:
 				future_error = True
 				break
-			except (OPD_DataUnavailableError, OPD_SocrataHTTPError) as e:
+			except (OPD_DataUnavailableError, OPD_SocrataHTTPError, OPD_MinVersionError) as e:
 				caught_exceptions_warn.append(e)
 				tables[year] = None
 				continue

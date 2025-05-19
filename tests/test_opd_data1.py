@@ -435,6 +435,7 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 	(data_loaders.Arcgis, "Charlotte-Mecklenburg", 'EMPLOYEE', None, []),
 	(data_loaders.Csv, 'Denver', "OFFICER-INVOLVED SHOOTINGS", None, []),
 	(data_loaders.Excel, 'Rutland', "USE OF FORCE", None, []),
+	(data_loaders.Opendatasoft, 'Long Beach', "STOPS", None, [2021, [2020, 2022]]),
 	(data_loaders.Carto, "Philadelphia", 'STOPS', None, [2021, [2020, 2022]])
 	])
 def test_get_count(datasets, loader, source, table_type, agency, years):
@@ -511,7 +512,7 @@ def test_load_gen(source, year, table_type, nrows, agency):
 def can_be_limited(data_type, url):
 	if url.lower().endswith(".zip"):
 		return False
-	elif data_type in [DataType.ArcGIS, DataType.SOCRATA, DataType.CSV, DataType.EXCEL, DataType.CARTO, DataType.CKAN, DataType.HTML]:
+	elif data_type in [DataType.ArcGIS, DataType.SOCRATA, DataType.CSV, DataType.EXCEL, DataType.CARTO, DataType.CKAN, DataType.HTML, DataType.OPENDATASOFT]:
 		return True
 	else:
 		raise ValueError("Unknown table type")

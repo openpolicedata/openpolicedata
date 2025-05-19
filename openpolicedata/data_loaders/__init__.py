@@ -5,4 +5,5 @@ from .combine_dataset import CombinedDataset
 from .csv_class import Csv
 from .excel import Excel
 from .html import Html
+from .opendatasoft import Opendatasoft
 from .socrata import Socrata

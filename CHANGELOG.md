@@ -6,15 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 ### Added
-- Added test that all datasets associated with a loader were added after introduction of that loader
-- Add Excel loader code to handle complex Omaha officer-involved shootings datasets
+- Added fuzzy searching for source name in datasets query
+- Added rapidfuzz as required dependency
+- Added data loader for [Opendatasoft](https://www.opendatasoft.com/en/) API
 ### Changed
-- Improved removal of non-table data from Excel sheets
-- Improved logging when using verbose input in Source and Table methods
-- Changed some dataset IDs to be in JSON format instead of custom format
 ### Deprecated
 ### Removed
+- Removed deprecated load_from_url and load_from_url_gen functions
+- Removed deprecated datasets_query function
+- Removed handling to deprecated table types
+- Removed deprecated url_contains and id_contains inputs
 ### Fixed
+- Fixed bug when date was used in year input for Carto datasets
+- Now handling strings that are date strings if stripped
+- Changed enum for pedestrian stops table from PEDESTRIAN to PEDESTRIAN_STOPS
 ### Security
 
 ## v0.10 - 2025-03-09
