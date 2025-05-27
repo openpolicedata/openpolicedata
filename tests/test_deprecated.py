@@ -8,6 +8,7 @@ import warnings
 import openpolicedata as opd
 from openpolicedata.defs import TableType
 from openpolicedata.deprecated._decorators import deprecated, input_swap
+from openpolicedata.deprecated.datasetsCompat import datasets_query
 from openpolicedata.deprecated._pandas import DeprecationHandlerDataFrame, DeprecationHandlerSeries
 import pytest
 
