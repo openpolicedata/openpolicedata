@@ -811,6 +811,8 @@ class Source:
                      table_type: str | defs.TableType | None = None, 
                      year: str | int | None = None, 
                      partial_name: str | None = None,
+                     url_contains: str | None = None,
+                     id_contains: str | None = None,
                      url: str | None = None,
                      id: str | None = None
                      ) -> list[str]:
@@ -839,6 +841,8 @@ class Source:
         '''
 
         src = self.__find_datasets(table_type)
+
+        url, id = _handle_deprecated_filters(url, url_contains, id, id_contains)
 
         if url:
             src = src[src['URL'].str.contains(url, regex=False)]
@@ -896,6 +900,8 @@ class Source:
                   agency: str | None = None, 
                   force: bool = False,
                   verbose: bool | str | int = False,
+                  url_contains: str | None = None,
+                  id_contains: str | None = None,
                   url: str | None = None,
                   id: str | None = None
                   ) -> int:
@@ -932,6 +938,8 @@ class Source:
             Table object containing the requested data
         '''
 
+        url, id = _handle_deprecated_filters(url, url_contains, id, id_contains)
+
         return self.__load(table_type, year, agency, True, pbar=False, return_count=True, force=force, verbose=verbose, 
                            url_contains=url, id=id)
     
@@ -946,6 +954,8 @@ class Source:
                 sortby=None,
                 force: bool =False,
                 verbose: bool | str | int = False,
+                url_contains: str | None = None,
+                id_contains: str | None = None,
                 format_date: bool = True,
                 url: str | None = None,
                 id: str | None = None
@@ -993,6 +1003,8 @@ class Source:
             generates Table objects containing the requested data
         '''
 
+        url, id = _handle_deprecated_filters(url, url_contains, id, id_contains)
+
         count = self.get_count(table_type, year, agency, force, verbose=verbose, url=url, id=id)
         for k in range(offset, count, nbatch):
             yield self.__load(table_type, year, agency, True, pbar, nrows=min(nbatch, count-k), offset=k, 
@@ -1028,6 +1040,8 @@ class Source:
             offset: int = 0,
             sortby=None,
             verbose: bool | str | int = False,
+            url_contains: str | None = None,
+            id_contains: str | None = None,
             format_date: bool = True,
             url: str | None = None,
             id: str | None = None
@@ -1071,6 +1085,8 @@ class Source:
         Table
             Table object containing the requested data
         '''
+
+        url, id = _handle_deprecated_filters(url, url_contains, id, id_contains)
 
         return self.__load(table_type, year, agency, True, pbar, nrows=nrows, offset=offset, sortby=sortby, 
                            verbose=verbose, url_contains=url, id=id, format_date=format_date)
@@ -1276,6 +1292,8 @@ class Source:
                       table_type: str | defs.TableType | None = None,
                       agency: str | None = None,
                       zip: bool =False,
+                      url_contains: str | None = None,
+                      id_contains: str | None = None,
                       format_date: bool = True,
                       filename: str | None = None,
                       url: str | None = None,
@@ -1314,6 +1332,8 @@ class Source:
         Table
             Table object containing the requested data
         '''
+
+        url, id = _handle_deprecated_filters(url, url_contains, id, id_contains)
 
         table = self.__load(table_type, year, agency, False, url_contains=url, id=id, format_date=format_date)
 
@@ -1394,6 +1414,8 @@ class Source:
                          output_dir: str | None = None, 
                          table_type: str | defs.TableType | None = None,
                          agency: str | None = None,
+                         url_contains: str | None = None,
+                         id_contains: str | None = None,
                          url: str | None = None,
                          id: str | None = None
                          ) -> str:
@@ -1423,6 +1445,8 @@ class Source:
         str
             Auto-generated CSV filename
         '''
+
+        url, id = _handle_deprecated_filters(url, url_contains, id, id_contains)
 
         table = self.__load(table_type, year, agency, False, url_contains=url, id=id)
 
