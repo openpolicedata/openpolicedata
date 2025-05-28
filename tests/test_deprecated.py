@@ -78,6 +78,12 @@ def test_inputswap_class_error(year, table_type):
 def fdep():
 	pass
 
+@pytest.mark.parametrize("type1, type2", [("COMPLAINTS - SUBJECTS", 'COMPLAINTS - CIVILIANS'),
+										  ("USE OF FORCE - SUBJECTS/OFFICERS", 'USE OF FORCE - CIVILIANS/OFFICERS')])
+def test_deprecated_enums(type1, type2):
+	with pytest.deprecated_call():
+		assert TableType(type1) == TableType(type2)
+
 
 def test_datasets_no_civilian_tabletypes():
 	df = opd.datasets.query()
