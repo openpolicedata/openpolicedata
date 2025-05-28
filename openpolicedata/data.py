@@ -1145,7 +1145,7 @@ class Source:
             yield self.__load(table_type, year, agency, True, pbar, nrows=min(nbatch, count-k), offset=k, 
                               verbose=verbose, url_contains=url, id=id, format_date=format_date, sortby=sortby)
     
-    @deprecated("load_from_url_gen is deprecated and will be removed in a future release. Please use load_iter instead. "+
+    @deprecated("load_from_url_gen is deprecated and will be removed in the next release (v1.0). Please use load_iter instead. "+
                 "load_iter uses the same inputs except table_type now comes before year.")
     def load_from_url_gen(self, 
                           year: str | int | list[int], 
@@ -1227,7 +1227,7 @@ class Source:
                            verbose=verbose, url_contains=url, id=id, format_date=format_date)
 
     
-    @deprecated("load_from_url is deprecated and will be removed in a future release. Please use load instead. "+
+    @deprecated("load_from_url is deprecated and will be removed in the next release (v1.0). Please use load instead. "+
                 "load uses the same inputs except table_type now comes before year.")
     def load_from_url(self, 
                       year: str | int | list[int], 
