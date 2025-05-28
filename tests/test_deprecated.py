@@ -241,6 +241,32 @@ def test_pandas_query_has_subject():
 	assert isinstance(df, DeprecationHandlerDataFrame)
 
 
+def test_pandas_query_tabletype_subject():
+	with pytest.deprecated_call():
+		df = opd.datasets.query(table_type="COMPLAINTS - CIVILIANS")
+	assert isinstance(df, DeprecationHandlerDataFrame)
+	assert len (df)>0
+
+
+def test_pandas_query_tabletype_no_subject():
+	with warnings.catch_warnings():
+		warnings.simplefilter("error")
+		df = opd.datasets.query(table_type=opd.defs.TableType.COMPLAINTS_SUBJECTS)
+	assert isinstance(df, pd.DataFrame)
+	assert len (df)>0
+
+def test_tabletype_contains_subject():
+	with pytest.deprecated_call():
+		t = opd.datasets.get_table_types(contains="- CIVILIANS")
+	assert len (t)>0
+
+
+def test_tabletype_contains_no_subject():
+	with warnings.catch_warnings():
+		warnings.simplefilter("error")
+		t = opd.datasets.get_table_types(contains="- SUBJECTS")
+	assert len (t)>0
+
 @pytest.mark.parametrize("y", [7, 13, range(0,8), [6, 7,13], slice(0,8)])
 @pytest.mark.filterwarnings("error::DeprecationWarning")
 def test_datasets_iloc_no_warning(all_datasets, y):
