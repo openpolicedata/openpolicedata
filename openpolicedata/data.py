@@ -1681,3 +1681,20 @@ def _get_years_to_check(years, cur_year, force, isfile):
         years_to_check = [x for x in range(max_year+1,cur_year+1)]
 
     return years_to_check
+
+def _handle_deprecated_filters(url, url_contains, id, id_contains):
+    if url_contains:
+        if url and url!=url_contains:
+            raise ValueError("url and url_contains cannot both be set. Please only use url, which replaces url_contains.")
+        else:
+            warnings.warn('url_contains input has been deprecated. Please replace with url.', DeprecationWarning)
+            url = url_contains
+
+    if id_contains:
+        if id and id!=id_contains:
+            raise ValueError("id and id_contains cannot both be set. Please only use id, which replaces id_contains.")
+        else:
+            warnings.warn('id_contains input has been deprecated. Please replace with id.', DeprecationWarning)
+            id = id_contains
+
+    return url, id
