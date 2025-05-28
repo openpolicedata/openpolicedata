@@ -205,6 +205,32 @@ def test_datasets_loc_single_row():
 	assert isinstance(df.loc[0], pd.Series)
 
 
+def test_datasets_isin_civilians():
+	df = opd.datasets.query()
+	assert isinstance(df, DeprecationHandlerDataFrame)
+
+	with pytest.deprecated_call():
+		df["TableType"].isin(["ARRESTS", "OFFICER-INVOLVED SHOOTINGS - CIVILIANS"])
+
+
+def test_datasets_isin_subjects():
+	df = opd.datasets.query()
+	assert isinstance(df, DeprecationHandlerDataFrame)
+
+	with warnings.catch_warnings():
+		warnings.simplefilter("error")
+		df["TableType"].isin(["ARRESTS", "OFFICER-INVOLVED SHOOTINGS - SUBJECTS"])
+
+
+def test_datasets_isin_DataType():
+	df = opd.datasets.query()
+	assert isinstance(df, DeprecationHandlerDataFrame)
+
+	with warnings.catch_warnings():
+		warnings.simplefilter("error")
+		df["DataType"].isin(["ARRESTS", "OFFICER-INVOLVED SHOOTINGS - SUBJECTS"])
+
+
 def test_pandas_query_no_subject():
 	df = opd.datasets.query(state="Virginia")
 	assert isinstance(df, pd.DataFrame)
