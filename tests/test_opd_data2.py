@@ -220,9 +220,10 @@ def test_agency_filter():
 		assert len(table.table)==100
 		assert table.table[table.agency_field].nunique()==1
 		assert table.table.iloc[0][table.agency_field] == agency
+pytest -k test_save_load test_opd_data2.py
 
-
-@pytest.mark.parametrize('save,fname,load',[('to_csv','get_csv_filename','load_from_csv'),
+@pytest.mark.parametrize('save,fname,load',[('to_csv','get_csv_filename'),
+											('to_csv','get_csv_filename','load_csv'),
 											('to_feather','get_feather_filename','load_feather'),
 											('to_parquet','get_parquet_filename','load_parquet')])
 def test_save_load(buffalo_data, save,fname,load):
@@ -236,7 +237,7 @@ def test_save_load(buffalo_data, save,fname,load):
 
 		try:
 			# Load table back in
-			getattr(src, load)(buffalo_data.year, agency=buffalo_data.agency)
+			getattr(src, load)(table_type=buffalo_data.table_type, year=buffalo_data.year, agency=buffalo_data.agency)
 		except:
 			raise
 		finally:
