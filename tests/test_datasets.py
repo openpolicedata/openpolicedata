@@ -155,7 +155,7 @@ def test_zip(datasets):
     for url in urls:
         df = ds[ds['URL']==url]
         try:
-            with opd.data_loaders.UrlIoContextManager(url) as fp:
+            with opd.data_loaders.data_loader.UrlIoContextManager(url) as fp:
                 with ZipFile(fp, 'r') as z:
                     for k in range(len(df)):
                         if hasattr(df.iloc[k]['dataset_id'],'__iter__'):
@@ -268,7 +268,7 @@ def test_min_versions(datasets):
         if not (ver == "-1" or type(version.parse(ver)) == version.Version):
             raise ValueError(f"{ver} is an invalid value for min_version")
         
-@pytest.mark.parametrize('data_type, ver_added', [('Excel','0.3.1'), ('Carto','0.4.1'), ('CKAN','0.6'), ('HTML','0.7.3'), ('Opendatasoft','1.0')])
+@pytest.mark.parametrize('data_type, ver_added', [('Excel','0.3.1'), ('Carto','0.4.1'), ('CKAN','0.6'), ('HTML','0.7.3'), ('Opendatasoft','0.11')])
 def test_loader_min_version(datasets, data_type, ver_added):
     datasets = datasets[datasets['DataType'].str.lower()==data_type.lower()]
     assert datasets['min_version'].isnull().sum()==0

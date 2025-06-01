@@ -297,6 +297,8 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 												agency=agency, pbar=False, url=url, id=id)
 				else:
 					raise
+			except (OPD_DataUnavailableError, OPD_SocrataHTTPError, OPD_MinVersionError) as e:
+				continue
 			except DateFilterException as e:
 				continue
 

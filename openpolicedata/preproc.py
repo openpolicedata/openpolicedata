@@ -735,7 +735,7 @@ class Standardizer:
             std_col_name=defs.columns.TIME,
             secondary_patterns=secondary_patterns, 
             validator=datetime_parser.validate_time,
-            tables_to_exclude=[("Chicago",defs.TableType.PEDESTRIAN)],
+            tables_to_exclude=[("Chicago",defs.TableType.PEDESTRIAN_STOPS)],
             validate_args=validator_args,
             exclude_col_names=exclude_col_names,
             exclude_table_types=[defs.TableType.CALLS_FOR_SERVICE],
@@ -832,7 +832,7 @@ class Standardizer:
                 specific_cases=[_case("Norman", defs.TableType.COMPLAINTS, "Age", defs.columns.AGE_OFFICER, year=[2016,2017,2018]),
                                 _case("Norman", defs.TableType.USE_OF_FORCE, "Age", defs.columns.AGE_OFFICER, year=[2016,2017]),
                                 _case("Fairfax County", defs.TableType.ARRESTS, "ArresteeAg", defs.columns.AGE_SUBJECT),
-                                _case("Chicago", defs.TableType.PEDESTRIAN, "AGE", defs.columns.AGE_SUBJECT)]
+                                _case("Chicago", defs.TableType.PEDESTRIAN_STOPS, "AGE", defs.columns.AGE_SUBJECT)]
                 )
 
             match_cols = self._find_col_matches("age range", ["agerange","age_range","age range","agegroup","age_group"],
