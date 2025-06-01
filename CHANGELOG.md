@@ -6,9 +6,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 ### Added
-- Added fuzzy searching for source name in datasets query
-- Added rapidfuzz as required dependency
-- Added data loader for [Opendatasoft](https://www.opendatasoft.com/en/) API
 ### Changed
 ### Deprecated
 ### Removed
@@ -17,10 +14,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed handling to deprecated table types
 - Removed deprecated url_contains and id_contains inputs
 ### Fixed
-- Fixed bug when date was used in year input for Carto datasets
-- Now handling strings that are date strings if stripped
-- Changed enum for pedestrian stops table from PEDESTRIAN to PEDESTRIAN_STOPS
 ### Security
+
+## v0.11 - 2025-06-01
+### Added
+- Added fuzzy searching for source name in datasets query
+- Added rapidfuzz as required dependency
+- Added data loader for [Opendatasoft](https://www.opendatasoft.com/en/) API
+- Added to_feather and load_feather functions to export and re-import tables from feather files
+- Added to_parquet and load_parquet functions to export and re-import tables from parquet files
+- Added load_csv function to replace load_from_csv in the next release (v1.0)
+### Changed
+- Data loaders moved into separate modules
+- Changed enum for pedestrian stops table from PEDESTRIAN to PEDESTRIAN_STOPS
+- Minimum geopandas version is now 0.8
+- rapidfuzz is now a required dependency
+### Deprecated
+- Deprecated load_from_csv function. load_csv should be used instead.
+- Added note that all deprecated functionality will be removed in the next release (v1.0)
+### Fixed
+- Fixed bug when requested date range contains a date and a year
+- Now handling strings that are date strings if stripped
+- Fixed bug in pandas deprecation handler class if the length of the table is 0
 
 ## v0.10 - 2025-03-09
 ### Added

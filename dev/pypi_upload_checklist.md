@@ -4,6 +4,7 @@
 - [ ] Review outages
 - [ ] Run data cleaning script
 - [ ] Update readme with changelog 
+- [ ] Review changelog for any necessary documentation updates
 - [ ] Update readme and website (datasets/index) latest datasets
 - [ ] Update datasets tables in datasets/index
 - [ ] Update # of datasets in pyproject.toml, README, index.md, documentation.md, and GitHub about using num_unique in datasets.py
