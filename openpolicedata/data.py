@@ -1399,6 +1399,63 @@ class Source:
             table = None
 
         return Table(src, table, year_filter=table_year, agency=table_agency, src_obj=self)
+    
+    
+        return self.load_csv(
+                      table_type, year, output_dir, agency, zip, format_date,
+                      filename, url, id
+                      )
+
+    def load_csv(self, 
+                table_type: str | defs.TableType,
+                year: str | int | list[int],
+                output_dir: str | None = None, 
+                agency: str | None = None,
+                zip: bool =False,
+                format_date: bool = True,
+                filename: str | None = None,
+                url: str | None = None,
+                id: str | None = None
+                ) -> Table:
+        '''Load data from previously saved CSV file
+        
+        Parameters
+        ----------
+        table_type - str or TableType enum
+            Table type of requested data
+        year - int or length 2 list or the string opd.defs.MULTI or opd.defs.NONE
+            Used to identify the requested dataset if equal to its year value
+            Otherwise, for datasets containing multiple years, this filters 
+            the return data for a specific year (int input) or a range of years
+            [X,Y] to return data for years X to Y
+        output_dir - str
+            (output_dirOptional) Directory where CSV file is stored
+        agency - str
+            (Optional) If set, for datasets containing multiple agencies, data will
+            only be returned for this agency
+        zip - bool
+            (Optional) Set to true if CSV is in a zip file with the same filename. Default: False
+        url - str | None
+            (Optional) If set, URL must contain this string. Can be used in combination with id when multiple datasets match a set of inputs.
+        id - str | None
+            (Optional) If set, dataset ID must equal this value. Can be used in combination with url when multiple datasets match a set of inputs.
+        format_date : bool, optional
+            If True, known date columns (based on presence of date_field in datasets table or data type information provided by dataset owner) will be automatically formatted
+            to be pandas datetimes (or pandas Period in rare cases), by default True
+        filename: str, optional
+            If set, this will override the default filename based on the other inputs
+
+        Returns
+        -------
+        Table
+            Table object containing the requested data
+        '''
+
+        def read_csv(filename):
+            return pd.read_csv(filename, parse_dates=True, encoding_errors='surrogateescape')
+
+        return self.__load_file('get_csv_filename', read_csv, year, output_dir, table_type, agency, zip,
+                                format_date, filename, url, id)
 
     def load_feather(self, 
                      table_type: str | defs.TableType,

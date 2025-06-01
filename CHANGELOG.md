@@ -62,7 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## v0.7.2 - 2024-07-13
 ### Added
-- Added id_contains input to get_count, load_iter, load, and load_from_csv of Source class to help distinguish between multiple datasets matching a data request (along with previously added url_contains)
+- Added id_contains input to get_count, load_iter and load of Source class to help distinguish between multiple datasets matching a data request (along with previously added url_contains)
 - Added SEARCHES, WARNINGS, STOPS_INCIDENTS, and STOPS_SUBJECTS table types
 
 ## v0.7.1 - 2024-06-01
@@ -79,7 +79,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added POINTING WEAPON (by officer) table type
 - Added data loader to combine multiple files that span a single year into a single dataset
 - Added support for more text date column formats in Arcgis loader.
-- Added url_contains input to get_count, load_iter, load, and load_from_csv of Source class to distinguish between multiple datasets matching a data request
+- Added url_contains input to get_count, load_iter and load of Source class to distinguish between multiple datasets matching a data request
 - Added datasets input to get_years to allow getting the years in specific datasets.
 - Added [Year Filter Guide](https://openpolicedata.readthedocs.io/en/stable/getting_started/year_filtering.html) to documentation
 ### Changed
