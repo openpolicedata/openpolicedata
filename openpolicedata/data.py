@@ -1300,9 +1300,6 @@ class Source:
         if dataset_id.notnull(id):
             src = src[src['dataset_id'].apply(lambda x: x==id)]
 
-
-        for i in src.index:
-
         matchingYears = src["Year"]==year if not isinstance(year, list) else pd.Series(False, src.index)
 
         if (filter_by_year:=not matchingYears.any()):

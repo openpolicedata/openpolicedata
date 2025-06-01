@@ -93,7 +93,7 @@ def test_verbose(logger, log_stream):
 
 @pytest.mark.parametrize('source, table, year', [('Phoenix', "OFFICER-INVOLVED SHOOTINGS", 2022), 
 				('Orlando', "OFFICER-INVOLVED SHOOTINGS", 2022), ('Indianapolis', "OFFICER-INVOLVED SHOOTINGS", 2022),
-				('Philadelphia', "OFFICER-INVOLVED SHOOTINGS", 2018)])
+				('Philadelphia', "COMPLAINTS - BACKGROUND", 2018)])
 def test_format_date_false(all_datasets, source, table, year):
 	if check_for_dataset(source, table):
 		src = opd.Source(source)
@@ -443,7 +443,12 @@ def test_get_count(datasets, loader, source, table_type, agency, years):
 		print(f"Testing {loader} source")
 		src = opd.Source(source)
 		i = src.datasets["TableType"] == table_type
-		i = i[i].index[0]
+		i = i[i].index
+		if len(i)>0:
+			i = src.datasets.loc[i, 'DataType'].str.lower()==loader.__name__.lower()
+			i = i[i].index
+		assert len(i)==1
+		i = i[0]
 		if pd.notnull(src.datasets.loc[i]["dataset_id"]):
 			loader = loader(src.datasets.loc[i]["URL"], data_set=src.datasets.loc[i]["dataset_id"], date_field=src.datasets.loc[i]["date_field"])
 		else:
