@@ -1399,12 +1399,6 @@ class Source:
             table = None
 
         return Table(src, table, year_filter=table_year, agency=table_agency, src_obj=self)
-    
-    
-        return self.load_csv(
-                      table_type, year, output_dir, agency, zip, format_date,
-                      filename, url, id
-                      )
 
     def load_csv(self, 
                 table_type: str | defs.TableType,
