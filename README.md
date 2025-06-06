@@ -49,7 +49,7 @@ OpenPoliceData provides access to police data with 2 simple lines of code:
 - Cary, NC Crashes and Incidents
 - Morrisville, NC Incidents
 
-## v0.11 - 2025-06-01
+## v0.11 - 2025-06-06
 ### Added
 - Added fuzzy searching for source name in datasets query
 - Added rapidfuzz as required dependency
@@ -73,4 +73,6 @@ OpenPoliceData provides access to police data with 2 simple lines of code:
 Complete change log available at: https://github.com/openpolicedata/openpolicedata/blob/main/CHANGELOG.md
 
 ## Contributing
+[![](https://avatars.githubusercontent.com/u/67804485?s=50)](https://github.com/sowdm)
+
 All contributions are welcome including code enhancments, bug fixes, bug reports, documentation updates, and locating new datasets. If you're interesting in helping out, see our [Contributing Guide](https://github.com/openpolicedata/openpolicedata/blob/main/CONTRIBUTING.MD) or reach out by [email](mailto:openpolicedata@gmail.com).
