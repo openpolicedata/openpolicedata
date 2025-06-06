@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
-## v0.11 - 2025-06-01
+## v0.11 - 2025-06-06
 ### Added
 - Added fuzzy searching for source name in datasets query
 - Added rapidfuzz as required dependency
