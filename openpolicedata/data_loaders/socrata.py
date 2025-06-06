@@ -1,4 +1,5 @@
 import os
+import warnings
 import pandas as pd
 from numpy import nan
 import requests
@@ -174,10 +175,10 @@ class Socrata(Data_Loader):
 
         try:
             results = self.client.get(self.data_set, where=where, select="count(*)")
-        except (requests.HTTPError, requests.exceptions.ReadTimeout) as e:
+        except (requests.HTTPError, requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError) as e:
             raise OPD_SocrataHTTPError(self.url, self.data_set, *e.args, _url_error_msg.format(self.get_api_url()))
         except Exception as e: 
-            if len(e.args)>0 and (e.args[0]=='Unknown response format: text/html' or \
+            if len(e.args)>0 and isinstance(e.args[0],str) and (e.args[0].startswith('Unknown response format: text/html') or \
                 "Read timed out" in e.args[0]):
                 raise OPD_SocrataHTTPError(self.url, self.data_set, *e.args, _url_error_msg.format(self.get_api_url()))
             else:
@@ -249,8 +250,13 @@ class Socrata(Data_Loader):
 
         order = None
         if select == None:
-            if self.date_field and isinstance(sortby,str) and sortby=="date":
-                order = self.date_field
+            if sortby=="date":
+                if self.date_field:
+                    order = self.date_field
+                else:
+                    warnings.warn(DeprecationWarning('Date sorting was requested but no date field found. Results will not be sorted. '+
+                                                     'This will result in an error in the next release (V1.0)'))
+                    order = ":id"
             elif sortby:
                 order = sortby
             else:

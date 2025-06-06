@@ -1,4 +1,5 @@
 from math import ceil
+import warnings
 import pandas as pd
 import re
 import requests
@@ -307,8 +308,13 @@ class Ckan(Data_Loader):
             
             fields = [x['id'] for x in data['result']['fields'] if x['id'] not in ['_id','_full_text']]
 
-        if self.date_field and isinstance(sortby,str) and sortby=="date":
-            sortby = self.date_field if self.date_field else "_id"
+        if sortby=="date":
+            if self.date_field:
+                sortby = self.date_field
+            else:
+                warnings.warn(DeprecationWarning('Date sorting was requested but no date field found. Results will not be sorted. '+
+                                                     'This will result in an error in the next release (V1.0)'))
+                sortby = "_id"
         elif not sortby:
             # order by_id guarantees data order remains the same when paging
             sortby = "_id"
