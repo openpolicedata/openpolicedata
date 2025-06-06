@@ -49,6 +49,18 @@ OpenPoliceData provides access to police data with 2 simple lines of code:
 - Cary, NC Crashes and Incidents
 - Morrisville, NC Incidents
 
+## Contributing
+[<img src="https://avatars.githubusercontent.com/u/67804485" alt="Alt Text" width="35" height="35">](https://github.com/sowdm)
+[<img src="https://avatars.githubusercontent.com/u/9930263" alt="Alt Text" width="35" height="35">](https://github.com/potto216)
+[<img src="https://avatars.githubusercontent.com/u/56132560" alt="Alt Text" width="35" height="35">](https://github.com/minkedup)
+[<img src="https://avatars.githubusercontent.com/u/42755301" alt="Alt Text" width="35" height="35">](https://github.com/imrnmzri)
+[<img src="https://avatars.githubusercontent.com/u/178184249" alt="Alt Text" width="35" height="35">](https://github.com/Brijeshthummar02)
+[<img src="https://avatars.githubusercontent.com/u/142138112" alt="Alt Text" width="35" height="35">](https://github.com/harikrishnatp)
+[<img src="https://avatars.githubusercontent.com/u/170487658" alt="Alt Text" width="35" height="35">](https://github.com/gotog11)
+[<img src="https://avatars.githubusercontent.com/u/98405259" alt="Alt Text" width="35" height="35">](https://github.com/apancoast)
+
+All contributions are welcome including code enhancments, bug fixes, bug reports, documentation updates, and locating new datasets. If you're interesting in helping out, see our [Contributing Guide](https://github.com/openpolicedata/openpolicedata/blob/main/CONTRIBUTING.MD) or reach out by [email](mailto:openpolicedata@gmail.com).
+
 ## v0.11 - 2025-06-06
 ### Added
 - Added fuzzy searching for source name in datasets query
@@ -71,15 +83,3 @@ OpenPoliceData provides access to police data with 2 simple lines of code:
 - Fixed bug in pandas deprecation handler class if the length of the table is 0
 
 Complete change log available at: https://github.com/openpolicedata/openpolicedata/blob/main/CHANGELOG.md
-
-## Contributing
-[<img src="https://avatars.githubusercontent.com/u/67804485" alt="Alt Text" width="35" height="35">](https://github.com/sowdm)
-[<img src="https://avatars.githubusercontent.com/u/9930263" alt="Alt Text" width="35" height="35">](https://github.com/potto216)
-[<img src="https://avatars.githubusercontent.com/u/56132560" alt="Alt Text" width="35" height="35">](https://github.com/minkedup)
-[<img src="https://avatars.githubusercontent.com/u/42755301" alt="Alt Text" width="35" height="35">](https://github.com/imrnmzri)
-[<img src="https://avatars.githubusercontent.com/u/178184249" alt="Alt Text" width="35" height="35">](https://github.com/Brijeshthummar02)
-[<img src="https://avatars.githubusercontent.com/u/142138112" alt="Alt Text" width="35" height="35">](https://github.com/harikrishnatp)
-[<img src="https://avatars.githubusercontent.com/u/170487658" alt="Alt Text" width="35" height="35">](https://github.com/gotog11)
-[<img src="https://avatars.githubusercontent.com/u/98405259" alt="Alt Text" width="35" height="35">](https://github.com/apancoast)
-
-All contributions are welcome including code enhancments, bug fixes, bug reports, documentation updates, and locating new datasets. If you're interesting in helping out, see our [Contributing Guide](https://github.com/openpolicedata/openpolicedata/blob/main/CONTRIBUTING.MD) or reach out by [email](mailto:openpolicedata@gmail.com).
