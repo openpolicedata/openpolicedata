@@ -31,10 +31,10 @@ Learn how to load a dataset once you have found it
 :link-alt: opd-examples/standardization.ipynb
 Description with examples of optional data standardization/cleaning process
 :::
-:::{grid-item-card} {fas}`table;pst-color-primary` Export dataset to CSV
-:link: opd-examples/export_dataset_to_csv.ipynb
-:link-alt: opd-examples/export_dataset_to_csv.ipynb
-See how to export a dataset to a CSV file and how to load the CSV file
+:::{grid-item-card} {fas}`table;pst-color-primary` Export dataset to CSV, feather, and parquet
+:link: opd-examples/export_dataset_to_csv_and_other_file_types.ipynb
+:link-alt: opd-examples/export_dataset_to_csv_and_other_file_types.ipynb
+See how to export a dataset to a CSV, feather, or parquet file and how to load the file back in as an OPD Table
 :::
 :::{grid-item-card} {fas}`diagnoses;pst-color-primary` A simple data analysis
 :link: opd-examples/analyze_datasets.ipynb

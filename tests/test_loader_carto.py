@@ -41,11 +41,11 @@ def test_carto():
 
     offset = 1
     nrows = count - 2
-    df_offset = loader.load(year=year, nrows=nrows, offset=1, pbar=False)
+    df_offset = loader.load(year=year, nrows=nrows, offset=offset, pbar=False)
 
     assert df_offset.equals(df.iloc[offset:offset+nrows].reset_index(drop=True))
 
-    df_offset = loader.load(year=year, offset=1, pbar=False)
+    df_offset = loader.load(year=year, offset=offset, pbar=False)
     assert df_offset.equals(df.iloc[offset:].reset_index(drop=True))
 
     r = requests.get(f"https://phl.carto.com/api/v2/sql?format=GeoJSON&q=SELECT * FROM {dataset} WHERE {date_field} >= '{year}-01-01' AND {date_field} < '{year+1}-01-01'")

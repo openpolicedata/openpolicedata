@@ -125,7 +125,7 @@ def test_arcgis():
     ('https://gis.charlottenc.gov/arcgis/rest/services/ODP/CMPD_Calls_for_Service/MapServer/0', 2022, 'CALENDAR_YEAR'),  # YYYY
     ('https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPDOfficerInvolvedShootings_Incidents/MapServer/0', None, 'Year_Month'),      # YYYY-MM
     ("https://gis.charlottenc.gov/arcgis/rest/services/CMPD/Officer_Traffic_Stop/MapServer/0", 2020, 'Month_of_Stop'),
-    ('https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPDOfficerInvolvedShootings_Officers/MapServer/0', None, 'YR'),   # Numeric year
+    ('https://gis.charlottenc.gov/arcgis/rest/services/CMPD/CMPDOfficerInvolvedShootings_Officers/MapServer/0', None, 'Year'),   # Numeric year
 ])
 def test_arcgis_text_date(url, year, date_field):
     loader = data_loaders.Arcgis(url, date_field=date_field)

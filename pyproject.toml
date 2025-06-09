@@ -11,7 +11,7 @@ authors = [
 ]
 description = """
 The OpenPoliceData (OPD) Python library is the most comprehensive centralized public access point for incident-level police data 
-in the United States. OPD provides easy access to 500+ incident-level datasets from about 233 police agencies and 11 entire states. Types of data include 
+in the United States. OPD provides easy access to 550+ incident-level datasets from 236 police agencies and 11 entire states. Types of data include 
 traffic stops, use of force, officer-involved shootings, and complaints.
 """
 readme = "README.md"
@@ -31,7 +31,7 @@ dependencies = [
     "openpyxl",
     "numpy",
     "packaging",
-    "pandas[html] >= 2.1.0, <3.0.0",
+    "pandas[html,parquet,feather] >= 2.1.0, <3.0.0",
     'rapidfuzz',
     "requests",
     "sodapy",
@@ -62,16 +62,11 @@ tracker = "https://github.com/openpolicedata/openpolicedata/issues"
 
 [project.optional-dependencies]
 optional = ['msoffcrypto-tool']
-geopandas = ['geopandas']
+geopandas = ['geopandas>=0.8']
 test = ['pytest']
 
 [tool.setuptools.dynamic]
 version = {file = ".\\openpolicedata\\_version.txt"}
-# version = {attr = "openpolicedata.__version__"}
-
-# I think this is true by default...
-# [tool.setuptools]
-# include-package-data = true
 
 [tool.setuptools.packages.find]
 include = ["openpolicedata", "openpolicedata.*"]
@@ -83,6 +78,7 @@ filterwarnings = [
     "ignore:datetime.datetime:DeprecationWarning:.*openpyxl:",
     "ignore:datetime.datetime.utcfromtimestamp():DeprecationWarning:.*tz:",
     "ignore:Passing a SingleBlockManager to Series.*:DeprecationWarning:geopandas:",
+    "ignore:Passing a BlockManager to GeoDataFrame.*:DeprecationWarning:pandas:",
     "ignore:Mismatched null-like values.*:FutureWarning::",
 ]
-# addopts = "--csvfile='..\\opd-data\\opd_source_table.csv' --runslow --use-changed-rows"  #  
+addopts = "--csvfile='..\\opd-data\\opd_source_table.csv' --runslow"  #  --use-changed-rows

@@ -42,6 +42,14 @@ multi_tables = ['TRAFFIC STOPS','TRAFFIC CITATIONS','STOPS']
 multi_years = [MULTI,MULTI,MULTI]
 multi_partial = ["Hartford",'Buffalo',"Arlington"]
 
+@pytest.fixture(scope='module')
+def buffalo_data():
+	if check_for_dataset('New York', 'TRAFFIC CITATIONS'):
+		src = data.Source("New York")
+		agency="BUFFALO POLICE DEPT"
+		return  src.load('TRAFFIC CITATIONS', 2021, agency=agency, pbar=False, nrows=100)
+	
+
 def test_get_years(datasets, source, start_idx, skip, loghtml, query={}):
 	caught_exceptions = []
 	caught_exceptions_warn = []
@@ -213,26 +221,40 @@ def test_agency_filter():
 		assert table.table[table.agency_field].nunique()==1
 		assert table.table.iloc[0][table.agency_field] == agency
 
-
-def test_to_csv():
+@pytest.mark.parametrize('save,fname,load',[('to_csv','get_csv_filename'),
+											('to_csv','get_csv_filename','load_csv'),
+											('to_feather','get_feather_filename','load_feather'),
+											('to_parquet','get_parquet_filename','load_parquet')])
+def test_save_load(buffalo_data, save,fname,load):
 	if check_for_dataset('New York', 'TRAFFIC CITATIONS'):
 		src = data.Source("New York")
-		agency="BUFFALO POLICE DEPT"
-		year = 2021
-		table = src.load('TRAFFIC CITATIONS', 2021, agency=agency, pbar=False, nrows=100)
 
-		table.to_csv()
+		getattr(buffalo_data, save)()
 
-		filename = table.get_csv_filename()
+		filename = getattr(buffalo_data, fname)()
 		assert os.path.exists(filename)
 
 		try:
 			# Load table back in
-			src.load_from_csv(year, agency=agency)
+			getattr(src, load)(table_type=buffalo_data.table_type, year=buffalo_data.year, agency=buffalo_data.agency)
 		except:
 			raise
 		finally:
 			os.remove(filename)
+
+
+@pytest.mark.parametrize('save,fname',[('to_feather','get_feather_filename'),
+											('to_parquet','get_parquet_filename')])
+def test_save_mixed_dtype_column(save,fname):
+	if check_for_dataset('New York City', 'PEDESTRIAN STOPS'):
+		src = data.Source("New York City")
+		table = src.load('PEDESTRIAN STOPS', 2014, pbar=False)
+	
+		getattr(table, save)(mixed=True)
+
+		filename = getattr(table, fname)()
+		assert os.path.exists(filename)
+		os.remove(filename)
 
 
 def is_filterable(data_type):

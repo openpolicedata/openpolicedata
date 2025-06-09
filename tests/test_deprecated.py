@@ -77,10 +77,10 @@ def test_inputswap_class_error(year, table_type):
 def fdep():
 	pass
 
-
-def test_datasets_no_civilian_tabletypes():
-	df = opd.datasets.query()
-	assert not df["TableType"].str.contains("CIVILIAN").any()
+@pytest.mark.parametrize("func", [fdep])
+def test_deprecated_decorator(func):
+	with pytest.deprecated_call():
+		func()
 
 
 def test_datasets_get_datatype():
@@ -192,9 +192,3 @@ def test_datasets_iloc_single_input_no_warning(all_datasets, x):
 def test_datasets_iloc_warning(all_datasets, y):
 	with pytest.deprecated_call():
 		all_datasets.iloc[0,y]
-
-if __name__ == "__main__":
-	csvfile = None
-	csvfile = "C:\\Users\\matth\\repos\\opd-data\\opd_source_table.csv"
-	test_pandas_query_tabletype_subject(csvfile,None,None,None,None)
-	test_pandas_query_tabletype_no_subject(csvfile,None,None,None,None)
