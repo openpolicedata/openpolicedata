@@ -97,3 +97,6 @@ def test_mixed_floats_to_datetime(dates):
     new_dates = pd.Series({k:v.strftime('%Y%m%d.0') if k/2%1!=0 else v.strftime('%#m%d%Y.0') for k,v in dates.items()}, name=dates.name)
     dates_conv = opd.datetime_parser.to_datetime(new_dates)
     pd.testing.assert_series_equal(pd.to_datetime(dates.dt.date), dates_conv.dt.tz_localize(None))
+
+
+
