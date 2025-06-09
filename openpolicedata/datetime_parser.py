@@ -203,7 +203,8 @@ def parse_date_to_datetime(date_col):
     return date_col
 
 
-def merge_date_and_time(date_col, time_col, empty_time):
+
+def merge_date_and_time(date_col, time_col=None, empty_time="ignore"):
     # If date even has a time, this ignores it.
     # We assume that the time in time column is more likely to be local time
     # Often returned date is in UTC but local time is preferred for those who want to do day vs. night analysis
@@ -211,21 +212,37 @@ def merge_date_and_time(date_col, time_col, empty_time):
     # We could use:
     # return pd.to_datetime(date_col.dt.date.astype(str) + " " + time_col.astype(str), errors="coerce")
     # but not for now to catch unexpected values
-    empty_time = empty_time.lower()
+
+    """
+    Merges date and time columns, applying logic to handle missing time columns.
+
+    Parameters:
+    - date_col: Series of date values.
+    - time_col: Series of time values (optional).
+    - empty_time: Behavior for empty time values ('NaT' or 'ignore').
+
+    Returns:
+    - Merged datetime objects or date column if time is unavailable.
+    """
+
+    empty_time = empty_time.lower() if empty_time else "ignore"
     def combine(d, t):
         if pd.isnull(d):
             return pd.NaT
         elif pd.isnull(t):
-            if empty_time=="nat":
-                return pd.NaT
-            elif empty_time == "ignore":
-                return d
-            else:
-                raise ValueError("empty_time must be 'NaT' or 'ignore'")
+            return d if empty_time == "ignore" else pd.NaT
         else:
-            return d.replace(hour=t.hour, minute=t.minute, second=t.second)
+            # Ensure t is a datetime.time object
+            if isinstance(t, str) or isinstance(t, pd.Timestamp):
+                t = pd.to_datetime(t, errors='coerce').time()
+            return pd.Timestamp.combine(d.date(), t)
 
-    return pd.Series([combine(d, t) for d,t in zip(date_col, time_col)])
+    if time_col is None:
+        return date_col  # If no time column, return date as is
+
+    return date_col.apply(lambda d: combine(d, time_col.loc[d.name]) if d.name in time_col.index else d)
+
+
 
 def validate_date(df, match_cols_test):
     score = None
@@ -235,8 +252,10 @@ def validate_date(df, match_cols_test):
             # Fails if date column is not valid. Otherwise, returns a 
             # numerical value that is higher for more complete datetimes (i.e. date-only lower than date and time)
             date_col = parse_date_to_datetime(df[col_name])
+            if pd.api.types.is_datetime64_any_dtype(date_col) and date_col.dt.tz is None:
+                date_col = date_col.dt.tz_localize("UTC")
 
-            dts = date_col[date_col.notnull()]
+            dts = date_col.dropna()
 
             if len(dts) == 0:
                 continue
@@ -267,110 +286,114 @@ def validate_date(df, match_cols_test):
                 score = new_score
                 match_cols = [col_name]
         except Exception as e:
+            print(f"Error processing column {col_name}: {e}")
+
             pass
 
     return match_cols
 
-    
+
 def validate_time(df, match_cols_test, date_col=None):
+    """
+    Validates time columns by checking if they contain date information,
+    and ensuring consistency with the date column.
+
+    Parameters:
+    - df: DataFrame containing the time columns to test.
+    - match_cols_test: List of column names to validate as possible time columns.
+    - date_col: Optional date column to compare against.
+
+    Returns:
+    - List of validated time column names.
+    """
+
     score = None
     match_cols = []
     max_len = 100000
+
+    # Limit the dataset size to improve validation efficiency
     if len(df) > max_len:
-        df = df.head(max_len)  # No need to validate everything
-        date_col = date_col.head(max_len) if date_col is not None else date_col
+        df = df.head(max_len)
+        if date_col is not None:
+            date_col = date_col.head(max_len)
+
     for col_name in match_cols_test:
         try:
             time_col = df[col_name]
-            not_a_time_col_msg = "This column contains date information, and therefore, is not a time column"
-            date_has_time_msg = "The date column has a time in it. There is no need for a time column."
+
+            # Check if the column contains date values, making it invalid as a time column
+            not_a_time_col_msg = "This column contains date information, and therefore, is not a time column."
+            date_has_time_msg = "The date column already contains time information. No separate time column needed."
+
+            # Ensure time column is properly parsed
             try:
-                # Try to convert to datetime. If successful, see if there is a date value that varies.
-                # If so, this is not a time column
-                test_date_col = parse_date_to_datetime(time_col)
+                test_date_col = pd.to_datetime(time_col, errors="coerce")
                 num_unique = len(test_date_col.dt.date.unique())
-                # If there are more than 2 dates or 2 dates are only 1 day apart (could be due to time zone change),
-                # then the supposed time contains date information
-                if num_unique > 2 or (num_unique==2 and  abs(test_date_col[0]-test_date_col[1]) > pd.Timedelta(days=1)):
+
+                if num_unique > 2 or (
+                        num_unique == 2 and abs(test_date_col.iloc[0] - test_date_col.iloc[1]) > pd.Timedelta(days=1)):
                     raise ValueError(not_a_time_col_msg)
             except ValueError as e:
-                if len(e.args)>0 and e.args[0] in [not_a_time_col_msg, date_has_time_msg]:
+                if len(e.args) > 0 and e.args[0] in [not_a_time_col_msg, date_has_time_msg]:
                     continue
             except Exception:
-                pass
+                pass  # Continue if parsing fails
 
-            new_time_col = parse_time(time_col)
+            # Convert integer-based time formats (e.g., HHMM) before processing
+            if time_col.dtype in ["int64", "float64"]:
+                time_col = time_col.apply(lambda x: f"{int(x):04d}" if pd.notnull(x) else x)
+                time_col = pd.to_datetime(time_col, format="%H%M", errors="coerce").dt.time
 
-            try: 
-                if date_col is not None:
-                    date_times = date_col.dt.time
-                    # Find times from the date column that differ from the time column
-                    date_times = date_times[
-                        date_col.dt.time.apply(lambda x: x.replace(second=0) if pd.notnull(x) else pd.NaT) != 
-                        new_time_col.apply(lambda x: x.replace(second=0) if pd.notnull(x) else pd.NaT)]
-                    counts = date_times.value_counts()
-                    if len(counts)==0:
-                        # All times are the same between date and time columns
+            new_time_col = time_col.dropna()
+
+            # Validate against date column
+            if date_col is not None:
+                date_times = date_col.dt.time
+                differing_times = date_times[
+                    date_times.apply(lambda x: x.replace(second=0) if pd.notnull(x) else pd.NaT) !=
+                    new_time_col.apply(lambda x: x.replace(second=0) if pd.notnull(x) else pd.NaT)
+                    ]
+
+                counts = differing_times.value_counts()
+                if len(counts) == 0:
+                    raise ValueError(date_has_time_msg)
+
+                # Check for common patterns in date-time mismatches
+                most_common_time = differing_times.mode()
+                if most_common_time.iloc[0] != dt.time(hour=0, minute=0, second=0):
+                    if len(counts) > 3 or any(x.minute != 0 or x.second != 0 for x in counts.index):
+                        if sum(counts[x] for x in counts.index if x.minute != 0) / counts.sum() > 0.4:
+                            raise ValueError(date_has_time_msg)
+                    elif len(counts) == 3 and all(x != dt.time(hour=0, minute=0, second=0) for x in counts.index):
                         raise ValueError(date_has_time_msg)
-                    most_common_time = date_times.mode()
 
-                    # If most common time is all zeros, assume no time in date
-                    if most_common_time[0]!=dt.time(hour=0, minute=0, second=0):
-                        # If the date has no time, it will have zeros, standard time offsets, or DST offsets
-                        if len(counts)>3 or any([x.minute!=0 or x.second!=0 for x in counts.index]):
-                            # Check the percentage of times in the date column whose minute is 0. It should be relatively rare
-                            if sum([counts[x] for x in counts.index if x.minute!=0]) / counts.sum() > 0.4:
-                                raise ValueError(date_has_time_msg)
-                        else:
-                            # 00:00 must be one of the numbers if 3 unique values
-                            if len(counts)==3 and all([x!=dt.time(hour=0, minute=0, second=0) for x in counts.index]):
-                                raise ValueError(date_has_time_msg)
-                            
-                            non_zero = [x for x in counts.index if x.hour!=0]
-                            if len(non_zero)>1:
-                                # Values should be off by one hour
-                                d1 = dt.timedelta(hours=non_zero[0].hour)
-                                d2 = dt.timedelta(hours=non_zero[1].hour)
-                                if d2-d1 != dt.timedelta(hours=1) and d1-d2 != dt.timedelta(hours=1):
-                                    raise ValueError(date_has_time_msg)
-            except ValueError as e:
-                if len(e.args)>0 and e.args[0] in [not_a_time_col_msg, date_has_time_msg]:
-                    continue
-            except Exception:
-                pass
+                    non_zero_times = [x for x in counts.index if x.hour != 0]
+                    if len(non_zero_times) > 1:
+                        hour_diff = abs(non_zero_times[0].hour - non_zero_times[1].hour)
+                        if hour_diff != 1:
+                            raise ValueError(date_has_time_msg)
 
-            new_time_col = new_time_col[new_time_col.notnull()]
-            
-            new_score = None
+            # Scoring logic
             if len(new_time_col) == 0:
                 continue
 
-            hours = pd.Series([t.hour if pd.notnull(t) else np.nan for t in new_time_col])
-            mins = pd.Series([t.minute if pd.notnull(t) else np.nan for t in new_time_col])
-            # secs = time_sec - hours*3600 - mins*60
+            hours = new_time_col.map(lambda t: t.hour if pd.notnull(t) else np.nan)
+            mins = new_time_col.map(lambda t: t.minute if pd.notnull(t) else np.nan)
+
             max_val = 3
-            # same_sec = (secs == secs.iloc[0]).all()
-            # if not same_sec: 
-            #     return max_val
-            same_min = (mins == mins.iloc[0]).all()
-            if not same_min: 
-                new_score = max_val-1
-            same_hour = (hours == hours.iloc[0]).all()
-            if new_score is None:
-                if not same_hour: 
-                    new_score = max_val-2
-                else:
-                    new_score = max_val-3
-                
+            same_min = mins.nunique() == 1
+            same_hour = hours.nunique() == 1
+
+            new_score = max_val - 1 if not same_min else (max_val - 2 if not same_hour else max_val - 3)
+
             if score == new_score:
                 match_cols.append(col_name)
-            elif new_score != None and (score == None or new_score > score):
-                # Higher scoring item found. This now takes priority
+            elif new_score is not None and (score is None or new_score > score):
                 score = new_score
                 match_cols = [col_name]
 
         except Exception as e:
-            pass
+            print(f"Error validating time column {col_name}: {e}")  # Log errors instead of silent failures
 
     return match_cols
 
@@ -506,157 +529,84 @@ def parse_time(time_col):
             raise NotImplementedError()
     else:
         raise NotImplementedError()
-    
 
-def to_datetime(dates, ignore_errors=False, *args, **kwargs):
-    coerce = 'errors' in kwargs and kwargs['errors']=='coerce'
+
+
+def to_datetime(dates, ignore_errors=False, default_timezone="America/Chicago", *args, **kwargs):
+    """
+    Converts input data to timezone-aware datetime objects, handling floating timestamps
+    and applying default timezone assumptions.
+
+    Parameters:
+    - dates: Input data (Series, DataFrame, or other formats) to be converted to datetime.
+    - ignore_errors: If True, parsing errors are ignored.
+    - default_timezone: Fallback timezone if dataset lacks explicit timezone info.
+
+    Returns:
+    - Converted datetime objects, properly localized.
+    """
+
+    coerce = 'errors' in kwargs and kwargs['errors'] == 'coerce'
+
     def to_datetime_local(x, *args, **kwargs):
         try:
             return pd.to_datetime(x, *args, **kwargs)
-        except:
-            return pd.NaT if coerce else x  # Coerce input to pd.to_datetime should return NaT if cannot convert to datetime
-        
+        except Exception as e:
+            return pd.NaT if coerce else x  # Convert failed entries to NaT
+
     if isinstance(dates, str):
         dates = dates.strip()
 
-    if isinstance(dates, pd.DataFrame) and \
-        (dates.isnull().any().any() or dates.apply(lambda x: isinstance(x,str)).any()):
-        # This should have columns year, month, and day
-        # Special code to handle nans in month or day which will be set to Periods instead of datetimes
-        # or to handle cases where the day is an ordinal
-        # This is year/month/date with NaNs in some of the values
-        year_col = [x for x in dates.columns if x.lower()=='year'][0]
-        month_col = [x for x in dates.columns if x.lower()=='month'][0]
-        day_col = [x for x in dates.columns if x.lower()=='day'][0]
-        def to_datetime_local(x):
-            if pd.isnull(x[day_col]):
-                if pd.isnull(x[month_col]):
-                    if pd.isnull(x[year_col]):
-                        return pd.NaT
-                    else:
-                        return pd.Period(freq='Y', year=x[year_col])
-                else:
-                    return pd.Period(freq='M', year=x[year_col], month=x[month_col])
-            elif pd.isnull(x[month_col]):
-                return ValueError(f"Month is null but day is not. Unable to parse {x}")
-            elif pd.isnull(x[year_col]):
-                return ValueError(f"Year is null but month and day are not. Unable to parse {x}")
-            
-            return pd.to_datetime(x.to_frame().T, *args, **kwargs).iloc[0]
-        
-        # Replace any ordinal days
+    if isinstance(dates, pd.DataFrame) and (
+            dates.isnull().any().any() or dates.apply(lambda x: isinstance(x, str)).any()):
+        # Handle DataFrame with year, month, and day columns
         try:
-            dates[day_col] = dates[day_col].apply(lambda x: x.strip()[:-2] if  isinstance(x,str) and re.search(r'\d+(th|st|nd|rd)',x) else x)
-            return dates.apply(to_datetime_local, axis=1)
-        except:
-            # Adding this to put breakpoint here to catch errors. This try/except should be removed in the future
-            raise
+            year_col = next(x for x in dates.columns if x.lower() == 'year')
+            month_col = next(x for x in dates.columns if x.lower() == 'month')
+            day_col = next(x for x in dates.columns if x.lower() == 'day')
+        except StopIteration:
+            raise ValueError("DataFrame must contain 'year', 'month', and 'day' columns.")
+
+        def parse_row(row):
+            """Convert row with separate year, month, and day values to datetime."""
+            if pd.isnull(row[day_col]):
+                if pd.isnull(row[month_col]):
+                    if pd.isnull(row[year_col]):
+                        return pd.NaT
+                    return pd.Period(freq='Y', year=row[year_col])
+                return pd.Period(freq='M', year=row[year_col], month=row[month_col])
+            if pd.isnull(row[month_col]) or pd.isnull(row[year_col]):
+                raise ValueError(f"Invalid date components in row: {row}")
+            return pd.to_datetime(f"{row[year_col]}-{row[month_col]}-{row[day_col]}",
+                                  errors=kwargs.get("errors", "raise"))
+
+        # Replace ordinal days (e.g., '1st', '2nd') with numeric values
+        dates[day_col] = dates[day_col].apply(
+            lambda x: x.strip()[:-2] if isinstance(x, str) and re.search(r'\d+(th|st|nd|rd)', x) else x)
+        return dates.apply(parse_row, axis=1)
 
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=UserWarning, message="Could not infer format")
         try:
-            return pd.to_datetime(dates, *args, **kwargs)
-        except UnicodeEncodeError as e:
-            if (ignore_errors or 'errors' in kwargs and kwargs['errors']=='coerce') and isinstance(dates, pd.Series):
-                return dates.apply(to_datetime_local)
-            else:
-                return dates
-        except (pd._libs.tslibs.parsing.DateParseError, dateutil.parser._parser.ParserError) as e:
-            if 'out of range' in str(e) and \
-                ((m1:=re.search(r'year ((19|20)\d{6}) is out of range: \1\.0.* position 0', str(e))) or \
-                 re.search(r'year (\d{3,4}(19|20)\d{2}) is out of range: 0?\1\.0.* position 0', str(e))):
-                if isinstance(dates, pd.Series):
-                    return dates.apply(to_datetime)
-                elif m1:
-                    return pd.to_datetime(dates[:-2])
-                else:
-                    dates = dates[:-2]
-                    year = dates[-4:]
-                    mmdd = dates[:-4] if len(dates)==8 else '0'+dates[:-4]
-                    return pd.to_datetime(year+mmdd)
-            elif re.search(r'\d{2}/\d{2}/\d{4} \d{4} hours', str(e)) and isinstance(dates, pd.Series):
-                return pd.to_datetime(dates, format='%m/%d/%Y %H%M hours')
-            elif ignore_errors and 'out of range' in str(e) and not isinstance(dates, pd.Series):
-                return dates
-            elif ignore_errors and isinstance(dates,pd.Series) and \
-                  (re.search(r'(Unknown string format|unable to parse): \d{4}\-__', str(e)) or \
-                   re.search(r'(Unknown string format|unable to parse): \d{4}\-\d{2}\-__', str(e))):
-                return dates.apply(lambda x: to_datetime(x, ignore_errors, *args, **kwargs))
-            elif ignore_errors and isinstance(dates,str) and \
-                ((m:=re.search(r'^(?P<year>\d{4})\-(?P<month>[\d\_]{2})\-\_\_', dates)) or \
-                 (m:=re.search(r'^(?P<year>\d{4})\-(?P<month>\_\_)\-\d{2}', dates))):
-                if m.groupdict()['month'].isdigit():
-                    return pd.Period(freq='M', year=int(m.groupdict()['year']), month=int(m.groupdict()['month']))
-                else:
-                    return pd.Period(freq='Y', year=int(m.groupdict()['year']))
-            elif ignore_errors and isinstance(dates, str) and re.search(r'Unknown(\sdatetime)? string format.+: \d+[-/]\d+[-/]\d+,?\s?\d+[-/]\d+[-/]\d+', str(e)):
-                # Comma separated list of dates. Just return value
-                return dates
-            elif re.search(r'year \d\d20\d\d is out of range: \d{1,2}/\d\d20\d\d', str(e)) and isinstance(dates, pd.Series):
-                dates = dates.apply(lambda x: re.sub(r'(\d\d)20(\d\d)', r'\1/20\2', x) if isinstance(x,str) else x)
-                return to_datetime(dates, ignore_errors=ignore_errors, *args, **kwargs)
-            else:
-                raise
-        except ValueError as e:
-            if ignore_errors and "Given date string" in str(e) and "not likely a datetime" in str(e) and \
-                (len(args)>0 or 'errors' not in kwargs or kwargs['errors']!='coerce'):
-                new_kwargs = kwargs.copy()
-                new_kwargs['errors'] = 'coerce'
-                dts = pd.to_datetime(dates, *args, **new_kwargs)
-                raise NotImplementedError()
-            elif ignore_errors and isinstance(dates,pd.Series) and \
-                    (re.search(r'time data \"\d{4}\-(\d\d|\_\_)\-\_\_\"',  str(e)) or \
-                     re.search(r'time data \"\d{4}\-\_\_\-\d\d\"',  str(e))):
-                def to_datetime_local(x):
-                    if isinstance(x, str) and ((m:=re.search(r'^(?P<year>\d{4})\-(?P<month>[\d\_]{2})\-\_\_', x)) or \
-                        (m:=re.search(r'^(?P<year>\d{4})\-(?P<month>[\_]{2})\-\d{2}', x))):
-                        if m.groupdict()['month'].isdigit():
-                            return pd.Period(freq='M', year=int(m.groupdict()['year']), month=int(m.groupdict()['month']))
-                        else:
-                            return pd.Period(freq='Y', year=int(m.groupdict()['year']))
-                    else:
-                        return pd.to_datetime(x, *args, **kwargs)
-                    
-                return dates.apply(to_datetime_local)
-            elif 'doesn\'t match format "%Y-%m-%dT%H:%M:%S.%f%z"' in str(e):
-                return pd.to_datetime(dates.apply(lambda x: x[:-1] if isinstance(x,str) and x[-1]=='Z' else x), format='mixed')
-            elif ignore_errors and 'is out of range' in str(e) and is_str_number(dates):
-                if (dec:=dates.find('.'))>0 and int(dates[dec+1:])==0:
-                    dates = int(dates[:dec])
-                    year_first = math.floor(dates/10000)
-                    year_last = dates % 10000
-
-                    is_year_first = 1980 <= year_first <= datetime.datetime.now().year
-                    is_year_last =  1980 <= year_last <= datetime.datetime.now().year
-                    if is_year_first + is_year_last != 1:
-                        raise e
-                    elif is_year_first:
-                        year = year_first
-                        month_day = dates - year*10000
-                        month = math.floor(month_day/100)
-                        day = month_day - month*100
-                    else:
-                        year = year_last
-                        month_day = year_first
-                        month = math.floor(month_day/100)
-                        day = month_day - month*100
-                    if month>12 or day>31:
-                        raise e
-                    return pd.to_datetime(datetime.datetime(year=year, month=month, day=day))
-                else:
-                    raise e
-            elif ignore_errors and re.search(r'Unknown string format: \d+[-/]\d+[-/]\d+,?\s?\d+[-/]\d+[-/]\d+', str(e)):
-                # Comma separated list of dates. Just return value
-                return dates
-            elif ignore_errors and re.search(r'time\s+data\s+\"\d{1,2}/\d\d20\d\d\"', str(e)) and isinstance(dates, pd.Series):
-                dates = dates.apply(lambda x: re.sub(r'(\d\d)20(\d\d)', r'\1/20\2', x) if isinstance(x,str) else x)
-                return to_datetime(dates, ignore_errors=ignore_errors, *args, **kwargs)
-            elif isinstance(dates, pd.DataFrame) and dates.shape[1]==3 and (str(e)=='cannot convert NA to integer' or \
-                    (re.search(r'Unable to parse string \"\d+(th|st|nd|rd)\"', str(e)) and \
-                    dates.iloc[:,2][dates.iloc[:,2].notnull()].apply(lambda x: isinstance(x, numbers.Number) or is_str_number(x) or \
-                    re.search(r'\d+(th|st|nd|rd)',x) is not None).all())):
-                raise NotImplementedError("This should no longer be reachable. Remove in a future release")
-            else:
-                return pd.to_datetime(dates, *args, format='mixed', **kwargs)
-        except Exception as e:
+            dates = pd.to_datetime(dates, *args, **kwargs)
+        except UnicodeEncodeError:
+            if ignore_errors or coerce:
+                return dates.apply(lambda x: pd.to_datetime(x, *args, **kwargs) if pd.notnull(x) else pd.NaT)
             raise
+        except (pd._libs.tslibs.parsing.DateParseError, dateutil.parser._parser.ParserError, ValueError):
+            if ignore_errors or coerce:
+                return pd.Series([pd.NaT if coerce else x for x in dates])
+            raise
+        except Exception as e:
+            raise ValueError(f"Unexpected error while parsing datetime: {e}")
+
+    # Apply timezone logic for floating timestamps
+    if isinstance(dates, pd.Series) and pd.api.types.is_datetime64_any_dtype(dates):
+        try:
+            if dates.dt.tz is None:
+                # Defaulting floating timestamps to assumed publisher timezone
+                dates = dates.dt.tz_localize(default_timezone, ambiguous='NaT', errors='coerce')
+        except Exception as e:
+            raise ValueError(f"Failed to localize timezone: {e}")
+
+    return dates
