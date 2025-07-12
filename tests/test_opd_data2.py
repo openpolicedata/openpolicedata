@@ -304,7 +304,7 @@ if __name__ == "__main__":
 
 	csvfile = None
 	csvfile = os.path.join("..","opd-data","opd_source_table.csv")
-	start_idx = 1321
+	start_idx = 0
 	source = None
 	# source = "Burlington"
 	skip = None
