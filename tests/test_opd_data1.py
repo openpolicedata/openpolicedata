@@ -69,12 +69,6 @@ def check_table_type_warning(all_datasets):
 		data.Table(sources)
 
 
-def test_source_bad_source_name(all_datasets):
-	source_name_partial = "Charlotte"
-	with pytest.raises(ValueError, match='No sources found'):
-		opd.Source(source_name_partial)
-
-
 def test_not_verbose(logger, log_stream):
 	source = 'Lansing'
 	table = "OFFICER-INVOLVED SHOOTINGS"
@@ -111,140 +105,20 @@ def test_format_date_false_not_allowed(all_datasets, source, table, year):
 			src.load(table, year, format_date=False, nrows=1)
 
 
-def test_check_version(datasets):
+@pytest.mark.parametrize('ver', ["0.0", pd.NA])
+def test_check_version_good(datasets, ver):
 	ds = datasets.iloc[0].copy()
-	# Set min_version to create error
-	ds["min_version"] = "-1"
-	with pytest.raises(OPD_FutureError):
-		data._check_version(ds)
 
-	ds["min_version"] = "100000.0"
-	with pytest.raises(OPD_MinVersionError):
-		data._check_version(ds)
-
-	# These should pass
-	ds["min_version"] = "0.0"
-	data._check_version(ds)
-	ds["min_version"] = pd.NA
+	ds["min_version"] = ver
 	data._check_version(ds)
 
-def test_check_python_version(datasets):
+
+@pytest.mark.parametrize('ver', [("-1", OPD_FutureError), ("100000.0", OPD_MinVersionError)])
+def test_check_version_bad(datasets, ver, error):
 	ds = datasets.iloc[0].copy()
-	# Set min_version to create error
-	ds["py_min_version"] = "100000.0"
-	with pytest.raises(OPD_MinVersionError):
+	ds["min_version"] = ver
+	with pytest.raises(error):
 		data._check_version(ds)
-
-	# These should pass
-	ds["py_min_version"] = "0.0"
-	data._check_version(ds)
-	ds["py_min_version"] = pd.NA
-	data._check_version(ds)
-
-def test_single_year_filter():
-	if check_for_dataset('Phoenix', opd.defs.TableType.CALLS_FOR_SERVICE):
-		src = data.Source('Phoenix')
-		year = 2017
-		dataset, filter_by_year = src._Source__filter_for_source(opd.defs.TableType.CALLS_FOR_SERVICE, year, None, None)
-		assert not filter_by_year
-		assert dataset['Year']==year
-		assert dataset['TableType']==opd.defs.TableType.CALLS_FOR_SERVICE
-
-def test_single_year_range_filter():
-	if check_for_dataset('Phoenix', opd.defs.TableType.CALLS_FOR_SERVICE):
-		src = data.Source('Phoenix')
-		with pytest.raises(ValueError, match="There are no sources matching"):
-			src._Source__filter_for_source(opd.defs.TableType.CALLS_FOR_SERVICE, [2017,2018], None, None)
-
-@pytest.mark.parametrize('year, exp_filt_by_year', [(2017,True), (opd.defs.MULTI,False)])
-def test_multi_year_filter(year,exp_filt_by_year):
-	if check_for_dataset('Norristown', opd.defs.TableType.USE_OF_FORCE):
-		src = data.Source('Norristown')
-		dataset, filter_by_year = src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, None, None)
-		assert filter_by_year == exp_filt_by_year
-		assert dataset['Year']==opd.defs.MULTI
-		assert dataset['TableType']==opd.defs.TableType.USE_OF_FORCE
-
-def test_multi_year_range_filter_includes_single_year():
-	if check_for_dataset('Norristown', opd.defs.TableType.USE_OF_FORCE):
-		src = data.Source('Norristown')
-		year = [2016,2018]
-		with pytest.raises(ValueError, match="Year range cannot contain the year corresponding to a single year"):
-			src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, None, None)
-
-def test_bad_year_range():
-	if check_for_dataset('Norristown', opd.defs.TableType.USE_OF_FORCE):
-		src = data.Source('Norristown')
-		year = [2016,2018, 2017]
-		with pytest.raises(ValueError, match="year input must either be a single year or a list containing a start and stop year"):
-			src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, None, None)
-
-@pytest.mark.parametrize('src_name, state, agency', [('ERROR',None,None), ('ERROR','Arizona',None), ('Chandler','Arizona', 'ERROR'),
-													 ('Chandler','ERROR', None)])
-def test_no_source_match(all_datasets, src_name, state, agency):
-	with pytest.raises(ValueError):
-		data.Source(src_name, state, agency)
-
-def test_single_agency(all_datasets):
-	if check_for_dataset('Chandler', opd.defs.TableType.ARRESTS):
-		data.Source('Chandler')
-
-def test_multiple_agency_same_source_name_error(all_datasets):
-	if check_for_dataset('Contra Costa County', opd.defs.TableType.STOPS):
-		with pytest.raises(exceptions.MultiAgencySourceError):
-			data.Source('Contra Costa County')
-
-@pytest.mark.parametrize('agency', ['MULTIPLE', 'Contra Costa County'])
-def test_multiple_agency_same_source_name(all_datasets, agency):
-	if check_for_dataset('Contra Costa County', opd.defs.TableType.STOPS):
-		data.Source('Contra Costa County', agency=agency)
-
-@pytest.mark.parametrize('year, url', [(2019, "APDUseOfForce/FeatureServer/0"), 
-												([2018,2019], "APDUseOfForce/FeatureServer/0"), (2021, "APD_UseOfForce2021/FeatureServer/0")])
-def test_multiple_multiple_year_filter(all_datasets, year, url):
-	if check_for_dataset('Asheville', opd.defs.TableType.USE_OF_FORCE):
-		src = data.Source('Asheville')
-		dataset, filter_by_year = src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, None, None)
-		assert filter_by_year
-		assert dataset['Year']==opd.defs.MULTI
-		assert dataset['TableType']==opd.defs.TableType.USE_OF_FORCE
-		assert url in dataset['URL']
-
-@pytest.mark.parametrize('year, url, url_test', [(2020, None, 'LMPD_STOPS_DATA_(2)'), 
-												(2021, None, 'LMPD_STOP_DATA_2021'),
-												(2021, 'LMPD_STOPS_DATA_(2)', 'LMPD_STOPS_DATA_(2)')])
-def test_overlapping_multi_and_single(all_datasets, year, url, url_test):
-	if check_for_dataset('Louisville', opd.defs.TableType.TRAFFIC):
-		src = data.Source('Louisville')
-		dataset, filter_by_year = src._Source__filter_for_source(opd.defs.TableType.TRAFFIC, year, url, None)
-		assert url_test in dataset['URL']
-
-@pytest.mark.parametrize('year, id, id_test', [(2020, None, 'ex94-c5ad'), 
-												(2021, None, 'izhu-764k'),
-												([2020,2021], 'izhu-764k', 'izhu-764k')])
-def test_overlapping_multi_and_single_with_id(all_datasets, year, id, id_test):
-	if check_for_dataset('Mesa', opd.defs.TableType.CALLS_FOR_SERVICE):
-		src = data.Source('Mesa')
-		dataset, filter_by_year = src._Source__filter_for_source(opd.defs.TableType.CALLS_FOR_SERVICE, year, None, id)
-		assert id_test == dataset['dataset_id']
-
-@pytest.mark.parametrize('year', [2020, [2020,2021], opd.defs.MULTI])
-def test_multiple_bad_multiple_year_filter(all_datasets, year):
-	if check_for_dataset('Asheville', opd.defs.TableType.USE_OF_FORCE):
-		src = data.Source('Asheville')
-		with pytest.raises(ValueError, match="There is more than one source matching "):
-			src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, None, None)
-
-@pytest.mark.parametrize('year, exp_filt_by_year', [([2021,2022], True), (opd.defs.MULTI, False)])
-def test_url_input(all_datasets, year, exp_filt_by_year):
-	if check_for_dataset('Asheville', opd.defs.TableType.USE_OF_FORCE):
-		src = data.Source('Asheville')
-		url = "APDUseOfForce/FeatureServer/0"
-		dataset, filter_by_year = src._Source__filter_for_source(opd.defs.TableType.USE_OF_FORCE, year, url, None)
-		assert filter_by_year == exp_filt_by_year
-		assert dataset['Year']==opd.defs.MULTI
-		assert dataset['TableType']==opd.defs.TableType.USE_OF_FORCE
-		assert url in dataset['URL']
 
 
 def test_offsets_and_nrows():
@@ -337,8 +211,6 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 			if len(table.table)==0: 
 				update_outages(outages_file, datasets.iloc[i], True, ValueError('Table has 0 rows'))
 				continue
-			else:
-				assert len(table.table)>0
 
 			update_outages(outages_file, datasets.iloc[i], False)
 

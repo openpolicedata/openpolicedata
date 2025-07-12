@@ -1,10 +1,11 @@
 import pandas as pd
 import requests
+import urllib3
 
 from .data_loader import Data_Loader, str2json, _url_error_msg, _process_date
 from .csv_class import TqdmReader
 from ..datetime_parser import to_datetime
-from ..exceptions import OPD_DataUnavailableError, OPD_TooManyRequestsError
+from ..exceptions import OPD_DataUnavailableError
 from .. import log
 
 logger = log.get_logger()
@@ -155,7 +156,7 @@ class Opendatasoft(Data_Loader):
             except requests.HTTPError as e:
                 if len(e.args)>0:
                     if "503 Server Error" in e.args[0]:
-                        raise OPD_DataUnavailableError(self.get_api_url(), e.args, _url_error_msg.format(self.get_api_url()))
+                        raise OPD_DataUnavailableError(self.get_api_url(), _url_error_msg.format(self.get_api_url())) from e
                     else:
                         raise
 
@@ -171,8 +172,15 @@ class Opendatasoft(Data_Loader):
                 # https://community.opendatasoft.com/managing-data-portal-73/invalid-value-for-sum-of-offset-limit-api-parameter-error-with-exports-endpoint-566
                 start = params.pop('offset')
                 count = params.pop('limit')
-            r = requests.get(url, params=params, stream=True)
-            r.raise_for_status()
+            
+            try:
+                r = requests.get(url, params=params, stream=True)
+                r.raise_for_status()
+            except requests.exceptions.ConnectionError as e:
+                if len(e.args)>0 and isinstance(e.args[0], urllib3.exceptions.MaxRetryError):
+                    raise OPD_DataUnavailableError(self.get_api_url(), _url_error_msg.format(self.get_api_url())) from e
+                else:
+                    raise e
             df = pd.read_csv(TqdmReader(r, pbar=pbar), delimiter=';', low_memory=False)
 
             if start!=None:

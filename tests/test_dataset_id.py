@@ -2,6 +2,7 @@ import os
 import pandas as pd
 import pytest
 import re
+import warnings
 
 from openpolicedata.dataset_id import parse_id, expand, is_combined_dataset, parse_excel_dataset
 
@@ -13,7 +14,10 @@ def test_parse_str():
     assert string == parse_id(string)
 
 def test_parse_json(req_csvfile):
-    if os.path.exists(f:=req_csvfile.replace('\\','/')):
+    if req_csvfile == None:
+        warnings.warn(f"CSV file not found")
+        return
+    elif os.path.exists(f:=req_csvfile.replace('\\','/')):
         df = pd.read_csv(f)
     else:
         df = pd.read_csv(req_csvfile)
