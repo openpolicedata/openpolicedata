@@ -70,8 +70,8 @@ The follow guides describe more advanced topics that may interest you after view
 :gutter: 1 2 3 4
 
 :::{grid-item-card} {fas}`calendar-days;pst-color-primary` Year/Date Filtering
-:link: getting_started/year_filtering.ipynb
-:link-alt: getting_started/year_filtering.ipynb
+:link: getting_started/date_filtering.ipynb
+:link-alt: getting_started/date_filtering.ipynb
 More advanced year/date filtering and how to handle special (rare) cases
 :::
 :::{grid-item-card} {fas}`broom;pst-color-primary` Data Standardization
