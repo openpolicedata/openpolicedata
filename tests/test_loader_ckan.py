@@ -33,7 +33,7 @@ def test_ckan():
     filter_year = date_col_info[0]["type"] not in ['timestamp','date']
 
     year = 2022
-    count = loader.get_count(year=year)
+    count = loader.get_count(date=year)
 
     if filter_year:
         def gen_where(year):
@@ -51,7 +51,7 @@ def test_ckan():
     agency='William and Mary Police Department'
     opt_filter = {'=':{agency_field:agency}}
     opt_filter = 'LOWER("' + agency_field + '")' + " = '" + agency.lower() + "'"
-    count = loader.get_count(year=year, opt_filter=opt_filter)
+    count = loader.get_count(date=year, opt_filter=opt_filter)
 
     if filter_year:
         r = requests.get(f'https://data.virginia.gov/api/3/action/datastore_search_sql?sql=SELECT COUNT(*) FROM "{dataset}" WHERE ' + 
@@ -64,18 +64,18 @@ def test_ckan():
     assert count==r.json()['result']['records'][0]['count']>0
 
     loader._last_count = None
-    df = loader.load(year=year, pbar=False, opt_filter=opt_filter)
+    df = loader.load(date=year, pbar=False, opt_filter=opt_filter)
 
     assert len(df)==count
     assert (df[agency_field]==agency).all()
 
     offset = 1
     nrows = count - 2
-    df_offset = loader.load(year=year, nrows=nrows, offset=1, pbar=False, opt_filter=opt_filter)
+    df_offset = loader.load(date=year, nrows=nrows, offset=1, pbar=False, opt_filter=opt_filter)
 
     assert df_offset.equals(df.iloc[offset:offset+nrows].reset_index(drop=True))
 
-    df_offset = loader.load(year=year, offset=1, pbar=False, opt_filter=opt_filter)
+    df_offset = loader.load(date=year, offset=1, pbar=False, opt_filter=opt_filter)
     assert df_offset.equals(df.iloc[offset:].reset_index(drop=True))
 
     if filter_year:
@@ -94,7 +94,7 @@ def test_ckan():
 
     cur_year = datetime.now().year
     year_range = [cur_year-1, cur_year]
-    df = loader.load(year=year_range, pbar=False, opt_filter=opt_filter)
+    df = loader.load(date=year_range, pbar=False, opt_filter=opt_filter)
     assert (df[agency_field]==agency).all()
 
     data_loaders.data_loader._default_limit = lim

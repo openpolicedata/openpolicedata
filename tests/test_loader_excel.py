@@ -200,7 +200,7 @@ def test_excel_year_sheets(skip, src, url, date_field, yrs):
     df_comp = clean_df(df_comp, yrs[0])
 
     # Load all years
-    df_loaded1 = loader.load(year=yrs[0], pbar=False)
+    df_loaded1 = loader.load(date=yrs[0], pbar=False)
 
     assert df_comp.equals(df_loaded1)
 
@@ -208,11 +208,11 @@ def test_excel_year_sheets(skip, src, url, date_field, yrs):
     df_comp = clean_df(df_comp, yrs[1])
 
     # Load all years
-    df_loaded2 = loader.load(year=yrs[1], pbar=False)
+    df_loaded2 = loader.load(date=yrs[1], pbar=False)
 
     assert df_comp.equals(df_loaded2)
 
-    df_multi = loader.load(year=[yrs[0]-1,yrs[1]], pbar=False)
+    df_multi = loader.load(date=[yrs[0]-1,yrs[1]], pbar=False)
 
     df_loaded2.columns = df_loaded1.columns  # This takes care of case where columns had typos which is handled by data loader
     assert df_multi.equals(pd.concat([df_loaded1, df_loaded2], ignore_index=True))
@@ -222,7 +222,7 @@ def test_excel_year_sheets(skip, src, url, date_field, yrs):
     df2 = df[df_multi.columns].head(len(df_multi)).convert_dtypes()
     pd.testing.assert_frame_equal(df2, df_multi, check_dtype=False)
 
-    df_last = loader.load(year=years[-1], pbar=False)
+    df_last = loader.load(date=years[-1], pbar=False)
     if 'Incident/Type of Charges' in df_last:
         df_last = df_last.rename(columns={'Incident/Type of Charges':'Incident Type/Charges',
                                           'Event':'Event #',

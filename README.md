@@ -15,7 +15,7 @@ OpenPoliceData provides access to police data with 2 simple lines of code:
 ```
 > import openpolicedata as opd
 > src = opd.Source("New Orleans")
-> data = src.load(table_type="USE OF FORCE", year=2022)
+> data = src.load(table_type="USE OF FORCE", date=2022)
 ```
 
 - Documentation: https://openpolicedata.readthedocs.io/

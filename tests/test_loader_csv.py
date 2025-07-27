@@ -113,14 +113,14 @@ def test_csv(url, date_field, query):
 def test_csv_year_filter(url, date_field):
     loader = data_loaders.Csv(url, date_field=date_field)
     year = 2020
-    df = loader.load(year=year, pbar=False)
+    df = loader.load(date=year, pbar=False)
     with pytest.raises(ValueError):
-        count = loader.get_count(year=year)
+        count = loader.get_count(date=year)
 
-    count = loader.get_count(year=year, force=True)
+    count = loader.get_count(date=year, force=True)
     assert len(df) == count
 
-    count2 = loader.get_count(year=year+1, force=True)
+    count2 = loader.get_count(date=year+1, force=True)
 
     # Ensure that count updates properly with different call (most recent count is cached)
     assert count!=count2
