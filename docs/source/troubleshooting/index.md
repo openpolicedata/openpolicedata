@@ -57,7 +57,8 @@ The following are deprecated and will be removed in OPD Version 1.0:
 - Function `opd.datasets_query` has been replaced by `opd.datasets.query`
 - Class function `opd.Source.load_from_url` has been replaced by `opd.Source.load_from_url`
 - Class function `opd.Source.load_from_url_gen` has been replaced by `opd.Source.load_iter`
-- All functions of `opd.Source` where the `year` input was before the `table_type` input, i.e. opd.Source.get_count(year, table_type), will now have those inputs reversed, i.e. opd.Source.get_count(table_type, year)
+- All functions of `opd.Source` where the `year`/`date` input was before the `table_type` input, i.e. opd.Source.get_count(year, table_type), will now have those inputs reversed, i.e. opd.Source.get_count(table_type, year)
+- Usage of the `year` input in functions of `opd.Source`. `date` should be used instead.
 
 ## Report Issues
 Report issues with OPD by [creating an issue](https://github.com/openpolicedata/openpolicedata/issues) or [emailing us](mailto:openpolicedata@gmail.com). 
