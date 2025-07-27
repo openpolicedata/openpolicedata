@@ -50,6 +50,7 @@ def buffalo_data():
 		return  src.load('TRAFFIC CITATIONS', 2021, agency=agency, pbar=False, nrows=100)
 	
 
+@pytest.mark.slow(reason="This test is slow to run and will be run last.")
 def test_get_years(datasets, source, start_idx, skip, loghtml, query={}):
 	caught_exceptions = []
 	caught_exceptions_warn = []
