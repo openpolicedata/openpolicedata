@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from datetime import date, datetime
+import datetime
+from datetime import datetime
 from io import BytesIO
 import numbers
 import json
@@ -54,6 +55,9 @@ def _process_date(date, date_field=None, force_year=False, datetime_format=None,
         start_date = str(date[0])
         stop_date = str(date[1])
     else:
+        for k,x in enumerate(date):
+            if isinstance(x,pd.Timestamp):
+                date[k] = x.strftime('%Y-%m-%d')
         if isinstance(date[0], str) and re.search(r'^\d{4}-\d{2}-\d{2}$', date[0]):  # YYYY-MM-DD
             start_date = date[0]
         elif isinstance(date[0], numbers.Number) or re.search(r'^\d{4}$', date[0]):   # YYYY
@@ -80,8 +84,8 @@ def _process_date(date, date_field=None, force_year=False, datetime_format=None,
     return start_date, stop_date
 
 
-def filter_dataframe(df, date_field=None, year_filter=None, agency_field=None, agency=None, format_date=True):
-    '''Filter dataframe by agency and/or year (range)
+def filter_dataframe(df, date_field=None, date_filter=None, agency_field=None, agency=None, format_date=True):
+    '''Filter dataframe by agency and/or date range
     
     Parameters
     ----------
@@ -89,8 +93,10 @@ def filter_dataframe(df, date_field=None, year_filter=None, agency_field=None, a
         Dataframe containing the data
     date_field : str
         (Optional) Name of the column that contains the date
-    year_filter : int, list
-        (Optional) Either the year or the year range [first_year, last_year] for the data that is being requested.  None value returns data for all years.
+    date_filter : int or a length 2 list of start and stop year(s), date string(s), and/or timestamp(s)
+        (Optional) Define timespan of data to request count for:
+            1. Request data for an entire year by inputting the year (i.e. 2023)
+            2. Request data from a start year or datetime to a stop year or datetime using a length 2 list (i.e. [2021, '2023-02-01'] for start of 2021 to end of 2023-02-01)
     agency_field : str
         (Optional) Name of the column that contains the agency name (i.e. name of the police departments)
     agency : str
@@ -120,44 +126,47 @@ def filter_dataframe(df, date_field=None, year_filter=None, agency_field=None, a
                 except:
                     return df
     
-        if year_filter != None:
+        if date_filter != None:
             if not format_date:
                 raise ValueError("Dates cannot be filtered if format_date is False for CSV and Excel data types")
-            if isinstance(year_filter, list):
-                if len(year_filter) != 2:
-                    raise ValueError(f'Format of the input {year_filter} is invalid.'
+            if isinstance(date_filter, list):
+                if len(date_filter) != 2:
+                    raise ValueError(f'Format of the input {date_filter} is invalid.'
                                      'Date/year filters that are lists are expected to be a length 2 list of ' +
                                      '[startYear, stopYear] or [startDate, stopDate]. Dates should be in '+
                                      'YYYY-MM-DD format.')
                 if not is_year:
-                    if isinstance(year_filter[0],int) or is_str_number(year_filter[0]):
-                        year_filter[0] = f"{year_filter[0]}-01-01"
-                    elif not (re.search(r'\d{4}-\d{2}-\d{2}', year_filter[0]) or \
-                              re.search(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}', year_filter[0])):
-                        raise ValueError(f"{year_filter[0]} must be in YYYY-MM-DD format")
+                    for k,x in enumerate(date_filter):
+                        if isinstance(x,pd.Timestamp):
+                            date_filter[k] = x.strftime('%Y-%m-%d')
+                    if isinstance(date_filter[0],int) or is_str_number(date_filter[0]):
+                        date_filter[0] = f"{date_filter[0]}-01-01"
+                    elif not (re.search(r'\d{4}-\d{2}-\d{2}', date_filter[0]) or \
+                              re.search(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}', date_filter[0])):
+                        raise ValueError(f"{date_filter[0]} must be in YYYY-MM-DD format")
                     
-                    if isinstance(year_filter[-1],int) or is_str_number(year_filter[0]):
-                        year_filter[-1] = f"{year_filter[-1]}-12-31T23:59:59.999"
-                    elif re.search(r'\d{4}-\d{2}-\d{2}', year_filter[1]):
-                        year_filter[-1] = f"{year_filter[-1]}T23:59:59.999"
-                    elif not re.search(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}', year_filter[1]):
-                        raise ValueError(f"{year_filter[0]} must be in YYYY-MM-DD format")
-                    logger.debug(f"Keeping values of column {date_field} between {year_filter[0]} and {year_filter[1]}")
-                    df = df[(df[date_field] >= year_filter[0]) & (df[date_field] <= year_filter[1])]
-                elif (isinstance(year_filter[0],int) or is_str_number(year_filter[0])) and \
-                     (isinstance(year_filter[1],int) or is_str_number(year_filter[1])):
+                    if isinstance(date_filter[-1],int) or is_str_number(date_filter[0]):
+                        date_filter[-1] = f"{date_filter[-1]}-12-31T23:59:59.999"
+                    elif re.search(r'\d{4}-\d{2}-\d{2}', date_filter[1]):
+                        date_filter[-1] = f"{date_filter[-1]}T23:59:59.999"
+                    elif not re.search(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}', date_filter[1]):
+                        raise ValueError(f"{date_filter[0]} must be in YYYY-MM-DD format")
+                    logger.debug(f"Keeping values of column {date_field} between {date_filter[0]} and {date_filter[1]}")
+                    df = df[(df[date_field] >= date_filter[0]) & (df[date_field] <= date_filter[1])]
+                elif (isinstance(date_filter[0],int) or is_str_number(date_filter[0])) and \
+                     (isinstance(date_filter[1],int) or is_str_number(date_filter[1])):
                     logger.debug(f"Column {date_field} has been identfied as a year column")
-                    logger.debug(f"Keeping values of column {date_field} between {year_filter[0]} and {year_filter[1]}")
-                    df = df[df[date_field].isin(range(year_filter[0], year_filter[1]+1))]
+                    logger.debug(f"Keeping values of column {date_field} between {date_filter[0]} and {date_filter[1]}")
+                    df = df[df[date_field].isin(range(date_filter[0], date_filter[1]+1))]
                 else:
-                    raise ValueError(f"Column {date_field} has been identfied as a year column and cannot be filtered by dates: {year_filter}")
+                    raise ValueError(f"Column {date_field} has been identfied as a year column and cannot be filtered by dates: {date_filter}")
             elif not is_year:
-                logger.debug(f"Keeping values of column {date_field} for year={year_filter}")
-                df = df[df[date_field].dt.year == int(year_filter)]
+                logger.debug(f"Keeping values of column {date_field} for date={date_filter}")
+                df = df[df[date_field].dt.year == int(date_filter)]
             else:
                 logger.debug(f"Column {date_field} has been identfied as a year column")
-                logger.debug(f"Keeping values of column {date_field} for year={year_filter}")
-                df = df[df[date_field] == int(year_filter)]
+                logger.debug(f"Keeping values of column {date_field} for date={date_filter}")
+                df = df[df[date_field] == int(date_filter)]
 
     return df
 
@@ -261,9 +270,9 @@ class Data_Loader(ABC):
 
     Methods
     -------
-    load(year=None, nrows=None, pbar=True, agency=None, opt_filter=None, select=None, output_type=None)
+    load(date=None, nrows=None, pbar=True, agency=None, opt_filter=None, select=None, output_type=None)
         Load data for query
-    get_count(year=None, agency=None, force=False, opt_filter=None, where=None)
+    get_count(date=None, agency=None, force=False, opt_filter=None, where=None)
         Get number of records/rows generated by query
     get_years(nrows=1)
         Get years contained in data set
@@ -276,11 +285,11 @@ class Data_Loader(ABC):
         pass
 
     @abstractmethod
-    def get_count(self, year=None, *, agency=None, force=False, opt_filter=None, where=None):
+    def get_count(self, date=None, *, agency=None, force=False, opt_filter=None, where=None):
         pass
 
     @abstractmethod
-    def load(self, year=None, nrows=None, offset=0, *, pbar=True, agency=None, opt_filter=None, select=None, output_type=None, format_date=True):
+    def load(self, date=None, nrows=None, offset=0, *, pbar=True, agency=None, opt_filter=None, select=None, output_type=None, format_date=True):
         pass
 
     def get_years(self, *, nrows=1, check=None, **kwargs):
@@ -310,7 +319,7 @@ class Data_Loader(ABC):
             check.sort(reverse=True)
             year = check.pop(0)
         else:
-            year = date.today().year
+            year = datetime.date.today().year
 
         oldest_recent = 20
         max_misses_gap = 10
@@ -318,7 +327,7 @@ class Data_Loader(ABC):
         misses = 0
         years = []
         while misses < max_misses:
-            count = self.get_count(year=year)
+            count = self.get_count(date=year)
 
             if count==0:  # If doesn't have len attribute, it is None
                 misses+=1

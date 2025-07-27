@@ -29,23 +29,23 @@ def test_carto():
     assert count==r.json()["rows"][0]["count"]>0
 
     year = 2019
-    count = loader.get_count(year=year)
+    count = loader.get_count(date=year)
 
     r = requests.get(f"https://phl.carto.com/api/v2/sql?q=SELECT count(*) FROM {dataset} WHERE {date_field} >= '{year}-01-01' AND {date_field} < '{year+1}-01-01'")
     r.raise_for_status()
     assert count==r.json()["rows"][0]["count"]>0
 
-    df = loader.load(year=year, pbar=False)
+    df = loader.load(date=year, pbar=False)
 
     assert len(df)==count
 
     offset = 1
     nrows = count - 2
-    df_offset = loader.load(year=year, nrows=nrows, offset=1, pbar=False)
+    df_offset = loader.load(date=year, nrows=nrows, offset=1, pbar=False)
 
     assert df_offset.equals(df.iloc[offset:offset+nrows].reset_index(drop=True))
 
-    df_offset = loader.load(year=year, offset=1, pbar=False)
+    df_offset = loader.load(date=year, offset=1, pbar=False)
     assert df_offset.equals(df.iloc[offset:].reset_index(drop=True))
 
     r = requests.get(f"https://phl.carto.com/api/v2/sql?format=GeoJSON&q=SELECT * FROM {dataset} WHERE {date_field} >= '{year}-01-01' AND {date_field} < '{year+1}-01-01'")
@@ -75,7 +75,7 @@ def test_carto():
     if _has_gpd:
         assert type(df) == gpd.GeoDataFrame
         data_loaders.carto._has_gpd = False
-        df = loader.load(year=year, nrows=nrows, pbar=False)
+        df = loader.load(date=year, nrows=nrows, pbar=False)
         data_loaders.carto._has_gpd = True
         assert isinstance(df, pd.DataFrame)
 

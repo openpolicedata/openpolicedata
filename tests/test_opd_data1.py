@@ -96,9 +96,10 @@ def test_format_date_false(all_datasets, source, table, year):
 		assert isinstance(table.table[table.date_field].iloc[0],str)
 		
 
-@pytest.mark.parametrize('source, table, year', [('Denver', "OFFICER-INVOLVED SHOOTINGS", 2022), 
-				('Sparks', "OFFICER-INVOLVED SHOOTINGS", 2022),  ('Louisville', "TRAFFIC STOPS", ['2018-12-29', '2019-01-01'])])
-def test_format_date_false_not_allowed(all_datasets, source, table, year):
+@pytest.mark.parametrize('source, table, year,url', [('Denver', "OFFICER-INVOLVED SHOOTINGS", 2022,None), 
+				('Sparks', "OFFICER-INVOLVED SHOOTINGS", 2022, None),  
+				('Louisville', "TRAFFIC STOPS", ['2018-12-29', '2019-01-01'], 'LMPD_STOPS_DATA_(2)')])
+def test_format_date_false_not_allowed(all_datasets, source, table, year, url):
 	if check_for_dataset(source, table):
 		src = opd.Source(source)
 		with pytest.raises(ValueError, match='Dates cannot be filtered'):
@@ -124,10 +125,10 @@ def test_check_version_bad(datasets, ver, error):
 def test_offsets_and_nrows():
 	if check_for_dataset('Philadelphia', opd.defs.TableType.SHOOTINGS):
 		src = data.Source("Philadelphia")
-		df = src.load(year=2019, table_type="Officer-Involved Shootings").table
+		df = src.load(date=2019, table_type="Officer-Involved Shootings").table
 		offset = 1
 		nrows = len(df)-2
-		df_offset = src.load(year=2019, table_type="Officer-Involved Shootings", offset=offset, nrows=nrows).table
+		df_offset = src.load(date=2019, table_type="Officer-Involved Shootings", offset=offset, nrows=nrows).table
 		assert df_offset.equals(df.iloc[offset:offset+nrows].reset_index(drop=True))
 
 def check_excel_sheets(datasets, source, start_idx, skip):
@@ -271,8 +272,8 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 				dts = dts[dts.notnull()]
 				# New Orleans complaints dataset has many empty dates
 				# "Seattle and Minneapolis starts with bad date data"
-				if len(dts)>0 or srcName not in ["Seattle","New Orleans",'Minneapolis','St. Paul'] or \
-					table_type not in [TableType.COMPLAINTS, TableType.INCIDENTS]:
+				if len(dts)>0 or srcName not in ["Seattle","New Orleans",'Minneapolis','St. Paul','Virginia Beach'] or \
+					table_type not in [TableType.COMPLAINTS, TableType.INCIDENTS, TableType.CALLS_FOR_SERVICE]:
 					assert len(dts) > 0   # If not, either all dates are bad or number of rows requested needs increased
 					assert dts.iloc[0].year <= datetime.now().year if isinstance(dts.iloc[0], (pd.Timestamp,pd.Period)) else \
 						dts.iloc[1].year <= datetime.now().year
@@ -326,15 +327,15 @@ def test_get_count(datasets, loader, source, table_type, agency, years):
 		else:
 			loader = loader(src.datasets.loc[i]["URL"], date_field=src.datasets.loc[i]["date_field"])
 		if len(years)==0:
-			assert loader.get_count(force=True) == src.get_count(year=src.datasets.loc[i]['Year'], table_type=table_type, force=True)
+			assert loader.get_count(force=True) == src.get_count(date=src.datasets.loc[i]['Year'], table_type=table_type, force=True)
 		else: 
 			for year in years:
-				assert loader.get_count(year=year, force=True) == src.get_count(year=year, table_type=table_type, force=True)
+				assert loader.get_count(date=year, force=True) == src.get_count(date=year, table_type=table_type, force=True)
 
 		if agency:
 			opt_filter = '"' + src.datasets.loc[i]["agency_field"] + '"' + " = '" + agency + "'"
 			year = years[0]
-			assert src.get_count(year=year, agency=agency, force=True) == loader.get_count(year=year, opt_filter=opt_filter, force=True)
+			assert src.get_count(date=year, agency=agency, force=True) == loader.get_count(date=year, opt_filter=opt_filter, force=True)
 
 
 def test_get_years_to_check():

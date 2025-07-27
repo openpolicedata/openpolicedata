@@ -18,7 +18,7 @@ def test_socrata_geopandas():
         date_field = "date_of_stop"
         year = 2020
         nrows = 1000
-        df = data_loaders.Socrata(url=url, data_set=data_set, date_field=date_field).load(year=year, nrows=nrows)
+        df = data_loaders.Socrata(url=url, data_set=data_set, date_field=date_field).load(date=year, nrows=nrows)
 
         assert type(df) == gpd.GeoDataFrame
     else:
@@ -31,8 +31,8 @@ def test_socrata_pandas():
     date_field = "created_dt"
     year = 2020
     loader = data_loaders.Socrata(url=url, data_set=data_set, date_field=date_field)
-    df = loader.load(year=year, pbar=False)
-    count = loader.get_count(year=year)
+    df = loader.load(date=year, pbar=False)
+    count = loader.get_count(date=year)
 
     # Reset
     data_loaders._use_gpd_force = None
@@ -40,7 +40,7 @@ def test_socrata_pandas():
     assert type(df) == pd.DataFrame
     assert len(df) == count
 
-    count2 = loader.get_count(year=year+1)
+    count2 = loader.get_count(date=year+1)
 
     # Ensure that count updates properly with different call (most recent count is cached)
     assert count!=count2
@@ -54,11 +54,11 @@ def test_socrata_agency_filter():
 
     agency='Winsted'
     opt_filter = 'LOWER(' + agency_field + ") = '" + agency.lower() + "'"
-    df = loader.load(year=2018, opt_filter=opt_filter)
+    df = loader.load(date=2018, opt_filter=opt_filter)
 
     assert (df[agency_field]==agency).all()
 
-    df = loader.load(year=[2018,2019], opt_filter=opt_filter)
+    df = loader.load(date=[2018,2019], opt_filter=opt_filter)
 
     assert (df[agency_field]==agency).all()
 

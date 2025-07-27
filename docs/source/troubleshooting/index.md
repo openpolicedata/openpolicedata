@@ -17,7 +17,7 @@ OpenPoliceData (OPD) accesses data from many different websites, and occasionall
 ```
 > src = opd.Source('Buffalo')
 > # Attempt to load dataset that was removed by Buffalo (now also removed from OPD)
-> src.load(table_type='TRAFFIC ARRESTS',year=2023)
+> src.load(table_type='TRAFFIC ARRESTS',date=2023)
 
 openpolicedata.exceptions.OPD_SocrataHTTPError: ('data.buffalony.gov', '5kqt-m62h', '404 Client Error: Not Found', 'There is likely an issue with the website. Open the URL https://data.buffalony.gov/resource/5kqt-m62h.json with a web browser to confirm. See a list of known site outages at https://github.com/openpolicedata/opd-data/blob/main/outages.csv')
 ```

@@ -181,15 +181,15 @@ def test_arcgis_pandas():
     date_field = "DATE"
     year_filter = 2020
     gis = data_loaders.Arcgis(url, date_field=date_field)
-    df = gis.load(year=year_filter)
-    count = gis.get_count(year=year_filter)
+    df = gis.load(date=year_filter)
+    count = gis.get_count(date=year_filter)
     # Reset
     data_loaders._use_gpd_force = None
 
     assert type(df) == pd.DataFrame
     assert len(df) == count
 
-    count2 = gis.get_count(year=year_filter+1)
+    count2 = gis.get_count(date=year_filter+1)
 
     # Ensure that count updates properly with different call (most recent count is cached)
     assert count!=count2

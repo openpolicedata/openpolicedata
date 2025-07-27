@@ -22,7 +22,7 @@ def check_filter_results(dataset, filter_by_year_check, year, table_type):
 								 [2018, pd.to_datetime('2020-02-15')], [pd.to_datetime('2020-02-15'), 2023],
 								 ['2018-04-05', '2020-02-15']])
 def test_check_year_input(date):
-	clean_date = data._check_year_input(date)
+	clean_date = data._check_date_input(date)
 	if isinstance(date, list):
 		date = [pd.to_datetime(x) if isinstance(x,str) else x for x in date]
 
@@ -35,7 +35,7 @@ def test_check_year_input(date):
 								 ['2020-02-15', '2018-04-05'], [2017,2018, 2019]])
 def test_check_year_input_bad_input(date):
 	with pytest.raises(ValueError):
-		data._check_year_input(date)
+		data._check_date_input(date)
 
 
 @pytest.mark.parametrize('date',[[2018, '2020-02-15 14:04:23.999'], ['2020-02-15 14:04:23.999', 2023],
@@ -43,7 +43,7 @@ def test_check_year_input_bad_input(date):
 								 ['2018-04-05', '2020-02-15 14:04:23.999']])
 def test_check_year_input_bad_input(date):
 	with pytest.warns(UserWarning, match='Filtering is not currently possible for times'):
-		data._check_year_input(date)
+		data._check_date_input(date)
 
 
 @pytest.mark.parametrize('loc, table_type,year', [('Phoenix', opd.defs.TableType.CALLS_FOR_SERVICE,2017), 
