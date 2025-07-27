@@ -114,11 +114,11 @@ def test_check_version_good(datasets, ver):
 	data._check_version(ds)
 
 
-@pytest.mark.parametrize('ver', [("-1", OPD_FutureError), ("100000.0", OPD_MinVersionError)])
-def test_check_version_bad(datasets, ver, error):
+@pytest.mark.parametrize('ver, err', [("-1", OPD_FutureError), ("100000.0", OPD_MinVersionError)])
+def test_check_version_bad(datasets, ver, err):
 	ds = datasets.iloc[0].copy()
 	ds["min_version"] = ver
-	with pytest.raises(error):
+	with pytest.raises(err):
 		data._check_version(ds)
 
 
@@ -158,6 +158,7 @@ def check_excel_sheets(datasets, source, start_idx, skip):
 			excel._Excel__check_sheet(sheets)
 
 
+@pytest.mark.slow(reason="This test is slow to run and will be run last.")
 def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, query={}):
 	caught_exceptions = []
 	caught_exceptions_warn = []
