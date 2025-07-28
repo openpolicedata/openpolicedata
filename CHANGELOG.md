@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
+## v0.12 - 2025-07-27
+### Changed
+- Name of year input changed to date in Table and Source classes to more clearly reflect that input can handle both year and date ranges
+### Deprecated
+- Usage of year input changed to date in Table and Source classes. date input should be used instead.
+
 ## v0.11 - 2025-06-06
 ### Added
 - Added fuzzy searching for source name in datasets query
