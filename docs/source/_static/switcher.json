@@ -12,50 +12,42 @@
     {
       "name": "0.11",
       "version": "v0.11",
-      "url": "https://openpolicedata.readthedocs.io/en/v0.11/",
-      "preferred": true
+      "url": "https://openpolicedata.readthedocs.io/en/v0.11/"
     },
     {
       "name": "0.10",
       "version": "v0.10",
-      "url": "https://openpolicedata.readthedocs.io/en/v0.10/",
-      "preferred": true
+      "url": "https://openpolicedata.readthedocs.io/en/v0.10/"
     },
     {
       "name": "0.9",
       "version": "v0.9",
-      "url": "https://openpolicedata.readthedocs.io/en/v0.9/",
-      "preferred": true
+      "url": "https://openpolicedata.readthedocs.io/en/v0.9/"
     },
     {
       "name": "0.8",
       "version": "v0.8",
-      "url": "https://openpolicedata.readthedocs.io/en/v0.8/",
-      "preferred": true
+      "url": "https://openpolicedata.readthedocs.io/en/v0.8/"
     },
     {
       "name": "0.7.2",
       "version": "v0.7.2",
-      "url": "https://openpolicedata.readthedocs.io/en/v0.7.2/",
-      "preferred": true
+      "url": "https://openpolicedata.readthedocs.io/en/v0.7.2/"
     },
     {
       "name": "0.7.1",
       "version": "v0.7.1",
-      "url": "https://openpolicedata.readthedocs.io/en/v0.7.1/",
-      "preferred": true
+      "url": "https://openpolicedata.readthedocs.io/en/v0.7.1/"
     },
     {
       "name": "0.7.0",
       "version": "v0.7.0",
-      "url": "https://openpolicedata.readthedocs.io/en/v0.7.0/",
-      "preferred": true
+      "url": "https://openpolicedata.readthedocs.io/en/v0.7.0/"
     },
     {
       "name": "0.6.0",
       "version": "v0.6.0",
-      "url": "https://openpolicedata.readthedocs.io/en/v0.6.0/",
-      "preferred": true
+      "url": "https://openpolicedata.readthedocs.io/en/v0.6.0/"
     },
     {
       "name": "0.5.8",
