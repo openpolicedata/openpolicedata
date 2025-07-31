@@ -4,7 +4,7 @@ from test_utils import get_datasets, get_outage_datasets
 
 def pytest_addoption(parser):
     parser.addoption(
-        "--runslow", action="store_true", default=False, help="run slow tests"
+        "--runslow", action="store_true", default=False, help="run very slow tests"
     )
     parser.addoption(
         "--csvfile", action="store", default=None, help="Replace default opd_source_table.csv with an updated one for testing"
@@ -30,17 +30,28 @@ def pytest_addoption(parser):
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "slow: mark test as slow to run")
-    config.addinivalue_line("markers", "onetime: mark test as slow to run")
+    config.addinivalue_line("markers", "veryslow: mark test as very slow to run")
+    config.addinivalue_line("markers", "onetime: mark test as only expected to need to be run once")
 
 
 def pytest_collection_modifyitems(config, items):            
     skip_slow = pytest.mark.skip(reason="need --runslow option to run")
     skip_onetime = pytest.mark.skip(reason="need --onetime option to run")
+
+    tests = []
+    slowtests = []
     for item in items:
-        if not config.getoption("--runslow") and "slow" in item.keywords:
+        if not config.getoption("--runslow") and "veryslow" in item.keywords:
             item.add_marker(skip_slow)
         elif not config.getoption("--onetime") and "onetime" in item.keywords:
             item.add_marker(skip_onetime)
+        elif "slow" in item.keywords or "veryslow" in item.keywords:
+            slowtests.append(item)
+        else:
+            tests.append(item)
+
+    # Run slow tests last
+    items[:] = tests + slowtests
 
 
 # Define fixtures for each command line option

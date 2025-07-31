@@ -27,35 +27,35 @@ def test_opendatasoft():
     assert count==len(df_truth)
 
     year = 2020
-    count = loader.get_count(year=year)
+    count = loader.get_count(date=year)
 
     df_truth['stopdate'] = pd.to_datetime(df_truth['stopdate'])
     assert count==(df_truth['stopdate'].dt.year==year).sum()
 
-    df = loader.load(year=year, pbar=False)
+    df = loader.load(date=year, pbar=False, sortby='date')
 
     assert len(df)==count
 
     offset = int(df[df['schoolname'].notnull()].index[0] if df['schoolname'].notnull().any() else 1)
     nrows = 100
-    df_offset = loader.load(year=year, nrows=nrows, offset=offset, pbar=False)
+    df_offset = loader.load(date=year, nrows=nrows, offset=offset, pbar=False, sortby='date')
 
-    assert df_offset.equals(df.iloc[offset:offset+nrows].reset_index(drop=True))
+    assert df_offset.convert_dtypes().equals(df.iloc[offset:offset+nrows].reset_index(drop=True).convert_dtypes())
 
     offset = count-2
-    df_offset = loader.load(year=year, offset=offset, pbar=False)
-    assert df_offset.equals(df.iloc[offset:].reset_index(drop=True))
+    df_offset = loader.load(date=year, offset=offset, pbar=False, sortby='date')
+    assert df_offset.convert_dtypes().equals(df.iloc[offset:].reset_index(drop=True).convert_dtypes())
 
     offset = min(count-2, 10000)
     nrows = 2
-    df_offset = loader.load(year=year, offset=offset, nrows=nrows, pbar=False)
-    assert df_offset.equals(df.iloc[offset:offset+nrows].reset_index(drop=True))
+    df_offset = loader.load(date=year, offset=offset, nrows=nrows, pbar=False, sortby='date')
+    assert df_offset.convert_dtypes().equals(df.iloc[offset:offset+nrows].reset_index(drop=True).convert_dtypes())
 
-    df_truth = df_truth[df_truth['stopdate'].dt.year==year].reset_index(drop=True)
+    df_truth = df_truth[df_truth['stopdate'].dt.year==year].sort_values(['stopdate','stopid','pid']).reset_index(drop=True)
     df['stopdate'] = pd.to_datetime(df['stopdate'])
 
     for c in df_truth.columns:
          if df_truth[c].dtype != df[c].dtype:
               df[c] = df[c].astype(df_truth[c].dtype)
 
-    pd.testing.assert_frame_equal(df, df_truth)
+    pd.testing.assert_frame_equal(df.sort_values(['stopdate','stopid','pid']).reset_index(drop=True), df_truth)

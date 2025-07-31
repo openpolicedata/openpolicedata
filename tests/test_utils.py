@@ -120,9 +120,10 @@ def check_for_dataset(source, table_type, warn=True):
 
 already_warned = [False]
 def update_outages(outages_file, dataset, is_outage, e=None):
-    if not os.path.exists(outages_file) and not already_warned[0]:
-        warnings.warn(f'Outages file not found at {outages_file}')
-        already_warned[0] = True
+    if not os.path.exists(outages_file):
+        if not already_warned[0]:
+            warnings.warn(f'Outages file not found at {outages_file}')
+            already_warned[0] = True
         return
     
     outages = pd.read_csv(outages_file)

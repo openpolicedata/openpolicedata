@@ -66,7 +66,7 @@ def test_bloomington_citations():
 		assert count==sum(count_by_year)
 
 
-@pytest.mark.slow(reason="This is a slow test that should be run before a major commit.")
+@pytest.mark.veryslow(reason="This is a very slow test that should be run before a major commit.")
 def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 	max_count = 1e5
 		
@@ -370,6 +370,7 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 			warnings.warn(str(e))
 
 
+@pytest.mark.slow(reason="This test is slow to run and will be run last.")
 def test_source_download_not_limitable(datasets, source, start_idx, skip, query={}, num_zips_check=5):
 
 	df_ori = pd.read_csv('https://data-openjustice.doj.ca.gov/sites/default/files/dataset/2024-07/UseofForce_ORI-Agency_Names_2023.csv')
