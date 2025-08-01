@@ -206,12 +206,6 @@ class Table:
             self.readme = source["readme"]
 
         self.urls = {'source_url':self.source_url, 'readme':self.readme, 'data':self.url}
-
-
-    @property
-    def year(self):
-        warnings.warn('year attribute is deprecated. Use date instead.', DeprecationWarning)
-        return self.date
     
 
     def get_race_col(self, role:Literal['SUBJECT','OFFICER']='SUBJECT'):
@@ -1036,8 +1030,7 @@ class Source:
                   force: bool = False,
                   verbose: bool | str | int = False,
                   url: str | None = None,
-                  id: str | None = None,
-                  year: str | int | list[Union[int, str, pd.Timestamp]]=None
+                  id: str | None = None
                   ) -> int:
         '''Get number of records for a data request
 
@@ -1073,8 +1066,6 @@ class Source:
             Table object containing the requested data
         '''
 
-        date = _handle_deprecated_date_input(date, year)
-
         return self.__load(table_type, date, agency, True, pbar=False, return_count=True, force=force, verbose=verbose, 
                            url_contains=url, id=id)
     
@@ -1090,8 +1081,7 @@ class Source:
                 verbose: bool | str | int = False,
                 format_date: bool = True,
                 url: str | None = None,
-                id: str | None = None,
-                year: str | int | list[Union[int, str, pd.Timestamp]] = None
+                id: str | None = None
                 ) -> Iterator[Table]:
         '''Get generator to load data from URL in batches
 
@@ -1137,8 +1127,6 @@ class Source:
             generates Table objects containing the requested data
         '''
 
-        date = _handle_deprecated_date_input(date, year)
-
         count = self.get_count(table_type, date, agency, force, verbose=verbose, url=url, id=id)
         for k in range(offset, count, nbatch):
             yield self.__load(table_type, date, agency, True, pbar, nrows=min(nbatch, count-k), offset=k, 
@@ -1156,8 +1144,7 @@ class Source:
             verbose: bool | str | int = False,
             format_date: bool = True,
             url: str | None = None,
-            id: str | None = None,
-            year: str | int | list[Union[int, str, pd.Timestamp]] = None
+            id: str | None = None
             ) -> Table:
         '''Load data from URL
 
@@ -1199,8 +1186,6 @@ class Source:
         Table
             Table object containing the requested data
         '''
-
-        date = _handle_deprecated_date_input(date, year)
 
         return self.__load(table_type, date, agency, True, pbar, nrows=nrows, offset=offset, sortby=sortby, 
                            verbose=verbose, url_contains=url, id=id, format_date=format_date)
@@ -1546,8 +1531,7 @@ class Source:
                 format_date: bool = True,
                 filename: str | None = None,
                 url: str | None = None,
-                id: str | None = None,
-                year: str | int | list[int] = None
+                id: str | None = None
                 ) -> Table:
         '''Load data from previously saved CSV file
         
@@ -1584,8 +1568,6 @@ class Source:
             Table object containing the requested data
         '''
 
-        date = _handle_deprecated_date_input(date, year)
-
         def read_csv(filename):
             return pd.read_csv(filename, parse_dates=True, encoding_errors='surrogateescape')
 
@@ -1601,8 +1583,7 @@ class Source:
                       format_date: bool = True,
                       filename: str | None = None,
                       url: str | None = None,
-                      id: str | None = None,
-                      year: str | int | list[Union[int, str, pd.Timestamp]] = None,
+                      id: str | None = None
                       ) -> Table:
         '''Load data from previously saved feather file
         
@@ -1639,8 +1620,6 @@ class Source:
             Table object containing the requested data
         '''
 
-        date = _handle_deprecated_date_input(date, year)
-
         return self.__load_file('get_feather_filename', pd.read_feather, date, output_dir, table_type, agency, zip,
                                 format_date, filename, url, id)
     
@@ -1654,8 +1633,7 @@ class Source:
                       format_date: bool = True,
                       filename: str | None = None,
                       url: str | None = None,
-                      id: str | None = None,
-                      year: str | int | list[Union[int, str, pd.Timestamp]] = None
+                      id: str | None = None
                       ) -> Table:
         '''Load data from previously saved parquet file
         
@@ -1691,8 +1669,6 @@ class Source:
         Table
             Table object containing the requested data
         '''
-
-        date = _handle_deprecated_date_input(date, year)
 
         return self.__load_file('get_parquet_filename', pd.read_parquet, date, output_dir, table_type, agency, zip,
                                 format_date, filename, url, id)
@@ -1797,8 +1773,7 @@ class Source:
                          table_type: str | defs.TableType | None = None,
                          agency: str | None = None,
                          url: str | None = None,
-                         id: str | None = None,
-                         year: str | int | list[Union[int, str, pd.Timestamp]]=None
+                         id: str | None = None
                          ) -> str:
         '''Get auto-generated CSV filename
         
@@ -1828,7 +1803,6 @@ class Source:
             Auto-generated CSV filename
         '''
 
-        date = _handle_deprecated_date_input(date, year)
         return self.__get_filename('get_csv_filename', table_type, date, agency, url, id, output_dir)
     
 
@@ -1839,8 +1813,7 @@ class Source:
                          agency: str | None = None,
                          url: str | None = None,
                          id: str | None = None,
-                         geo: bool = False,
-                         year: str | int | list[Union[int, str, pd.Timestamp]]=None
+                         geo: bool = False
                          ) -> str:
         '''Get auto-generated feather filename
         
@@ -1872,7 +1845,6 @@ class Source:
             Auto-generated feather filename
         '''
 
-        date = _handle_deprecated_date_input(date, year)
         return self.__get_filename('get_feather_filename', table_type, date, agency, url, id, output_dir, geo)
     
 
@@ -1883,8 +1855,7 @@ class Source:
                          agency: str | None = None,
                          url: str | None = None,
                          id: str | None = None,
-                         geo: bool = False,
-                         year: str | int | list[Union[int, str, pd.Timestamp]]=None
+                         geo: bool = False
                          ) -> str:
         '''Get auto-generated parquet filename
         
@@ -1916,7 +1887,6 @@ class Source:
             Auto-generated parquet filename
         '''
 
-        date = _handle_deprecated_date_input(date, year)
         return self.__get_filename('get_parquet_filename', table_type, date, agency, url, id, output_dir, geo)
 
 
@@ -2085,8 +2055,7 @@ def get_csv_filename(
     date: str | int | list[Union[int, str, pd.Timestamp]]=None,
     url: str|None = None,
     id: str|None = None,
-    src: Source|None = None,
-    year: str | int | list[Union[int, str, pd.Timestamp]]=None
+    src: Source|None = None
     ) -> str:
     '''Get default CSV filename for the given parameters. Enables reloading of data from CSV.
     
@@ -2119,7 +2088,6 @@ def get_csv_filename(
         Default CSV filename
     '''
 
-    date = _handle_deprecated_date_input(date, year)
     return _get_filename('.csv', state, source_name, agency, table_type, date, url, id, src)
 
 
@@ -2132,8 +2100,7 @@ def get_feather_filename(
     geo: bool = False,
     url: str|None = None,
     id: str|None = None,
-    src: Source|None = None,
-    year: str | int | list[Union[int, str, pd.Timestamp]]=None
+    src: Source|None = None
     ) -> str:
     
     '''Get default feather filename for the given parameters. Enables reloading of data from feather files.
@@ -2170,7 +2137,6 @@ def get_feather_filename(
 
     ext = '.geofeather' if geo else '.feather'
 
-    date = _handle_deprecated_date_input(date, year)
     return _get_filename(ext, state, source_name, agency, table_type, date, url, id, src)
 
 
@@ -2183,8 +2149,7 @@ def get_parquet_filename(
     geo: bool = False,
     url: str|None = None,
     id: str|None = None,
-    src: Source|None = None,
-    year: str | int | list[Union[int, str, pd.Timestamp]]=None
+    src: Source|None = None
     ) -> str:
     
     '''Get default parquet filename for the given parameters. Enables reloading of data from parquet files.
@@ -2221,7 +2186,6 @@ def get_parquet_filename(
 
     ext = '.geoparquet' if geo else '.parquet'
 
-    date = _handle_deprecated_date_input(date, year)
     return _get_filename(ext, state, source_name, agency, table_type, date, url, id, src)
 
 
@@ -2406,18 +2370,6 @@ def _get_years_to_check(years, cur_year, force, isfile):
         years_to_check = [x for x in range(max_year+1,cur_year+1)]
 
     return years_to_check
-
-def _handle_deprecated_date_input(date, year):
-    if year!=None:
-        if date!=None:
-            raise ValueError("year and date inputs cannot both be used. year input is deprecated. Use date instead.")
-        date = year
-        warnings.warn('year input is deprecated. Use date instead.', DeprecationWarning)
-    elif date==None:
-        # TODO: When this function is replaced, default values for date inputs should be removed
-        raise ValueError("The date (2nd) input is a required input")
-
-    return date
 
 
 def _check_date_input(date):

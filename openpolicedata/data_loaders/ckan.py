@@ -316,9 +316,7 @@ class Ckan(Data_Loader):
             if self.date_field:
                 sortby = self.date_field
             else:
-                warnings.warn(DeprecationWarning('Date sorting was requested but no date field found. Results will not be sorted. '+
-                                                     'This will result in an error in the next release (V1.0)'))
-                sortby = "_id"
+                raise ValueError("Date sorting was requested but no date field was provided")
         elif not sortby:
             # order by_id guarantees data order remains the same when paging
             sortby = "_id"

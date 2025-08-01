@@ -222,8 +222,7 @@ def test_agency_filter():
 		assert table.table[table.agency_field].nunique()==1
 		assert table.table.iloc[0][table.agency_field] == agency
 
-@pytest.mark.parametrize('save,fname,load',[('to_csv','get_csv_filename'),
-											('to_csv','get_csv_filename','load_csv'),
+@pytest.mark.parametrize('save,fname,load',[('to_csv','get_csv_filename','load_csv'),
 											('to_feather','get_feather_filename','load_feather'),
 											('to_parquet','get_parquet_filename','load_parquet')])
 def test_save_load(buffalo_data, save,fname,load):

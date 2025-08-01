@@ -258,9 +258,7 @@ class Socrata(Data_Loader):
                 if self.date_field:
                     order = self.date_field
                 else:
-                    warnings.warn(DeprecationWarning('Date sorting was requested but no date field found. Results will not be sorted. '+
-                                                     'This will result in an error in the next release (V1.0)'))
-                    order = ":id"
+                    raise ValueError("Date sorting was requested but no date field was provided")
             elif sortby:
                 order = sortby
             else:

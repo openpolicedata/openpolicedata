@@ -241,9 +241,7 @@ class Opendatasoft(Data_Loader):
             if self.date_field:
                 sortby = self.date_field
             else:
-                warnings.warn(DeprecationWarning('Date sorting was requested but no date field found. Results will not be sorted. '+
-                                                     'This will result in an error in the next release (V1.0)'))
-                sortby = None
+                raise ValueError("Date sorting was requested but no date field was provided")
 
         where_query = self.__construct_where(date)
         df = self.__request(where=where_query, offset=offset, count=nrows, pbar=pbar, sortby=sortby)
