@@ -7,7 +7,6 @@ from typing import Optional, Union
 import warnings
 
 from . import defs, dataset_id
-from .deprecated._pandas import DeprecationHandlerDataFrame
 from .deprecated.source_table_compat import check_compat_source_table
 
 # Location of table where datasets available in opd are stored
@@ -86,7 +85,7 @@ def _build(csv_file, error=False):
         df["coverage_end"] = df["coverage_end"].apply(lambda x: pd.to_datetime(x) if \
                                                       not isinstance(x,pd.Timestamp) and pd.notnull(x) and p.search(x) else x)
 
-    return DeprecationHandlerDataFrame(df)
+    return df
 
 
 datasets = _build(csv_file)

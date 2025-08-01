@@ -1,4 +1,3 @@
-import warnings
 from pandas import DataFrame, Series
 from pandas.core.indexing import _iLocIndexer, _LocIndexer
 
