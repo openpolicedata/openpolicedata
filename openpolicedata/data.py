@@ -26,7 +26,6 @@ from . import __version__
 from . import preproc
 from . import defs
 from . import exceptions
-from .deprecated._decorators import input_swap, deprecated
 from .datetime_parser import to_datetime
 
 try:
@@ -1030,7 +1029,6 @@ class Source:
             return [src["Agency"]]
 
 
-    @input_swap([1,2], ['table_type','date'], [defs.TableType, {'values':[defs.NA, defs.MULTI], 'types':[list, int]}], opt1=None)
     def get_count(self, 
                   table_type: str | defs.TableType | None = None,
                   date: str | int | list[Union[int, str, pd.Timestamp]]=None,
@@ -1080,7 +1078,6 @@ class Source:
         return self.__load(table_type, date, agency, True, pbar=False, return_count=True, force=force, verbose=verbose, 
                            url_contains=url, id=id)
     
-    @input_swap([1,2], ['table_type','date'], [defs.TableType, {'values':[defs.NA, defs.MULTI], 'types':[list, int]}], error=True, opt1=None)
     def load_iter(self,
                 table_type: str | defs.TableType,
                 date: str | int | list[Union[int, str, pd.Timestamp]]=None,  
@@ -1148,7 +1145,6 @@ class Source:
                               verbose=verbose, url_contains=url, id=id, format_date=format_date, sortby=sortby)
     
     
-    @input_swap([1,2], ['table_type','date'], [defs.TableType, {'values':[defs.NA, defs.MULTI], 'types':[list, int]}], error=True, opt1=None)
     def load(self, 
             table_type: str | defs.TableType, 
             date: str | int | list[Union[int, str, pd.Timestamp]] = None,
