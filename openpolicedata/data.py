@@ -1225,11 +1225,7 @@ class Source:
             pandas Dataframe containing sources found when only filtering by table type and date
         '''
 
-        src, _ = self.__filter_for_source_deprecated(table_type, date, None, None, errors=False, use_coverage_only=True)
-        src_new, _ = self.__filter_for_source(table_type, date, None, None, errors=False)
-
-        if not src.equals(src_new):
-            raise ValueError("New source filtering is not in agreement with old method")
+        src, _ = self.__filter_for_source(table_type, date, None, None, errors=False)
 
         url_diff = id_diff = False
         if isinstance(src, pd.DataFrame):
@@ -1238,100 +1234,6 @@ class Source:
             
         return url_diff, id_diff, src
         
-    
-    def __filter_for_source_deprecated(self, table_type, date, url, id, errors=True, use_coverage_only=False):
-        orig_src = self.__find_datasets(table_type)
-        src = orig_src.copy()
-
-        date = _check_date_input(date)
-        
-        if url:
-            src = src[src['URL'].str.contains(url, regex=False)]
-
-        if dataset_id.notnull(id):
-            src = src[src['dataset_id'].apply(lambda x: x==id)]
-
-        matchingYears = src["Year"]==date if not isinstance(date, list) else pd.Series(False, src.index)
-
-        if (filter_by_year:=not matchingYears.any()):
-            src = src[src["Year"]==defs.MULTI]
-        else:
-            src = src[matchingYears]
-
-        if isinstance(date,list):
-            year_filter = []
-            for y in date:
-                if isinstance(y, pd.Timestamp) or (isinstance(y, str) and re.search(r'\d{4}-\d{2}-\d{2}', y)):
-                    year_filter.append(int(str(y)[:4]))
-                else:
-                    year_filter.append(y)
-        else:
-            year_filter = date
-
-        if len(src)>1 and date!=defs.MULTI:
-            # Try to find a single multi-year dataset containing the date
-            contains = pd.Series(False, index=src.index)
-            for k in src.index:
-                ds_years = self.get_years(table_type, datasets=src.loc[[k]], use_coverage_only=use_coverage_only)
-                if isinstance(date,list):
-                    if any([x>=year_filter[0] and x<=year_filter[1] for x in ds_years]):
-                        contains[k] = True
-                elif date in ds_years:
-                    contains[k] = True
-            src = src[contains]
-
-        if len(src)>0 and isinstance(date,list) and not url and pd.isnull(id):
-            # Ensure that year range does not also match a single year dataset
-            if (orig_src['Year'].apply(lambda x: x!=defs.MULTI and \
-                                       (isinstance(year_filter[0], numbers.Number) and x>=year_filter[0]) and \
-                                        (isinstance(year_filter[1], numbers.Number) and x<=year_filter[1]))).any():
-                raise ValueError(f"Year range cannot contain the year corresponding to a single year dataset.\n "
-                                 f"A dataset exists for the date {date}\n "+
-                                 "If the requested year range was correct, the url or id input can be used to specify a dataset in ambiguous cases "+
-                                 "by setting url to a unique substring of the desired dataset's URL or id to the dataset ID. The URL(s) for the datasets matching "+
-                                 f"the current inputs are {list(src['URL'])}")
-            
-        if isinstance(src, pd.core.frame.DataFrame):
-            if len(src) == 0:
-                err_msg = f"There are no sources matching {table_type=} and {date=}"
-                if url:
-                    err_msg+=f" and {url=}"
-                if dataset_id.notnull(id):
-                    err_msg+=f" and {id=}"
-                raise ValueError(err_msg)
-            elif len(src) > 1:
-                if errors:
-                    err_msg = f"There is more than one source matching {table_type=} and {date=}"
-                    if url:
-                        err_msg+=f" and {url=}"
-                    if dataset_id.notnull(id):
-                        err_msg+=f" and {id=}"
-                    if isinstance(date, list):
-                        raise ValueError(err_msg+" It is possible that the year range covers more the one dataset." +
-                                        " Set the date input to not contain years for multiple datasets and/or use the url or id "+
-                                        "input to specify a single dataset "+
-                                        "by setting url to a unique substring of the desired dataset's URL or id to the dataset ID. "
-                                        f"The URL(s) for the datasets matching the current inputs are {list(src['URL'])}")
-                    elif date==defs.MULTI:
-                        raise ValueError(err_msg+f" Therea are multiple multi-year datasets with date={defs.MULTI}." +
-                                        " Use the url or id "+
-                                        "input to specify a single dataset "+
-                                        "by setting url to a unique substring of the desired dataset's URL or id to the dataset ID. "
-                                        f"The URL(s) for the datasets matching the current inputs are {list(src['URL'])}")
-                    else:
-                        raise ValueError(err_msg+
-                                        " Set the date input to a single year or a year range and/or "+
-                                        "use the url or id input to specify a single dataset "+
-                                        "by setting url to a unique substring of the desired dataset's URL or id to the dataset ID. "
-                                        f"The URL(s) for the datasets matching the current inputs are {list(src['URL'])}")
-                else:
-                    # This is only for testing
-                    pass
-            else:
-                src = src.iloc[0]
-
-        return src, filter_by_year
-
 
     def __filter_for_source(self, table_type, date, url, id, errors=True):
         src = self.__find_datasets(table_type).copy()
@@ -1446,25 +1348,10 @@ class Source:
         # Make copy so original isn't changed
         date = date.copy() if isinstance(date, list) else date
 
-        src_new, filter_by_date_new = self.__filter_for_source(table_type, date, url_contains, id, errors=False)  # Remove errors=False when deprecation removed
-        src, filter_by_date = self.__filter_for_source_deprecated(table_type, date, url_contains, id)
+        src, filter_by_date = self.__filter_for_source(table_type, date, url_contains, id, errors=False)  # Remove errors=False when deprecation removed
 
         # Load data from URL. For date or agency equal to opd.defs.MULTI, filtering can be done
         url = src["URL"]
-
-        if not src.equals(src_new):
-            assert any((src_new['URL'] == src['URL']) & ((src_new['dataset_id'].isnull() & pd.isnull(src['dataset_id'])) | (src_new['dataset_id'] == src['dataset_id'])))
-            poss_matches = src_new.apply(lambda x: f'(url={x["URL"]}, id={x["dataset_id"]})' if pd.notnull(x['dataset_id']) else f'(url={x["URL"]})', axis=1).tolist()
-            poss_matches = ' or \n'.join(poss_matches)
-            cur_match  =f'(url={src["URL"]}, id={src["dataset_id"]})' if pd.notnull(src['dataset_id']) else f'(url={src["URL"]})'
-            warnings.warn('Requested dataset is potentially ambiguous. This will cause an error in the future when more strict criteria '+\
-                                'are implemented to make the returned dataset more predictable. ' +\
-                                'Please utilize url and/or id inputs (using data from URL and dataset_id columns of datasets '+\
-                                f'attribute) to specify a single dataset: i.e.\n\n{poss_matches}\n\nCurrently, selected dataset is: '+\
-                                cur_match, 
-                                category=DeprecationWarning)
-        else:
-            assert filter_by_date==filter_by_date_new
 
         date_filter = date if filter_by_date else None
         dataset = src["dataset_id"] if (isinstance(src["dataset_id"], list) or pd.notnull(src["dataset_id"])) else None
