@@ -68,14 +68,14 @@ def read_zipped_csv(url, pbar=True, block_size=2**20, data_set=None):
         # Load only requested dataset to minimize download size
         with httpio.open(url, block_size=block_size) as fp:
             with ZipFile(fp, 'r') as z:
-                return pd.read_csv(BytesIO(z.read(data_set['file'])), encoding_errors='surrogateescape')
+                return pyarrow_read_csv(BytesIO(z.read(data_set['file'])), encoding_errors='surrogateescape')
     else:
         logging.debug('Load CSV from zip by downloading and converting to pandas DataFrame')
 
         zip_data = download_zip_and_extract(url, block_size, pbar)
         zip_bytes_io = BytesIO(zip_data)
         logger.debug('Converting BytesIO to DataFrame')
-        return pd.read_csv(zip_bytes_io, encoding_errors='surrogateescape')
+        return pyarrow_read_csv(zip_bytes_io, encoding_errors='surrogateescape')
   
 
 def count_csv_rows(chunk_iter):
@@ -267,7 +267,7 @@ class Csv(Data_Loader):
                             'Sec-Fetch-User': '?1',
                         }
                         try:
-                            table = pd.read_csv(self.url, encoding_errors='surrogateescape', storage_options=headers)
+                            table = pyarrow_read_csv(self.url, encoding_errors='surrogateescape', storage_options=headers)
                         except urllib.error.HTTPError as e:
                             raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(self.url))
                         except:
@@ -398,4 +398,13 @@ class Csv(Data_Loader):
                 years = list(date_col.dt.year.dropna().unique())
             years.sort()
             return [int(x) for x in years]
+        
+def pyarrow_read_csv(input, *args, **kwargs):
+    df = pd.read_csv(input, *args, **kwargs, engine='pyarrow')
+    if len(df)>0:
+        for c in df:
+            if df[c].dtype=='object' and isinstance(df[c].iloc[0], bytes):
+                # pyarrow decoding returns bytes if a value cannot be decoded. Revert to non-pyarrow behavior
+                df[c] = df[c].apply(lambda x: x.decode('UTF-8', errors='surrogateescape') if isinstance(x,bytes) else x)
 
+    return df
