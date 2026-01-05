@@ -9,13 +9,14 @@
 project = 'OpenPoliceData'
 copyright = 'OpenPoliceData contributors'
 author = 'Matt Sowd and Paul Otto'
-release = '0.5.4'
 
 import os
 import sys
 docs_loc = os.path.dirname(os.path.dirname(__file__))
 sys.path.insert(0, os.path.dirname(docs_loc))
 import openpolicedata
+
+release = getattr(openpolicedata, "__version__", "")
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -26,18 +27,82 @@ import openpolicedata
 # ones.
 extensions = [
     'sphinx.ext.autodoc',
+    'sphinx.ext.viewcode',
     'sphinx.ext.doctest',
     'sphinx.ext.duration',
-    'sphinx.ext.autosummary',
+    'sphinx.ext.autosummary', # Generate autodoc summaries
     'myst_parser',
     'nbsphinx',
-    "numpydoc",
+    "numpydoc", # for NumPy/Google style docstrings https://numpydoc.readthedocs.io/en/latest/
     'sphinx_design',
 ]
 
 autosummary_generate = True
+autosummary_mock_imports = []
 # https://www.sphinx-doc.org/en/master/usage/extensions/autodoc.html#confval-autodoc_typehints
 autodoc_typehints = "none"
+autodoc_inherit_docstrings = False
+autodoc_default_options = {
+    'members': True,
+    'inherited-members': False, # Set to True if you want to include inherited members from parent classes
+    'undoc-members': False,       # Include members even if they don't have a docstring (optional)
+    'private-members': False,      # Change to True if you want to document private members too
+    'show-inheritance': False,
+    
+}
+
+# Add this near your other autosummary settings
+numpydoc_show_class_members = False  # This prevents numpydoc from auto-generating autosummary tables
+
+# Alternatively, you can keep the autosummary tables but tell it to ignore inherited members
+# numpydoc_class_members_toctree = False
+
+# Add this to explicitly exclude certain classes from having autosummary tables generated
+numpydoc_show_inherited_class_members = {
+    'openpolicedata.DataType': False,
+    'openpolicedata.defs.DataType': False,
+    'openpolicedata.TableType': False,
+    'openpolicedata.defs.TableType': False,
+}
+
+STR_METHODS_TO_SKIP = {
+    'capitalize', 'casefold', 'center', 'count', 'encode', 'endswith',
+    'expandtabs', 'find', 'format', 'format_map', 'index', 'isalnum',
+    'isalpha', 'isascii', 'isdecimal', 'isdigit', 'isidentifier',
+    'islower', 'isnumeric', 'isprintable', 'isspace', 'istitle',
+    'isupper', 'join', 'ljust', 'lower', 'lstrip', 'maketrans',
+    'partition', 'removeprefix', 'removesuffix', 'replace', 'rfind',
+    'rindex', 'rjust', 'rpartition', 'rsplit', 'rstrip', 'split',
+    'splitlines', 'startswith', 'strip', 'swapcase', 'title',
+    'translate', 'upper', 'zfill'
+}
+
+def autodoc_skip_str_methods_for_enums(app, what, name, obj, skip, options):
+    if what == "method" and name in STR_METHODS_TO_SKIP:
+        # Only skip for DataType and TableType
+        if hasattr(obj, '__qualname__') and obj.__qualname__.startswith(("DataType.", "TableType.")):
+            return True
+    return skip
+
+
+def skip_enum_value_members(app, what, name, obj, skip, options):
+    """
+    Hide individual Enum value members for DataType and TableType so only the
+    class docstring is shown.
+    """
+    try:
+        from openpolicedata import defs as _defs
+        if isinstance(obj, (_defs.DataType, _defs.TableType)):
+            return True
+    except Exception:
+        pass
+    return skip
+
+#def setup(app):
+def setup(app):
+    app.connect('autodoc-skip-member', skip_enum_value_members)
+    app.connect('autodoc-skip-member', autodoc_skip_str_methods_for_enums)
+    return {'parallel_read_safe': True, 'parallel_write_safe': True}
 
 myst_enable_extensions = ["colon_fence"]
 
@@ -117,8 +182,6 @@ source_suffix = {
     '.rst': 'restructuredtext',
     '.md': 'markdown',
 }
-
-source_parsers = {'.md': 'recommonmark.parser.CommonMarkParser'}
 
 # This removes execution counts when displaying Jupyter notebooks
 # https://nbsphinx.readthedocs.io/en/0.8.9/custom-css.html
