@@ -360,7 +360,12 @@ class Table:
                     left_on = defs.columns.INCIDENT_ID if std_id else id_col1
                     right_on = defs.columns.INCIDENT_ID if std_id else id_col2
                 else:
-                    raise exceptions.AutoMergeError("Unable to automatically find ID that relates tables")
+                    if len(df1)==0:
+                        raise exceptions.AutoMergeError("Unable to automatically find ID that relates tables. This is likely due to this (left) table being empty.")
+                    elif len(df2)==0:
+                        raise exceptions.AutoMergeError("Unable to automatically find ID that relates tables.  This is likely due to right table being empty.")
+                    else:
+                        raise exceptions.AutoMergeError("Unable to automatically find ID that relates tables")
             if std_id and id_col1:
                 df1 = df1_new
                 df2 = df2_new
@@ -1348,7 +1353,7 @@ class Source:
         # Make copy so original isn't changed
         date = date.copy() if isinstance(date, list) else date
 
-        src, filter_by_date = self.__filter_for_source(table_type, date, url_contains, id, errors=False)  # Remove errors=False when deprecation removed
+        src, filter_by_date = self.__filter_for_source(table_type, date, url_contains, id)
 
         # Load data from URL. For date or agency equal to opd.defs.MULTI, filtering can be done
         url = src["URL"]
