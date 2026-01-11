@@ -242,8 +242,8 @@ def test_excel_header():
 
     df_comp = pd.read_excel(url)
     df_comp.columns= [x for x in df_comp.iloc[3]]
-    df_comp.drop(index=df_comp.index[0:4], inplace=True)
-    df_comp.reset_index(drop=True, inplace=True)
+    df_comp = df_comp.drop(index=df_comp.index[0:4])
+    df_comp = df_comp.reset_index(drop=True)
     df_comp = df_comp.convert_dtypes()
     df_comp.columns = [x.strip() if isinstance(x, str) else x for x in df_comp.columns]
     df_comp = df_comp.dropna(thresh=10)

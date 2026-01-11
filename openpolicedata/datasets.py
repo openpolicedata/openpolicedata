@@ -48,10 +48,10 @@ def _build(csv_file, error=False):
                 return None
 
     if "Jurisdiction" in df:
-        df.rename(columns={
+        df = df.rename(columns={
             "Jurisdiction" : "Agency",
             "jurisdiction_field" : "agency_field"
-        }, inplace=True)
+        })
 
     # Convert years to int
     df["Year"] = [int(x) if isinstance(x,str) and x.isdigit() else x for x in df["Year"]]
@@ -76,7 +76,7 @@ def _build(csv_file, error=False):
     df["URL"] = urls
 
     key_vals = ['State', 'SourceName', 'Agency', 'TableType','Year', 'coverage_start', 'coverage_end']
-    df.drop_duplicates(subset=key_vals, inplace=True, ignore_index=True)
+    df = df.drop_duplicates(subset=key_vals, ignore_index=True)
 
     if "coverage_start" in df:
         p = re.compile(r"\d{1,2}/\d{1,2}/\d{4}")
@@ -195,13 +195,13 @@ def summary_by_state(by: Optional[str] = None) -> pd.DataFrame:
         s = df.drop_duplicates(["State","SourceName","Agency","TableType","Year"]).groupby(["State","Year"]).size().unstack()
         s = s.fillna(0).convert_dtypes(convert_integer=True)
         s = s[s.columns[::-1]]
-        s.rename(columns={"NONE":"N/A",defs.MULTI:"MULTI-YEAR"},inplace=True)
+        s = s.rename(columns={"NONE":"N/A",defs.MULTI:"MULTI-YEAR"})
         out = pd.concat([out, s],axis=1)
     elif by_table:
         s = df_unique.groupby(["State","TableType"]).size().unstack().fillna(0).convert_dtypes(convert_integer=True)
         out = pd.concat([out, s],axis=1)
 
-    out.sort_values(by="Total",inplace=True, ascending=False)
+    out = out.sort_values(by="Total", ascending=False)
 
     # Group related tables
     k = 0
@@ -216,7 +216,7 @@ def summary_by_state(by: Optional[str] = None) -> pd.DataFrame:
                 s = df_state.drop_duplicates(["State","SourceName","Agency","TableType","Year"]).groupby(["State","Year"]).size().unstack()
                 s = s.fillna(0).convert_dtypes(convert_integer=True)
                 s = s[s.columns[::-1]]
-                s.rename(columns={"NONE":"N/A",defs.MULTI:"MULTI-YEAR"},inplace=True)
+                s = s.rename(columns={"NONE":"N/A",defs.MULTI:"MULTI-YEAR"})
                 row_state = pd.concat([row_state, s],axis=1)
             elif by_table:
                 s = df_state.drop_duplicates(["State","SourceName","Agency","TableType"]).groupby(["State","TableType"]).size().unstack().fillna(0).convert_dtypes(convert_integer=True)
@@ -253,10 +253,10 @@ def summary_by_table_type(by_year: bool = False) -> pd.DataFrame:
         s = df.drop_duplicates(["State","SourceName","Agency","TableType","Year"]).groupby(["TableType","Year"]).size().unstack()
         s = s.fillna(0).convert_dtypes(convert_integer=True)
         s = s[s.columns[::-1]]
-        s.rename(columns={"NONE":"N/A",defs.MULTI:"MULTI-YEAR"},inplace=True)
+        s = s.rename(columns={"NONE":"N/A",defs.MULTI:"MULTI-YEAR"})
         out = pd.concat([out, s],axis=1)
 
-    out.sort_values(by="Total",inplace=True, ascending=False)
+    out = out.sort_values(by="Total", ascending=False)
     definitions = []
     for x in out.index:
         try:
@@ -301,9 +301,9 @@ def summary_by_table_type(by_year: bool = False) -> pd.DataFrame:
                 ],ignore_index=True)  
             out_cur.index = index  
         else:
-            out_cur.rename(index={cur_group : cur_group+" (All)"}, inplace=True)
-            out_cur.rename(index={x:x+" (Only)" for x in out_cur.index if "(All)" not in x}, inplace=True)
-            out_cur.rename(index={x:"  "+x+"  " for x in out_cur.index}, inplace=True)
+            out_cur = out_cur.rename(index={cur_group : cur_group+" (All)"})
+            out_cur = out_cur.rename(index={x:x+" (Only)" for x in out_cur.index if "(All)" not in x})
+            out_cur = out_cur.rename(index={x:"  "+x+"  " for x in out_cur.index})
             # Add empty row for spacing
             out_cur  = pd.concat([pd.DataFrame([empty_row],index=[cur_group+"-RELATED"],columns=out.columns),out_cur],axis=0)
             # Find all indices for group

@@ -19,12 +19,12 @@ def dates():
 # #   validate_time
 # #   parse_time
 
-@pytest.mark.parametrize('format', ['%Y%m%d', '%Y%m%d.0', '%#m%d%Y.0', '%B %#d, %Y', '%#m/%#d/%y', '%#m/%#d/%Y',
+@pytest.mark.parametrize('format', ['%Y%m%d', '%Y%m%d.0', '%#m%d%Y.0', '%#m%d%Y', '%B %#d, %Y', '%#m/%#d/%y', '%#m/%#d/%Y',
                                     '%m-%d-%Y', '%Y-%m-%d', '%m/%d/%Y  00:00', '%Y-%m-%d 00:00:00+00', '%#m/%d%Y'])
 def test_dates_to_datetime(dates, format):
     new_dates = dates.dt.strftime(format)
     dates_conv = opd.datetime_parser.to_datetime(new_dates)
-    pd.testing.assert_series_equal(pd.to_datetime(dates.dt.date), dates_conv.dt.tz_localize(None))
+    pd.testing.assert_series_equal(pd.to_datetime(dates.dt.date), dates_conv.dt.tz_localize(None), check_dtype=False)
 
 @pytest.mark.parametrize('format', ['%Y-%m-%d %H:%M:%S', '%Y-%m-%dT%H:%M:%S.000', '%Y-%m-%dT%H:%M:%S.000Z',
                                     '%m/%d/%Y %H%M hours', '%Y%m%d%H%M%S'])
@@ -36,7 +36,7 @@ def test_datetimes_to_datetime(dates, format):
 def test_ymd_to_datetime(dates):
     dates_conv = opd.datetime_parser.to_datetime({'year':dates.dt.year,'month':dates.dt.month, 'day':dates.dt.day})
     dates_conv.name = dates.name
-    pd.testing.assert_series_equal(pd.to_datetime(dates.dt.date), dates_conv)
+    pd.testing.assert_series_equal(pd.to_datetime(dates.dt.date), dates_conv, check_dtype=False)
 
 @pytest.mark.parametrize('ordinal',[False, True])
 @pytest.mark.parametrize('object',[False, True])
@@ -72,7 +72,7 @@ def test_ymd_ordinal_to_datetime(dates, object, ordinal):
 def test_unix_to_datetime(dates):
     unix = dates.apply(lambda x: x.timestamp())*1000
     dates_conv = opd.datetime_parser.to_datetime(unix, unit='ms')
-    pd.testing.assert_series_equal(dates, dates_conv)
+    pd.testing.assert_series_equal(dates, dates_conv, check_dtype=False)
 
 @pytest.mark.parametrize('format, period', [('%Y-%m-__', 'M'),('%Y-__-__', 'Y'),('%Y-__-%d', 'Y')]) 
 def test_blank_to_datetime(dates, format, period):
@@ -96,4 +96,4 @@ def test_mixed_to_datetime(dates, format):
 def test_mixed_floats_to_datetime(dates):
     new_dates = pd.Series({k:v.strftime('%Y%m%d.0') if k/2%1!=0 else v.strftime('%#m%d%Y.0') for k,v in dates.items()}, name=dates.name)
     dates_conv = opd.datetime_parser.to_datetime(new_dates)
-    pd.testing.assert_series_equal(pd.to_datetime(dates.dt.date), dates_conv.dt.tz_localize(None))
+    pd.testing.assert_series_equal(pd.to_datetime(dates.dt.date), dates_conv.dt.tz_localize(None), check_dtype=False)

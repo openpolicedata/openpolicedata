@@ -56,7 +56,7 @@ def parse_date_to_datetime(date_col):
                 with warnings.catch_warnings():
                     warnings.filterwarnings("ignore", category=RuntimeWarning, message="invalid value encountered in cast")
                     new_col = date_col.convert_dtypes()
-                if new_col.dtype in ["object", "string", "string[python]"] and \
+                if new_col.dtype in ["object", "string", "string[python]", 'str'] and \
                     new_col.apply(lambda x: pd.notnull(x) and (isinstance(x, numbers.Number) or is_str_number(x))).sum() > 0 and \
                     new_col.apply(lambda x: pd.isnull(x) or isinstance(x,(pd.Timestamp,int, dt.datetime)) or \
                                   isinstance(x, numbers.Number) or is_str_number(x) or \
@@ -152,9 +152,9 @@ def parse_date_to_datetime(date_col):
 
                     return date_col
                     
-            elif date_col.dtype in ["O", "object", "string", "string[python]"]:
+            elif date_col.dtype in ["O", "object", "string", "string[python]", 'str']:
                 new_col = date_col.convert_dtypes()
-                if new_col.dtype in ["string", "string[python]"] or \
+                if new_col.dtype in ["string", "string[python]", 'str'] or \
                     str in new_col.apply(type).unique():
                     p = re.compile(r"\d{1,2}[/-]\d{1,2}[/-]\d{2,4}")
                     p2 = re.compile(r"\d{4}[/-]\d{1,2}[/-]\d{1,2}")
@@ -334,7 +334,11 @@ def validate_time(df, match_cols_test, date_col=None):
                                 if d2-d1 != dt.timedelta(hours=1) and d1-d2 != dt.timedelta(hours=1):
                                     raise ValueError(date_has_time_msg)
             except ValueError as e:
-                if len(e.args)>0 and e.args[0] in [not_a_time_col_msg, date_has_time_msg]:
+                if len(e.args)>0 and e.args[0] in [date_has_time_msg]:
+                    # Date has time in it. No need for time column
+                    match_cols = []
+                    break
+                if len(e.args)>0 and e.args[0] in [not_a_time_col_msg]:
                     continue
             except Exception:
                 pass
@@ -382,6 +386,7 @@ def parse_time(time_col):
         # Expected to be time as integer in 24-hr HHMM format
         # Check that this is true
         time_col[(time_col==9999) | (time_col==999)] = pd.NA  # 9999 is used as error code
+        time_col[time_col==2400]=0  # Fix mistaken values for midnight
         hour = np.floor(time_col/100)
         min = time_col - np.floor(time_col/100)*100
         if hour.max() >= 24:
@@ -400,33 +405,47 @@ def parse_time(time_col):
                 raise NotImplementedError()
 
         return pd.Series([dt.time(hour=int(x),minute=int(y)) if (pd.notnull(x) and pd.notnull(y)) else pd.NaT for x,y in zip(hour,min)])
-    elif time_col.dtype in ['O','string[python]']:
+    elif time_col.dtype in ['O'] or str(time_col.dtype).startswith('str'):
         new_col = time_col.convert_dtypes()
-        if new_col.dtype in ["string",'string[python]'] or \
+        if str(new_col.dtype).startswith('str') or \
             time_col.apply(lambda x: isinstance(x,str) or isinstance(x,int) or pd.isnull(x) or isinstance(x,dt.time)).all():
             # Cleanup split AM or PM, which causes a warning from pandas
             new_col = new_col.apply(lambda x: x.replace("P M","PM").replace("A M","AM") if isinstance(x,str) else x)
             new_col = new_col.apply(lambda x: x.strftime('%H:%M') if isinstance(x,dt.time) else x)
-            try:
-                new_col = to_datetime(new_col)
-                return new_col.dt.time
-            except:
-                pass
+
 
             p_date = [re.compile(r"\d{1,2}[/-]\d{1,2}[/-]\d{2,4}"),
                       re.compile(r"^\d{1,2}-(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)$"),
                       re.compile(r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{1,2}$")]
+            def test(x):
+                # These strings now pass to_datetime where the string is treated as a year
+                # 'TIME' is bad data
+                return pd.isnull(x) or \
+                    (isinstance(x,str) and ((x.isdigit() and 0<=int(x)<10000) or x in ['TIME'] or any([y.search(x) for y in p_date]))) or \
+                    isinstance(x,int) and 0<=x<=10000
+            
+            if new_col.isnull().all() or not new_col.apply(test).all():
+                try:
+                    new_col = to_datetime(new_col)
+                    return new_col.dt.time
+                except:
+                    pass
+
             def convert_timestr_to_sec(x):
                 if pd.isnull(x):
                     return x
                 
-                if isinstance(x,int):
+                if isinstance(x,int) or (isinstance(x,str) and x.isdigit()):
+                    x = int(x)
+                    if x==9999 or x==999 or x==99:
+                        return pd.NaT  # 9999 and 999 is used as error code
+
                     hour = np.floor(x/100)
                     min = x - np.floor(x/100)*100
                     if hour >= 24:
-                        raise NotImplementedError()
+                        return pd.NaT
                     if min > 59:
-                        raise NotImplementedError()
+                        return pd.NaT
                     return dt.time(hour=int(hour),minute=int(min))
 
                 x = x.replace(" ","")
@@ -547,7 +566,11 @@ def to_datetime(dates, ignore_errors=False, *args, **kwargs):
         # Replace any ordinal days
         try:
             dates[day_col] = dates[day_col].apply(lambda x: x.strip()[:-2] if  isinstance(x,str) and re.search(r'\d+(th|st|nd|rd)',x) else x)
-            return dates.apply(to_datetime_local, axis=1)
+            dts = pd.to_datetime(dates)
+            if dts.isnull().all():
+                return dates.apply(to_datetime_local, axis=1)
+            else:
+                return dts
         except:
             # Adding this to put breakpoint here to catch errors. This try/except should be removed in the future
             raise
@@ -562,9 +585,12 @@ def to_datetime(dates, ignore_errors=False, *args, **kwargs):
             else:
                 return dates
         except (pd._libs.tslibs.parsing.DateParseError, dateutil.parser._parser.ParserError) as e:
-            if 'out of range' in str(e) and \
-                ((m1:=re.search(r'year ((19|20)\d{6}) is out of range: \1\.0.* position 0', str(e))) or \
-                 re.search(r'year (\d{3,4}(19|20)\d{2}) is out of range: 0?\1\.0.* position 0', str(e))):
+            if ('out of range' in str(e) and \
+                    ((m1:=re.search(r'year ((19|20)\d{6}) is out of range: \1\.0.* position 0', str(e))) or \
+                    re.search(r'year (\d{3,4}(19|20)\d{2}) is out of range: 0?\1\.0.* position 0', str(e)))) or \
+                ('year must be in 1..9999' in str(e) and \
+                    ((m1:=re.search(r'not ((19|20)\d{6}): \1\.0.*', str(e))) or \
+                     re.search(r'not (\d{3,4}(19|20)\d{2}): 0?\1\.0.*', str(e)))):
                 if isinstance(dates, pd.Series):
                     return dates.apply(to_datetime)
                 elif m1:
@@ -592,9 +618,57 @@ def to_datetime(dates, ignore_errors=False, *args, **kwargs):
             elif ignore_errors and isinstance(dates, str) and re.search(r'Unknown(\sdatetime)? string format.+: \d+[-/]\d+[-/]\d+,?\s?\d+[-/]\d+[-/]\d+', str(e)):
                 # Comma separated list of dates. Just return value
                 return dates
-            elif re.search(r'year \d\d20\d\d is out of range: \d{1,2}/\d\d20\d\d', str(e)) and isinstance(dates, pd.Series):
+            elif (re.search(r'year \d\d20\d\d is out of range: \d{1,2}/\d\d20\d\d', str(e)) or \
+                    re.search(r'year must be in 1..9999, not \d\d20\d\d: \d{1,2}/\d\d20\d\d', str(e))) and \
+                  isinstance(dates, pd.Series):
                 dates = dates.apply(lambda x: re.sub(r'(\d\d)20(\d\d)', r'\1/20\2', x) if isinstance(x,str) else x)
                 return to_datetime(dates, ignore_errors=ignore_errors, *args, **kwargs)
+            elif re.search(r'year must be in 1..9999, not (\d{3,4}(19|20)\d{2}): \1', str(e)) or \
+                re.search(r'month must be in 1..12, not 20: (\d{3,4}(19|20)\d{2})', str(e)):  # Eg. 1052025 or 11052025
+                if isinstance(dates, pd.Series):
+                    return dates.apply(to_datetime)
+                else:
+                    dtstr = dates[-4:]
+                    mmdd = dates[:-4]
+                    if len(mmdd)==3:
+                        dtstr+='0'
+                    dtstr+=mmdd
+                    return pd.to_datetime(dtstr)
+            elif isinstance(str) and 'Unknown datetime string format' in str(e):
+                # Try to parse...
+                # Find date
+                m = re.search(r'\d+[/-]\d+[/-]\d+', dates)
+                if not m:
+                    raise
+
+                datestr = m.group()
+                dt = pd.to_datetime(datestr)
+
+                if (m:=re.search(r'\d+:\d+:\d+\s*([AP]M)?', dates)):
+                    # Time found
+                    timestr = m.group()
+                    if dates.replace(datestr, '').replace(timestr, '').strip()!='':
+                        # There is more to the string that has not been parsed
+                        raise
+                    format = re.sub(r'\d+:\d+:\d+', '%H:%M:%S', timestr)
+                    format = re.sub(r'[A|P]M', '%p', format)
+
+                    t = pd.to_datetime(timestr, format=format)
+                    dt += t - pd.to_datetime(t.date())
+                else:
+                    if dates.replace(datestr, '').strip()!='':
+                        # There is more to the string that has not been parsed
+                        raise
+                return dt
+            elif isinstance(dates, str) and 'year must be in 1..9999' in str(e) and \
+                (m:=re.search(r'^(\d{1,2})/(\d{6})$', dates)):
+                month = int(m.group(1))
+                day = int(m.group(2)[:2])
+                year = int(m.group(2)[2:])
+                if year<1980 or year > datetime.datetime.now().year:
+                    raise
+                
+                return pd.to_datetime(f'{year}{month}{day}')
             else:
                 raise
         except ValueError as e:
@@ -656,7 +730,22 @@ def to_datetime(dates, ignore_errors=False, *args, **kwargs):
                     dates.iloc[:,2][dates.iloc[:,2].notnull()].apply(lambda x: isinstance(x, numbers.Number) or is_str_number(x) or \
                     re.search(r'\d+(th|st|nd|rd)',x) is not None).all())):
                 raise NotImplementedError("This should no longer be reachable. Remove in a future release")
-            else:
-                return pd.to_datetime(dates, *args, format='mixed', **kwargs)
+            elif isinstance(dates, pd.Series):
+                kwargs.pop('format', None)
+                kwargs.pop('errors', None)
+                dts = pd.to_datetime(dates, *args, format='mixed', errors='coerce', **kwargs)
+                isnull = dts.isnull()
+                if isnull.any():
+                    # Find cases that were not originally null
+                    isnull_orig = dates.isnull()
+                    nonnulls = dates[~isnull_orig & isnull]
+                    if len(nonnulls)>0:
+                        nonnulls = nonnulls[nonnulls.apply(lambda x: not isinstance(x,str) or len(x.strip())>1)]
+                        if len(nonnulls)>0:
+                            nonnulls = nonnulls.apply(to_datetime)
+                            dts.loc[nonnulls.index] = nonnulls
+                elif isnull.all():
+                    raise
+                return dts
         except Exception as e:
             raise

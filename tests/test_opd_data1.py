@@ -265,9 +265,7 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 					 	url=url, id=id)
 				assert datasets.iloc[i]["date_field"] in table.table
 				#assuming a Pandas string dtype('O').name = object is okay too
-				assert (table.table[datasets.iloc[i]["date_field"]].dtype.name in ['datetime64[ns]', 'datetime64[ns, UTC]', 
-																	'datetime64[ms]', 'period[Y-DEC]','period[Q-DEC]',
-																	'period[M]']) or \
+				assert any([x in table.table[datasets.iloc[i]["date_field"]].dtype.name for x in ['datetime','period']]) or \
 						table.table[datasets.iloc[i]["date_field"]].apply(lambda x: type(x) in [pd.Timestamp,pd.Period]).mean()>0.9
 				dts = table.table[datasets.iloc[i]["date_field"]]
 				dts = dts[dts.notnull()]
@@ -375,7 +373,7 @@ def test_load_gen(source, year, table_type, nrows, agency):
 				missing_columns = list(set(df.columns).difference(set(df2.columns)))
 				for col in missing_columns:
 					assert df_cur[col].isnull().all()
-					df_cur.drop(columns=col, inplace=True)
+					df_cur = df_cur.drop(columns=col)
 			# Assure columns are in proper order
 			assert set(df_cur.columns)==set(df2.columns)
 			df2 = df2[df_cur.columns]

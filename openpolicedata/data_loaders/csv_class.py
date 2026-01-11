@@ -75,7 +75,16 @@ def read_zipped_csv(url, pbar=True, block_size=2**20, data_set=None):
         zip_data = download_zip_and_extract(url, block_size, pbar)
         zip_bytes_io = BytesIO(zip_data)
         logger.debug('Converting BytesIO to DataFrame')
-        return pd.read_csv(zip_bytes_io, encoding_errors='surrogateescape')
+        unicode_error = None
+        for encoding_errors in ['surrogateescape', 'ignore']:
+            try:
+                return pd.read_csv(zip_bytes_io, encoding_errors=encoding_errors)
+            except UnicodeEncodeError as e:
+                if unicode_error:
+                    raise unicode_error
+                unicode_error = e
+                zip_bytes_io.seek(0)
+                continue
   
 
 def count_csv_rows(chunk_iter):
@@ -333,20 +342,28 @@ class Csv(Data_Loader):
                 else:
                     return requests.get(url, params=None, stream=True, headers=headers)
 
-            header = 'infer'   
-
-            with get(self.url, use_legacy, headers) as resp:
-                try:
-                    with warnings.catch_warnings():
-                        warnings.filterwarnings("ignore", message=r"Columns \(.+\) have mixed types", category=pd.errors.DtypeWarning)
-                        nrows_read = offset+nrows if nrows is not None and not self.query else None
-                        table = pd.read_csv(TqdmReader(resp, pbar=pbar), nrows=nrows_read, 
-                            encoding_errors='surrogateescape', 
-                            header=header)
-                except (urllib.error.HTTPError, pd.errors.ParserError) as e:
-                    raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(self.url))
-                except Exception as e:
-                    raise e
+            header = 'infer'
+            unicode_error = None
+            nrows_read = offset+nrows if nrows is not None and not self.query else None
+            for encoding_errors in ['surrogateescape', 'ignore']:
+                with get(self.url, use_legacy, headers) as resp:
+                    try:
+                        with warnings.catch_warnings():
+                            warnings.filterwarnings("ignore", message=r"Columns \(.+\) have mixed types", category=pd.errors.DtypeWarning)
+                            table = pd.read_csv(TqdmReader(resp, pbar=pbar), nrows=nrows_read, 
+                                encoding_errors=encoding_errors, 
+                                header=header)
+                    except UnicodeEncodeError as e:
+                        if unicode_error:
+                            raise unicode_error
+                        unicode_error = e
+                        continue
+                    except (urllib.error.HTTPError, pd.errors.ParserError) as e:
+                        raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(self.url))
+                    except Exception as e:
+                        raise e
+                    
+                break
                 
         if len(table.columns)==1 and ('?xml' in table.columns[0] or re.search(r'^\<.+\>', table.columns[0])):
             # Read data was not a CSV file. It was an error code or HTML

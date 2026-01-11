@@ -210,8 +210,8 @@ def find_id_column(df1, df2, std_id, keep_raw):
         # Save column off rather than creating it before cleanup in case original column name matches new column name
         col1 = df1[id_col1]
         col2 = df2[id_col2]
-        raw_name1 = cleanup_column(df1, id_col1, keep_raw)
-        raw_name2 = cleanup_column(df2, id_col2, keep_raw)
+        df1, raw_name1 = cleanup_column(df1, id_col1, keep_raw)
+        df2, raw_name2 = cleanup_column(df2, id_col2, keep_raw)
         df1[defs.columns.INCIDENT_ID] = col1
         df2[defs.columns.INCIDENT_ID] = col2
 
@@ -1348,7 +1348,8 @@ class Standardizer:
     
     def _cleanup_old_column(self, col_name, keep_raw=None):
         keep_raw = self.keep_raw if keep_raw is None else keep_raw
-        return cleanup_column(self.df, col_name, keep_raw)
+        self.df, new_name =  cleanup_column(self.df, col_name, keep_raw)
+        return new_name
         
 
     def standardize_date(self):
@@ -1400,7 +1401,7 @@ class Standardizer:
         #     # time so the threshold is 3.
         #     self.table[defs.columns.DATETIME] = self.table[defs.columns.DATE]
         #     if not keeporig:
-        #         self.table.drop(columns=[defs.columns.DATE], inplace=True)
+        #         self.table = self.table.drop(columns=[defs.columns.DATE])
 
     def standardize_name(self):
         cols = [defs.columns.NAME_SUBJECT, defs.columns.NAME_OFFICER, defs.columns.NAME_OFFICER_SUBJECT]
@@ -1946,7 +1947,7 @@ class Standardizer:
                                 new_col_name = getattr(defs.columns, new_col_prop)
                                 if new_col_name not in self.col_map:
                                     self.col_map.replace(col, new_col_name)
-                                    self.df.rename(columns={col:new_col_name}, inplace=True)
+                                    self.df = self.df.rename(columns={col:new_col_name})
                                     col = new_col_name
                                     map = None
                                 else:
@@ -2427,16 +2428,16 @@ def cleanup_column(df, col_name, keep_raw):
             if not col_name.startswith(_OLD_COLUMN_INDICATOR):
                 new_name = _OLD_COLUMN_INDICATOR+"_"+col_name
                 logger.info(f"Renaming raw column {col_name} to {new_name}")
-                df.rename(columns={col_name : new_name}, inplace=True)
+                df = df.rename(columns={col_name : new_name})
                 new_names.append(new_name)
             else:
                 new_names.append(col_name)
         new_name = new_names[0] if len(new_names)==1 else new_names
-        return new_name
+        return df, new_name
     else:
         logger.info(f"Removing raw column {col_name}")
-        df.drop(col_name, axis=1, inplace=True)
-        return None
+        df = df.drop(col_name, axis=1)
+        return df, None
     
 def washingtonpost_id2agency(col, unknown='ignore'):
     assert(unknown in ['ignore','error'])
