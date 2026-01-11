@@ -344,10 +344,10 @@ class Arcgis(Data_Loader):
         # Determine format by getting some data
         data = None
         if not self._date_type:
-            data = self.__request(where='1=1', out_fields=self.date_field, count=1000)
+            data = self.__request(where=f'{self.date_field} IS NOT NULL', out_fields=self.date_field, count=1000)
             self._date_type = data['fields'][0]['type']
 
-        if self._date_type=='esriFieldTypeDate':
+        if self._date_type in ['esriFieldTypeDate','esriFieldTypeDateOnly']:
             where_query, record_count = self._build_date_query_date_type(date)
         elif self._date_type=='esriFieldTypeString':
             where_query, record_count = self._build_date_query_string_type(date, data, date_range_error)
