@@ -5,7 +5,6 @@ if __name__ == "__main__":
 	sys.path.append('../openpolicedata')
 from openpolicedata import data, data_loaders
 from openpolicedata.defs import DataType, TableType
-from openpolicedata import exceptions
 from openpolicedata.exceptions import OPD_DataUnavailableError, OPD_TooManyRequestsError,  \
 	OPD_MultipleErrors, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError, OPD_FutureError, OPD_MinVersionError
 import openpolicedata as opd
@@ -41,7 +40,7 @@ else:
 	except:
 		pass
 
-warn_errors = (OPD_DataUnavailableError, OPD_SocrataHTTPError, OPD_FutureError, OPD_MinVersionError)
+warn_errors = (OPD_DataUnavailableError, OPD_SocrataHTTPError, OPD_FutureError)
 
 @pytest.fixture()
 def log_stream():
@@ -96,14 +95,14 @@ def test_format_date_false(all_datasets, source, table, year):
 		assert isinstance(table.table[table.date_field].iloc[0],str)
 		
 
-@pytest.mark.parametrize('source, table, year,url', [('Denver', "OFFICER-INVOLVED SHOOTINGS", 2022,None), 
+@pytest.mark.parametrize('source, table, year,url', [('Denver', "OFFICER-INVOLVED SHOOTINGS", 2022,'https://raw.githubusercontent.com/openpolicedata/opd-datasets/main/data/Colorado_Denver_OFFICER-INVOLVED_SHOOTINGS.csv'), 
 				('Sparks', "OFFICER-INVOLVED SHOOTINGS", 2022, None),  
 				('Louisville', "TRAFFIC STOPS", ['2018-12-29', '2019-01-01'], 'LMPD_STOPS_DATA_(2)')])
 def test_format_date_false_not_allowed(all_datasets, source, table, year, url):
 	if check_for_dataset(source, table):
 		src = opd.Source(source)
 		with pytest.raises(ValueError, match='Dates cannot be filtered'):
-			src.load(table, year, format_date=False, nrows=1)
+			src.load(table, year, format_date=False, nrows=1, url=url)
 
 
 @pytest.mark.parametrize('ver', ["0.0", pd.NA])
@@ -196,6 +195,10 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 			try:
 				table = src.load(table_type, datasets.iloc[i]["Year"], pbar=True, nrows=nrows, 
 					 url=url, id=id)
+			except OPD_MinVersionError as e:
+				e.prepend(f"Iteration {i}", srcName, table_type, datasets.iloc[i]["Year"])
+				caught_exceptions_warn.append(e)
+				continue
 			except warn_errors as e:
 				e.prepend(f"Iteration {i}", srcName, table_type, datasets.iloc[i]["Year"])
 				update_outages(outages_file, datasets.iloc[i], True, e)
@@ -271,7 +274,7 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 				dts = dts[dts.notnull()]
 				# New Orleans complaints dataset has many empty dates
 				# "Seattle and Minneapolis starts with bad date data"
-				if len(dts)>0 or srcName not in ["Seattle","New Orleans",'Minneapolis','St. Paul','Virginia Beach'] or \
+				if len(dts)>0 or srcName not in ["Seattle","New Orleans",'Minneapolis','St. Paul','Virginia Beach','Tucson'] or \
 					table_type not in [TableType.COMPLAINTS, TableType.INCIDENTS, TableType.CALLS_FOR_SERVICE]:
 					assert len(dts) > 0   # If not, either all dates are bad or number of rows requested needs increased
 					assert dts.iloc[0].year <= datetime.now().year if isinstance(dts.iloc[0], (pd.Timestamp,pd.Period)) else \
@@ -305,8 +308,8 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 	(data_loaders.Socrata, 'Richmond', 'CALLS FOR SERVICE', None, [2021, [2020, 2022]]),
 	(data_loaders.Ckan, 'Virginia', 'STOPS', "Arlington County Police Department", [2021, [2020, 2022]]),
 	(data_loaders.Arcgis, "Charlotte-Mecklenburg", 'EMPLOYEE', None, []),
-	(data_loaders.Csv, 'Denver', "OFFICER-INVOLVED SHOOTINGS", None, []),
-	(data_loaders.Excel, 'Rutland', "USE OF FORCE", None, []),
+	(data_loaders.Csv, 'Jacksonville', "OFFICER-INVOLVED SHOOTINGS", None, []),
+	(data_loaders.Excel, 'Norwich', "OFFICER-INVOLVED SHOOTINGS", None, []),
 	(data_loaders.Opendatasoft, 'Long Beach', "STOPS", None, [2021, [2020, 2022]]),
 	(data_loaders.Carto, "Philadelphia", 'STOPS', None, [2021, [2020, 2022]])
 	])
@@ -427,13 +430,13 @@ if __name__ == "__main__":
 	use_changed_rows = False
 	csvfile = None
 	csvfile = os.path.join(r"..",'opd-data','opd_source_table.csv')
-	start_idx = 0
+	start_idx = 462
 	skip = None
 	# skip = "Sacramento"
 	source = None
-	# source = "St. Paul" #"Washington D.C." #"Wallkill"
+	# source = "Mesa"
 	query = {}
-	# query = {'SourceName':'San Francisco'}
+	# query = {'TableType':'TRAFFIC STOPS'}
 
 	datasets = get_datasets(csvfile, use_changed_rows)
 

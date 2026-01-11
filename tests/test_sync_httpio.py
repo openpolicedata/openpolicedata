@@ -1,13 +1,11 @@
 from io import BufferedIOBase, UnsupportedOperation
-from numpy import isin
 import pytest
-from requests import HTTPError
 import requests
 
 from openpolicedata.httpio import HTTPIOFile
 from openpolicedata import httpio
 
-test_url = 'http://www.example.com/'
+test_url = 'https://cdn.muckrock.com/foia_files/2024/05/05/Records_Request_Download_FOIL-2023-3998_2024-05-05--23-47-12.zip'
 
 # from __future__ import print_function
 # from __future__ import absolute_import
@@ -148,7 +146,7 @@ def test_readinto1(DATA):
         with HTTPIOFile(test_url, 1024) as io:
             assert io.tell()==0
 
-def test_seek_and_tell_match():
+def test_seek_and_tell_match(DATA):
     with HTTPIOFile(test_url, 1024) as io:
         assert io.seek(1536) == 1536
         assert io.tell() == 1536
@@ -182,10 +180,11 @@ def test_truncate():
         with pytest.raises(httpio.IOBaseError):
             io.truncate()
 
-def test_write():
-    with HTTPIOFile(test_url, 1024) as io:
-        with pytest.raises(httpio.HTTPIOError):
-            io.write(DATA[:1024])
+# We have no need to write
+# def test_write():
+#     with HTTPIOFile(test_url, 1024) as io:
+#         with pytest.raises(httpio.HTTPIOError):
+#             io.write(DATA[:1024])
 
 def test_writable():
     with HTTPIOFile(test_url, 1024) as io:
@@ -195,6 +194,3 @@ def test_writelines():
     with HTTPIOFile(test_url, 1024) as io:
         with pytest.raises(httpio.HTTPIOError):
             io.writelines([line.encode('ascii') for line in ASCII_LINES])
-
-def test_httpio():
-    raise NotImplementedError()

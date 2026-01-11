@@ -252,7 +252,7 @@ def test_excel_header():
 
 
 def test_excel_xls():
-    url = r"http://gouda.beloitwi.gov/WebLink/0/edoc/66423/3Use%20of%20Force%202017%20-%20last%20updated%201-12-18.xls"
+    url = r"https://cdn.muckrock.com/foia_files/2023/10/02/UOF_Database_2022_Incidents.xls"
 
     try:
         df_comp = pd.read_excel(url)
@@ -272,46 +272,47 @@ def test_excel_xls():
     assert df_comp.equals(df)
 
 
-def test_excel_xls_protected():
-    url = "http://www.rutlandcitypolice.com/app/download/5136813/ResponseToResistance+2015-2017.xls"
+# The below dataset is no longer available and no other dataset triggers this case
+# def test_excel_xls_protected():
+#     url = "http://www.rutlandcitypolice.com/app/download/5136813/ResponseToResistance+2015-2017.xls"
 
-    r = requests.get(url)
-    r.raise_for_status()
+#     r = requests.get(url)
+#     r.raise_for_status()
 
-    import os
-    import msoffcrypto
-    import tempfile
-    # Create a file path by joining the directory name with the desired file name
-    output_directory = tempfile.gettempdir()
-    file_path = os.path.join(output_directory, 'temp1.xls')
+#     import os
+#     import msoffcrypto
+#     import tempfile
+#     # Create a file path by joining the directory name with the desired file name
+#     output_directory = tempfile.gettempdir()
+#     file_path = os.path.join(output_directory, 'temp1.xls')
 
-    # Write the file
-    with open(file_path, 'wb') as output:
-        output.write(r.content)
+#     # Write the file
+#     with open(file_path, 'wb') as output:
+#         output.write(r.content)
 
-    file_path_decrypted = os.path.join(output_directory, 'temp2.xls')
-    # Try and unencrypt workbook with magic password
-    fp = open(file_path, 'rb')
-    wb_msoffcrypto_file = msoffcrypto.OfficeFile(fp)
+#     file_path_decrypted = os.path.join(output_directory, 'temp2.xls')
+#     # Try and unencrypt workbook with magic password
+#     fp = open(file_path, 'rb')
+#     wb_msoffcrypto_file = msoffcrypto.OfficeFile(fp)
 
-    # https://stackoverflow.com/questions/22789951/xlrd-error-workbook-is-encrypted-python-3-2-3
-    # https://nakedsecurity.sophos.com/2013/04/11/password-excel-velvet-sweatshop/
-    wb_msoffcrypto_file.load_key(password='VelvetSweatshop')
-    with open(file_path_decrypted, 'wb') as output:
-        wb_msoffcrypto_file.decrypt(output)
+#     # https://stackoverflow.com/questions/22789951/xlrd-error-workbook-is-encrypted-python-3-2-3
+#     # https://nakedsecurity.sophos.com/2013/04/11/password-excel-velvet-sweatshop/
+#     wb_msoffcrypto_file.load_key(password='VelvetSweatshop')
+#     with open(file_path_decrypted, 'wb') as output:
+#         wb_msoffcrypto_file.decrypt(output)
 
-    fp.close()
+#     fp.close()
 
-    with open(file_path_decrypted, 'rb') as f:
-        df_comp = pd.read_excel(f)
+#     with open(file_path_decrypted, 'rb') as f:
+#         df_comp = pd.read_excel(f)
 
-    os.remove(file_path)
-    os.remove(file_path_decrypted)
+#     os.remove(file_path)
+#     os.remove(file_path_decrypted)
 
-    loader = data_loaders.Excel(url)
-    df = loader.load(pbar=False)
+#     loader = data_loaders.Excel(url)
+#     df = loader.load(pbar=False)
 
-    df_comp = df_comp.convert_dtypes()
-    df_comp.columns = [x.strip() if isinstance(x, str) else x for x in df_comp.columns]
-    df_comp = df_comp[[x for x in df_comp.columns if 'Unnamed' not in x]]
-    assert df_comp.equals(df)
+#     df_comp = df_comp.convert_dtypes()
+#     df_comp.columns = [x.strip() if isinstance(x, str) else x for x in df_comp.columns]
+#     df_comp = df_comp[[x for x in df_comp.columns if 'Unnamed' not in x]]
+#     assert df_comp.equals(df)
