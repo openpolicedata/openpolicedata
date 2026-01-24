@@ -188,9 +188,9 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 			nrows = 20 if limit_rows else None
 
 			# Handle cases where URL is required to disambiguate requested dataset
-			ds_filter, _ = src._Source__filter_for_source(table_type, datasets.iloc[i]["Year"], None, None, errors=False)
-			url = datasets.iloc[i]['URL'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
-			id = datasets.iloc[i]['dataset_id'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
+			ds_filter = src.filter(table_type, datasets.iloc[i]["Year"])
+			url = datasets.iloc[i]['URL'] if len(ds_filter)>1 else None
+			id = datasets.iloc[i]['dataset_id'] if len(ds_filter)>1 else None
 
 			try:
 				table = src.load(table_type, datasets.iloc[i]["Year"], pbar=True, nrows=nrows, 

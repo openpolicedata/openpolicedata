@@ -46,9 +46,9 @@ def test_csv_get_count(all_datasets, source, start_idx):
         print(f"{now} Testing {i} of {len(datasets)-1}: {srcName} {table_print} table")
 
         # Handle cases where URL is required to disambiguate requested dataset
-        ds_filter, _ = src._Source__filter_for_source(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], None, None, errors=False)
-        url = datasets.iloc[i]['URL'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
-        id = datasets.iloc[i]['dataset_id'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
+        ds_filter = src.filter(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"])
+        url = datasets.iloc[i]['URL'] if len(ds_filter)>1 else None
+        id = datasets.iloc[i]['dataset_id'] if len(ds_filter)>1 else None
 
         try:
             t = time.time()

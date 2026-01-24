@@ -20,6 +20,7 @@ except:
 import warnings
 
 from . import data_loaders, dataset_id
+from .data_loaders import data_loader
 from . import datasets
 from . import log
 from . import __version__
@@ -193,16 +194,16 @@ class Table:
         if "dataset_id" in source and (isinstance(source["dataset_id"], list) or pd.notnull(source["dataset_id"])):
             self._dataset_id = source["dataset_id"]
 
-        if "date_field" in source and not pd.isnull(source["date_field"]):
+        if "date_field" in source and pd.notnull(source["date_field"]):
             self.date_field = source["date_field"]
         
-        if "agency_field" in source and not pd.isnull(source["agency_field"]):
+        if "agency_field" in source and pd.notnull(source["agency_field"]):
             self.agency_field = source["agency_field"]
 
-        if "source_url" in source and not pd.isnull(source["source_url"]):
+        if "source_url" in source and pd.notnull(source["source_url"]):
             self.source_url = source["source_url"]
 
-        if "readme" in source and not pd.isnull(source["readme"]):
+        if "readme" in source and pd.notnull(source["readme"]):
             self.readme = source["readme"]
 
         self.urls = {'source_url':self.source_url, 'readme':self.readme, 'data':self.url}
@@ -883,7 +884,8 @@ class Source:
         force: bool = False, 
         manual: bool = False,
         datasets: pd.DataFrame = None,
-        use_coverage_only: bool = False
+        use_coverage_only: bool = False,
+        req_years: list[int] | None = None
         ) -> list[int]:
         '''Get years available for 1 or more datasets
 
@@ -897,6 +899,8 @@ class Source:
             (Optional) If True, for datasets that contain multiple years, the years will be determined by making requests to the dataset rather than using the years stored in the dataset table. The default is False, which runs faster but may not be up-to-date.
         datasets - pd.DataFrame
             (Optional) Only select from datasets in this dataframe instead of self.datasets. datasets should be a subset of the rows in self.datasets.
+        req_years - list[int]
+            (Optional) If set, only req_years will be checked for data
 
         Returns
         -------
@@ -931,17 +935,23 @@ class Source:
             if use_coverage:
                 years.update(range(df["coverage_start"].year, df["coverage_end"].year+1))
                 if not use_coverage_only:
-                    years_to_check = _get_years_to_check(years, cur_year, force, loader.isfile())
+                    if req_years!=None:
+                        years_to_check = [x for x in req_years if x not in years]
+                    else:
+                        years_to_check = _get_years_to_check(years, cur_year, force, loader.isfile())
                     if len(years_to_check)>0:
                         # Check for updates
                         new_years = loader.get_years(force=force, check=years_to_check)
                         years.update(new_years)
             else:
-                new_years = loader.get_years(force=force)
+                new_years = loader.get_years(force=force, check=req_years)
                 years.update(new_years)
             
         years = list(years)
         years.sort()
+
+        if req_years!=None:
+            years = [x for x in years if x in req_years]
 
         return years
 
@@ -1230,7 +1240,7 @@ class Source:
             pandas Dataframe containing sources found when only filtering by table type and date
         '''
 
-        src, _ = self.__filter_for_source(table_type, date, None, None, errors=False)
+        src = self.filter(table_type, date)
 
         url_diff = id_diff = False
         if isinstance(src, pd.DataFrame):
@@ -1240,27 +1250,62 @@ class Source:
         return url_diff, id_diff, src
         
 
-    def __filter_for_source(self, table_type, date, url, id, errors=True):
+    def filter(self, 
+                table_type: str|None = None, 
+                date: str | int | list[Union[int, str, pd.Timestamp]] = None,
+                url: str | None = None,
+                id: str | None = None,
+                errors: bool = False):
+        '''Filter source datasets. This can be used to be determine if there are are any datasets for a given table type and/or date.
+        It can also be used to determine if more than one dataset for a requested table type and date, which would necesitate usage of 
+        the url and id inputs when loading data.
+
+        Parameters
+        ----------
+        table_type - str or TableType enum
+            (Optional) Table type to load
+        date - int or the string opd.defs.MULTI or opd.defs.NONE or a length 2 list of start and stop year(s), date string(s), and/or timestamp(s)
+            (Optional) Define timespan of data to request:
+                1. Request data for an entire year by inputting the year (i.e. 2023)
+                2. Request data from a start year or datetime to a stop year or datetime using a length 2 list (i.e. [2021, '2023-02-01'] for start of 2021 to end of 2023-02-01)
+                3. Request an entire multi-year dataset by inputting 'MULTIPLE'
+                4. Request of a dataset with no time information (i.e. officer demographics) by inputting 'NONE'
+        url - str
+            (Optional) If set, URL must contain this string. Can be used in combination with id when multiple datasets match a set of inputs.
+        id - str
+            (Optional) If set, dataset ID must equal this value. Can be used in combination with url when multiple datasets match a set of inputs.
+        errors : bool
+            If True, throw error if no datasets are found or if more than one dataset is found, by default False
+
+        Returns
+        -------
+        DataFrame
+            pandas Dataframe containing sources found
+        '''
+
+        date = data_loader._clean_date_input(date)
         src = self.__find_datasets(table_type).copy()
 
-        if len(src)==0:
+        if errors and len(src)==0:
             raise ValueError(f"No source found for table type {table_type}. See datasets attribute for available table types (i.e. obj.datasets['TableType'] (where obj is your Source object)).")
-
-        date = _check_date_input(date)
         
         if url:
             src = src[src['URL'].str.contains(url, regex=False)]
 
-            if len(src)==0:
+            if errors and len(src)==0:
                 raise ValueError(f"No source found with a URL field containing {url}. See datasets attribute for available URLs (i.e. obj.datasets['URL'] (where obj is your Source object)).")
 
-        if dataset_id.notnull(id):
-            src = src[src['dataset_id'].apply(lambda x: x==id)]
+        # TODO: Check that this works for dict ids
+        if id!=None:
+            if dataset_id.notnull(id):
+                src = src[src['dataset_id'].apply(lambda x: x==id)]
+            else:
+                src = src[src['dataset_id'].isnull()]
 
-            if len(src)==0:
+            if errors and len(src)==0:
                 raise ValueError(f"No source found with a dataset id field containing {id}. See datasets attribute for available dataset IDs (i.e. obj.datasets['dataset_id'] (where obj is your Source object)).")
 
-        if isinstance(date, str):
+        if len(src)>0 and isinstance(date, str):
             matches = src["Year"]==date  # User is requesting NONE or MULTIPLE
 
             if errors:
@@ -1276,65 +1321,28 @@ class Source:
                                 f'attribute of Source object) to specify a single dataset: i.e.\n\n{poss_matches}.')
                 
             src = src[matches]
-            apply_date_filter = False
-        else:
-            single_year_request = isinstance(date, numbers.Number)
-            if single_year_request:
-                req_years = [date]  # Single date request
-                req_dates = pd.to_datetime([f'{date}-01-01', f'{date}-12-31'])
-            else:
-                # One or more year request
-                req_year_range = [int(str(x)[:4]) for x in date]
-                req_years = [x for x in range(req_year_range[0], req_year_range[1]+1)]
-                req_dates = []
-                req_dates.append(f'{date[0]}-01-01' if isinstance(date[0], numbers.Number) else date[0])
-                req_dates.append(f'{date[1]}-12-31' if isinstance(date[1], numbers.Number) else date[1])
-                req_dates = [pd.to_datetime(x) for x in req_dates]
-                
-            # First find all applicable single year datasets
-            matches = src["Year"].isin(req_years)
+        elif len(src)>0 and date!=None:
+            # Find datasets containting date range
+            matches = src['coverage_start'].apply(lambda x: x<=date[1] if isinstance(x,pd.Timestamp) else False) & \
+                        src['coverage_end'].apply(lambda x: x>=date[0] if isinstance(x,pd.Timestamp) else False)
 
-            def filt_required(date):
-                if date==defs.MULTI:
-                    return True
-                elif isinstance(date, numbers.Number):
-                    min_date = pd.to_datetime(f'{date}-01-01')
-                    max_date = pd.to_datetime(f'{date}-12-31')
-                    return min_date < req_dates[0] or max_date > req_dates[1]
-                else:
-                    raise NotImplementedError(f'Unexpected date {date} in filt_required')
-            # If a range is requested (i.e. a single year is not requested), a date filter in the data request is necessary if the range does not include the entire dataset
-            # If matchingYears is set to True because the Year matches a requested date, an entire annual dataset is requested and 
-            # it is not necessary to apply a date filter in the data request
-            apply_date_filter = src["Year"].apply(filt_required)
-
-            # Find all applicable multi-year datasets
-            # First try a simple match based on coverage years in the source table (which could potentially be out-of-date)
-            for k in src.index:
-                if src.loc[k, 'Year']==defs.MULTI:
-                    # Find if there is overlap
-                    matches.loc[k] = req_dates[1]>=src.loc[k, 'coverage_start'] and req_dates[0]<=src.loc[k, 'coverage_end']
-
-            num_matches = matches.sum()
-            if num_matches>1:
-                # Multiple matches found
-                # Check if coverage is just outside the coverage range of one of the datasets
-                for k in src.index:
-                    if src.loc[k, 'Year']==defs.MULTI:
-                        # Find if there is overlap
-                        matches.loc[k] = req_dates[1]>=src.loc[k, 'coverage_start'] and req_dates[0]<=src.loc[k, 'coverage_end']
-            elif num_matches==0:
+            if matches.sum()==0:
                 # If no dataset's coverage includes the selected data, use Year=MULTIPLE
                 matches = src['Year']==defs.MULTI
+                if matches.sum()>1:
+                # Check to see if coverage might be out-of-date
+                    src = src[matches]
+                    updated_matches = []
+                    req_years = [x for x in range(date[0].year, date[1].year+1)]
+                    for k in range(len(src)):
+                        years = self.get_years(table_type, datasets=src.iloc[k], req_years=req_years)
+                        updated_matches.append(len(years)>0)
+                    
+                    matches = updated_matches
 
             src = src[matches]
-            apply_date_filter = apply_date_filter[matches]
 
-        if len(src)==1:
-            src = src.iloc[0]
-            if isinstance(apply_date_filter, pd.Series):
-                apply_date_filter = apply_date_filter.iloc[0]
-        elif errors:
+        if len(src)!=1 and errors:
             if len(src)==0:
                 raise ValueError(f"No source found containing date {date}. See datasets attribute for available dataset years "+\
                                      "(i.e. Year, coverage_start, and coverage_end columns of obj.datasets (where obj is your Source object)).")
@@ -1345,15 +1353,15 @@ class Source:
                                  'Please either update the dates requested or utilize url and/or id inputs (using data from URL and dataset_id columns of datasets '+\
                                 f'attribute of Source object) to specify a single dataset: i.e.\n\n{poss_matches}.')
 
-        return src, apply_date_filter
-
+        return src
+    
 
     def __load(self, table_type, date, agency, load_table, pbar=True, return_count=False, force=False, 
                nrows=None, offset=0, sortby=None, verbose=False, url_contains=None, id=None, format_date=True):
-        # Make copy so original isn't changed
-        date = date.copy() if isinstance(date, list) else date
-
-        src, filter_by_date = self.__filter_for_source(table_type, date, url_contains, id)
+        
+        date = data_loader._clean_date_input(date)
+        src = self.filter(table_type, date, url_contains, id, errors=True).iloc[0]      
+        filter_by_date = _check_whether_to_filter_by_date(src, date)      
 
         # Load data from URL. For date or agency equal to opd.defs.MULTI, filtering can be done
         url = src["URL"]
@@ -1362,7 +1370,7 @@ class Source:
         dataset = src["dataset_id"] if (isinstance(src["dataset_id"], list) or pd.notnull(src["dataset_id"])) else None
 
         table_year = None
-        if not pd.isnull(src["date_field"]):
+        if pd.notnull(src["date_field"]):
             date_field = src["date_field"]
             if date_filter != None:
                 table_year = date_filter
@@ -1370,7 +1378,7 @@ class Source:
             date_field = None
         
         table_agency = None
-        if not pd.isnull(src["agency_field"]):
+        if pd.notnull(src["agency_field"]):
             agency_field = src["agency_field"]
             if agency != None and src['DataType'] !=defs.DataType.ArcGIS:
                 table_agency = agency
@@ -2126,11 +2134,7 @@ def _get_filename(
                 else:
                     raise ValueError("Unable to find unique filename")
             else:
-                filename += '_urlcontains_' + addon
-                
-            
-            
-                
+                filename += '_urlcontains_' + addon       
 
     # Clean up filename
     filename = filename.replace(",", "_").replace(" ", "_").replace("__", "_").replace("/", "_")
@@ -2155,7 +2159,7 @@ def _get_unique_id_sub(matches, url, id):
     is_requested = is_requested[is_requested].index[0]
 
     id = matches.loc[is_requested, 'dataset_id']
-    assert not pd.isnull(id)
+    assert pd.notnull(id)
     if (matches['dataset_id']==id).sum()==1:
         if len(id)<10:
             return id
@@ -2263,47 +2267,19 @@ def _get_years_to_check(years, cur_year, force, isfile):
 
     return years_to_check
 
+def _check_whether_to_filter_by_date(src, date):
+    if isinstance(src, pd.DataFrame):
+        assert len(src)==1
+        src = src.iloc[0]
 
-def _check_date_input(date):
-    def is_year_input(date):
-        return isinstance(date, numbers.Number) and 999 < date < 10000 and date==round(date)
-    year_input = is_year_input(date)
-    str_input = isinstance(date, str) and date in [defs.MULTI, defs.NA]
-    list_input = isinstance(date, list) and len(date)==2
-    if list_input:
-        for k,y in enumerate(date):
-            if isinstance(y, numbers.Number):
-                list_input &= is_year_input(y)
-            else:
-                try:
-                    date[k] = pd.to_datetime(y)
-                except:
-                    list_input = False
+    date = data_loader._clean_date_input(date)
+    filter_by_date = isinstance(date, list)  # Check if user requested date range (list)
+    if filter_by_date:
+        filter_by_date = src['Year']==defs.MULTI
+        if not filter_by_date:
+            # This is an annual dataset
+            if date[0]<pd.to_datetime(f'{src['Year']}-01-01') or date[1]>=pd.to_datetime(f'{src['Year']+1}-01-01'):
+                raise ValueError(f"Single year dataset for {src['Year']} cannot be filtered for dates outside the year: {date}")
+            filter_by_date = date[0] > src['coverage_start'] or date[1] < src['coverage_end']
 
-        if list_input:
-            tmp_year = date.copy()
-            tmp_year[0] = pd.to_datetime(f'{tmp_year[0]}-01-01') if is_year_input(tmp_year[0]) else tmp_year[0]
-            tmp_year[1] = pd.to_datetime(f'{tmp_year[1]}-12-31') if is_year_input(tmp_year[1]) else tmp_year[1]
-            if tmp_year[1]<tmp_year[0]:
-                raise ValueError(f'Start date/year must be less than stop date/year. Invalid input: {tmp_year}')
-            elif any([x!=x.floor('D') for x in tmp_year]):
-                old_tmp_year = tmp_year
-                tmp_year = [x.floor('D') for x in old_tmp_year]
-                warnings.warn('Filtering is not currently possible for times within a day. '+\
-                              'Returned results will be filtered from the start of first day requested to the end of the last day requested. '+\
-                              f'{old_tmp_year} has been updated to {tmp_year}')
-                
-
-            
-    if not year_input and not str_input and not list_input:
-        raise ValueError("date input must be one of the following:\n"+\
-                            '\t1. A single year (i.e. 2024  for all data from 2024-01-01 to 2024-12-31 23:59:59)\n'+\
-                            '\t2. A length 2 list of start and stop years (i.e. [2023, 2024] for all data from 2023-01-01 to 2024-12-31 23:59:59)\n'+\
-                            '\t3. A length 2 list of start and stop dates in YYYY-MM-DD format (i.e. [2023-12-01, 2024-01-15] for all data from 2023-12-01 to 2024-01-15 23:59:59)\n'+\
-                            '\t4. A length 2 list of a combination of start and stop years/dates (i.e. [2023, 2024-01-15] (from start of 2023 to 2024-01-15) or [2023-12-01, 2024] (from 2023-12-01 to end of 2024))\n'+\
-                            '\t5. The string "MULTIPLE" for an entire multi-year dataset (indicated by a Year column of MULTIPLE in the source table or in obj.datasets)\n'+\
-                            '\t6. The string "NONE" for a dataset that cannot be filtered by date (indicated by a Year column of NONE in the source table or in obj.datasets)\n'+\
-                            'Note that for datasets without a date_field (see date_field column in the source table or in obj.datasets), year must equal the value in the Year column in the source table or in obj.datasets.'
-        )
-    
-    return date
+    return filter_by_date
