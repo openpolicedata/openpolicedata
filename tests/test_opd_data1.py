@@ -68,6 +68,37 @@ def check_table_type_warning(all_datasets):
 		data.Table(sources)
 
 
+def test_load():
+	# NOTE: this is analagous to test_socrata but uses Source instead of the data_loader
+
+	if not check_for_dataset('Richmond', opd.defs.TableType.SHOOTINGS):
+		return
+	
+	src = opd.Source('Richmond', state='California')
+	df = src.load(opd.defs.TableType.SHOOTINGS, opd.defs.MULTI).table
+	count = src.get_count(opd.defs.TableType.SHOOTINGS)
+
+	assert len(df)==count
+
+	offset = 1
+	nrows = len(df)-offset-1
+	df_offset = src.load(opd.defs.TableType.SHOOTINGS, opd.defs.MULTI, offset=offset, nrows=nrows).table
+
+	assert set(df.columns)==set(df_offset.columns)
+	df_offset = df_offset[df.columns]
+	assert df_offset.equals(df.iloc[offset:nrows+offset].reset_index(drop=True))
+	
+	url = "www.transparentrichmond.org"
+	data_set = "asfd-zcvn"
+	client = data_loaders.socrata.SocrataClient(url, data_loaders.socrata.default_sodapy_key, timeout=60)
+	results = client.get(data_set, order=":id", limit=100000)
+	rows = pd.DataFrame.from_records(results)
+
+	rows['occurreddatetime'] = pd.to_datetime(rows['occurreddatetime'])
+	
+	pd.testing.assert_frame_equal(df, rows)
+
+
 def test_not_verbose(logger, log_stream):
 	source = 'Lansing'
 	table = "OFFICER-INVOLVED SHOOTINGS"
@@ -430,7 +461,7 @@ if __name__ == "__main__":
 	use_changed_rows = False
 	csvfile = None
 	csvfile = os.path.join(r"..",'opd-data','opd_source_table.csv')
-	start_idx = 462
+	start_idx = 0
 	skip = None
 	# skip = "Sacramento"
 	source = None
