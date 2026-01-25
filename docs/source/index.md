@@ -10,12 +10,15 @@ html_theme.sidebar_secondary.remove: true
 :maxdepth: 2
 :hidden:
 
+documentation.md
+api.md
 getting_started/index.ipynb
 datasets/index.ipynb
 examples/index.md
 resources/index.md
 troubleshooting/index.md
 citations/index.md
+modules
 ```
 
 > **OPD User Survey**: We would love to hear how you are using OpenPoliceData and how we can make it better! [Please take a moment to fill out this short survey.](https://docs.google.com/forms/d/e/1FAIpQLScvhcKQwvPmUK6wV0YKQipGsTsz0uzyVdT8FQsQ5g2RBvNh0g/viewform?usp=pp_url)
@@ -32,7 +35,7 @@ Here are the current tools provided by OpenPoliceData:
 :::{grid-item-card} {fas}`star;pst-color-primary` OpenPoliceData Python Library
 :link: documentation.md
 :link-alt: ref
-Access OPD's datasets using simple Python commands. Data is returned as pandas DataFrames.
+Documentation for the `openpolicedata` Python API (data is returned as pandas DataFrames).
 :::
 :::{grid-item-card} {fas}`database;pst-color-primary` OpenPoliceData Explorer
 :link: https://openpolicedata.streamlit.app/
