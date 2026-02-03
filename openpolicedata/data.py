@@ -26,6 +26,7 @@ except:
 import warnings
 
 from . import data_loaders, dataset_id
+from .data_loaders import data_loader
 from . import datasets
 from . import log
 from . import __version__
@@ -75,7 +76,8 @@ class Table:
 
     Methods
     -------
-    expand(person_type="subject", mismatch='error')
+    expand(person_type="subject",
+           mismatch='error')
         Expand rows that contain information on multiple subjects or officers into multiple rows
     get_csv_filename()
         Get default name of CSV file
@@ -89,18 +91,35 @@ class Table:
         Get gender column (if found) after running standardize
     get_race_col(role='SUBJECT')
         Get race column (if found) after running standardize
-    get_transform_map(orig=None, new=None, minimize=False)
+    get_transform_map(orig=None, 
+                      new=None, 
+                      minimize=False)
         Get documentation of standardizations performed after running standardize
-    merge(right, std_id=False, keep_raw=True, on=None, how='inner', left_on=None, right_on=None, ``**kwargs``)
+    merge(right, 
+        std_id=False,
+        keep_raw=True,
+        on=None, 
+        how='inner', 
+        left_on=None, 
+        right_on=None, 
+        **kwargs)
         Merge 2 related Table objects together
-    standardize(race_cats=None, agg_race_cat=False, eth_cats=None, gender_cats=None, keep_raw=True,
-                known_cols=None, verbose=False, no_id="keep", race_eth_combo="merge",
-                merge_date_time=True, empty_time="NaT")
+    standardize(race_cats = None,
+        agg_race_cat = False,
+        eth_cats = None,
+        gender_cats = None,
+        keep_raw=True,
+        known_cols = None,
+        verbose = False,
+        no_id = "keep",
+        race_eth_combo = "merge",
+        merge_date_time=True,
+        empty_time = "NaT"
         Standardize column names and data values for loaded data in self.table
     to_csv(output_dir=None, filename=None)
         Convert table to CSV file
     """
-    
+
     details: str= None
     state: str = None
     source_name: str = None
@@ -181,16 +200,16 @@ class Table:
         if "dataset_id" in source and (isinstance(source["dataset_id"], list) or pd.notnull(source["dataset_id"])):
             self._dataset_id = source["dataset_id"]
 
-        if "date_field" in source and not pd.isnull(source["date_field"]):
+        if "date_field" in source and pd.notnull(source["date_field"]):
             self.date_field = source["date_field"]
         
-        if "agency_field" in source and not pd.isnull(source["agency_field"]):
+        if "agency_field" in source and pd.notnull(source["agency_field"]):
             self.agency_field = source["agency_field"]
 
-        if "source_url" in source and not pd.isnull(source["source_url"]):
+        if "source_url" in source and pd.notnull(source["source_url"]):
             self.source_url = source["source_url"]
 
-        if "readme" in source and not pd.isnull(source["readme"]):
+        if "readme" in source and pd.notnull(source["readme"]):
             self.readme = source["readme"]
 
         self.urls = {'source_url':self.source_url, 'readme':self.readme, 'data':self.url}
@@ -348,7 +367,12 @@ class Table:
                     left_on = defs.columns.INCIDENT_ID if std_id else id_col1
                     right_on = defs.columns.INCIDENT_ID if std_id else id_col2
                 else:
-                    raise exceptions.AutoMergeError("Unable to automatically find ID that relates tables")
+                    if len(df1)==0:
+                        raise exceptions.AutoMergeError("Unable to automatically find ID that relates tables. This is likely due to this (left) table being empty.")
+                    elif len(df2)==0:
+                        raise exceptions.AutoMergeError("Unable to automatically find ID that relates tables.  This is likely due to right table being empty.")
+                    else:
+                        raise exceptions.AutoMergeError("Unable to automatically find ID that relates tables")
             if std_id and id_col1:
                 df1 = df1_new
                 df2 = df2_new
@@ -866,7 +890,8 @@ class Source:
         force: bool = False, 
         manual: bool = False,
         datasets: pd.DataFrame = None,
-        use_coverage_only: bool = False
+        use_coverage_only: bool = False,
+        req_years: list[int] | None = None
         ) -> list[int]:
         '''Get years available for 1 or more datasets
 
@@ -880,6 +905,8 @@ class Source:
             (Optional) If True, for datasets that contain multiple years, the years will be determined by making requests to the dataset rather than using the years stored in the dataset table. The default is False, which runs faster but may not be up-to-date.
         datasets - pd.DataFrame
             (Optional) Only select from datasets in this dataframe instead of self.datasets. datasets should be a subset of the rows in self.datasets.
+        req_years - list[int]
+            (Optional) If set, only req_years will be checked for data
 
         Returns
         -------
@@ -914,17 +941,23 @@ class Source:
             if use_coverage:
                 years.update(range(df["coverage_start"].year, df["coverage_end"].year+1))
                 if not use_coverage_only:
-                    years_to_check = _get_years_to_check(years, cur_year, force, loader.isfile())
+                    if req_years!=None:
+                        years_to_check = [x for x in req_years if x not in years]
+                    else:
+                        years_to_check = _get_years_to_check(years, cur_year, force, loader.isfile())
                     if len(years_to_check)>0:
                         # Check for updates
                         new_years = loader.get_years(force=force, check=years_to_check)
                         years.update(new_years)
             else:
-                new_years = loader.get_years(force=force)
+                new_years = loader.get_years(force=force, check=req_years)
                 years.update(new_years)
             
         years = list(years)
         years.sort()
+
+        if req_years!=None:
+            years = [x for x in years if x in req_years]
 
         return years
 
@@ -1213,7 +1246,7 @@ class Source:
             pandas Dataframe containing sources found when only filtering by table type and date
         '''
 
-        src, _ = self.__filter_for_source(table_type, date, None, None, errors=False)
+        src = self.filter(table_type, date)
 
         url_diff = id_diff = False
         if isinstance(src, pd.DataFrame):
@@ -1223,27 +1256,62 @@ class Source:
         return url_diff, id_diff, src
         
 
-    def __filter_for_source(self, table_type, date, url, id, errors=True):
+    def filter(self, 
+                table_type: str|None = None, 
+                date: str | int | list[Union[int, str, pd.Timestamp]] = None,
+                url: str | None = None,
+                id: str | None = None,
+                errors: bool = False):
+        '''Filter source datasets. This can be used to be determine if there are are any datasets for a given table type and/or date.
+        It can also be used to determine if more than one dataset for a requested table type and date, which would necesitate usage of 
+        the url and id inputs when loading data.
+
+        Parameters
+        ----------
+        table_type - str or TableType enum
+            (Optional) Table type to load
+        date - int or the string opd.defs.MULTI or opd.defs.NONE or a length 2 list of start and stop year(s), date string(s), and/or timestamp(s)
+            (Optional) Define timespan of data to request:
+                1. Request data for an entire year by inputting the year (i.e. 2023)
+                2. Request data from a start year or datetime to a stop year or datetime using a length 2 list (i.e. [2021, '2023-02-01'] for start of 2021 to end of 2023-02-01)
+                3. Request an entire multi-year dataset by inputting 'MULTIPLE'
+                4. Request of a dataset with no time information (i.e. officer demographics) by inputting 'NONE'
+        url - str
+            (Optional) If set, URL must contain this string. Can be used in combination with id when multiple datasets match a set of inputs.
+        id - str
+            (Optional) If set, dataset ID must equal this value. Can be used in combination with url when multiple datasets match a set of inputs.
+        errors : bool
+            If True, throw error if no datasets are found or if more than one dataset is found, by default False
+
+        Returns
+        -------
+        DataFrame
+            pandas Dataframe containing sources found
+        '''
+
+        date = data_loader._clean_date_input(date)
         src = self.__find_datasets(table_type).copy()
 
-        if len(src)==0:
+        if errors and len(src)==0:
             raise ValueError(f"No source found for table type {table_type}. See datasets attribute for available table types (i.e. obj.datasets['TableType'] (where obj is your Source object)).")
-
-        date = _check_date_input(date)
         
         if url:
             src = src[src['URL'].str.contains(url, regex=False)]
 
-            if len(src)==0:
+            if errors and len(src)==0:
                 raise ValueError(f"No source found with a URL field containing {url}. See datasets attribute for available URLs (i.e. obj.datasets['URL'] (where obj is your Source object)).")
 
-        if dataset_id.notnull(id):
-            src = src[src['dataset_id'].apply(lambda x: x==id)]
+        # TODO: Check that this works for dict ids
+        if id!=None:
+            if dataset_id.notnull(id):
+                src = src[src['dataset_id'].apply(lambda x: x==id)]
+            else:
+                src = src[src['dataset_id'].isnull()]
 
-            if len(src)==0:
+            if errors and len(src)==0:
                 raise ValueError(f"No source found with a dataset id field containing {id}. See datasets attribute for available dataset IDs (i.e. obj.datasets['dataset_id'] (where obj is your Source object)).")
 
-        if isinstance(date, str):
+        if len(src)>0 and isinstance(date, str):
             matches = src["Year"]==date  # User is requesting NONE or MULTIPLE
 
             if errors:
@@ -1259,65 +1327,28 @@ class Source:
                                 f'attribute of Source object) to specify a single dataset: i.e.\n\n{poss_matches}.')
                 
             src = src[matches]
-            apply_date_filter = False
-        else:
-            single_year_request = isinstance(date, numbers.Number)
-            if single_year_request:
-                req_years = [date]  # Single date request
-                req_dates = pd.to_datetime([f'{date}-01-01', f'{date}-12-31'])
-            else:
-                # One or more year request
-                req_year_range = [int(str(x)[:4]) for x in date]
-                req_years = [x for x in range(req_year_range[0], req_year_range[1]+1)]
-                req_dates = []
-                req_dates.append(f'{date[0]}-01-01' if isinstance(date[0], numbers.Number) else date[0])
-                req_dates.append(f'{date[1]}-12-31' if isinstance(date[1], numbers.Number) else date[1])
-                req_dates = [pd.to_datetime(x) for x in req_dates]
-                
-            # First find all applicable single year datasets
-            matches = src["Year"].isin(req_years)
+        elif len(src)>0 and date!=None:
+            # Find datasets containting date range
+            matches = src['coverage_start'].apply(lambda x: x<=date[1] if isinstance(x,pd.Timestamp) else False) & \
+                        src['coverage_end'].apply(lambda x: x>=date[0] if isinstance(x,pd.Timestamp) else False)
 
-            def filt_required(date):
-                if date==defs.MULTI:
-                    return True
-                elif isinstance(date, numbers.Number):
-                    min_date = pd.to_datetime(f'{date}-01-01')
-                    max_date = pd.to_datetime(f'{date}-12-31')
-                    return min_date < req_dates[0] or max_date > req_dates[1]
-                else:
-                    raise NotImplementedError(f'Unexpected date {date} in filt_required')
-            # If a range is requested (i.e. a single year is not requested), a date filter in the data request is necessary if the range does not include the entire dataset
-            # If matchingYears is set to True because the Year matches a requested date, an entire annual dataset is requested and 
-            # it is not necessary to apply a date filter in the data request
-            apply_date_filter = src["Year"].apply(filt_required)
-
-            # Find all applicable multi-year datasets
-            # First try a simple match based on coverage years in the source table (which could potentially be out-of-date)
-            for k in src.index:
-                if src.loc[k, 'Year']==defs.MULTI:
-                    # Find if there is overlap
-                    matches.loc[k] = req_dates[1]>=src.loc[k, 'coverage_start'] and req_dates[0]<=src.loc[k, 'coverage_end']
-
-            num_matches = matches.sum()
-            if num_matches>1:
-                # Multiple matches found
-                # Check if coverage is just outside the coverage range of one of the datasets
-                for k in src.index:
-                    if src.loc[k, 'Year']==defs.MULTI:
-                        # Find if there is overlap
-                        matches.loc[k] = req_dates[1]>=src.loc[k, 'coverage_start'] and req_dates[0]<=src.loc[k, 'coverage_end']
-            elif num_matches==0:
+            if matches.sum()==0:
                 # If no dataset's coverage includes the selected data, use Year=MULTIPLE
                 matches = src['Year']==defs.MULTI
+                if matches.sum()>1:
+                # Check to see if coverage might be out-of-date
+                    src = src[matches]
+                    updated_matches = []
+                    req_years = [x for x in range(date[0].year, date[1].year+1)]
+                    for k in range(len(src)):
+                        years = self.get_years(table_type, datasets=src.iloc[k], req_years=req_years)
+                        updated_matches.append(len(years)>0)
+                    
+                    matches = updated_matches
 
             src = src[matches]
-            apply_date_filter = apply_date_filter[matches]
 
-        if len(src)==1:
-            src = src.iloc[0]
-            if isinstance(apply_date_filter, pd.Series):
-                apply_date_filter = apply_date_filter.iloc[0]
-        elif errors:
+        if len(src)!=1 and errors:
             if len(src)==0:
                 raise ValueError(f"No source found containing date {date}. See datasets attribute for available dataset years "+\
                                      "(i.e. Year, coverage_start, and coverage_end columns of obj.datasets (where obj is your Source object)).")
@@ -1328,15 +1359,15 @@ class Source:
                                  'Please either update the dates requested or utilize url and/or id inputs (using data from URL and dataset_id columns of datasets '+\
                                 f'attribute of Source object) to specify a single dataset: i.e.\n\n{poss_matches}.')
 
-        return src, apply_date_filter
-
+        return src
+    
 
     def __load(self, table_type, date, agency, load_table, pbar=True, return_count=False, force=False, 
                nrows=None, offset=0, sortby=None, verbose=False, url_contains=None, id=None, format_date=True):
-        # Make copy so original isn't changed
-        date = date.copy() if isinstance(date, list) else date
-
-        src, filter_by_date = self.__filter_for_source(table_type, date, url_contains, id, errors=False)  # Remove errors=False when deprecation removed
+        
+        date = data_loader._clean_date_input(date)
+        src = self.filter(table_type, date, url_contains, id, errors=True).iloc[0]      
+        filter_by_date = _check_whether_to_filter_by_date(src, date)      
 
         # Load data from URL. For date or agency equal to opd.defs.MULTI, filtering can be done
         url = src["URL"]
@@ -1345,7 +1376,7 @@ class Source:
         dataset = src["dataset_id"] if (isinstance(src["dataset_id"], list) or pd.notnull(src["dataset_id"])) else None
 
         table_year = None
-        if not pd.isnull(src["date_field"]):
+        if pd.notnull(src["date_field"]):
             date_field = src["date_field"]
             if date_filter != None:
                 table_year = date_filter
@@ -1353,7 +1384,7 @@ class Source:
             date_field = None
         
         table_agency = None
-        if not pd.isnull(src["agency_field"]):
+        if pd.notnull(src["agency_field"]):
             agency_field = src["agency_field"]
             if agency != None and src['DataType'] !=defs.DataType.ArcGIS:
                 table_agency = agency
@@ -1576,8 +1607,6 @@ class Source:
             else:
                 filename += '.zip'
 
-
-
         if has_gpd and (filename.endswith('.geofeather') or filename.endswith('.geoparquet')):
             read_fcn = getattr(gpd, read_fcn.__name__)
             
@@ -1596,9 +1625,9 @@ class Source:
                             sub_type: 
                                 Literal['INCIDENTS','SUBJECTS',"OFFICERS","SUBJECTS/OFFICERS",'PENALTIES','ALLEGATIONS',
                                         'NONMOTORIST','BACKGROUND','VEHICLES', None] = None,
-                            exact_match: bool = False) -> tuple[str]:
-        '''For cases where information is split across tables (i.e. 'USE OF FORCE - INCIDENTS', 'USE OF FORCE - SUBJECTS', 'USE OF FORCE - OFFICERS'),
-        find related tables for different subtypes. 'USE OF FORCE - INCIDENTS' will return 'USE OF FORCE - SUBJECTS' and 'USE OF FORCE - OFFICERS'
+                            exact_match: bool =False) -> tuple[str]:
+        """For cases where information is split across tables (i.e. 'USE OF FORCE - INCIDENTS', 'USE OF FORCE - SUBJECTS', 'USE OF FORCE - OFFICERS'),
+        find related tables for different subtypes. 'USE OF FORCE - INCIDENTS' will return 'USE OF FORCE - SUBJECTS' and 'USE OF FORCE - OFFICERS' 
         without sub_type specified and 'USE OF FORCE - SUBJECTS' if sub_type='SUBJECTS'
 
         Parameters
@@ -1608,11 +1637,11 @@ class Source:
         year : int or Literal[opd.defs.MULTI, opd.defs.NONE] or None, optional
             Year of datasets to find related tables for. Optional if there is only one possible table for each table type.
         sub_type : Literal['INCIDENTS','SUBJECTS',"OFFICERS","SUBJECTS/OFFICERS",'PENALTIES','ALLEGATIONS',
-                        'NONMOTORIST','BACKGROUND','VEHICLES', None], optional
+                           'NONMOTORIST','BACKGROUND','VEHICLES', None], optional
             If specified, only return tables containing data for the requested sub_type, by default None
         exact_match : bool, optional
             If False, return tables that contain the specified sub_type (sub_type="SUBJECTS" returns 'SUBJECTS' and 'SUBJECTS/OFFICERS').
-            If True, only return the exact sub_type match, by default False
+            If True, return only return the exact sub_type match, by default False
 
         Returns
         -------
@@ -1620,8 +1649,8 @@ class Source:
             Tuple of related table type names.            
         related_years : tuple[str] 
             Tuple of year values corresponding to each related table type.
-        '''
-        
+        """
+
         all_related_tables = [str(x) for x in defs.TableType if re.search(r'.+\-(?!INVOLVED)\s*', x)]
         types = set([re.sub(r'.+\-(?!INVOLVED)\s*','',x) for x in all_related_tables])
         if m:=re.search(r"^(?P<table_type>.+) - (?P<subtype>("+'|'.join(types)+r"))$", table_type, re.IGNORECASE):
@@ -1680,7 +1709,292 @@ class Source:
             Auto-generated CSV filename
         '''
 
-        return _get_filename('.csv', state, source_name, agency, table_type, date, url, id, src)
+        return self.__get_filename('get_csv_filename', table_type, date, agency, url, id, output_dir)
+    
+
+    def get_feather_filename(self, 
+                         date: str | int | list[Union[int, str, pd.Timestamp]]=None,
+                         output_dir: str | None = None, 
+                         table_type: str | defs.TableType | None = None,
+                         agency: str | None = None,
+                         url: str | None = None,
+                         id: str | None = None,
+                         geo: bool = False
+                         ) -> str:
+        '''Get auto-generated feather filename
+        
+        Parameters
+        ----------
+        date - int or the string opd.defs.MULTI or opd.defs.NONE or a length 2 list of start and stop year(s), date string(s), and/or timestamp(s)
+            Define timespan of data to request:
+                1. Request data for an entire year by inputting the year (i.e. 2023)
+                2. Request data from a start year or datetime to a stop year or datetime using a length 2 list (i.e. [2021, '2023-02-01'] for start of 2021 to end of 2023-02-01)
+                3. Request an entire multi-year dataset by inputting 'MULTIPLE'
+                4. Request of a dataset with no time information (i.e. officer demographics) by inputting 'NONE'
+        output_dir - str
+            (Optional) Directory where feather file is stored
+        table_type - str or TableType enum
+            (Optional) If set, requested dataset will be of this type
+        agency - str
+            (Optional) If set, for datasets containing multiple agencies, data will
+            only be returned for this agency
+        url - str | None
+            (Optional) If set, URL must contain this string. Can be used in combination with id when multiple datasets match a set of inputs.
+        id - str | None
+            (Optional) If set, dataset ID must equal this value. Can be used in combination with url when multiple datasets match a set of inputs.
+        geo - bool
+            Whether saved data will be from a pandas (False) or geopandas (True) DataFrame, Default: False
+
+        Returns
+        -------
+        str
+            Auto-generated feather filename
+        '''
+
+        return self.__get_filename('get_feather_filename', table_type, date, agency, url, id, output_dir, geo)
+    
+
+    def get_parquet_filename(self, 
+                         date: str | int | list[Union[int, str, pd.Timestamp]]=None,
+                         output_dir: str | None = None, 
+                         table_type: str | defs.TableType | None = None,
+                         agency: str | None = None,
+                         url: str | None = None,
+                         id: str | None = None,
+                         geo: bool = False
+                         ) -> str:
+        '''Get auto-generated parquet filename
+        
+        Parameters
+        ----------
+        date - int or the string opd.defs.MULTI or opd.defs.NONE or a length 2 list of start and stop year(s), date string(s), and/or timestamp(s)
+            Define timespan of data to request:
+                1. Request data for an entire year by inputting the year (i.e. 2023)
+                2. Request data from a start year or datetime to a stop year or datetime using a length 2 list (i.e. [2021, '2023-02-01'] for start of 2021 to end of 2023-02-01)
+                3. Request an entire multi-year dataset by inputting 'MULTIPLE'
+                4. Request of a dataset with no time information (i.e. officer demographics) by inputting 'NONE'
+        output_dir - str
+            (Optional) Directory where parquet file is stored
+        table_type - str or TableType enum
+            (Optional) If set, requested dataset will be of this type
+        agency - str
+            (Optional) If set, for datasets containing multiple agencies, data will
+            only be returned for this agency
+        url - str | None
+            (Optional) If set, URL must contain this string. Can be used in combination with id when multiple datasets match a set of inputs.
+        id - str | None
+            (Optional) If set, dataset ID must equal this value. Can be used in combination with url when multiple datasets match a set of inputs.
+        geo - bool
+            Whether saved data will be from a pandas (False) or geopandas (True) DataFrame, Default: False
+
+        Returns
+        -------
+        str
+            Auto-generated parquet filename
+        '''
+
+        return self.__get_filename('get_parquet_filename', table_type, date, agency, url, id, output_dir, geo)
+
+
+    def __get_filename(self, fname_fcn, table_type, date, agency, url, id, output_dir, geo=None):
+
+        table = self.__load(table_type, date, agency, False, url_contains=url, id=id)
+
+        filename = getattr(table, fname_fcn)() if geo==None else getattr(table, fname_fcn)(geo)
+        if output_dir != None:
+            filename = path.join(output_dir, filename)             
+
+        return filename
+    
+
+
+
+    def __get_loader(self, data_type, url, query, dataset=None, date_field=None, agency_field=None, pbar=True):
+        if not isinstance(dataset, list) and pd.isnull(dataset):
+            dataset = None
+        params = (data_type, url, dataset, date_field, agency_field)
+        if self.__loader is not None and self.__loader[0]==params:
+            return self.__loader[1]
+        
+        dataset = dataset_id.expand(dataset)
+        if dataset_id.is_combined_dataset(dataset):
+            # Multiple dataset IDs
+            if data_type ==defs.DataType.CSV:
+                loader = data_loaders.CombinedDataset(data_loaders.Csv, url, dataset, date_field=date_field, agency_field=agency_field, pbar=pbar)
+            elif data_type ==defs.DataType.EXCEL:
+                loader = data_loaders.CombinedDataset(data_loaders.Excel, url, dataset, date_field=date_field, agency_field=agency_field, pbar=pbar)
+            else:
+                raise ValueError(f"Not supported data type for CombinedDataset: {data_type}")
+        else:
+            if data_type ==defs.DataType.CSV:
+                loader = data_loaders.Csv(url, data_set=dataset, date_field=date_field, agency_field=agency_field, query=query)
+            elif data_type ==defs.DataType.EXCEL:
+                loader = data_loaders.Excel(url, data_set=dataset, date_field=date_field, agency_field=agency_field) 
+            elif data_type ==defs.DataType.ArcGIS:
+                loader = data_loaders.Arcgis(url, date_field=date_field, query=query)
+            elif data_type ==defs.DataType.OPENDATASOFT:
+                loader = data_loaders.Opendatasoft(url, data_set=dataset, date_field=date_field, query=query)
+            elif data_type ==defs.DataType.SOCRATA:
+                loader = data_loaders.Socrata(url, dataset, date_field=date_field)
+            elif data_type ==defs.DataType.CARTO:
+                loader = data_loaders.Carto(url, dataset, date_field=date_field, query=query)
+            elif data_type ==defs.DataType.CKAN:
+                loader = data_loaders.Ckan(url, dataset, date_field=date_field, query=query)
+            elif data_type==defs.DataType.HTML:
+                loader = data_loaders.Html(url, date_field=date_field, agency_field=agency_field)
+            else:
+                raise ValueError(f"Unknown data type: {data_type}")
+
+        self.__loader = (params, loader)
+
+        return loader
+    
+    def __fix_date_field(self, table, date_field, loc):
+        if date_field != None and table is not None and len(table)>0 and date_field not in table and \
+            any([x.lower()==date_field.lower() for x in table.columns]):
+            # Instances have been found where capitalization changes
+            date_field = [x for x in table.columns if x.lower()==date_field.lower()][0]
+
+        return date_field
+
+
+def _check_date(table, date_field):
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore",category=DeprecationWarning, message='Passing a BlockManager')
+        table = table.copy()
+    if date_field != None and table is not None and len(table)>0 and date_field in table:
+        dts = table[date_field]
+        dts = dts[dts.notnull()]
+        if len(dts) > 0:
+            one_date = dts.iloc[0]  
+            if isinstance(one_date, pd.Timestamp):
+                if logger:
+                    logger.debug(f"Converting values in column {date_field} to datetime objects")
+                table[date_field] = to_datetime(table[date_field], ignore_errors=True)
+            elif isinstance(one_date, str) and re.match(r'^20\d{2}(\-|/)\d{2}$',one_date):
+                if logger:
+                    logger.debug(f"Converting values in column {date_field} to monthly Period objects")
+                table[date_field] = table[date_field].apply(pd.Period, args=('M'))
+            elif (isinstance(one_date, numbers.Number) or isinstance(one_date,str)) and \
+                ("year" in date_field.lower() or date_field.lower() == "yr" or \
+                 (isinstance(one_date, numbers.Number) and ((dts>=1900) & (dts<2100)).all())):
+                if logger:
+                    logger.debug(f"Converting values in column {date_field} to annual Period objects")
+                if isinstance(one_date, str) and re.search(r'\d{4}\sQ\d', one_date):
+                    table[date_field] = table[date_field].str.replace(r'(\d{4}) (Q\d)', r'\1\2', regex=True)
+                    table[date_field] = table[date_field].apply(pd.Period, args=('Q'))
+                else:
+                    table[date_field] = table[date_field].apply(pd.Period, args=('Y'))
+            elif isinstance(one_date, str):
+                def to_datetime_local(x):
+                    try:
+                        return to_datetime(x, ignore_errors=True)
+                    except:
+                        return x
+
+                if logger:
+                    logger.debug(f"Converting values in column {date_field} to datetime objects")
+                
+                try:
+                    # This way is much faster
+                    table[date_field] = to_datetime(table[date_field], ignore_errors=True)
+                except ValueError as e:
+                    table[date_field] = table[date_field].apply(to_datetime_local)
+
+                if pd.api.types.is_object_dtype(table[date_field]):
+                    try:
+                        # Attempt to convert
+                        table = table.astype({date_field: 'datetime64[ns]'})
+                    except (pd._libs.tslibs.parsing.DateParseError, ParserError) as e:
+                        if 'out of range' in str(e) or \
+                            re.search(r'Unknown(\sdatetime)? string format.+: \d+[-/]\d+[-/]\d+,?\s?\d+[-/]\d+[-/]\d+', str(e)):
+                            pass
+                        else:
+                            raise
+                    except UnicodeEncodeError:
+                        pass
+                    except ValueError as e:
+                        if len(e.args)>0 and e.args[0].startswith('Cannot mix tz-aware with tz-naive values') and \
+                            table[date_field].apply(lambda x: x.hour==0 and x.minute==0).all() and \
+                            len(set([str(x.tzinfo) for x in table[date_field] if x.tzinfo is not None]))==1:
+                            warnings.warn("Some date values have timezone and some do not. Setting timezone unware objects to have the same timezone as the rest.")
+                            tz = [x.tzinfo for x in table[date_field] if x.tzinfo is not None][0]
+                            is_not_aware = table[date_field].apply(lambda x: x.tzinfo is None or x.tzinfo.utcoffset(x) is None)
+                            table.loc[is_not_aware, date_field] = table.loc[is_not_aware, date_field].apply(lambda x: x.replace(tzinfo=tz))
+                            table[date_field] = table[date_field].convert_dtypes()
+                        elif 'DateParseError' in str(type(e)) and '-__' in str(e):
+                            # Ignore case where month and day are underscores (i.e. 2023-__-__)
+                            pass
+                        elif 'ParserError' in str(type(e)) and re.search(r'Unknown string format: \d+[-/]\d+[-/]\d+,?\s?\d+[-/]\d+[-/]\d+', str(e)):
+                            # Comma separated list of dates cannot be parsed
+                            pass
+                        else:
+                            raise
+                    except TypeError as e:
+                        if "Period'> is not convertible to datetime" in str(e):
+                            # Mixture of datetimes and periods
+                            pass
+                        else:
+                            raise
+                    except Exception as e:
+                        raise
+                elif date_field.lower()=="year" and (table[date_field].dt.month==1).all() and \
+                    (table[date_field].dt.day==1).all():
+                    if logger:
+                        logger.debug(f"Converting values in column {date_field} to annual Period objects")
+                    table[date_field] = table[date_field].apply(pd.Period, args=('Y'))
+
+                
+            # Replace bad dates with NaT
+            if logger:
+                logger.debug(f"Replacing any values of 1900-01-01 00:00:00 in column {date_field} with null")
+            table[date_field] = table[date_field].replace(datetime.strptime('1900-01-01 00:00:00', '%Y-%m-%d %H:%M:%S'), pd.NaT)
+
+    return table
+
+
+def get_csv_filename(
+    state: str, 
+    source_name: str, 
+    agency: str, 
+    table_type: str | defs.TableType, 
+    date: str | int | list[Union[int, str, pd.Timestamp]]=None,
+    url: str|None = None,
+    id: str|None = None,
+    src: Source|None = None
+    ) -> str:
+    '''Get default CSV filename for the given parameters. Enables reloading of data from CSV.
+    
+    Parameters
+    ----------
+    state - str
+        Name of state
+    source_name - str
+        Name of source
+    agency - str
+        Name of agency
+    table_type - str or TableType enum
+        Type of data
+    date - int or the string opd.defs.MULTI or opd.defs.NONE or a length 2 list of start and stop year(s), date string(s), and/or timestamp(s)
+            Define timespan of data to request:
+                1. Request data for an entire year by inputting the year (i.e. 2023)
+                2. Request data from a start year or datetime to a stop year or datetime using a length 2 list (i.e. [2021, '2023-02-01'] for start of 2021 to end of 2023-02-01)
+                3. Request an entire multi-year dataset by inputting 'MULTIPLE'
+                4. Request of a dataset with no time information (i.e. officer demographics) by inputting 'NONE'
+    url - str | None
+            (Optional) Dataset URL from URL columns of source table
+    id - str | None
+        (Optional) Dataset ID from dataset_id columns of source table
+    src - Source
+        Source object that can be used to make unique filenames when state, source_name, table_type, and year do not create a unique name
+
+    Returns
+    -------
+    str
+        Default CSV filename
+    '''
+
+    return _get_filename('.csv', state, source_name, agency, table_type, date, url, id, src)
 
 
 def get_feather_filename(
@@ -1826,11 +2140,7 @@ def _get_filename(
                 else:
                     raise ValueError("Unable to find unique filename")
             else:
-                filename += '_urlcontains_' + addon
-                
-            
-            
-                
+                filename += '_urlcontains_' + addon       
 
     # Clean up filename
     filename = filename.replace(",", "_").replace(" ", "_").replace("__", "_").replace("/", "_")
@@ -1855,7 +2165,7 @@ def _get_unique_id_sub(matches, url, id):
     is_requested = is_requested[is_requested].index[0]
 
     id = matches.loc[is_requested, 'dataset_id']
-    assert not pd.isnull(id)
+    assert pd.notnull(id)
     if (matches['dataset_id']==id).sum()==1:
         if len(id)<10:
             return id
@@ -1963,47 +2273,19 @@ def _get_years_to_check(years, cur_year, force, isfile):
 
     return years_to_check
 
+def _check_whether_to_filter_by_date(src, date):
+    if isinstance(src, pd.DataFrame):
+        assert len(src)==1
+        src = src.iloc[0]
 
-def _check_date_input(date):
-    def is_year_input(date):
-        return isinstance(date, numbers.Number) and 999 < date < 10000 and date==round(date)
-    year_input = is_year_input(date)
-    str_input = isinstance(date, str) and date in [defs.MULTI, defs.NA]
-    list_input = isinstance(date, list) and len(date)==2
-    if list_input:
-        for k,y in enumerate(date):
-            if isinstance(y, numbers.Number):
-                list_input &= is_year_input(y)
-            else:
-                try:
-                    date[k] = pd.to_datetime(y)
-                except:
-                    list_input = False
+    date = data_loader._clean_date_input(date)
+    filter_by_date = isinstance(date, list)  # Check if user requested date range (list)
+    if filter_by_date:
+        filter_by_date = src['Year']==defs.MULTI
+        if not filter_by_date:
+            # This is an annual dataset
+            if date[0]<pd.to_datetime(f'{src['Year']}-01-01') or date[1]>=pd.to_datetime(f'{src['Year']+1}-01-01'):
+                raise ValueError(f"Single year dataset for {src['Year']} cannot be filtered for dates outside the year: {date}")
+            filter_by_date = date[0] > src['coverage_start'] or date[1] < src['coverage_end']
 
-        if list_input:
-            tmp_year = date.copy()
-            tmp_year[0] = pd.to_datetime(f'{tmp_year[0]}-01-01') if is_year_input(tmp_year[0]) else tmp_year[0]
-            tmp_year[1] = pd.to_datetime(f'{tmp_year[1]}-12-31') if is_year_input(tmp_year[1]) else tmp_year[1]
-            if tmp_year[1]<tmp_year[0]:
-                raise ValueError(f'Start date/year must be less than stop date/year. Invalid input: {tmp_year}')
-            elif any([x!=x.floor('D') for x in tmp_year]):
-                old_tmp_year = tmp_year
-                tmp_year = [x.floor('D') for x in old_tmp_year]
-                warnings.warn('Filtering is not currently possible for times within a day. '+\
-                              'Returned results will be filtered from the start of first day requested to the end of the last day requested. '+\
-                              f'{old_tmp_year} has been updated to {tmp_year}')
-                
-
-            
-    if not year_input and not str_input and not list_input:
-        raise ValueError("date input must be one of the following:\n"+\
-                            '\t1. A single year (i.e. 2024  for all data from 2024-01-01 to 2024-12-31 23:59:59)\n'+\
-                            '\t2. A length 2 list of start and stop years (i.e. [2023, 2024] for all data from 2023-01-01 to 2024-12-31 23:59:59)\n'+\
-                            '\t3. A length 2 list of start and stop dates in YYYY-MM-DD format (i.e. [2023-12-01, 2024-01-15] for all data from 2023-12-01 to 2024-01-15 23:59:59)\n'+\
-                            '\t4. A length 2 list of a combination of start and stop years/dates (i.e. [2023, 2024-01-15] (from start of 2023 to 2024-01-15) or [2023-12-01, 2024] (from 2023-12-01 to end of 2024))\n'+\
-                            '\t5. The string "MULTIPLE" for an entire multi-year dataset (indicated by a Year column of MULTIPLE in the source table or in obj.datasets)\n'+\
-                            '\t6. The string "NONE" for a dataset that cannot be filtered by date (indicated by a Year column of NONE in the source table or in obj.datasets)\n'+\
-                            'Note that for datasets without a date_field (see date_field column in the source table or in obj.datasets), year must equal the value in the Year column in the source table or in obj.datasets.'
-        )
-    
-    return date
+    return filter_by_date
