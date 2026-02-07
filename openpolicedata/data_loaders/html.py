@@ -1,6 +1,6 @@
 import pandas as pd
 
-from .data_loader import Data_Loader, filter_dataframe
+from .data_loader import Data_Loader, _filter_dataframe
 from ..datetime_parser import to_datetime
 from .. import log
 
@@ -123,7 +123,6 @@ class Html(Data_Loader):
 
         if isinstance(nrows, float):
             nrows = int(nrows)
-        
         logger.debug(f"Loading file from {self.url}")
 
         header = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36 Edg/126.0.0.0'}
@@ -149,7 +148,7 @@ class Html(Data_Loader):
                     table.loc[994,:] = newvals
 
         
-        table = filter_dataframe(table, date_field=self.date_field, date_filter=date, 
+        table = _filter_dataframe(table, date_field=self.date_field, date_filter=date, 
             agency_field=self.agency_field, agency=agency, format_date=format_date)
 
         if offset>0:

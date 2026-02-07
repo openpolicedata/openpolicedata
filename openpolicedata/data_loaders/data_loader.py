@@ -118,7 +118,7 @@ def _process_date(date, date_field=None, force_year=False, datetime_format=None,
     return start_date, stop_date
 
 
-def filter_dataframe(df, date_field=None, date_filter=None, agency_field=None, agency=None, format_date=True):
+def _filter_dataframe(df, date_field=None, date_filter=None, agency_field=None, agency=None, format_date=True):
     '''Filter dataframe by agency and/or date range
     
     Parameters
@@ -128,9 +128,9 @@ def filter_dataframe(df, date_field=None, date_filter=None, agency_field=None, a
     date_field : str
         (Optional) Name of the column that contains the date
     date_filter : int or a length 2 list of start and stop year(s), date string(s), and/or timestamp(s)
-        (Optional) Define timespan of data to request count for:
-            1. Request data for an entire year by inputting the year (i.e. 2023)
-            2. Request data from a start year or datetime to a stop year or datetime using a length 2 list (i.e. [2021, '2023-02-01'] for start of 2021 to end of 2023-02-01)
+            (Optional) Define timespan of data to request count for:
+                1. Request data for an entire year by inputting the year (i.e. 2023)
+                2. Request data from a start year or datetime to a stop year or datetime using a length 2 list (i.e. [2021, '2023-02-01'] for start of 2021 to end of 2023-02-01)
     agency_field : str
         (Optional) Name of the column that contains the agency name (i.e. name of the police departments)
     agency : str
@@ -140,16 +140,21 @@ def filter_dataframe(df, date_field=None, date_filter=None, agency_field=None, a
         to be pandas datetimes (or pandas Period in rare cases), by default True
     '''
 
-    if agency != None and agency_field != None:
+    date_filter = _clean_date_input(date_filter)
+
+    if agency:
+        if not agency_field:
+            raise ValueError(f'Agency filtering requested but no agency field was provided')
+        
         logger.debug(f"Keeping values of column {agency_field} that are equal to {agency}")
-        df = df.query(agency_field + " = '" + agency + "'")
+        df = df[df[agency_field]==agency]
 
     if pd.notnull(date_field):
         is_year = date_field.lower()=='year'
         if not is_year and pd.api.types.is_integer_dtype(df[date_field]):
             is_year = ((df[date_field] >= 1900) & (df[date_field] <= 2200)).all()
 
-        if not is_year and not hasattr(df[date_field], "dt"):
+        if format_date and not is_year and not hasattr(df[date_field], "dt"):
             with warnings.catch_warnings():
                 # Ignore future warning about how this operation will be attempted to be done inplace:
                 # In a future version, `df.iloc[:, i] = newvals` will attempt to set the values inplace instead of always setting a new array. 
@@ -158,49 +163,32 @@ def filter_dataframe(df, date_field=None, date_filter=None, agency_field=None, a
                 try:
                     df[date_field] = to_datetime(df[date_field], ignore_errors=True)
                 except:
+                    if date_filter is not None:
+                        raise ValueError(f"Unable to convert column {date_field} to a datetime. Date filter cannot be applied.")
                     return df
-    
-        if date_filter != None:
-            if not format_date:
-                raise ValueError("Dates cannot be filtered if format_date is False for CSV and Excel data types")
-            if isinstance(date_filter, list):
-                if len(date_filter) != 2:
-                    raise ValueError(f'Format of the input {date_filter} is invalid.'
-                                     'Date/year filters that are lists are expected to be a length 2 list of ' +
-                                     '[startYear, stopYear] or [startDate, stopDate]. Dates should be in '+
-                                     'YYYY-MM-DD format.')
-                if not is_year:
-                    for k,x in enumerate(date_filter):
-                        if isinstance(x,pd.Timestamp):
-                            date_filter[k] = x.strftime('%Y-%m-%d')
-                    if isinstance(date_filter[0],int) or is_str_number(date_filter[0]):
-                        date_filter[0] = f"{date_filter[0]}-01-01"
-                    elif not (re.search(r'\d{4}-\d{2}-\d{2}', date_filter[0]) or \
-                              re.search(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}', date_filter[0])):
-                        raise ValueError(f"{date_filter[0]} must be in YYYY-MM-DD format")
-                    
-                    if isinstance(date_filter[-1],int) or is_str_number(date_filter[0]):
-                        date_filter[-1] = f"{date_filter[-1]}-12-31T23:59:59.999"
-                    elif re.search(r'\d{4}-\d{2}-\d{2}', date_filter[1]):
-                        date_filter[-1] = f"{date_filter[-1]}T23:59:59.999"
-                    elif not re.search(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}', date_filter[1]):
-                        raise ValueError(f"{date_filter[0]} must be in YYYY-MM-DD format")
-                    logger.debug(f"Keeping values of column {date_field} between {date_filter[0]} and {date_filter[1]}")
-                    df = df[(df[date_field] >= date_filter[0]) & (df[date_field] <= date_filter[1])]
-                elif (isinstance(date_filter[0],int) or is_str_number(date_filter[0])) and \
-                     (isinstance(date_filter[1],int) or is_str_number(date_filter[1])):
-                    logger.debug(f"Column {date_field} has been identfied as a year column")
-                    logger.debug(f"Keeping values of column {date_field} between {date_filter[0]} and {date_filter[1]}")
-                    df = df[df[date_field].isin(range(date_filter[0], date_filter[1]+1))]
-                else:
-                    raise ValueError(f"Column {date_field} has been identfied as a year column and cannot be filtered by dates: {date_filter}")
-            elif not is_year:
-                logger.debug(f"Keeping values of column {date_field} for date={date_filter}")
-                df = df[df[date_field].dt.year == int(date_filter)]
-            else:
-                logger.debug(f"Column {date_field} has been identfied as a year column")
-                logger.debug(f"Keeping values of column {date_field} for date={date_filter}")
-                df = df[df[date_field] == int(date_filter)]
+        
+    if date_filter is not None:
+        if pd.isnull(date_field):
+            raise ValueError(f'Date filtering requested but no date field was provided')
+        elif not format_date:
+            raise ValueError("Dates cannot be filtered if format_date is False")
+                
+        if not is_year:
+            for k in range(len(date_filter)):
+                dt_new = pd.to_datetime(date_filter[k]).floor('24h')  # Removed time. Times are currently ignored.
+                if date_filter[k]!=dt_new:
+                    warnings.warn(f"Times in date filter requests are ignored. Changing {date_filter[k]} to {dt_new}")
+                    date_filter[k] = dt_new
+
+            df = df[(df[date_field] >= date_filter[0]) & (df[date_field] < date_filter[1]+pd.Timedelta('1D'))]
+        elif date_filter[0].month==1 and date_filter[0].day==1 and \
+            date_filter[1].month==12 and date_filter[1].day==31:  # Requested full years
+            logger.debug(f"Column {date_field} has been identfied as a year column")
+            logger.debug(f"Keeping values of column {date_field} between {date_filter[0]} and {date_filter[1]}")
+            dates = df[date_field].apply(lambda x: int(x) if isinstance(x,str) and x.isdigit() else x)
+            df = df[dates.isin(range(date_filter[0].year, date_filter[1].year+1))]
+        else:
+            raise ValueError(f"Column {date_field} has been identfied as a year column and cannot be filtered by dates: {date_filter}")
 
     return df
 

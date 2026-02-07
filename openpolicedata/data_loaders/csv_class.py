@@ -8,7 +8,7 @@ import urllib
 import warnings
 from zipfile import ZipFile
 
-from .data_loader import Data_Loader, str2json, download_zip_and_extract, _url_error_msg, get_legacy_session, filter_dataframe
+from .data_loader import Data_Loader, str2json, download_zip_and_extract, _url_error_msg, get_legacy_session, _filter_dataframe, _clean_date_input
 from ..datetime_parser import to_datetime
 from ..exceptions import OPD_DataUnavailableError
 from .. import httpio, log
@@ -369,7 +369,7 @@ class Csv(Data_Loader):
             # Read data was not a CSV file. It was an error code or HTML
             raise OPD_DataUnavailableError(table.iloc[0,0], _url_error_msg.format(self.url))
         
-        table = filter_dataframe(table, date_field=self.date_field, date_filter=date, 
+        table = _filter_dataframe(table, date_field=self.date_field, date_filter=date, 
             agency_field=self.agency_field, agency=agency, format_date=format_date)
         
         if bool(self.query):
