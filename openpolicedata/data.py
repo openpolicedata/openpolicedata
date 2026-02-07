@@ -13,10 +13,7 @@ import sys
 
 import pyarrow
 from typing import Union
-try:
-    from typing import Literal
-except:
-    from typing_extensions import Literal
+from typing import Literal
 import warnings
 
 from . import data_loaders, dataset_id
@@ -1356,12 +1353,12 @@ class Source:
         return src
     
 
-    def __load(self, table_type, date, agency, load_table, pbar=True, return_count=False, force=False, 
+    def __load(self, table_type, date_orig, agency, load_table, pbar=True, return_count=False, force=False, 
                nrows=None, offset=0, sortby=None, verbose=False, url_contains=None, id=None, format_date=True):
         
-        date = data_loader._clean_date_input(date)
-        src = self.filter(table_type, date, url_contains, id, errors=True).iloc[0]      
-        filter_by_date = _check_whether_to_filter_by_date(src, date)      
+        date = data_loader._clean_date_input(date_orig)
+        src = self.filter(table_type, date, url_contains, id, errors=True).iloc[0]
+        filter_by_date = _check_whether_to_filter_by_date(src, date_orig)
 
         # Load data from URL. For date or agency equal to opd.defs.MULTI, filtering can be done
         url = src["URL"]
@@ -2267,19 +2264,9 @@ def _get_years_to_check(years, cur_year, force, isfile):
 
     return years_to_check
 
-def _check_whether_to_filter_by_date(src, date):
+def _check_whether_to_filter_by_date(src, date_orig):
     if isinstance(src, pd.DataFrame):
         assert len(src)==1
         src = src.iloc[0]
 
-    date = data_loader._clean_date_input(date)
-    filter_by_date = isinstance(date, list)  # Check if user requested date range (list)
-    if filter_by_date:
-        filter_by_date = src['Year']==defs.MULTI
-        if not filter_by_date:
-            # This is an annual dataset
-            if date[0]<pd.to_datetime(f'{src['Year']}-01-01') or date[1]>=pd.to_datetime(f'{src['Year']+1}-01-01'):
-                raise ValueError(f"Single year dataset for {src['Year']} cannot be filtered for dates outside the year: {date}")
-            filter_by_date = date[0] > src['coverage_start'] or date[1] < src['coverage_end']
-
-    return filter_by_date
+    return src['Year']!=date_orig

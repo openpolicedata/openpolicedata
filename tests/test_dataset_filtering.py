@@ -292,24 +292,29 @@ def test_filter_no_multiple():
 def test_check_whether_to_filter_by_date_FALSE(loc, table_type, year):
 	src = data.Source(loc)
 	dataset = src.filter(table_type, year, errors=True)
-	filter_by_date = opd.data._check_whether_to_filter_by_date(dataset, year)
-	assert not filter_by_date
+	assert not opd.data._check_whether_to_filter_by_date(dataset, year)
 
 
-@pytest.mark.parametrize('year', [[2016, '2016-02-15'], ['2016-02-15', 2016],
-								 ['2016-04-05', '2016-06-15']])
-def test_check_whether_to_filter_by_date_TRUE_annual(year):
+@pytest.mark.parametrize('date', [[2016, '2016-02-15'], ['2016-02-15', 2016],
+								 ['2016-04-05', '2016-06-15'], [2016, 2016], ['2016-01-01', '2016-12-31']])
+def test_check_whether_to_filter_by_date_TRUE_annual(date):
 	if check_for_dataset('Phoenix', opd.defs.TableType.CALLS_FOR_SERVICE):
 		src = data.Source('Phoenix')
-		dataset = src.filter(opd.defs.TableType.CALLS_FOR_SERVICE, year, errors=True)
-		filter_by_date = opd.data._check_whether_to_filter_by_date(dataset, year)
-		assert filter_by_date
+		dataset = src.filter(opd.defs.TableType.CALLS_FOR_SERVICE, date, errors=True)
+		assert dataset.iloc[0]['Year']!=opd.defs.MULTI
+		assert opd.data._check_whether_to_filter_by_date(dataset, date)
+
+@pytest.mark.parametrize('date', [[2020, '2020-02-15'], ['2020-02-15', 2022],
+								 ['2022-04-05', '2024-06-15'], 2021, [2021, 2021], ['2023-01-01', '2023-12-31']])
+def test_check_whether_to_filter_by_date_TRUE_MULTI(date):
+	if check_for_dataset('Tucson', opd.defs.TableType.ARRESTS):
+		src = data.Source('Tucson')
+		dataset = src.filter(opd.defs.TableType.ARRESTS, date, errors=True)
+		assert dataset.iloc[0]['Year']==opd.defs.MULTI
+		assert opd.data._check_whether_to_filter_by_date(dataset, date)
 
 
-@pytest.mark.parametrize('year', [[2016, '2017-01-01'], ['2015-12-31', 2016]])
-def test_check_whether_to_filter_by_date_annual_FAIL(year):
-	if check_for_dataset('Phoenix', opd.defs.TableType.CALLS_FOR_SERVICE):
-		src = data.Source('Phoenix')
-		dataset = src.filter(opd.defs.TableType.CALLS_FOR_SERVICE, 2016, errors=True)
-		with pytest.raises(ValueError, match='cannot be filtered for dates outside the year'):
-			opd.data._check_whether_to_filter_by_date(dataset, year)
+def test_filter_all(datasets):
+	for row in datasets.itertuples():
+		src = data.Source(row.SourceName, state=row.State, agency=row.Agency)
+		src.filter(row.TableType, row.Year, url=row.URL, id=row.dataset_id, errors=True)
