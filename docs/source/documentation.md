@@ -69,9 +69,9 @@ The follow guides describe more advanced topics that may interest you after view
 ::::{grid} 2
 :gutter: 1 2 3 4
 
-:::{grid-item-card} {fas}`calendar-days;pst-color-primary` Year/Date Filtering
-:link: getting_started/date_filtering.ipynb
-:link-alt: getting_started/date_filtering.ipynb
+:::{grid-item-card} {fas}`calendar-days;pst-color-primary` Dataset Specification and Date Filtering Guide
+:link: getting_started/data_specification.ipynb
+:link-alt: getting_started/data_specification.ipynb
 More advanced year/date filtering and how to handle special (rare) cases
 :::
 :::{grid-item-card} {fas}`broom;pst-color-primary` Data Standardization
