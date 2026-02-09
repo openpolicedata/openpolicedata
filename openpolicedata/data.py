@@ -1,3 +1,9 @@
+"""Core data module for OpenPoliceData.
+
+Contains:
+- Source: entry point for discovering datasets and loading data.
+- Table: data container + metadata + standardization/utilities.
+"""
 from __future__ import annotations
 import copy
 import numbers
@@ -1628,21 +1634,21 @@ class Source:
         ----------
         table_type : str | defs.TableType | None
             Type of table to find related tables for
-        year - int or the strings opd.defs.MULTI or opd.defs.NONE. or None, optional
+        year : int or Literal[opd.defs.MULTI, opd.defs.NONE] or None, optional
             Year of datasets to find related tables for. Optional if there is only one possible table for each table type.
         sub_type : Literal['INCIDENTS','SUBJECTS',"OFFICERS","SUBJECTS/OFFICERS",'PENALTIES','ALLEGATIONS',
                            'NONMOTORIST','BACKGROUND','VEHICLES', None], optional
-            If specified, only return table containing data for the requested sub_type by default None
+            If specified, only return tables containing data for the requested sub_type, by default None
         exact_match : bool, optional
-            If False, return tables that contain the specified sub_type (subtype="SUBJECTS" will return 'SUBJECTS' and SUBJECTS/OFFICERS tables).
-            If True, return only return exact sub_type match  (subtype="SUBJECTS" will return 'SUBJECTS' table only). by default False
+            If False, return tables that contain the specified sub_type (sub_type="SUBJECTS" returns 'SUBJECTS' and 'SUBJECTS/OFFICERS').
+            If True, return only return the exact sub_type match, by default False
 
         Returns
         -------
-        tuple[str]
-            Tuple of related table types
-        tuple[str]
-            Tuple of year values corresponding to each table type
+        related_table_types : tuple[str] 
+            Tuple of related table type names.            
+        related_years : tuple[str] 
+            Tuple of year values corresponding to each related table type.
         """
 
         all_related_tables = [str(x) for x in defs.TableType if re.search(r'.+\-(?!INVOLVED)\s*', x)]
