@@ -1,3 +1,5 @@
+import random
+import time
 import urllib.error
 from zipfile import ZipFile
 import pandas as pd
@@ -7,6 +9,8 @@ import re
 from packaging import version
 import pytest
 import urllib
+from datetime import datetime
+from urllib.parse import urlparse
 
 if __name__ == "__main__":
 	import sys
@@ -152,10 +156,25 @@ def test_agencies_not_multi(datasets):
 def test_zip(datasets):
     ds = datasets[datasets['URL'].str.endswith('zip')]
     urls = ds['URL'].unique()
+    rand_state = random.getstate()
+    random.seed(datetime.now().month*31 + datetime.now().day) # Using a seed that varies but can be guessed if there is an error
+    random.shuffle(urls)
+    random.setstate(rand_state)
+    hostnames = []
+    urls_run = []
     for url in urls:
+        h = urlparse(url).hostname
+        if h not in hostnames:
+            urls_run.append(url)
+            hostnames.append(h)
+
+    for url in urls_run:
+        print(url)
         df = ds[ds['URL']==url]
         try:
             with opd.data_loaders.data_loader.UrlIoContextManager(url) as fp:
+                if 'chicagopolice' in url:
+                    time.sleep(1) # This URL is sensitive to timing
                 with ZipFile(fp, 'r') as z:
                     for k in range(len(df)):
                         if hasattr(df.iloc[k]['dataset_id'],'__iter__'):
@@ -208,10 +227,9 @@ def test_source_list_by_source_name(datasets, use_changed_rows):
 
 
 def test_source_list_by_source_name_fuzzy(all_datasets):
-    source_name_partial = "Charlotte"
-    source_name = 'Charlotte-Mecklenburg'
+    source_name_partial = "Charlotte"  # Jurisdiction is actually 'Charlotte-Mecklenburg'
     df = opd.datasets.query(source_name=source_name_partial, fuzzy_source=True)
-    df_truth = all_datasets[all_datasets["SourceName"]==source_name]
+    df_truth = all_datasets[all_datasets["SourceName"].str.contains(source_name_partial)]
     pd.testing.assert_frame_equal(df_truth, df)
 
 

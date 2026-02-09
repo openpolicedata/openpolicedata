@@ -14,7 +14,7 @@ except:
 
 def test_opendatasoft():
     url = "data.longbeach.gov"
-    dataset = "lbpd-ripa-data-annual"
+    dataset = "police-stop-data-ripa-copy"
     date_field = "stopdate"
     loader = data_loaders.Opendatasoft(url, dataset, date_field)
 
@@ -22,7 +22,7 @@ def test_opendatasoft():
 
     count = loader.get_count()
 
-    df_truth = pd.read_csv("https://data.longbeach.gov/api/explore/v2.1/catalog/datasets/lbpd-ripa-data-annual/exports/csv", 
+    df_truth = pd.read_csv("https://data.longbeach.gov/api/explore/v2.1/catalog/datasets/police-stop-data-ripa-copy/exports/csv", 
                            delimiter=';', low_memory=False)
     assert count==len(df_truth)
 
@@ -40,19 +40,32 @@ def test_opendatasoft():
     nrows = 100
     df_offset = loader.load(date=year, nrows=nrows, offset=offset, pbar=False, sortby='date')
 
-    assert df_offset.convert_dtypes().equals(df.iloc[offset:offset+nrows].reset_index(drop=True).convert_dtypes())
+    pd.testing.assert_frame_equal(df_offset, df.iloc[offset:offset+nrows].reset_index(drop=True), check_dtype=False)
 
     offset = count-2
     df_offset = loader.load(date=year, offset=offset, pbar=False, sortby='date')
-    assert df_offset.convert_dtypes().equals(df.iloc[offset:].reset_index(drop=True).convert_dtypes())
+    pd.testing.assert_frame_equal(df_offset, df.iloc[offset:].reset_index(drop=True), check_dtype=False)
+    # assert df_offset.convert_dtypes().equals(df.iloc[offset:].reset_index(drop=True).convert_dtypes())
 
     offset = min(count-2, 10000)
     nrows = 2
     df_offset = loader.load(date=year, offset=offset, nrows=nrows, pbar=False, sortby='date')
-    assert df_offset.convert_dtypes().equals(df.iloc[offset:offset+nrows].reset_index(drop=True).convert_dtypes())
+    pd.testing.assert_frame_equal(df_offset, df.iloc[offset:offset+nrows].reset_index(drop=True), check_dtype=False)
+    # assert df_offset.convert_dtypes().equals(df.iloc[offset:offset+nrows].reset_index(drop=True).convert_dtypes())
 
     df_truth = df_truth[df_truth['stopdate'].dt.year==year].sort_values(['stopdate','stopid','pid']).reset_index(drop=True)
     df['stopdate'] = pd.to_datetime(df['stopdate'])
+    df_truth['stopid'] = df_truth['stopid'].astype(int)
+    
+    def map(x):
+        if x=='True':
+            return True
+        elif x=='False':
+            return False
+        else:
+            return x
+         
+    df_truth = df_truth.map(map)
 
     for c in df_truth.columns:
          if df_truth[c].dtype != df[c].dtype:

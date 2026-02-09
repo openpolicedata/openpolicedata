@@ -236,7 +236,7 @@ def test_save_load(buffalo_data, save,fname,load):
 
 		try:
 			# Load table back in
-			getattr(src, load)(table_type=buffalo_data.table_type, year=buffalo_data.year, agency=buffalo_data.agency)
+			getattr(src, load)(table_type=buffalo_data.table_type, date=buffalo_data.date, agency=buffalo_data.agency)
 		except:
 			raise
 		finally:

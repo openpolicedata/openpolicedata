@@ -203,15 +203,31 @@ def find_id_column(df1, df2, std_id, keep_raw):
                 id_col1 = [x for x in df1.columns if x.lower()=='dr_no'][0]
                 id_col2 = [x for x in df2.columns if x.lower()=='dr_no'][0]
             else:
-                return default_result         
+                possible_cols1 = [x for x in df1.columns if 'id' in split_words(x.lower())]
+                possible_cols2 = [x for x in df2.columns if 'id' in split_words(x.lower())]
+
+                id_words = ['master','crime','complaint','tax','log','collision','report','case']
+                for c1 in possible_cols1:
+                    words1 = set(x.lower() for x in split_words(c1))
+                    if any(x in id_words for x in words1):
+                        for c2 in possible_cols2:
+                            words2 = set(x.lower() for x in split_words(c2))
+                            if words1==words2:
+                                id_col1 = c1
+                                id_col2 = c2
+                                break
+                        if id_col1:
+                            break
+                else:
+                    return default_result         
     
     mapping = None
     if std_id:
         # Save column off rather than creating it before cleanup in case original column name matches new column name
         col1 = df1[id_col1]
         col2 = df2[id_col2]
-        raw_name1 = cleanup_column(df1, id_col1, keep_raw)
-        raw_name2 = cleanup_column(df2, id_col2, keep_raw)
+        df1, raw_name1 = cleanup_column(df1, id_col1, keep_raw)
+        df2, raw_name2 = cleanup_column(df2, id_col2, keep_raw)
         df1[defs.columns.INCIDENT_ID] = col1
         df2[defs.columns.INCIDENT_ID] = col2
 
@@ -521,7 +537,8 @@ class Standardizer:
         logger.info(f"Searching for {id} column")
         if self.table_type in exclude_table_types or \
             (only_table_types != None and self.table_type not in only_table_types) or \
-            (self.source_name, self.table_type) in tables_to_exclude:
+            (self.source_name, self.table_type) in tables_to_exclude or \
+            (self.source_name, self.table_type,self.year) in tables_to_exclude:
             if std_col_name in self.df.columns:
                 logger.info(f"\tSetting {id} column as {std_col_name}")
                 return [std_col_name]
@@ -809,7 +826,8 @@ class Standardizer:
 
             self._id_ethnicity_column(race_types, match_cols, race_cols,
                 specific_cases=[
-                    _case("Fairfax County", defs.TableType.ARRESTS, "ArresteeEt", defs.columns.ETHNICITY_SUBJECT)
+                    _case("Fairfax County", defs.TableType.ARRESTS, "ArresteeEt", defs.columns.ETHNICITY_SUBJECT),
+                    _case("Fairfax County", defs.TableType.ARRESTS, "Arrestee_E", defs.columns.ETHNICITY_SUBJECT)
                 ])
 
             # Do not want the result to contain the word agency
@@ -821,7 +839,7 @@ class Standardizer:
                                                 validator=_age_validator,
                                                 validate_args=[match_substr],
                                                 word_replacements={'ageat':'age at'},
-                                                tables_to_exclude=[("Merced",defs.TableType.COMPLAINTS)],
+                                                tables_to_exclude=[("Merced",defs.TableType.COMPLAINTS), ("Oakland",defs.TableType.USE_OF_FORCE,2024)],
                                                 always_validate=True)
             
             logger.info(f"Potential age columns found: {match_cols}")
@@ -1348,7 +1366,8 @@ class Standardizer:
     
     def _cleanup_old_column(self, col_name, keep_raw=None):
         keep_raw = self.keep_raw if keep_raw is None else keep_raw
-        return cleanup_column(self.df, col_name, keep_raw)
+        self.df, new_name =  cleanup_column(self.df, col_name, keep_raw)
+        return new_name
         
 
     def standardize_date(self):
@@ -1400,7 +1419,7 @@ class Standardizer:
         #     # time so the threshold is 3.
         #     self.table[defs.columns.DATETIME] = self.table[defs.columns.DATE]
         #     if not keeporig:
-        #         self.table.drop(columns=[defs.columns.DATE], inplace=True)
+        #         self.table = self.table.drop(columns=[defs.columns.DATE])
 
     def standardize_name(self):
         cols = [defs.columns.NAME_SUBJECT, defs.columns.NAME_OFFICER, defs.columns.NAME_OFFICER_SUBJECT]
@@ -1748,6 +1767,8 @@ class Standardizer:
                 def expand(x, d):
                     if isinstance(x,str):
                         result = 0
+                        if d=='/':
+                            x = re.sub('N/A', 'NA', x)  # Ensure that N/A does not falsely register as multi-entry
                         for val in re.split(d, x):
                             y = val.lower().split("x")
                             if len(y)==2 and y[1].strip().isdigit():
@@ -1946,7 +1967,7 @@ class Standardizer:
                                 new_col_name = getattr(defs.columns, new_col_prop)
                                 if new_col_name not in self.col_map:
                                     self.col_map.replace(col, new_col_name)
-                                    self.df.rename(columns={col:new_col_name}, inplace=True)
+                                    self.df = self.df.rename(columns={col:new_col_name})
                                     col = new_col_name
                                     map = None
                                 else:
@@ -2132,24 +2153,52 @@ class Standardizer:
 
 def _age_validator(df, cols_test, match_substr):
     match_cols = []
+    aux_words = ['perceived']
+
+    def test_column(col):
+        col = col[col.notnull()]
+
+        if len(col)==0:
+            return True
+        
+        if 'str' in str(col.dtype).lower():
+            col = col[col.str.lower()!='unknown']
+            if len(col)==0:
+                return True
+            
+            p = re.compile(r'\d')
+            allowed_words = ['marsy', 'adult', 'juvenile']
+            result = col.apply(lambda x: any(y in x.lower() for y in allowed_words) or p.search(x)).any()
+            return result
+
+        return True
+
     for col_name in cols_test:
         # Only want to check cols_test that contain age
         for s in match_substr:
             if s.lower()=="age":
                 pass
             elif s.lower() in col_name.lower():
-                match_cols.append(col_name)
+                if test_column(df[col_name]):
+                    match_cols.append(col_name)
                 continue
 
         if check_column(col_name, "age"):
             # Check for unambiguous column name
-            match_cols.append(col_name)
+            if test_column(df[col_name]):
+                match_cols.append(col_name)
+            continue
+
+        if any(x+'age'==col_name.lower() or 'age'+x==col_name.lower() for x in aux_words):
+            if test_column(df[col_name]):
+                match_cols.append(col_name)
             continue
 
         # Split into words based on white space and underscore. Then look for word "age"
         words = re.split(r"[\W^_]+", col_name)
         if any([x.lower()=="age" for x in words]):
-            match_cols.append(col_name)
+            if test_column(df[col_name]):
+                match_cols.append(col_name)
             continue
 
         for w in words:
@@ -2159,7 +2208,8 @@ def _age_validator(df, cols_test, match_substr):
                 continue
             # Catching typo ageat
             elif any([x.lower() in ["age",'ageat'] for x in camel_case_split(w)]):
-                match_cols.append(col_name)
+                if test_column(df[col_name]):
+                    match_cols.append(col_name)
                 break
 
     return match_cols
@@ -2239,6 +2289,13 @@ def _race_validator(df, cols_test, source_name, mult_data=_MultData()):
             match_cols.append(col_name)
         except Exception as e:
             pass
+
+    if len(match_cols)==2:
+        # Check if one column is a simplified version of the other
+        basecols = [re.sub('s?(_simplified)?$', '', x.lower()) for x in match_cols]
+        if all(x==basecols[0] for x in basecols):
+            # Keep simplified version
+            match_cols = [x for x in match_cols if 'simplified' in x.lower()]
 
     return match_cols
 
@@ -2427,16 +2484,16 @@ def cleanup_column(df, col_name, keep_raw):
             if not col_name.startswith(_OLD_COLUMN_INDICATOR):
                 new_name = _OLD_COLUMN_INDICATOR+"_"+col_name
                 logger.info(f"Renaming raw column {col_name} to {new_name}")
-                df.rename(columns={col_name : new_name}, inplace=True)
+                df = df.rename(columns={col_name : new_name})
                 new_names.append(new_name)
             else:
                 new_names.append(col_name)
         new_name = new_names[0] if len(new_names)==1 else new_names
-        return new_name
+        return df, new_name
     else:
         logger.info(f"Removing raw column {col_name}")
-        df.drop(col_name, axis=1, inplace=True)
-        return None
+        df = df.drop(col_name, axis=1)
+        return df, None
     
 def washingtonpost_id2agency(col, unknown='ignore'):
     assert(unknown in ['ignore','error'])

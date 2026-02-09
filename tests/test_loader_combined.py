@@ -1,14 +1,18 @@
 from io import BytesIO
 import json
+import pandas as pd
 import pytest
 import re
 import requests
 import sys
 
+from tests import test_utils
+
 if __name__ == "__main__":
 	sys.path.append('../openpolicedata')
 from openpolicedata import data_loaders, dataset_id
-import pandas as pd
+
+from test_utils import match_dataframes
 
 @pytest.mark.parametrize("url, dataset", [
     ("https://wallkillpd.org/document-center/data/vehicle-a-pedestrian-stops/2016-vehicle-a-pedestrian-stops", 
@@ -74,6 +78,7 @@ def test_combined(url, dataset):
 
     assert len(df_true) == count
     
+    df, df_true = match_dataframes(df, df_true)
     pd.testing.assert_frame_equal(df, df_true)
 
     offset = 3000

@@ -1,4 +1,5 @@
 import calendar
+import copy
 import datetime
 from io import BytesIO
 import openpyxl
@@ -63,6 +64,7 @@ class Excel(Data_Loader):
         self.url = url.replace(' ','%20')
         self.date_field = date_field
         self.agency_field = agency_field
+        self.data_set = data_set
 
         is_zip = ".zip" in self.url
         self.sheet, file_in_zip = dataset_id.parse_excel_dataset(is_zip, data_set)
@@ -154,6 +156,17 @@ class Excel(Data_Loader):
                 raise
         except Exception as e:
             raise e
+        
+
+    def __deepcopy__(self, memo):
+        # Overwriting deep copy because excel_file can no longer be deep copied
+        url = copy.deepcopy(self.url, memo)
+        data_set = copy.deepcopy(self.data_set, memo)
+        date_field = copy.deepcopy(self.date_field, memo)
+        agency_field = copy.deepcopy(self.agency_field, memo)
+        excel = Excel(url, data_set=data_set, date_field=date_field, agency_field=agency_field)
+        excel.excel_file = None
+        return excel
 
 
     def isfile(self):

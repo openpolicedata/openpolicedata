@@ -271,15 +271,17 @@ def _create_ethnicity_lut(x, no_id, source_name, state, eth_cats, *args, **kwarg
     if defs._eth_keys.UNKNOWN in eth_cats and x in ["U"] or 'UNKNOWN' in x:
         return eth_cats[defs._eth_keys.UNKNOWN]
     if defs._eth_keys.UNSPECIFIED in eth_cats and ("NODATA" in x or 
-        x in ["MISSING", "", "NOTREPORTED",'NOTAPPICABLE(NONINDIVIDUAL)','BLANK','NOTAVAILABLE']):
+        x in ["MISSING", "", "NOTREPORTED",'NOTAPPICABLE(NONINDIVIDUAL)','BLANK','NOTAVAILABLE','NA']):
         return eth_cats[defs._eth_keys.UNSPECIFIED]
     if defs._eth_keys.MIDDLE_EASTERN and x in ["M"] and source_name == "Connecticut":
         return eth_cats[defs._eth_keys.MIDDLE_EASTERN]
     if no_id=="test":
-        if any(y in x for y in ["EXEMPT",'EASTAFRICA','BLACK','UI','CAUCASIAN','X','HN','ASIA', 'LAT', 'PACF','AFR','M','F','B']):
+        if any(y in x for y in ["EXEMPT",'EASTAFRICA','BLACK','UI','CAUCASIAN','X','HN','ASIA', 'LAT', 'PACF','AFR','M','F','B','0']):
             return orig
         elif x in ["W","A"] or x in ferndale_eth_vals:
             return eth_cats[defs._eth_keys.NONLATINO]
+        elif source_name=='Virginia' and x in ['45']:
+            return 'BAD DATA'
         else:
             raise NotImplementedError()
     elif no_id=="error":
@@ -482,23 +484,25 @@ def _create_race_lut(x, no_id, source_name, state, race_cats=defs.get_race_cats(
             if k.upper()==str(orig).upper() or k.upper()==str(x) or str(v)==str(orig).upper() or str(v)==str(x):
                 return v
         
-    def is_latino(x):
+    def is_latino(x, drop=None):
         if isinstance(x,str):
+            if drop:
+                x = x.upper().replace(drop.upper(),'')
             x = x.upper().replace("-","").replace(" ","")
-            return "HISPANIC" in x or "LATINO" in x
+            return ("HISPANIC" in x or "LATINO" in x or x=='HISP') and all(y not in x for y in ['NONHISP', 'NONLATINO'])
         else:
             return False
 
     x_no_space = x.replace(" ","")
-    if has_unspecified and (x in ["MISSING","NOT SPECIFIED", "", "NOT RECORDED","N/A", "NOT REPORTED", "NONE",'BLANK'] or \
+    if has_unspecified and (x in ["MISSING","NOT SPECIFIED", "", "NOT RECORDED","N/A", "NOT REPORTED", "NONE",'BLANK','NOT SPECIF','I DO NOT WISH TO SELF IDENTIFY','I DO NOT WISH TO ANSWER'] or \
         (type(x)==str and ("NO DATA" in x or ("NOT APP" in x and x not in ["NOT APPLICABLE (NONUS)",'NOT APPLICABLE (NON US)']) or "NO RACE" in x or "NULL" in x))):
         return race_cats[defs._race_keys.UNSPECIFIED]
     if has_white and x_no_space in ["W", "CAUCASIAN", "WN", "WHITE", "WHTE", "WHITE,OTHER", 'WHT']:  # WN = White-Non-Hispanic
         return race_cats[defs._race_keys.WHITE]
-    if has_black and (x in ["B", "AFRICAN AMERICAN", "BLCK", "BLK", "BLACE",'AFR AMERICAN', 'AFR AM'] or \
+    if has_black and (x in ["B", "AFRICAN AMERICAN", "BLCK", "BLK", "BLACE",'AFR AMERICAN', 'AFR AM', 'BLK/AFR AM'] or \
                       x_no_space in ["AFRICANAMERICAN"] or \
                       re.search("BLACK?($|[^A-Za-z])",x)) \
-                      and not is_latino(x):
+                      and not is_latino(x, 'BLACK'):
         if x.count("BLACK") > 1:
             raise ValueError(f"The value of {x} likely contains the races for multiple people")
         return race_cats[defs._race_keys.BLACK]
@@ -572,6 +576,7 @@ def _create_race_lut(x, no_id, source_name, state, race_cats=defs.get_race_cats(
                      'NOT AVAILABLE', 'DECLINED TO ANSWER'] or \
                 (source_name in ["Chapel Hill","Lansing","Fayetteville"] and x in ["S","P"]) or \
                 (source_name=="Burlington" and x in ["EXPUNGED"]) or \
+                (source_name=="Colorado Springs" and x in ["0"]) or \
                 (source_name=="Menlo Park" and x in ["S",'F','P','J','L']) or \
                 (source_name=="Minneapolis" and x in ["NO CONTACT"]) or \
                 (source_name in ["Cincinnati","San Diego"] and x in ["F","S","P"]) or \
@@ -682,12 +687,14 @@ def _create_gender_lut(x, no_id, source_name, state, gender_cats, *args, **kwarg
         else:
             # Same result whether no_id is keep or null
             return ""
-    if has_unspecified and x in ["MISSING", "UNSPECIFIED", "",",",'NOTSPECIFIED',"NOTRECORDED","NONE", 'BLANK'] or \
+        
+    x = x.replace('CISGENDER','').strip()
+    if has_unspecified and x in ["MISSING", "UNSPECIFIED", "",",",'NOTSPECIFIED',"NOTRECORDED","NONE", 'BLANK','N/A','NONSPECIFIED'] or \
         "NODATA" in x or "NOSEX" in x or "NULL" in x:
         return gender_cats[defs._gender_keys.UNSPECIFIED]
-    elif defs._gender_keys.FEMALE in gender_cats and x in ["F", "FEMALE", "FEMAALE", "FFEMALE", "FEMAL", "FEMALE/WOMAN","WOMAN"]:
+    elif defs._gender_keys.FEMALE in gender_cats and x in ["F", "FEMALE", "FEMAALE", "FFEMALE", "FEMAL", "FEMALE/WOMAN","WOMAN", 'WOMAN/GIRL']:
         return gender_cats[defs._gender_keys.FEMALE]
-    elif defs._gender_keys.MALE in gender_cats and x in ["M", "MALE", "MMALE", "MALE/MAN","MAN", "MLE"]:
+    elif defs._gender_keys.MALE in gender_cats and x in ["M", "MALE", "MMALE", "MALE/MAN","MAN", "MLE",'MAN/BOY']:
         return gender_cats[defs._gender_keys.MALE]
     elif defs._gender_keys.OTHER in gender_cats and x in ["OTHER", "O"]:
         return gender_cats[defs._gender_keys.OTHER]
@@ -711,7 +718,7 @@ def _create_gender_lut(x, no_id, source_name, state, gender_cats, *args, **kwarg
     elif defs._gender_keys.GENDER_NONCONFORMING in gender_cats and (source_name=="Los Angeles" and x=="C"):
         return gender_cats[defs._gender_keys.GENDER_NONCONFORMING]
     elif defs._gender_keys.UNKNOWN in gender_cats and \
-        (x in ["U","UK", "UNABLE TO DETERMINE".replace(" ","")] or "UNK" in x):
+        (x in ["U","UK", "UNABLE TO DETERMINE".replace(" ",""), 'UKNOWN'] or "UNK" in x):
         return gender_cats[defs._gender_keys.UNKNOWN]
     elif defs._gender_keys.UNSPECIFIED_OR_ANOTHER in gender_cats and x in 'X':
         # https://www.state.gov/x-gender-marker-available-on-u-s-passports-starting-april-11/
@@ -725,6 +732,7 @@ def _create_gender_lut(x, no_id, source_name, state, gender_cats, *args, **kwarg
             (source_name=="New York City" and (x=="Z" or x.isdigit())) or \
             (source_name=="New York" and x in ["Organization".upper()]) or \
             (source_name=="Baltimore" and x in ["Y","Z"]) or \
+            (source_name=="Colorado Springs" and x in ["0"]) or \
             (source_name=="Urbana" and x in ["."]) or \
             (source_name=="Greensboro" and x in ["ASIAN"]) or \
             (source_name=="Columbia" and x in ["B"]) or \
@@ -746,6 +754,8 @@ def _create_gender_lut(x, no_id, source_name, state, gender_cats, *args, **kwarg
             (source_name=="Chattanooga" and all(y in ['MALE','FEMALE'] for y in x.split(','))) or \
             (x=="PENDINGRELEASE" and source_name=="Portland") or \
             (x in ["N","H"] and source_name=="Los Angeles") or \
+            (source_name=='Albemarle County' and x in ['B']) or \
+            (source_name=='Virginia' and x in ['Y']) or \
             (source_name=='Bremerton' and x in ['B', 'W', 'A','I']) or \
             "DOG" in x or \
             x in ["UNDISCLOSE","UNDISCLOSED","PREFER TO SELF DESCRIBE".replace(" ",""),'NONBINARY/THIRDGENDER',
@@ -803,7 +813,7 @@ def _create_injury_lut(x, no_id, source_name, *args, **kwargs):
     elif x.startswith('NO INJUR') or x.startswith('NONE') or x.startswith('NO COMPLAINT') or\
         x in ["NOT INJURED",'NEITHER','NO','N', "MISS", 'SHOOT AND MISS','FALSE','NO VISIBLE INJURY','UNINJURED', 'SHOW OF FORCE']:
         return "NO INJURY"
-    elif x in ['SELF INFLICTED FATAL', 'DECEASED (SELF INFLICTED)','KILLED (SELF INFLICTED)', 'FATAL SUICIDE']:
+    elif x in ['SELF INFLICTED FATAL', 'DECEASED (SELF INFLICTED)','KILLED (SELF INFLICTED)', 'FATAL'] or 'SUICIDE' in x:
         return 'SELF-INFLICTED FATAL'
     elif any([y in x for y in ['SELF INFLICTED GUNSHOT WOUND']]):
         return 'SELF-INFLICTED INJURY'
@@ -816,7 +826,7 @@ def _create_injury_lut(x, no_id, source_name, *args, **kwargs):
                               'SOFT TISSUE','BLOOD','HEAD','SORE','SHOULDER', 'MINOR INJUR', 'FINGER', 'IMPACT', 'FACE', 'ARM',
                               'MOUTH', 'BACK','RIB', 'THUMB','SHIN',' EAR', 'ACHILLES', 'STRUCK', 'LEG', 'SERIOUS',
                               'CONCUSSION','FRACTURE','CANINE BITE', 'MARK','BURN', 'MINOR', 'DISABL', 'PHYSICAL INJURY',
-                              'TREATED','TAKEN TO HOSPITAL','SHOT', 'VISIBLE INJURY', 'BODILY INJURY']]):
+                              'TREATED','TAKEN TO HOSPITAL','SHOT', 'VISIBLE INJURY', 'BODILY INJURY','MAJOR INJURY']]):
         return "INJURED"
     elif 'NALOXONE' in x:
         return orig

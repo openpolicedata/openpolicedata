@@ -37,13 +37,19 @@ def test_sortby_date_has_datefield(loader_class, url, dataset, date_field):
      (data_loaders.Socrata, "www.transparentrichmond.org","asfd-zcvn", "occurreddatetime"),
      (data_loaders.Ckan, 'https://data.boston.gov/', '58ad5180-f5f5-4893-a681-742971f71582', 'incident_date')])
 def test_sortby_no_datefield(loader_class, url, dataset, date_field):
-    loader = loader_class(url, dataset)
-    with pytest.deprecated_call():
-        df1 = loader.load(pbar=False, sortby='date')
+    loader = loader_class(url, dataset, date_field=date_field)
+    df1 = loader.load(pbar=False, sortby='date')
     df2 = loader.load(pbar=False)
 
-    pd.testing.assert_frame_equal(df1, df2)
-    assert df1[date_field].sort_values().tolist()!=df1[date_field].tolist()
+    assert set(df1.columns) == set(df2.columns)
+
+    df2 = df2[df1.columns]
+
+    assert (df1[date_field] != df2[date_field]).any()  # Ensure sort is needed to match
+
+    sort_cols = [date_field]
+    sort_cols.extend([x for x in df1.columns if x!=date_field])
+    pd.testing.assert_frame_equal(df1, df2.sort_values(sort_cols, ignore_index=True))
 
 
 @pytest.mark.parametrize('loader_class, url, dataset, sort_col', [

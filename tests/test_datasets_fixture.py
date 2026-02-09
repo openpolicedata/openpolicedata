@@ -3,7 +3,7 @@ import pandas as opd
 import pandas as pd
 import pytest
 import shutil
-from test_utils import get_changed_rows, get_datasets, get_line_numbers
+from test_utils import get_datasets, get_line_numbers
 
 import sys
 sys.path.append('../openpolicedata')

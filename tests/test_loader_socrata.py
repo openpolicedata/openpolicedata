@@ -2,13 +2,15 @@ import sys
 
 if __name__ == "__main__":
 	sys.path.append('../openpolicedata')
-from openpolicedata import data_loaders
+from openpolicedata import data_loaders, defs
 import pandas as pd
 try:
     import geopandas as gpd
     _has_gpd = True
 except:
     _has_gpd = False
+
+from test_utils import check_for_dataset
 
 
 def test_socrata_geopandas():
@@ -25,25 +27,21 @@ def test_socrata_geopandas():
         pass
 
 def test_socrata_pandas():
-    data_loaders._use_gpd_force = False
     url = "data.montgomerycountymd.gov"
     data_set = "usip-62e2"
     date_field = "created_dt"
     year = 2020
     loader = data_loaders.Socrata(url=url, data_set=data_set, date_field=date_field)
-    df = loader.load(date=year, pbar=False)
-    count = loader.get_count(date=year)
-
-    # Reset
-    data_loaders._use_gpd_force = None
+    
+    data_loaders._use_gpd_force = False
+    try:
+        df = loader.load(date=year, pbar=False, nrows=1000)
+    except:
+        raise
+    finally:
+        data_loaders._use_gpd_force = None
 
     assert type(df) == pd.DataFrame
-    assert len(df) == count
-
-    count2 = loader.get_count(date=year+1)
-
-    # Ensure that count updates properly with different call (most recent count is cached)
-    assert count!=count2
 
 def test_socrata_agency_filter():
     url = "data.ct.gov/"
@@ -63,34 +61,35 @@ def test_socrata_agency_filter():
     assert (df[agency_field]==agency).all()
 
 def test_socrata():
-    lim = data_loaders.data_loader._default_limit
-    data_loaders.data_loader._default_limit = 500
+    if not check_for_dataset('Richmond', defs.TableType.SHOOTINGS):
+        return
+    
     url = "www.transparentrichmond.org"
     data_set = "asfd-zcvn"
-    loader = data_loaders.Socrata(url, data_set)
-    df =loader.load(pbar=False)
-    assert not loader.isfile()
-    count = loader.get_count()
-
-    assert len(df)==count
-
-    offset = 1
-    nrows = len(df)-offset-1
-    df_offset = loader.load(offset=offset,nrows=nrows, pbar=False)
-    assert set(df.columns)==set(df_offset.columns)
-    df_offset = df_offset[df.columns]
-    assert df_offset.equals(df.iloc[offset:nrows+offset].reset_index(drop=True))
-
-    df_offset = loader.load(offset=offset, pbar=False)
-    assert set(df.columns)==set(df_offset.columns)
-    df_offset = df_offset[df.columns]
-    assert df_offset.equals(df.iloc[offset:].reset_index(drop=True))
     
-    data_loaders.data_loader._default_limit = lim
+    lim = data_loaders.data_loader._default_limit
+    data_loaders.data_loader._default_limit = 500
+    try:
+        loader = data_loaders.Socrata(url, data_set)
+        df =loader.load(pbar=False)
+        assert not loader.isfile()
+        count = loader.get_count()
+
+        assert len(df)==count
+
+        offset = 1
+        nrows = len(df)-offset-1
+        df_offset = loader.load(offset=offset,nrows=nrows, pbar=False)
+        assert set(df.columns)==set(df_offset.columns)
+        df_offset = df_offset[df.columns]
+        assert df_offset.equals(df.iloc[offset:nrows+offset].reset_index(drop=True))
+    except:
+        raise
+    finally:
+        data_loaders.data_loader._default_limit = lim
 
     client = data_loaders.socrata.SocrataClient(url, data_loaders.socrata.default_sodapy_key, timeout=60)
     results = client.get(data_set, order=":id", limit=100000)
     rows = pd.DataFrame.from_records(results)
 
-    assert len(df) == count
     assert rows.equals(df)

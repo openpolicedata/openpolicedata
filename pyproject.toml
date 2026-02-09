@@ -31,7 +31,7 @@ dependencies = [
     "openpyxl",
     "numpy",
     "packaging",
-    "pandas[html,parquet,feather] >= 2.1.0, <3.0.0",
+    "pandas[html,parquet,feather] >= 2.1.0",
     'rapidfuzz',
     "requests",
     "sodapy",

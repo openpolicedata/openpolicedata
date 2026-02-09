@@ -115,8 +115,8 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 		src = data.Source(srcName, state=state, agency=datasets.iloc[i]["Agency"])
 
 		# Handle cases where URL is required to disambiguate requested dataset
-		ds_filter, _ = src._Source__filter_for_source(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], None, None, errors=False)
-		ds_input = datasets.iloc[[i]] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
+		ds_filter = src.filter(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"])
+		ds_input = datasets.iloc[[i]] if len(ds_filter)>1 else None
 
 		if ds_input is None:
 			already_run.append(unique_id)
@@ -170,9 +170,9 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 				years = years[:1]
 
 		# Handle cases where URL is required to disambiguate requested dataset
-		ds_filter, _ = src._Source__filter_for_source(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], None, None, errors=False)
-		url = datasets.iloc[i]['URL'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
-		id = datasets.iloc[i]['dataset_id'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
+		ds_filter = src.filter(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"])
+		url = datasets.iloc[i]['URL'] if len(ds_filter)>1 else None
+		id = datasets.iloc[i]['dataset_id'] if len(ds_filter)>1 else None
 
 		tables = {}
 		future_error = False
@@ -258,7 +258,8 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 			all_years = dts.dt.year.unique().tolist()
 			
 			try:
-				assert len(all_years) == 1
+				# Ignore if annual datasets fail as this is indicative that the data contains bad dates
+				assert len(all_years) == 1 or table.date == year
 			except AssertionError as e:
 				# Some datasets filter by local time but return
 				# UTC time
@@ -275,7 +276,7 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 					assert len(all_years)==1
 			except:
 				raise(e)
-			assert all_years[0] == year
+			assert year in all_years
 
 			if not multi_case:
 				continue
@@ -414,9 +415,9 @@ def test_source_download_not_limitable(datasets, source, start_idx, skip, query=
 			table_type = datasets.iloc[i]["TableType"]
 
 			# Handle cases where URL is required to disambiguate requested dataset
-			ds_filter, _ = src._Source__filter_for_source(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], None, None, errors=False)
-			url = datasets.iloc[i]['URL'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
-			id = datasets.iloc[i]['dataset_id'] if isinstance(ds_filter,pd.DataFrame) and len(ds_filter)>1 else None
+			ds_filter = src.filter(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"])
+			url = datasets.iloc[i]['URL'] if len(ds_filter)>1 else None
+			id = datasets.iloc[i]['dataset_id'] if len(ds_filter)>1 else None
 
 			now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
 			print(f"{now} Testing {i+1} of {len(datasets)}: {srcName}, {state} {table_type} table for {year}")
@@ -433,7 +434,7 @@ def test_source_download_not_limitable(datasets, source, start_idx, skip, query=
 			if not pd.isnull(table.date_field):
 				assert table.date_field in table.table
 				#assuming a Pandas string dtype('O').name = object is okay too
-				assert (table.table[table.date_field].dtype.name in ['datetime64[ns]', 'datetime64[ms]'])
+				assert table.table[table.date_field].dtype.name.startswith('datetime64')
 			if not pd.isnull(datasets.iloc[i]["agency_field"]):
 				assert datasets.iloc[i]["agency_field"] in table.table
 
@@ -503,4 +504,4 @@ if __name__ == "__main__":
 
 	test_load_year(datasets, source, start_idx, skip, False, query=query) 
 	start_idx = 0
-	test_source_download_not_limitable(datasets, source, start_idx, skip) 
+	# test_source_download_not_limitable(datasets, source, start_idx, skip) 

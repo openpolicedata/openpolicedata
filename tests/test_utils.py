@@ -166,3 +166,32 @@ def user_request_skip(datasets, i, skip, start_idx, source):
 		return True
 	
 	return False
+
+def match_dataframes(df1, df2):
+    df2 = df2.convert_dtypes()
+    df1 = df1.convert_dtypes()
+
+    for c in df1.columns:
+        if df1[c].dtype != df2[c].dtype:
+            df2[c] = df2[c].astype(df1[c].dtype)
+        if df1[c].dtype=='object':
+            # Ensure each value has same type
+            app_vals = df2[c].tolist()
+            true_vals = df1[c].tolist()
+            for k in range(len(true_vals)):
+                if type(true_vals[k]) != type(app_vals[k]):
+                    # Convert to same type
+                    if pd.isnull(app_vals[k]) and pd.isnull(true_vals[k]):
+                        app_vals[k] = true_vals[k]
+                    # elif isinstance(true_vals[k], dict) and isinstance(app_vals[k], str):
+                    #     app_vals[k] = json.loads(app_vals[k].replace("'",'"'))
+                    else:
+                        app_vals[k] = type(true_vals[k])(app_vals[k])
+
+            df2[c] = app_vals
+            df2[c] = df2[c].astype(df1[c].dtype)
+
+        if df1[c].dtype != df2[c].dtype:
+            df2[c] = df2[c].astype(df1[c].dtype)
+
+    return df1, df2

@@ -17,7 +17,7 @@ from zipfile import ZipFile
 from ..datetime_parser import to_datetime
 from ..exceptions import DateFilterException
 from .. import log, httpio
-from ..utils import is_str_number
+from .. import defs
 
 try:
     import geopandas as gpd
@@ -37,6 +37,40 @@ _url_error_msg = "There is likely an issue with the website. Open the URL {} wit
                     "See a list of known site outages at https://github.com/openpolicedata/opd-data/blob/main/outages.csv"
 def _check_year(year):
     return isinstance(year, int) or (isinstance(year, str) and len(year)==4 and year.isdigit())
+
+
+def _clean_date_input(date):
+    if date==None or (isinstance(date, str) and date in [defs.MULTI, defs.NA]):
+        return date
+    
+    date = [date, date] if not isinstance(date, list) else date
+    
+    # Make copy so original isn't changed
+    date = date.copy() if isinstance(date, list) else date
+
+    if len(date)!=2:
+        raise ValueError("List of start/stop dates is not length 2")
+    
+    for k in range(2):
+        if isinstance(date[k], str) and date[k].isdigit():
+            date[k] = int(date[k])
+
+        if isinstance(date[k], numbers.Number):
+            if 999 < date[k] < 10000 and date[k]==round(date[k]):
+                # Assume this is a year
+                date[k] = f'{date[k]}-01-01' if k==0 else f'{date[k]}-12-31'
+            else:
+                raise ValueError(f"Unable to parse number {date[k]} as a year")
+
+        dt_new = pd.to_datetime(date[k]).floor('24h')  # Removed time. Times are currently ignored.
+        if date[k]!=dt_new:
+            warnings.warn(f"Times in date filter requests are ignored. Changing {date[k]} to {dt_new}")
+            date[k] = dt_new
+
+    if date[0] > date[1]:
+        raise ValueError(f'Start date must be less than stop date. Invalid input: {date}')
+    
+    return date
 
 
 def _process_date(date, date_field=None, force_year=False, datetime_format=None, is_date_string=False):
