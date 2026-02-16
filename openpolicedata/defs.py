@@ -1,3 +1,11 @@
+"""
+Definitions module for OpenPoliceData.
+
+This module contains enumerations like DataType and TableType,
+standardized column names, and other constant definitions used
+throughout the package.
+"""
+
 # Definition of constants
 from __future__ import annotations
 from copy import deepcopy
@@ -12,6 +20,30 @@ import warnings
 # They all have corresponding data loaders.
 # When new data loaders are added, this list should be updated.
 class DataType(str, Enum):
+    """
+    Enumeration of the types of data sources supported by OpenPoliceData.
+
+    These correspond to different data storage platforms or file formats
+    from which police data can be accessed. Each type typically has a
+    corresponding data loader implementation in the `data_loaders` module.
+
+    Attributes
+    ----------
+    ArcGIS : str
+        Data stored in an Esri ArcGIS system (Feature Server, Map Server, etc.).
+    CARTO : str
+        Data stored on the CARTO platform.
+    CKAN : str
+        Data stored in a CKAN data portal.
+    CSV : str
+        Data provided as a Comma Separated Values file.
+    EXCEL : str
+        Data provided as a Microsoft Excel file (.xls, .xlsx).
+    HTML : str
+        Data embedded within an HTML table on a web page.
+    SOCRATA : str
+        Data stored on the Socrata Open Data platform.
+    """    
     ArcGIS = "ArcGIS"
     CARTO = "Carto"
     CKAN = 'CKAN'
@@ -25,6 +57,118 @@ class DataType(str, Enum):
 # These are the types of tables currently available in opd.
 # Add to this list when datasets do not correspond to the below data types
 class TableType(str, Enum):
+    """
+    Enumeration of the types of police incident or record tables available through OpenPoliceData.
+
+    Each member represents a specific category of police data, such as traffic stops,
+    use of force incidents, or complaints. Each member also includes a `description`
+    attribute providing a brief explanation of the data type.
+
+    Attributes
+    ----------
+    ARRESTS : str
+        Seizures or forcible restraints by police.
+    CALLS_FOR_SERVICE : str
+        Includes dispatched calls (911 or non-emergency #) and officer-initiated calls.
+    CITATIONS : str
+        Commonly referred to as tickets, citations indicate a violation of the law and may be given for violations such as traffic and civil violations.
+    COMPLAINTS : str
+        Complaints of police misconduct made internally or by the community.
+    COMPLAINTS_ALLEGATIONS : str
+        Complaint data may be split into several tables. This table contains specific data on the allegations.
+    COMPLAINTS_BACKGROUND : str
+        Complaint data may be split into several tables. This table contains data on the general background of the complaints.
+    COMPLAINTS_BODY_WORN_CAMERA : str
+        Complaint data may be split into several tables. This table contains data on body worn camera details.
+    COMPLAINTS_SUBJECTS : str
+        Complaint data may be split into several tables. This table contains specific data on the involved subjects.
+    COMPLAINTS_SUBJECTS_OFFICERS : str
+        Complaint data may be split into several tables. This table contains data on the involved subjects and officers. A row in the data will indicate whether that row corresponds to an officer or subject.
+    COMPLAINTS_OFFICERS : str
+        Complaint data may be split into several tables. This table contains specific data on the involved officers.
+    COMPLAINTS_PENALTIES : str
+        Complaint data may be split into several tables. This table contains specific data on any resulting penalties.
+    CRASHES : str
+        Traffic crashes.
+    CRASHES_SUBJECTS : str
+        Crash data may be split into several tables due to the possibility that multiple subjects (drivers and/or passengers) and vehicles may be involved in an incident. This table contains data on subjects.
+    CRASHES_INCIDENTS : str
+        Crash data may be split into several tables due to the possibility that multiple subjects and vehicles may be involved in an incident. This table contains data on the incident.
+    CRASHES_NONMOTORIST : str
+        Crash data may be split into several tables due to the possibility that multiple subjects and vehicles may be involved in an incident. This table contains information on non-motorists involved in a crash.
+    CRASHES_VEHICLES : str
+        Crash data may be split into several tables due to the possibility that multiple subjects and vehicles may be involved in an incident. This table contains data on vehicles.
+    DISCIPLINARY_RECORDS : str
+        Disciplinary records of officers.
+    EMPLOYEE : str
+        Demographic data of the police workforce.
+    DEATHS_IN_CUSTODY : str
+        Deaths that occur in custody or during the process of arrest.
+    FIELD_CONTACTS : str
+        Consensual contacts between officers and the community.
+    INCIDENTS : str
+        Crime incident reports.
+    INCIDENTS_INCIDENTS : str
+        Incidents data may be split into several tables due to the possibility that multiple subjects may be involved in an incident. This table contains data on the details of the incident.
+    INCIDENTS_SUBJECTS : str
+        Incidents data may be split into several tables due to the possibility that multiple subjects may be involved in an incident. This table contains data on subjects.
+    LAWSUITS : str
+        Lawsuits against a police department.
+    PEDESTRIAN_STOPS : str
+        Stops of pedestrians based on 'reasonable suspicion'. May lead to a frisk.
+    PEDESTRIAN_ARRESTS : str
+        Pedestrian stops leading to an arrest.
+    PEDESTRIAN_CITATIONS : str
+        Pedestrian stops leading to a citation.
+    PEDESTRIAN_WARNINGS : str
+        Pedestrian stops leading to a warning.
+    POINTING_WEAPON : str
+        Instances of officers pointing a weapon (firearm, Taser, etc.) at individuals.
+    SEARCHES : str
+        Details of searches.
+    SHOOTINGS : str
+        Shootings by officers.
+    SHOOTINGS_SUBJECTS : str
+        Officer-involved shootings data may be split into several tables due to the possibility that multiple subjects and officers may be involved in an incident. This table contains data on subjects.
+    SHOOTINGS_OFFICERS : str
+        Officer-involved shootings data may be split into several tables due to the possibility that multiple subjects and officers may be involved in an incident. This table contains data on officer.
+    SHOOTINGS_INCIDENTS : str
+        Officer-involved shootings data may be split into several tables due to the possibility that multiple subjects and officers may be involved in an incident. This table contains data on the incident.
+    STOPS : str
+        Contains data on both pedestrian and traffic stops.
+    STOPS_INCIDENTS : str
+        Stops data may be split into several tables due to the possibility that multiple subjects and officers may be involved in an incident. This table contains data on the incident.
+    STOPS_SUBJECTS : str
+        Stops data may be split into several tables due to the possibility that multiple subjects and officers may be involved in an incident. This table contains data on the subjects.
+    TRAFFIC : str
+        Traffic stops are stops by police of motor vehicles due to reasonable suspicion  or traffic violations.
+    TRAFFIC_INCIDENTS : str
+        Traffic stops data may be split into several tables due to the possibility that multiple subjects and officers may be involved in an incident. This table contains data on the incident.
+    TRAFFIC_SUBJECTS : str
+        Traffic stops data may be split into several tables due to the possibility that multiple subjects and officers may be involved in an incident. This table contains data on the subjects.
+    TRAFFIC_ARRESTS : str
+        Traffic stops leading to an arrest.
+    TRAFFIC_CITATIONS : str
+        Traffic stops leading to a citation.
+    TRAFFIC_WARNINGS : str
+        Traffic stops leading to a warning.
+    USE_OF_FORCE : str
+        Documentation of physical force used against subjects.
+    USE_OF_FORCE_ADDITIONAL : str
+        Table with additional use of force information.
+    USE_OF_FORCE_SUBJECTS : str
+        Use of force data may be split into several tables due to the possibility that multiple subjects and officers may be involved in an incident. This table contains data on subjects.
+    USE_OF_FORCE_OFFICERS : str
+        Use of force data may be split into several tables due to the possibility that multiple subjects and officers may be involved in an incident. This table contains data on officer.
+    USE_OF_FORCE_INCIDENTS : str
+        Use of force data may be split into several tables due to the possibility that multiple subjects and officers may be involved in an incident. This table contains data on the incident.
+    USE_OF_FORCE_SUBJECTS_OFFICERS : str
+        Use of force data may be split into several tables due to the possibility that multiple subjects and officers may be involved in an incident. This table contains data on subjects and officers.A row in the data will indicate whether that row corresponds to an officer or subject.
+    VEHICLE_PURSUITS : str
+        Attempts by officers in vehicles to pursue vehicles where the operator is believed to be aware that they are being signaled to stop but who is fleeing or ignoring the officer's attempt to stop them.
+    WARNINGS : str
+        Warnings for traffic and civil violations.
+    """
     # Adding a description property in addition to value
     # https://rednafi.github.io/reflections/add-additional-attributes-to-enum-members-in-python.html
     description = None
@@ -136,8 +280,7 @@ class TableType(str, Enum):
         "subjects and officers may be involved in an incident. This table contains data on the incident.")
     USE_OF_FORCE_SUBJECTS_OFFICERS = ("USE OF FORCE - SUBJECTS/OFFICERS",
         "Use of force data may be split into several tables due to the possibility that multiple "+
-        "subjects and officers may be involved in an incident. This table contains data on subjects and officers."+
-        "A row in the data will indicate whether that row corresponds to an officer or subject.")
+        "subjects and officers may be involved in an incident. This table contains data on subjects and officers.A row in the data will indicate whether that row corresponds to an officer or subject.")
     VEHICLE_PURSUITS = ("VEHICLE PURSUITS","Attempts by officers in vehicles to pursue vehicles where the operator " + 
         "is believed to be aware that they are being signaled to stop but who is fleeing or ignoring the officer's attempt "+
         "to stop them.")

@@ -24,7 +24,7 @@ citations/index.md
 
 # OpenPoliceData
 
-Welcome to the *new* OpenPoliceData documentation. The **OpenPoliceData (OPD)** Python library is the most comprehensive centralized public access point for incident-level police data in the United States. OPD provides easy access to 550+ incident-level datasets from about 236 police agencies and 11 entire states. Types of data include traffic stops, use of force, officer-involved shootings, and complaints. It provides a simple interface for finding publically available data and downloading data into [pandas](https://pandas.pydata.org/) DataFrames.
+Welcome to the *new* OpenPoliceData documentation. The **OpenPoliceData (OPD)** Python library is the most comprehensive centralized public access point for incident-level police data in the United States. OPD provides easy access to 550+ incident-level datasets from about 236 police agencies and 11 entire states. Types of data include traffic stops, use of force, officer-involved shootings, and complaints. It provides a simple interface for finding publicly available data and downloading data into [pandas](https://pandas.pydata.org/) DataFrames.
 
 <!-- https://fontawesome.com/icons?d=gallery&amp%3Bm=free -->
 
