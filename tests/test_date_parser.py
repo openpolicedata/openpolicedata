@@ -11,13 +11,48 @@ def dates():
     t = src.load('OFFICER-INVOLVED SHOOTINGS','MULTIPLE')
     return t.table[t.date_field]
 
-# # data._check_date
-# # datetime_parser
-# #   parse_date_to_datetime
-# #   merge_date_and_time
-# #   validate_date
-# #   validate_time
-# #   parse_time
+@pytest.mark.parametrize('start,stop', [('2025-01-01', '2025-12-30'),('2025-01-02', '2025-12-31')])
+def test_split_date_range_partial_year(start, stop):
+    start = pd.Timestamp(start)
+    stop = pd.Timestamp(stop)
+    start_range, full_years, stop_range = opd.datetime_parser.split_date_range(start, stop)
+    assert start_range==[start,stop]
+    assert full_years==[]
+    assert stop_range==None
+
+@pytest.mark.parametrize('start,stop', [('2025-01-01', '2025-12-31'),('2023-01-01', '2025-12-31')])
+def test_split_date_range_full_year(start, stop):
+    start = pd.Timestamp(start)
+    stop = pd.Timestamp(stop)
+    start_range, full_years, stop_range = opd.datetime_parser.split_date_range(start, stop)
+    assert start_range==None
+    assert full_years==[x for x in range(start.year, stop.year+1)]
+    assert stop_range==None
+
+def test_split_date_range_partial_first_year():
+    start = pd.Timestamp('2023-01-02')
+    stop = pd.Timestamp('2025-12-31')
+    start_range, full_years, stop_range = opd.datetime_parser.split_date_range(start, stop)
+    assert start_range==[start, pd.Timestamp(year=start.year+1,month=1,day=1)-pd.Timedelta(seconds=1)]
+    assert full_years==[x for x in range(start.year+1, stop.year+1)]
+    assert stop_range==None
+
+def test_split_date_range_partial_last_year():
+    start = pd.Timestamp('2023-01-01')
+    stop = pd.Timestamp('2025-12-30')
+    start_range, full_years, stop_range = opd.datetime_parser.split_date_range(start, stop)
+    assert start_range==None
+    assert full_years==[x for x in range(start.year, stop.year)]
+    assert stop_range==[pd.Timestamp(year=stop.year,month=1,day=1), stop]
+
+def test_split_date_range_partial_first_and_last_year():
+    start = pd.Timestamp('2023-01-02')
+    stop = pd.Timestamp('2025-12-30')
+    start_range, full_years, stop_range = opd.datetime_parser.split_date_range(start, stop)
+    assert start_range==[start, pd.Timestamp(year=start.year+1,month=1,day=1)-pd.Timedelta(seconds=1)]
+    assert full_years==[x for x in range(start.year+1, stop.year)]
+    assert stop_range==[pd.Timestamp(year=stop.year,month=1,day=1), stop]
+
 
 @pytest.mark.parametrize('format', ['%Y%m%d', '%Y%m%d.0', '%#m%d%Y.0', '%#m%d%Y', '%B %#d, %Y', '%#m/%#d/%y', '%#m/%#d/%Y',
                                     '%m-%d-%Y', '%Y-%m-%d', '%m/%d/%Y  00:00', '%Y-%m-%d 00:00:00+00', '%#m/%d%Y'])

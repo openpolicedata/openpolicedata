@@ -5,12 +5,13 @@ from numpy import nan
 import requests
 from sodapy import Socrata as SocrataClient
 from tqdm import tqdm
-from math import ceil
 import re
 
-from .data_loader import Data_Loader, _process_date, _url_error_msg, _use_gpd_force, _default_limit, _has_gpd
+from .data_loader import Data_Loader, _process_date, _url_error_msg, _use_gpd_force, _has_gpd, _clean_date_input, \
+    _filter_inaccurate_date_query, _setup_records_request
+from . import data_loader
 from ..exceptions import OPD_SocrataHTTPError
-from .. import log
+from .. import log, datetime_parser
 
 if _has_gpd:
     import geopandas as gpd
@@ -68,6 +69,7 @@ class Socrata(Data_Loader):
         self.url = url
         self.data_set = data_set
         self.date_field = date_field
+        self.date_format = None
         # Unauthenticated client only works with public data sets. Note 'None'
         # in place of application token, and no username or password:
         self.client = SocrataClient(self.url, key, timeout=90)
@@ -76,55 +78,46 @@ class Socrata(Data_Loader):
     def __construct_where(self, date, opt_filter):
         where = ""
         if self.date_field!=None and date!=None:
-            filter_year = False
-            assume_date = False
-            try:
-                # Get metadata to ensure that date is not formatted as text
-                meta = self.client.get_metadata(self.data_set)
-                column = [x for x in meta['columns'] if x['fieldName']==self.date_field]
-                if len(column)>0 and 'dataTypeName' in column[0] and column[0]['dataTypeName']=='text':
-                    # The date column is text. It may have some metadata about it's largest value which 
-                    # will tell us if it's in YYYY-MM-DD format in which case our filtering will still work.
-                    # If not, we can only filter by year with a text search.
-                    if not ('cachedContents' in column[0] and 'largest' in column[0]['cachedContents'] and \
-                        isinstance(column[0]['cachedContents']['largest'], str) and \
-                            re.search(r'^\d{4}\-\d{2}\-\d{2}', column[0]['cachedContents']['largest'])):
-                        filter_year = True
-            except:
-                assume_date = True
+            start_date, stop_date = _process_date(date)
+            data_type, date_formats = self.__date_format_search(start_date, stop_date)
 
-            if not assume_date and len(column)==0:
-                raise ValueError(f"Date field {self.date_field} not found in dataset")
-            if filter_year:
-                start_date, stop_date = _process_date(date, date_field=self.date_field, force_year=True)
-                where = ''
-                for y in range(int(start_date),int(stop_date)+1):
-                    # %25 is % wildcard symbol
-                    if self.url=='data.bloomington.in.gov' and self.data_set=='gpr2-wqbb':
-                        # This dataset has a text date field and contains YYYY/MM/DD and MM/DD/YY formats
-                        yy = str(y)[2:]
-                        where+=self.date_field + f" LIKE '_/_/{yy}' OR " + \
-                               self.date_field + f" LIKE '_/__/{yy}' OR " + \
-                               self.date_field + f" LIKE '__/_/{yy}' OR " + \
-                               self.date_field + f" LIKE '__/__/{yy}' OR " + \
-                               self.date_field + rf" LIKE '{y}%' OR "
-                    else:
-                        where+=self.date_field + rf" LIKE '%{y}%' OR "
-                where = where[:-4]
-            else:
-                start_date, stop_date = _process_date(date, date_field=self.date_field)
+            if data_type=='timestamp' or date_formats=={'yyyymmdd'}:
                 where = self.date_field + " between '" + start_date + "' and '" + stop_date +"'"
+            else:
+                start_range, full_years, stop_range = datetime_parser.split_date_range(start_date, stop_date)
+                where = self.year_where_query(full_years)
+                if start_range or stop_range:
+                    where = where+" OR " if len(where)>0 else ''
+                    for x in date_formats:
+                        if x=='yyyymmdd':
+                            where+=f'({self.yyyymmdd_where_query(start_range, stop_range)}) OR '
+                        elif x=='abbrev_month':
+                            if start_range:
+                                where+=f'({self.__month_abbrev_where_query(start_range)}) OR '
+                            if stop_range:
+                                where+=f'({self.__month_abbrev_where_query(stop_range)}) OR '
+                        elif x=='MM/DD/YYYY':
+                            if start_range:
+                                where+=f'({self.__mmddyyyy_where_query(start_range)}) OR '
+                            if stop_range:
+                                where+=f'({self.__mmddyyyy_where_query(stop_range)}) OR '
+                        else:
+                            raise ValueError(f"Unknown filter type: {x}")
+                        
+                    where = [data_loader.Where(where=where[:-4], accurate=False)]
 
+        where = [data_loader.Where(where=where)] if not isinstance(where, list) else where
         if opt_filter is not None:
             if not isinstance(opt_filter, list):
                 opt_filter = [opt_filter]
 
             andStr = " AND "
             for filt in opt_filter:
-                where += andStr + filt
+                for k in range(len(where)):
+                    where[k].where += andStr + filt
 
-            if where[0:len(andStr)] == andStr:
-                where = where[len(andStr):]
+                if where[k].where[0:len(andStr)] == andStr:
+                    where[k].where = where[k].where[len(andStr):]
 
         return where
     
@@ -164,10 +157,25 @@ class Socrata(Data_Loader):
             Record count or number of rows in data request
         '''
 
+        where = self.__get_counts(date, opt_filter, where)
+        return sum(w.count for w in where)
+
+
+    def __get_counts(self, date=None, opt_filter=None, where=None):
+        date = _clean_date_input(date)
+
         if where==None:
             where = self.__construct_where(date, opt_filter)
 
-        if self._last_count is not None and self._last_count[0]==(date, opt_filter, where):
+            if any(not w.accurate for w in where):
+                raise ValueError(f"Count is not accurate for date input {date}. "
+                                 "Date field contains data in text format not date format "
+                                 "and the text not formatted in a way that makes getting a count "
+                                 "possible without loading in the data. Either adjust the input to "
+                                 "get_count to get a range of years instead of a range of dates or "
+                                 "load in the data for the current date range")
+
+        if data_loader._check_query_match_last(self._last_count, date, where, opt_filter):
             logger.debug("Request matches previous count request. Returning saved count.")
             return self._last_count[1]
         
@@ -175,29 +183,32 @@ class Socrata(Data_Loader):
         logger.debug(f"\twhere={where}")
         logger.debug(f"\tselect=count(*)")
 
-        try:
-            results = self.client.get(self.data_set, where=where, select="count(*)")
-        except (requests.HTTPError, requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError) as e:
-            raise OPD_SocrataHTTPError(self.url, self.data_set, *e.args, _url_error_msg.format(self.get_api_url()))
-        except Exception as e: 
-            if len(e.args)>0 and isinstance(e.args[0],str) and (e.args[0].startswith('Unknown response format: text/html') or \
-                "Read timed out" in e.args[0]):
+        for w in where:
+            try:
+                results = self.client.get(self.data_set, where=w.where, select="count(*)")
+            except (requests.HTTPError, requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError) as e:
                 raise OPD_SocrataHTTPError(self.url, self.data_set, *e.args, _url_error_msg.format(self.get_api_url()))
-            else:
-                raise e  
-            
-        try:
-            num_rows = float(results[0]["count"])
-        except:
-            num_rows = float(results[0]["count_1"]) # Value used in VT Shootings data
+            except Exception as e: 
+                if len(e.args)>0 and isinstance(e.args[0],str) and (e.args[0].startswith('Unknown response format: text/html') or \
+                    "Read timed out" in e.args[0]):
+                    raise OPD_SocrataHTTPError(self.url, self.data_set, *e.args, _url_error_msg.format(self.get_api_url()))
+                else:
+                    raise e  
+                
+            try:
+                num_rows = float(results[0]["count"])
+            except:
+                num_rows = float(results[0]["count_1"]) # Value used in VT Shootings data
 
-        count = int(num_rows)
-        self._last_count = ((date, opt_filter, where),count)
+            w.count = int(num_rows)
 
-        return count
+        self._last_count = data_loader._update_last_count(self._last_count, date, where, opt_filter)
+
+        return where
 
 
-    def load(self, date=None, nrows=None, offset=0, *, pbar=True, opt_filter=None, select=None, output_type=None, sortby=None, **kwargs):
+    def load(self, date=None, nrows=None, offset=0, *, pbar=True, opt_filter=None, select=None, output_type=None, sortby=None, 
+             format_date=True, **kwargs):
         '''Download table from Socrata to pandas or geopandas DataFrame
         
         Parameters
@@ -220,6 +231,9 @@ class Socrata(Data_Loader):
             (Optional) Data type for the output. Allowable values: GeoDataFrame, DataFrame, set, list. Default: GeoDataFrame or DataFrame
         sortby : str
             (Optional) Columns to sort by. Allowable values: None (defaults to id) or "date"
+        format_date : bool, optional
+            If True, known date columns (based on presence of date_field in datasets table or data type information provided by dataset owner) will be automatically formatted
+            to be pandas datetimes (or pandas Period in rare cases), by default True
             
         Returns
         -------
@@ -227,8 +241,7 @@ class Socrata(Data_Loader):
             DataFrame containing table
         '''
 
-        N = 1  # Initialize to value > 0 so while loop runs
-        start_offset = offset
+        date = _clean_date_input(date)
 
         where = self.__construct_where(date, opt_filter)
         
@@ -239,18 +252,19 @@ class Socrata(Data_Loader):
         else:
             use_gpd = _has_gpd
 
-        record_count = int(self.get_count(where=where))
-        record_count-=offset
-        if record_count<=0:
+        where = self.__get_counts(where=where)
+        
+        where, nrows_req, nrows_after_read, offset_after_read, offset = \
+            _setup_records_request(where, nrows, offset, sortby, self.date_field)
+        
+        if len(where)==0:
             return pd.DataFrame()
-        batch_size =  _default_limit
-        nrows = nrows if nrows!=None and record_count>=nrows else record_count
-        batch_size = nrows if nrows < batch_size else batch_size
-        num_batches = ceil(nrows / batch_size)
+
+        batch_sizes, num_batches = data_loader._split_batches(nrows_req)
+        total_batches = sum(num_batches)
             
-        show_pbar = pbar and num_batches>1 and select==None
-        if show_pbar:
-            bar = tqdm(desc=f"URL: {self.url}, Dataset: {self.data_set}", total=num_batches, leave=False)
+        show_pbar = pbar and total_batches>1 and select==None
+        bar = tqdm(desc=f"URL: {self.url}, Dataset: {self.data_set}", total=total_batches, leave=False) if show_pbar else None
 
         order = None
         if select == None:
@@ -258,7 +272,8 @@ class Socrata(Data_Loader):
                 if self.date_field:
                     order = self.date_field
                 else:
-                    raise ValueError("Date sorting was requested but no date field was provided")
+                    warnings.warn("Date sorting was requested but no date field was provided. Resulting data will not be sorted by date")
+                    sortby = ":id"
             elif sortby:
                 order = sortby
             else:
@@ -267,7 +282,97 @@ class Socrata(Data_Loader):
                 # https://dev.socrata.com/docs/paging.html#2.1
                 order = ":id"
 
-        while N > 0:
+        for k in range(len(where)):
+            df_cur, output_type = self._request_data(where[k].where, select, batch_sizes[k], offset if k==0 else 0, 
+                                        nrows_req[k], order, use_gpd, output_type, bar, show_pbar)
+            if k==0:
+                df = df_cur
+            else:
+                df = pd.concat([df, df_cur], ignore_index=True)
+
+        if any(not w.accurate for w in where):
+            df = _filter_inaccurate_date_query(df, self.date_field, date, format_date, offset_after_read, nrows_after_read)
+        elif isinstance(df, pd.DataFrame) and nrows is not None and len(df)>nrows:
+            df = df.head(nrows).reset_index(drop=True)
+
+        if show_pbar:
+            bar.close()
+
+        return df
+
+
+    def year_where_query(self, full_years):
+        where = ''
+        for y in full_years:
+            # %25 is % wildcard symbol
+            if self.url=='data.bloomington.in.gov' and self.data_set=='gpr2-wqbb':
+                # This dataset has a text date field and contains YYYY/MM/DD and MM/DD/YY formats
+                yy = str(y)[2:]
+                where+='('+self.date_field + f" LIKE '_/_/{yy}' OR " + \
+                    self.date_field + f" LIKE '_/__/{yy}' OR " + \
+                    self.date_field + f" LIKE '__/_/{yy}' OR " + \
+                    self.date_field + f" LIKE '__/__/{yy}' OR " + \
+                    self.date_field + rf" LIKE '{y}%') OR "
+            else:
+                where+='('+self.date_field + rf" LIKE '%{y}%') OR "
+        where = where[:-4]
+
+        return where
+    
+
+    def yyyymmdd_where_query(self, start_range, stop_range):
+        where = ''
+        if start_range:
+            where = f"({self.date_field} between '{start_range[0]}' and '{start_range[1]}')" + " OR "
+        if stop_range:
+            where+= f"({self.date_field} between '{stop_range[0]}' and '{stop_range[1]}')"
+        else:
+            where = where[:-4]
+
+    
+
+    def __mmddyyyy_where_query(self, date_range):        
+        # % wildcard symbol
+        year = date_range[0].year
+        where='(('+self.date_field + rf" LIKE '%{year}%') AND ("
+
+        mstart = date_range[0].month
+        mstop = date_range[1].month
+        # Trailing % is in case there is a time after date
+        for m in range(mstart, mstop+1):
+            where+=self.date_field + f" LIKE '{m}/_/{year}%' OR " + \
+                    self.date_field + f" LIKE '{m}/__/{year}%'"
+            if m<10:
+                where+=" OR "+self.date_field + f" LIKE '{m:02d}/_/{year}%' OR " + \
+                    self.date_field + f" LIKE '{m:02d}/__/{year}%'"
+                
+            where+=' OR '
+
+        where = where[:-4]+'))'
+
+        return where
+    
+
+    def __month_abbrev_where_query(self, date_range):
+        year = date_range[0].year
+        months = 'Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec'.split('|')
+        
+        # % wildcard symbol
+        where='(('+self.date_field + rf" LIKE '%{year}%') AND ("
+
+        mstart = date_range[0].month
+        mstop = date_range[1].month
+        for m in range(mstart, mstop+1):
+            where+=rf"{self.date_field} LIKE '%{months[m-1]}%' OR "
+
+        where = where[:-4]+'))'
+
+        return where
+    
+    def _request_data(self, where, select, batch_size, offset, nrows, order, use_gpd, output_type, bar, show_pbar):
+        results = [None]  # Initialize to len > 0 so while loop runs
+        start_offset = offset
+        while len(results) > 0:
             logger.debug(f"Request dataset {self.data_set} from {self.url}")
             logger.debug(f"\twhere={where}")
             logger.debug(f"\tselect={select}")
@@ -360,19 +465,100 @@ class Socrata(Data_Loader):
                 else:
                     df = pd.concat([df, rows], ignore_index=True)
 
-            N = len(results)
-            offset += N
+            offset += len(results)
 
             if show_pbar:
                 bar.update()
 
-            if N>=nrows:
+            if len(df)>=nrows:
                 break
+        
+        return df, output_type
+    
 
-        if show_pbar:
-            bar.close()
+    def __date_format_search(self, start_date, stop_date):
+        check_meta = True
+        try:
+            # Check if date is formatted as a date or is text that needs to be handled more carefully
+            meta = self.client.get_metadata(self.data_set)
+        except:
+            check_meta = False
 
-        if isinstance(df, pd.DataFrame) and nrows is not None and len(df)>nrows:
-            df = df.head(nrows)
-        return df
+        data_formats = set()
+        if check_meta:
+            column = [x for x in meta['columns'] if x['fieldName']==self.date_field]  # Extract date field
+            if len(column)>0 and 'dataTypeName' in column[0]:
+                if column[0]['dataTypeName']=='text':
+                    if 'cachedContents' in column[0]:
+                        data_formats = self.__get_formats_from_meta(column)
+                else:  # This is a timestamp
+                    return 'timestamp', None
+                
+        start_range, _, stop_range = datetime_parser.split_date_range(start_date, stop_date)
+        if not start_range and not stop_range:
+            return 'year', None
+        
+        for f in ['yyyymmdd', 'abbrev_month', 'MM/DD/YYYY']:
+            if f not in data_formats:
+                try:
+                    if f=='yyyymmdd':
+                        if self.__yyyymmdd_test():
+                            data_formats.add(f)
+                    elif f=='abbrev_month':
+                        if self.__month_abbrev_test():
+                            data_formats.add(f)
+                    elif f=='MM/DD/YYYY':
+                        if self.__mmddyyyy_test():
+                            data_formats.add(f)
+                    else:
+                        raise NotImplementedError(f'Unknown data format {f}')
+                except:
+                    pass
 
+        if len(data_formats)==0:
+            raise NotImplementedError()
+        
+        return 'text', data_formats
+
+    def __yyyymmdd_test(self):
+        where = self.date_field + f" LIKE '20__-__-__%'"
+        results = self.client.get(self.data_set, where=where,
+                                limit=1, select=self.date_field)
+        return len(results)>0
+    
+    def __mmddyyyy_test(self):
+        # self.date_field + f" LIKE '{m}/_/{year}%' OR 
+        where = f"{self.date_field} LIKE '_/_/20__%' OR {self.date_field} LIKE '__/_/20__%' OR " +\
+            f"{self.date_field} LIKE '_/__/20__%' OR {self.date_field} LIKE '__/__/20__%'"
+        results = self.client.get(self.data_set, where=where,
+                                limit=1, select=self.date_field)
+        return len(results)>0
+    
+    def __month_abbrev_test(self):
+        where = f"{self.date_field} LIKE '20__ ___ _%'"
+        results = self.client.get(self.data_set, where=where,
+                                limit=1, select=self.date_field)
+
+        return len(results)>0 and re.search(r'^\d{4}\s(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s\d{1,2}\b', results[0][self.date_field])
+
+    def __get_formats_from_meta(self, column):
+        formats = set()
+        for key in ['largest', 'smallest']:
+            if key in column[0]['cachedContents']:
+                value = column[0]['cachedContents'][key]
+                if isinstance(value, str):
+                    if re.search(r'^\d{4}\-\d{2}\-\d{2}', value):
+                        formats.add('yyyymmdd')  # This case case be handled using standard query
+                    elif re.search(r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d+\s+\d{4}', value) or \
+                        re.search(r'^\d{4}\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}', value):
+                        formats.add('abbrev_month')
+                    elif re.search(r'^\d{1,2}/\d{1,2}/\d{4}\b', value):
+                        formats.add('MM/DD/YYYY')
+                    else:
+                        raise NotImplementedError()
+                else:
+                    raise NotImplementedError()
+            else:
+                raise NotImplementedError()
+            
+        return formats

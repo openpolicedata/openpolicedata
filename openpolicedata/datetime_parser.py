@@ -537,6 +537,7 @@ def to_datetime(dates, ignore_errors=False, *args, **kwargs):
         
     if isinstance(dates, str):
         dates = dates.strip()
+        dates = re.sub(r'\s+',' ',dates)
 
     if isinstance(dates, pd.DataFrame) and \
         (dates.isnull().any().any() or dates.apply(lambda x: isinstance(x,str)).any()):
@@ -634,7 +635,7 @@ def to_datetime(dates, ignore_errors=False, *args, **kwargs):
                         dtstr+='0'
                     dtstr+=mmdd
                     return pd.to_datetime(dtstr)
-            elif isinstance(str) and 'Unknown datetime string format' in str(e):
+            elif isinstance(dates, str) and 'Unknown datetime string format' in str(e):
                 # Try to parse...
                 # Find date
                 m = re.search(r'\d+[/-]\d+[/-]\d+', dates)
@@ -669,6 +670,8 @@ def to_datetime(dates, ignore_errors=False, *args, **kwargs):
                     raise
                 
                 return pd.to_datetime(f'{year}{month}{day}')
+            elif isinstance(dates, pd.Series):
+                return dates.apply(lambda x: to_datetime(x, ignore_errors=ignore_errors, *args, **kwargs))
             else:
                 raise
         except ValueError as e:
@@ -749,3 +752,32 @@ def to_datetime(dates, ignore_errors=False, *args, **kwargs):
                 return dts
         except Exception as e:
             raise
+
+
+def split_date_range(start, stop):
+    if isinstance(start, str):
+        start = pd.to_datetime(start)
+    if isinstance(stop, str):
+        stop = pd.to_datetime(stop)
+
+    full_years = []
+    if start.month==1 and start.day==1 and stop >= pd.Timestamp(year=start.year, month=12, day=31):
+        full_years.append(start.year)
+    for x in range(start.year+1, stop.year):
+        full_years.append(x)
+    if stop.year>start.year and stop >= pd.Timestamp(year=stop.year, month=12, day=31):
+        full_years.append(stop.year)
+
+    start_range = None
+    if start.year not in full_years:
+        if len(full_years)==0:
+            start_range = [start, stop]
+        else:
+            start_range = [start, pd.Timestamp(year=start.year+1, month=1, day=1)-pd.Timedelta(seconds=1)]
+
+    stop_range = None
+    if len(full_years)>0 and stop.year not in full_years:
+        stop_range = [pd.Timestamp(year=stop.year, month=1, day=1), stop]
+
+
+    return start_range, full_years, stop_range
