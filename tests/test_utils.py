@@ -1,10 +1,16 @@
 from datetime import datetime
+import glob
+import time
 import pandas as pd
 import os
+import re
 import subprocess
 import warnings
+import urllib
 
 import sys
+
+import random
 sys.path.append('../openpolicedata')
 import openpolicedata as opd
 
@@ -110,6 +116,14 @@ def get_changed_rows(repo_dir, file_name):
     
     return added_lines_datasets
 
+
+def shuffle(lst):
+    rand_state = random.getstate()
+    random.seed(datetime.now().month*31 + datetime.now().day) # Using a seed that varies but can be guessed if there is an error
+    random.shuffle(lst)
+    random.setstate(rand_state)
+
+
 def check_for_dataset(source, table_type, warn=True):
 	ds = opd.datasets.query(source_name=source, table_type=table_type)
 	if len(ds):
@@ -155,17 +169,25 @@ def update_outages(outages_file, dataset, is_outage, e=None):
     outages.to_csv(outages_file, index=False)
     
 
-def user_request_skip(datasets, i, skip, start_idx, source):
+def user_request_skip(datasets, i, skip, start_idx, source, query={}, skip_zip=False):
 	# Skip sources that the user requested to skip
 	if skip and datasets.iloc[i]["SourceName"] in skip:
 		return True
 	# User requested to start at start_idx
-	if i<start_idx:
+	if i<start_idx-1:
 		return True
 	if source != None and datasets.iloc[i]["SourceName"] != source:
 		return True
+	if skip_zip and datasets.iloc[i]["URL"].lower().endswith('.zip'):
+		return True
 	
-	return False
+	match = True
+	for k,v in query.items():
+		if datasets.iloc[i][k]!=v:
+			match = False
+			break
+	
+	return not match
 
 def match_dataframes(df1, df2):
     df2 = df2.convert_dtypes()
@@ -195,3 +217,189 @@ def match_dataframes(df1, df2):
             df2[c] = df2[c].astype(df1[c].dtype)
 
     return df1, df2
+
+def pop_dataset(dataset):
+	srcName = dataset["SourceName"]
+	state = dataset["State"]
+	table = dataset["TableType"]
+	agency = dataset["Agency"]
+
+	return srcName, state, table, agency
+
+def rest_url(datasets, i, last_url, t=0.1):
+	url = datasets.iloc[i]['URL']
+	if urllib.urlparse(url).netloc == urllib.urlparse(last_url).netloc:
+		# Adding a pause here to prevent issues with requesting from site too frequently
+		time.sleep(t)
+
+	return url
+
+def is_file(datasets, i):
+	return datasets.iloc[i]["DataType"] in ["CSV","Excel",'HTML']
+
+
+def load_data(src, table_type, year, agency, nrows, url, id, caught_exceptions_warn):
+	table = None
+	try:
+		table = src.load(table_type, year, 
+						agency=agency, pbar=False, 
+						nrows=nrows, 
+						url=url, id=id)
+	except (opd.exceptions.OPD_DataUnavailableError, opd.exceptions.OPD_SocrataHTTPError) as e:
+		caught_exceptions_warn.append(e)
+	except:
+		raise
+
+	return table
+
+def check_result(df, gt, row):
+    assert len(gt)>0, 'Ground truth is empty. Unintentionally filtered for empty table'
+    df[row['date_field']] = opd.datetime_parser.to_datetime(df[row['date_field']])
+
+    if not isinstance(df[row['date_field']].dtype, pd.PeriodDtype):
+        df[row['date_field']] = df[row['date_field']].dt.tz_localize(None)
+
+    df = df.dropna(axis=1, how='all')
+    gt = gt.dropna(axis=1, how='all')
+    assert gt.shape==df.shape
+    df = df[gt.columns]  #Ensure columns are in correct order
+
+    df = df.apply(lambda x: x.apply(lambda y: str(y) if isinstance(y,dict) else y))
+    gt = gt.apply(lambda x: x.apply(lambda y: str(y) if isinstance(y,dict) else y))
+
+    # Sorting is done to account for rows that are sorted by date but where rows with same date are in different order
+    pd.testing.assert_frame_equal(df.sort_values(by=df.columns.tolist()).reset_index(drop=True), gt.sort_values(by=df.columns.tolist()).reset_index(drop=True))
+    time.sleep(0.1) # Just so we don't cause issues at the URL
+
+def check_load_for_datasets(datasets, skip, start_idx, source, query, nrows=None, testfcn=None, datefcn=None):
+    caught_exceptions = []
+    caught_exceptions_warn = []
+    base_sleep_time = 0.1
+    outages_file = os.path.join("..","opd-data","outages.csv")
+    warn_errors = (opd.exceptions.OPD_DataUnavailableError, opd.exceptions.OPD_SocrataHTTPError, opd.exceptions.OPD_FutureError)
+    last_source = None
+    for i in range(len(datasets)):
+        if user_request_skip(datasets, i, skip, start_idx, source, query):
+            continue
+        
+        srcName = datasets.iloc[i]["SourceName"]
+        src = opd.Source(srcName, state=datasets.iloc[i]["State"], agency=datasets.iloc[i]["Agency"])
+        
+        table_type = datasets.iloc[i]["TableType"]
+        now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
+        print(f"{now} Testing {i+1} of {len(datasets)}: {srcName} {table_type} table")
+
+		# Handle cases where URL is required to disambiguate requested dataset
+        ds_filter = src.filter(table_type, datasets.iloc[i]["Year"])
+        url = datasets.iloc[i]['URL'] if len(ds_filter)>1 else None
+        id = datasets.iloc[i]['dataset_id'] if len(ds_filter)>1 else None
+
+        date = datefcn(datasets.iloc[i], src, table_type) if datefcn else datasets.iloc[i]["Year"]
+
+        try:
+            table = src.load(table_type, date, pbar=False, nrows=nrows, 
+					url=url, id=id)
+        except opd.exceptions.OPD_MinVersionError as e:
+            e.prepend(f"Iteration {i}", srcName, table_type, datasets.iloc[i]["Year"])
+            caught_exceptions_warn.append(e)
+            continue
+        except warn_errors as e:
+            e.prepend(f"Iteration {i}", srcName, table_type, datasets.iloc[i]["Year"])
+            update_outages(outages_file, datasets.iloc[i], True, e)
+            caught_exceptions_warn.append(e)
+            continue
+        except (opd.exceptions.OPD_TooManyRequestsError, opd.exceptions.OPD_arcgisAuthInfoError) as e:
+			# Catch exceptions related to URLs not functioning
+            e.prepend(f"Iteration {i}", srcName, table_type, datasets.iloc[i]["Year"])
+            update_outages(outages_file, datasets.iloc[i], True, e)
+            caught_exceptions.append(e)
+            continue
+        except:
+            raise
+        
+        if len(table.table)==0: 
+            update_outages(outages_file, datasets.iloc[i], True, ValueError('Table has 0 rows'))
+            continue
+        
+        update_outages(outages_file, datasets.iloc[i], False)
+
+        if pd.notnull(datasets.iloc[i]['query']):
+            for k,v in opd.data_loaders.data_loader.str2json(datasets.iloc[i]['query']).items():
+                assert (table.table[k]==v).all()
+                
+        if pd.notnull(datasets.iloc[i]['date_field']):
+            assert datasets.iloc[i]['date_field'] in table.table
+            
+        if pd.notnull(datasets.iloc[i]['agency_field']):
+            assert datasets.iloc[i]['agency_field'] in table.table
+
+        if testfcn:
+            testfcn(datasets.iloc[i], table, date)
+
+        # Adding a pause here to prevent issues with requesting from site too frequently
+        if last_source!=srcName:
+            last_source = srcName
+            sleep_time = base_sleep_time
+        else:
+            time.sleep(sleep_time)
+            sleep_time+=base_sleep_time
+
+    if len(caught_exceptions)==1:
+        raise caught_exceptions[0]
+    elif len(caught_exceptions)>0:
+        msg = f"{len(caught_exceptions)} URL errors encountered:\n"
+        for e in caught_exceptions:
+            msg += "\t" + e.args[0] + "\n"
+        raise opd.exceptions.OPD_MultipleErrors(msg)
+
+    for e in caught_exceptions_warn:
+        warnings.warn(str(e))
+
+def get_remaining_datasets(datasets):
+    files = []
+    for f in ['1_unit_data_loaders', '1_unit_data_source_loading']:
+        files.extend(glob.glob(os.path.join('tests', f, '**','*.py'), recursive=True))
+
+    matches = []
+    for f in files:
+        with open(f, 'r') as fid:
+            for line in fid:
+                m = re.search(r'^source\s*=\s*[\"\'](.+)[\'\"]', line)
+                if m:
+                    source = m.group(1)
+                    year = None
+                    url = None
+                    for k in range(3):
+                        line = fid.readline()
+                        m = re.search(r'^table\s*=\s*(.+)\s*', line)
+                        if m:
+                            table = m.group(1)
+                            if '.' in table:
+                                e = table[table.rfind('.')+1:].strip()
+                                table = getattr(opd.defs.TableType, e)
+                            else:
+                                 table[1:-1]
+                            continue
+                        m = re.search(r'^year\s*=\s*(\d+)\s*', line)
+                        if m:
+                            year = int(m.group(1)) if m.group(1).isdigit() else m.group(1)
+                            continue
+                        m = re.search(r'^url\s*=\s*[\"\'](.+)[\"\']\s*', line)
+                        if m:
+                            url = m.group(1)
+                            continue
+					
+                    dmatch = (datasets['SourceName']==source) & (datasets['TableType']==table)
+                    if dmatch.sum()!=1 and url:
+                        dmatch &= datasets['URL'].str.contains(url)
+                    if dmatch.sum()!=1 and year:
+                        dmatch &= (datasets['Year']==year)
+                             
+                    if dmatch.sum()!=1:
+                        raise NotImplementedError()
+                    matches.append(dmatch[dmatch].index[0])
+                    break
+            else:
+                 raise NotImplementedError()
+
+    return datasets.drop(index=matches)

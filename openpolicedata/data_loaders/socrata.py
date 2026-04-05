@@ -1,3 +1,4 @@
+from math import ceil
 import os
 import warnings
 import pandas as pd
@@ -88,6 +89,8 @@ class Socrata(Data_Loader):
                 where = self.year_where_query(full_years)
                 if start_range or stop_range:
                     where = where+" OR " if len(where)>0 else ''
+                    if any(x in ['YYYY Q'] for x in date_formats):
+                        raise ValueError('Unable to filter by date. Filter by year instead. Dates for this dataset only provide the quarter an event occurred (e.g. 2025 Q1).')
                     for x in date_formats:
                         if x=='yyyymmdd':
                             where+=f'({self.yyyymmdd_where_query(start_range, stop_range)}) OR '
@@ -101,6 +104,16 @@ class Socrata(Data_Loader):
                                 where+=f'({self.__mmddyyyy_where_query(start_range)}) OR '
                             if stop_range:
                                 where+=f'({self.__mmddyyyy_where_query(stop_range)}) OR '
+                        elif x=='MM/DD/YY':
+                            if start_range:
+                                where+=f'({self.__mmddyyyy_where_query(start_range, numdigits=2)}) OR '
+                            if stop_range:
+                                where+=f'({self.__mmddyyyy_where_query(stop_range, numdigits=2)}) OR '
+                        elif x=='YYYY Q':
+                            if start_range:
+                                where+=f'({self.__yyyyq_where_query(start_range)}) OR '
+                            if stop_range:
+                                where+=f'({self.__yyyyq_where_query(stop_range)}) OR '
                         else:
                             raise ValueError(f"Unknown filter type: {x}")
                         
@@ -228,7 +241,7 @@ class Socrata(Data_Loader):
         select : str
             (Optional) select statement to REST API
         output_type : str
-            (Optional) Data type for the output. Allowable values: GeoDataFrame, DataFrame, set, list. Default: GeoDataFrame or DataFrame
+            (Optional) Data type for the output. Allowable values: GeoDataFrame, DataFrame, set. Default: GeoDataFrame or DataFrame
         sortby : str
             (Optional) Columns to sort by. Allowable values: None (defaults to id) or "date"
         format_date : bool, optional
@@ -312,7 +325,7 @@ class Socrata(Data_Loader):
                     self.date_field + f" LIKE '_/__/{yy}' OR " + \
                     self.date_field + f" LIKE '__/_/{yy}' OR " + \
                     self.date_field + f" LIKE '__/__/{yy}' OR " + \
-                    self.date_field + rf" LIKE '{y}%') OR "
+                    self.date_field + rf" LIKE '%{y}%') OR "
             else:
                 where+='('+self.date_field + rf" LIKE '%{y}%') OR "
         where = where[:-4]
@@ -322,52 +335,74 @@ class Socrata(Data_Loader):
 
     def yyyymmdd_where_query(self, start_range, stop_range):
         where = ''
+        f = '%Y-%m-%d'
         if start_range:
-            where = f"({self.date_field} between '{start_range[0]}' and '{start_range[1]}')" + " OR "
+            where = f"({self.date_field} between '{start_range[0].strftime(f)}' and '{start_range[1]}')" + " OR "
         if stop_range:
-            where+= f"({self.date_field} between '{stop_range[0]}' and '{stop_range[1]}')"
+            where+= f"({self.date_field} between '{stop_range[0].strftime(f)}' and '{stop_range[1]}')"
         else:
             where = where[:-4]
 
+        return where
     
 
-    def __mmddyyyy_where_query(self, date_range):        
-        # % wildcard symbol
-        year = date_range[0].year
-        where='(('+self.date_field + rf" LIKE '%{year}%') AND ("
+    def __yyyyq_where_query(self, date_range):
+        def gen_where(m, year):
+            where=self.date_field + f" LIKE '{year} Q{ceil(m/3)}'"
+                
+            return where
+        
+        return self.__loop_over_date_range(date_range, gen_where)
 
-        mstart = date_range[0].month
-        mstop = date_range[1].month
-        # Trailing % is in case there is a time after date
-        for m in range(mstart, mstop+1):
-            where+=self.date_field + f" LIKE '{m}/_/{year}%' OR " + \
+
+    def __mmddyyyy_where_query(self, date_range, numdigits=4):  
+        def gen_where(m, year):
+            where=self.date_field + f" LIKE '{m}/_/{year}%' OR " + \
                     self.date_field + f" LIKE '{m}/__/{year}%'"
             if m<10:
                 where+=" OR "+self.date_field + f" LIKE '{m:02d}/_/{year}%' OR " + \
                     self.date_field + f" LIKE '{m:02d}/__/{year}%'"
                 
-            where+=' OR '
-
-        where = where[:-4]+'))'
-
-        return where
+            return where
+        
+        return self.__loop_over_date_range(date_range, gen_where, numdigits=numdigits)
     
 
     def __month_abbrev_where_query(self, date_range):
-        year = date_range[0].year
         months = 'Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec'.split('|')
+
+        def gen_where(m, year):
+            return rf"{self.date_field} LIKE '%{months[m-1]}%'"
         
-        # % wildcard symbol
-        where='(('+self.date_field + rf" LIKE '%{year}%') AND ("
-
-        mstart = date_range[0].month
-        mstop = date_range[1].month
-        for m in range(mstart, mstop+1):
-            where+=rf"{self.date_field} LIKE '%{months[m-1]}%' OR "
-
-        where = where[:-4]+'))'
+        where = self.__loop_over_date_range(date_range, gen_where)
 
         return where
+    
+    def __loop_over_date_range(self, date_range, fcn, numdigits=4):
+        assert numdigits in [2,4]
+        dt = date_range[0]
+        stop = (date_range[1]+pd.DateOffset(months=1)).replace(day=1).floor('D')
+        wherelist = []
+        last_year = None
+        while dt<stop:
+            year = dt.year if numdigits==4 else dt.year%1000
+            if year!=last_year:
+                wherelist.append([self.date_field + rf" LIKE '%{year}%'", set()])
+            last_year = year
+
+            wherelist[-1][1].add(fcn(dt.month, year))
+
+            dt+=pd.DateOffset(months=1)
+
+        where = ''
+        for w in wherelist:
+            x = f'{w[0]} AND ({' OR '.join(w[1])})'
+            if len(wherelist)>1:
+                x = f'({x})'
+            where+=x+' OR '
+
+        return where[:-4]
+        
     
     def _request_data(self, where, select, batch_size, offset, nrows, order, use_gpd, output_type, bar, show_pbar):
         results = [None]  # Initialize to len > 0 so while loop runs
@@ -422,12 +457,7 @@ class Socrata(Data_Loader):
                     df.update(results)
 
             elif output_type == "list":
-                if offset==start_offset:
-                    df = list()
-
-                if len(results)>0:
-                    [df.append(row[select]) for row in results]
-
+                raise NotImplementedError('list option for output_type has been removed')
             elif use_gpd and output_type=="GeoDataFrame":
                 output_type = "GeoDataFrame"
                 # Presumed to be a list of properties that possibly include coordinates
@@ -547,6 +577,9 @@ class Socrata(Data_Loader):
             if key in column[0]['cachedContents']:
                 value = column[0]['cachedContents'][key]
                 if isinstance(value, str):
+                    value = value.strip()
+                    if len(value)==0:
+                        continue
                     if re.search(r'^\d{4}\-\d{2}\-\d{2}', value):
                         formats.add('yyyymmdd')  # This case case be handled using standard query
                     elif re.search(r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d+\s+\d{4}', value) or \
@@ -554,6 +587,10 @@ class Socrata(Data_Loader):
                         formats.add('abbrev_month')
                     elif re.search(r'^\d{1,2}/\d{1,2}/\d{4}\b', value):
                         formats.add('MM/DD/YYYY')
+                    elif re.search(r'^\d{1,2}/\d{1,2}/[012]\d\b', value):
+                        formats.add('MM/DD/YY')
+                    elif re.search(r'^\d{4}\s*Q\d$', value):
+                        formats.add('YYYY Q')
                     else:
                         raise NotImplementedError()
                 else:

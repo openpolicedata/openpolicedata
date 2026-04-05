@@ -1,7 +1,6 @@
 from calendar import monthrange
 import dataclasses
 import math
-import time
 import pytest
 import sys
 from sodapy import Socrata as SocrataClient
@@ -11,7 +10,7 @@ if __name__ == "__main__":
 from openpolicedata import data_loaders, defs, datetime_parser
 import pandas as pd
 
-from test_utils import check_for_dataset
+from test_utils import check_for_dataset, check_result
 
 source = 'Seattle'
 table = defs.TableType.SHOOTINGS
@@ -28,7 +27,7 @@ def gt_raw(row):
         return None
     
     client = SocrataClient(row['URL'], data_loaders.socrata.default_sodapy_key, timeout=90)
-    results = client.get(row['dataset_id'])
+    results = client.get(row['dataset_id'],  limit=100000, order=":id")
 
     df = pd.DataFrame.from_records(results)
 
@@ -37,6 +36,8 @@ def gt_raw(row):
 
 @pytest.fixture(scope='module')
 def gt(gt_raw, row):
+    if not check_for_dataset(source, table):
+        return None
     df = gt_raw.copy()
     df[row['date_field']] = datetime_parser.to_datetime(df[row['date_field']])
 
@@ -45,16 +46,6 @@ def gt(gt_raw, row):
 @pytest.fixture(scope='module')
 def loader(row):
     return data_loaders.Socrata(url=row['URL'], data_set=row['dataset_id'], date_field=row['date_field'])
-
-def check_result(df, gt, row):
-    df[row['date_field']] = datetime_parser.to_datetime(df[row['date_field']])
-
-    df = df.dropna(axis=1, how='all')
-    assert gt.shape==df.shape
-    df = df[gt.columns]  #Ensure columns are in correct order
-    # Sorting is done to account for rows that are sorted by date but where rows with same date are in different order
-    pd.testing.assert_frame_equal(df.sort_values(by=df.columns.tolist()).reset_index(drop=True), gt)
-    time.sleep(0.1) # Just so we don't cause issues at the URL
 
 
 def test_notfile(loader):
@@ -124,7 +115,7 @@ def test_count_not_cached(loader, next_year, next_opt_filter):
 @pytest.mark.parametrize('date', [None, 2025, [2024, 2025]])
 @pytest.mark.parametrize('nrows', [None, 2])
 @pytest.mark.parametrize('offset', [0, 1])
-def test_load(gt, row, loader, date, nrows, offset):
+def test_load_year(gt, row, loader, date, nrows, offset):
     if not check_for_dataset(source, table):
         return
     
@@ -133,8 +124,6 @@ def test_load(gt, row, loader, date, nrows, offset):
 
     gt = gt.iloc[offset:]
     gt = gt.head(nrows) if nrows else gt
-    gt = gt.dropna(axis=1, how='all')
-    gt = gt.sort_values(by=gt.columns.tolist()).reset_index(drop=True)
     
     df = loader.load(date=date, nrows=nrows, offset=offset)
     check_result(df, gt, row)
@@ -144,7 +133,7 @@ def test_load_count0(loader):
     assert len(df)==0
 
 
-@pytest.mark.parametrize('date', [['2025-05-30','2025-10-30'], ['2005-03-01','2005-06-20'], ['2023-05-30','2025-10-30']])
+@pytest.mark.parametrize('date', [['2025-05-30','2025-10-30'], ['2005-03-01','2005-06-20'], ['2024-01-02','2025-10-30'], ['2023-05-30','2025-10-30']])
 @pytest.mark.parametrize('nrows', [None, 2])
 @pytest.mark.parametrize('offset', [0, 1])
 def test_load_date_inaccurate_initial_filter_include(gt, row, loader, date, nrows, offset):
@@ -157,10 +146,6 @@ def test_load_date_inaccurate_initial_filter_include(gt, row, loader, date, nrow
     
     gt = gt.iloc[offset:]
     gt = gt.head(nrows) if nrows else gt
-    gt = gt.dropna(axis=1, how='all')
-    gt = gt.sort_values(by=gt.columns.tolist()).reset_index(drop=True)
-
-    assert len(gt)>0
     
     df = loader.load(date=date, nrows=nrows, offset=offset)
     check_result(df, gt, row)
@@ -190,9 +175,6 @@ def test_load_date_inaccurate_initial_filter_exclude(gt, row, loader):
 
     assert len(gt)==count
     
-    gt = gt.dropna(axis=1, how='all')
-    gt = gt.sort_values(by=gt.columns.tolist()).reset_index(drop=True)
-    
     with pytest.warns(UserWarning, match='Times in date filter requests are ignored'):
         df = loader.load(date=date)
     check_result(df, gt, row)
@@ -209,9 +191,6 @@ def test_load_batch(gt, row, loader):
     date = [gt[row['date_field']].iloc[0].floor('D'), gt[row['date_field']].iloc[count-1].floor('D')]
     date = data_loaders.data_loader._clean_date_input(date)
     gt = gt[(gt[row['date_field']]>=date[0]) & (gt[row['date_field']]<date[1]+pd.Timedelta(1, unit='D'))]
-    
-    gt = gt.dropna(axis=1, how='all')
-    gt = gt.sort_values(by=gt.columns.tolist()).reset_index(drop=True)
     
     orig = data_loaders.data_loader._default_limit
     data_loaders.data_loader._default_limit = math.ceil(count/2)
