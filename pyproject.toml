@@ -36,7 +36,6 @@ dependencies = [
     "requests",
     "sodapy",
     "tqdm",
-    "typing-extensions",
     "xlrd"
 ]
 keywords = [
