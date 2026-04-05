@@ -1,11 +1,12 @@
 import pytest
+from packaging import version
 
 if __name__ == "__main__":
 	import sys
 	sys.path.append('../openpolicedata')
 from openpolicedata import data, data_loaders
-from openpolicedata import datasets
-from openpolicedata.defs import MULTI, DataType
+from openpolicedata import __version__
+from openpolicedata.defs import MULTI
 from openpolicedata.exceptions import OPD_DataUnavailableError, OPD_TooManyRequestsError,  \
 	OPD_MultipleErrors, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError, OPD_FutureError, OPD_MinVersionError, \
 	DateFilterException
@@ -18,7 +19,8 @@ import os
 import re
 from urllib.parse import urlparse
 
-from test_utils import check_for_dataset
+import test_utils
+from test_utils import check_for_dataset, user_request_skip, pop_dataset
 
 # Set Arcgis data loader to validate queries with arcgis package if installed
 data_loaders._verify_arcgis = True
@@ -67,170 +69,61 @@ def test_bloomington_citations():
 
 
 @pytest.mark.veryslow(reason="This is a very slow test that should be run before a major commit.")
-def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
+def test_load_year_annual_data(datasets, source, start_idx, skip, query={}):
 	max_count = 1e5
 		
 	caught_exceptions = []
 	caught_exceptions_warn = []
 	already_run = []
 	for i in range(len(datasets)):
-		if skip != None and datasets.iloc[i]["SourceName"] in skip:
-			continue
-		if i < start_idx:
-			continue
-		if source != None and datasets.iloc[i]["SourceName"] != source:
+		if user_request_skip(datasets, i, skip, start_idx, source, query, skip_zip=True):
 			continue
 
-		if datasets.iloc[i]["URL"].lower().endswith('.zip'):
-			# These are tested in test_source_download_not_limitable
-			continue
+		srcName, state, table_type, agency_ds = pop_dataset(datasets.iloc[i])
+		agency = 'Henrico Police Department' if datasets.iloc[i]["Agency"] == MULTI and srcName == "Virginia" else None
 
-		match = True
-		for k,v in query.items():
-			if datasets.iloc[i][k]!=v:
-				match = False
-				break
-		if not match:
-			continue
-
-		srcName = datasets.iloc[i]["SourceName"]
-		state = datasets.iloc[i]["State"]
-
-		if datasets.iloc[i]["Agency"] == MULTI and \
-			srcName == "Virginia":
-			# Reduce size of data load by filtering by agency
-			agency = "Henrico Police Department"
-		else:
-			agency = None
-
-		table_print = datasets.iloc[i]["TableType"]
-
-		unique_id = [srcName, state, datasets.iloc[i]["Agency"], table_print]
+		unique_id = [srcName, state, agency_ds, table_type]
 		if unique_id in already_run:
 			continue
 
-		now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
-		print(f"{now} Testing {i} of {len(datasets)-1}: {srcName} {table_print} table")
+		src = data.Source(srcName, state=state, agency=agency_ds)
+		cur_datasets = src.datasets[src.datasets["TableType"] == table_type]
+		# Remove datasets this version can't read
+		cur_datasets = cur_datasets[cur_datasets['min_version'].apply(lambda x: pd.isnull(x) or (x!='-1' and version.parse(x)<=version.parse(__version__)))]
+		cur_years = cur_datasets["Year"].tolist()
+		multi_case = any(isinstance(x,str) for x in cur_years)
 
-		src = data.Source(srcName, state=state, agency=datasets.iloc[i]["Agency"])
+		if multi_case or len(cur_datasets)==0:
+			continue
+
+		now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
+		print(f"{now} Testing {i} of {len(datasets)-1}: {srcName} {table_type} table")
 
 		# Handle cases where URL is required to disambiguate requested dataset
-		ds_filter = src.filter(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"])
+		ds_filter = src.filter(table_type, datasets.iloc[i]["Year"])
 		ds_input = datasets.iloc[[i]] if len(ds_filter)>1 else None
 
 		if ds_input is None:
 			already_run.append(unique_id)
 
-		try:
-			try:
-				years = src.get_years(datasets.iloc[i]["TableType"], datasets=ds_input)
-			except ValueError as e:
-				if len(e.args)>0 and "Extracting the years" in e.args[0]:
-					# Just test reading in the table and continue
-					table = src.load(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], 
-									agency=agency, pbar=False)
-					continue
-				else:
-					raise
-			except:
-				raise
-		except warn_errors as e:
-			e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"])
-			caught_exceptions_warn.append(e)
-			continue
-		except (OPD_TooManyRequestsError, OPD_arcgisAuthInfoError) as e:
-			# Catch exceptions related to URLs not functioning
-			e.prepend(f"Iteration {i}", srcName, datasets.iloc[i]["TableType"])
-			caught_exceptions.append(e)
-			continue
-		except:
-			raise
-
-		# Adding a pause here to prevent issues with requesting from site too frequently
-		sleep(sleep_time)
-
-		years_orig = years.copy()
-		for y in src.datasets[src.datasets["TableType"] == datasets.iloc[i]["TableType"]]["Year"]:
-			if y != MULTI and y in years:
-				years.remove(y)
-
-		if len(years)==0:
-			# Each datasets is annual
-			# Run 1st and last year
-			multi_case = False
-			years = [min(years_orig)]
-			if len(years_orig)>1:
-				years.append(max(years_orig))
-		else:
-			multi_case = True
-			if len(years)>1:
-				# It is preferred to to not use first or last year that start and stop of year are correct
-				years = years[-2:-1]
-			else:
-				years = years[:1]
+		years_all = src.get_years(table_type, datasets=ds_input)
+		years_run = list({min(years_all),max(years_all)})   # Run 1st and last year
 
 		# Handle cases where URL is required to disambiguate requested dataset
-		ds_filter = src.filter(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"])
+		ds_filter = src.filter(table_type, datasets.iloc[i]["Year"])
 		url = datasets.iloc[i]['URL'] if len(ds_filter)>1 else None
 		id = datasets.iloc[i]['dataset_id'] if len(ds_filter)>1 else None
 
-		tables = {}
-		future_error = False
-		for year in years:
-			try:
-				table = src.load(datasets.iloc[i]["TableType"], year, 
-								agency=agency, pbar=False, 
-								sortby="date",
-								nrows=max_count if datasets.iloc[i]["DataType"] not in ["CSV","Excel"] else None, 
-					 			url=url, id=id)
-			except OPD_FutureError as e:
-				future_error = True
-				break
-			except (OPD_DataUnavailableError, OPD_SocrataHTTPError, OPD_MinVersionError) as e:
-				caught_exceptions_warn.append(e)
-				tables[year] = None
+		for year in years_run:
+			print(f"Testing for year {year}")
+			table = test_utils.load_data(src, table_type, year, agency, 
+									max_count if not test_utils.is_file(datasets, i) else None,
+									url, id, caught_exceptions_warn)
+			
+			if table==None:
 				continue
-			except:
-				raise
 
 			sleep(sleep_time)
-
-			if len(table.table)==0:
-				# Ensure count should have been 0
-				count = src.get_count(datasets.iloc[i]["TableType"], year, agency=agency, force=True)
-				if count!=0:
-					raise ValueError(f"Expected data for year {year} but received none")
-				
-				# There may not be any data for the year requested.
-				for y in years_orig:
-					if y not in years:
-						count = src.get_count(datasets.iloc[i]["TableType"], y, agency=agency, force=True)
-						if count>0:
-							years = [x if x!=year else y for x in years]
-							year = y
-							table = src.load(datasets.iloc[i]["TableType"], y, 
-										agency=agency, pbar=False, 
-										sortby="date",
-										nrows=max_count if datasets.iloc[i]["DataType"] not in ["CSV","Excel"] else None)
-							break
-				else:
-					if len(table.table)==0 and has_outages and \
-						(outages[["State","SourceName","Agency","TableType","Year"]] == datasets.iloc[i][["State","SourceName","Agency","TableType","Year"]]).all(axis=1).any():
-						pass
-					else:
-						raise ValueError("Unable to find data for any year")
-
-			tables[year] = table
-
-		if future_error:
-			continue
-
-		for year in years:
-			print(f"Testing for year {year}")
-
-			table = tables[year]
-			if table is None: # Data could not be loaded
-				continue
 
 			if len(table.table)==0 and has_outages and \
 				(outages[["State","SourceName","Agency","TableType","Year"]] == datasets.iloc[i][["State","SourceName","Agency","TableType","Year"]]).all(axis=1).any():
@@ -239,8 +132,7 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 			else:
 				assert len(table.table)>0
 
-			if table.date_field == None or datasets.iloc[i]["DataType"]==DataType.EXCEL.value or \
-				table.date_field.lower()=="year":
+			if table.date_field == None:
 				continue
 
 			dts = table.table[table.date_field]
@@ -278,213 +170,270 @@ def test_load_year(datasets, source, start_idx, skip, loghtml, query={}):
 				raise(e)
 			assert year in all_years
 
-			if not multi_case:
-				continue
+			raise ValueError('Load for date range')
 
-			if "month" in table.date_field.lower() or "year" in table.date_field.lower() or "yr" in table.date_field.lower():
-				# Cannot currently filter only by month/year
-				continue
-			
-			start_date = str(year-1) + "-12-29"
-			stop_date = datetime.strftime(dts.iloc[0], "%Y-%m-%d")
+	if len(caught_exceptions)==1:
+		raise caught_exceptions[0]
+	elif len(caught_exceptions)>0:
+		msg = f"{len(caught_exceptions)} URL errors encountered:\n"
+		for e in caught_exceptions:
+			msg += "\t" + e.args[0] + "\n"
+		raise OPD_MultipleErrors(msg)
 
-			try:
-				table_start = src.load(datasets.iloc[i]["TableType"], [start_date, stop_date], 
-												agency=agency, pbar=False, url=url, id=id)
-			except ValueError as e:
-				if str(e).startswith('Year range cannot contain the year corresponding to a single year dataset'):
-					start_date  = str(year) + "-01-01"
-					table_start = src.load(datasets.iloc[i]["TableType"], [start_date, stop_date], 
-												agency=agency, pbar=False, url=url, id=id)
-				else:
-					raise
-			except (OPD_DataUnavailableError, OPD_SocrataHTTPError, OPD_MinVersionError) as e:
-				continue
-			except DateFilterException as e:
-				continue
-
-			sleep(sleep_time)
-			dts_start = table_start.table[table.date_field]
-			dts_start = dts_start[dts_start.apply(lambda x: isinstance(x,pd._libs.tslibs.timestamps.Timestamp))].convert_dtypes()
-			dts_start = dts_start.sort_values(ignore_index=True, na_position="first")
-
-			# If this isn't true then the stop date is too early
-			assert dts_start.iloc[-1].year == year
-
-			# Find first value date in year
-			dts_start = dts_start[dts_start.dt.year == year]
-			try:
-				assert dts.iloc[0] == dts_start.iloc[0]
-			except AssertionError as e:
-				# See comments in above try/except
-				assert dts.iloc[0].tz_localize(None) <= datetime.strptime(f"{year}-01-01 08:00:00", "%Y-%m-%d %H:%M:%S")
-			except:
-				raise(e)
-			
-			if len(table.table) == max_count:
-				# Whole dataset was not read. Don't compare to latest data in the year
-				continue
-
-			start_date = datetime.strftime(dts.iloc[-1], "%Y-%m-%d")
-			stop_date  = str(year+1) + "-01-10"  
-
-			try:
-				table_stop = src.load(datasets.iloc[i]["TableType"], [start_date, stop_date], 
-												agency=agency, pbar=False, url=url, id=id)
-			except ValueError as e:
-				if str(e).startswith('There is more than one source matching') or \
-					str(e).startswith('Year range cannot contain the year corresponding to a single year dataset'):
-					stop_date  = str(year) + "-12-31"  
-					table_stop = src.load(datasets.iloc[i]["TableType"], [start_date, stop_date], 
-												agency=agency, pbar=False, url=url, id=id)
-				else:
-					raise
-			sleep(sleep_time)
-			dts_stop = table_stop.table[table.date_field]
-
-			dts_stop = dts_stop[dts_stop.apply(lambda x: not isinstance(x,str))]
-			try:
-				dts_stop = dts_stop.sort_values(ignore_index=True)
-			except TypeError as e:
-				dts_stop = dts_stop[dts_stop.apply(lambda x: isinstance(x,pd.Timestamp))]
-				dts_stop = dts_stop.sort_values(ignore_index=True)
-
-			# If this isn't true then the start date is too late
-			assert dts_stop.iloc[0].year == year
-
-			# Find last value date in year
-			dts_stop = dts_stop[dts_stop.dt.year == year]
-			assert dts.iloc[-1] == dts_stop.iloc[-1]
-
-	if loghtml:
-		log_errors_to_file(caught_exceptions, caught_exceptions_warn)
-	else:
-		if len(caught_exceptions)==1:
-			raise caught_exceptions[0]
-		elif len(caught_exceptions)>0:
-			msg = f"{len(caught_exceptions)} URL errors encountered:\n"
-			for e in caught_exceptions:
-				msg += "\t" + e.args[0] + "\n"
-			raise OPD_MultipleErrors(msg)
-
-		for e in caught_exceptions_warn:
-			warnings.warn(str(e))
+	for e in caught_exceptions_warn:
+		warnings.warn(str(e))
 
 
-@pytest.mark.slow(reason="This test is slow to run and will be run last.")
-def test_source_download_not_limitable(datasets, source, start_idx, skip, query={}, num_zips_check=5):
+@pytest.mark.veryslow(reason="This is a very slow test that should be run before a major commit.")
+def test_load_year_none(datasets, source, start_idx, skip, query={}):
+	raise NotImplementedError()
 
-	df_ori = pd.read_csv('https://data-openjustice.doj.ca.gov/sites/default/files/dataset/2024-07/UseofForce_ORI-Agency_Names_2023.csv')
-	
-	zip_data = datasets[datasets['URL'].str.lower().str.endswith('.zip')]
-	zip_data = zip_data[~zip_data['SourceName'].isin(skip)] if skip!=None else zip_data
-	zip_data = zip_data[zip_data.index>=start_idx]
-	zip_data = zip_data[zip_data['SourceName']==source] if source!=None else zip_data
-	zip_netloc = zip_data['URL'].apply(lambda x: urlparse(x).netloc)
-	zip_sites = zip_netloc.value_counts()
-	zip_2_run = {}
-	for k,v in zip_sites.items():
-		order = np.random.permutation(np.arange(v))
-		idx = zip_data[zip_netloc==k].index
-		for i in range(v):
-			zip_2_run[idx[i]] = order[i]
 
+@pytest.mark.veryslow(reason="This is a very slow test that should be run before a major commit.")
+def test_load_year_multiple(datasets, source, start_idx, skip, query={}):
+	max_count = 1e5
+		
+	caught_exceptions = []
+	caught_exceptions_warn = []
+	already_run = []
 	for i in range(len(datasets)):
-		if skip != None and datasets.iloc[i]["SourceName"] in skip:
-			continue
-		if i < start_idx:
-			continue
-		if source != None and datasets.iloc[i]["SourceName"] != source:
+		if user_request_skip(datasets, i, skip, start_idx, source, query, skip_zip=True):
 			continue
 
-		if datasets.iloc[i]["URL"].lower().endswith(".zip") and \
-			zip_2_run[datasets.index[i]] < num_zips_check:
-			match = True
-			for k,v in query.items():
-				if datasets.iloc[i][k]!=v:
-					match = False
-					break
-			if not match:
-				continue
+		srcName, state, table_type, agency_ds = pop_dataset(datasets.iloc[i])
+		agency = 'Henrico Police Department' if datasets.iloc[i]["Agency"] == MULTI and srcName == "Virginia" else None
 
-			srcName = datasets.iloc[i]["SourceName"]
-			state = datasets.iloc[i]["State"]
-			src = data.Source(srcName, state=state, agency=datasets.iloc[i]["Agency"])
+		unique_id = [srcName, state, agency_ds, table_type]
+		if unique_id in already_run:
+			continue
 
-			year = datasets.iloc[i]["Year"]
-			table_type = datasets.iloc[i]["TableType"]
+		src = data.Source(srcName, state=state, agency=agency_ds)
+		cur_datasets = src.datasets[src.datasets["TableType"] == table_type]
+		# Remove datasets this version can't read
+		cur_datasets = cur_datasets[cur_datasets['min_version'].apply(lambda x: pd.isnull(x) or (x!='-1' and version.parse(x)<=version.parse(__version__)))]
+		cur_years = cur_datasets["Year"].tolist()
+		multi_case = any(isinstance(x,str) for x in cur_years)
 
-			# Handle cases where URL is required to disambiguate requested dataset
-			ds_filter = src.filter(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"])
-			url = datasets.iloc[i]['URL'] if len(ds_filter)>1 else None
-			id = datasets.iloc[i]['dataset_id'] if len(ds_filter)>1 else None
+		if not multi_case or len(cur_datasets)==0 or cur_years == ['NONE']:
+			continue
 
-			now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
-			print(f"{now} Testing {i+1} of {len(datasets)}: {srcName}, {state} {table_type} table for {year}")
+		now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
+		print(f"{now} Testing {i} of {len(datasets)-1}: {srcName} {table_type} table")
+
+		# Handle cases where URL is required to disambiguate requested dataset
+		ds_filter = src.filter(table_type, datasets.iloc[i]["Year"])
+		ds_input = datasets.iloc[[i]] if len(ds_filter)>1 else None
+
+		if ds_input is None:
+			already_run.append(unique_id)
+
+		try:
 			try:
-				table = src.load(table_type, year, pbar=False, url=url, id=id)
-			except (OPD_FutureError, OPD_MinVersionError):
-				continue
+				years_all = src.get_years(table_type, datasets=ds_input)
+			except ValueError as e:
+				raise  # Skipping below starting on 2/1/20
+				# if len(e.args)>0 and "Extracting the years" in e.args[0]:
+				# 	# Just test reading in the table and continue
+				# 	table = src.load(table_type, datasets.iloc[i]["Year"], 
+				# 					agency=agency, pbar=False)
+				# 	continue
+				# else:
+				# 	raise
 			except:
 				raise
+		except warn_errors as e:
+			e.prepend(f"Iteration {i}", srcName, table_type)
+			caught_exceptions_warn.append(e)
+			continue
+		except (OPD_TooManyRequestsError, OPD_arcgisAuthInfoError) as e:
+			# Catch exceptions related to URLs not functioning
+			e.prepend(f"Iteration {i}", srcName, table_type)
+			caught_exceptions.append(e)
+			continue
+		except:
+			raise
 
-			sleep(sleep_time)
+		# Adding a pause here to prevent issues with requesting from site too frequently
+		sleep(sleep_time)
 
-			assert len(table.table)>1
-			if not pd.isnull(table.date_field):
-				assert table.date_field in table.table
-				#assuming a Pandas string dtype('O').name = object is okay too
-				assert table.table[table.date_field].dtype.name.startswith('datetime64')
-			if not pd.isnull(datasets.iloc[i]["agency_field"]):
-				assert datasets.iloc[i]["agency_field"] in table.table
+		years_avail = [y for y in years_all if y not in cur_years]  # List of years not in annual datasets
+		years_run = years_avail[-2:-1] if len(years_avail)>1 else years_avail[:1]  # Do not use first or last year if possible
 
-			if table.urls['source_url'] == 'https://openjustice.doj.ca.gov/data':
-				ori = table.table['AGENCY_ORI'].unique()
-				if table.agency==MULTI:
-					assert len(ori)>1
+		# Handle cases where URL is required to disambiguate requested dataset
+		ds_filter = src.filter(table_type, datasets.iloc[i]["Year"])
+		url = datasets.iloc[i]['URL'] if len(ds_filter)>1 else None
+		id = datasets.iloc[i]['dataset_id'] if len(ds_filter)>1 else None
+
+		tables = {}
+		for k in range(2):
+			for year in years_run:
+				table = test_utils.load_data(src, table_type, year, agency, 
+									max_count if not test_utils.is_file(datasets, i) else None,
+									url, id, caught_exceptions_warn)
+				
+				if table==None:
+					continue
+
+				sleep(sleep_time)
+
+				if len(table.table)==0:
+					# Ensure count should have been 0
+					count = src.get_count(table_type, year, agency=agency, force=True)
+					if count!=0:
+						raise ValueError(f"Expected data for year {year} but received none")
+					continue
+
+				tables[year] = table
+				if k>0:
+					years_run = [year]
+					break
+
+			if k==0:
+				if len(tables)==0:
+					# No data found. Try to run some different years
+					years_run = [y for y in years_avail if y not in years_run]
 				else:
-					assert len(ori)==1
-					if ori[0]=='CA0349902':
-						# This ORI is not found but is California Hwy Patrol
-						continue
-					df_sel = df_ori.loc[df_ori['ORI']==ori[0],'AGENCY_NAME']
-					assert len(df_sel)==1
-					name = df_sel.iloc[0].replace('PD','Police Department')\
-						.replace('SO','County Sheriff’s Department')\
-						.replace('SD','County Sheriff’s Department')\
-						.title()\
-						.replace("’S","’s").replace('’',"'")
-					if name.startswith('Csu'):
-						assert 'California State University' in datasets.iloc[i]['AgencyFull']
-					else:
-						assert datasets.iloc[i]['AgencyFull'].replace('Office','Department').replace('’',"'")==name
+					break
 
+		assert len(years_run)==1
+		year = years_run[0]
 
-def log_errors_to_file(*args):
-	if not os.path.exists(log_folder):
-		os.mkdir(log_folder)
+		print(f"Testing for year {year}")
 
-	filename = os.path.join(log_folder, log_filename)
+		table = tables[year]
 
-	if os.path.exists(filename):
-		perm = "r+"
-	else:
-		perm = "w"
+		if len(table.table)==0 and has_outages and \
+			(outages[["State","SourceName","Agency","TableType","Year"]] == datasets.iloc[i][["State","SourceName","Agency","TableType","Year"]]).all(axis=1).any():
+			caught_exceptions_warn.append(f'Outage continues for {str(datasets.iloc[i][["State","SourceName","Agency","TableType","Year"]])}')
+			continue
+		else:
+			assert len(table.table)>0
 
-	with open(filename, perm) as f:
-		for x in args:
-			for e in x:
-				new_line = ', '.join([str(x) for x in e.args])
-				skip = False
-				if perm == "r+":
-					for line in f:
-						if new_line in line or line in new_line:
-							skip = True
-							break
+		if table.date_field == None:
+			continue
 
-				if not skip:
-					f.write(new_line)
-					f.write("\n")
+		dts = table.table[table.date_field]
+		# Remove all non-datestamps
+		dts = dts[dts.apply(lambda x: isinstance(x,pd.Timestamp) or isinstance(x,pd.Period))].convert_dtypes()
+		try:
+			dts = dts.sort_values(ignore_index=True)
+		except TypeError as e:
+			if re.search(r"not supported between instances of '(Timestamp|Period)' and '(Timestamp|Period)'", str(e)):
+				dts = dts[dts.apply(lambda x: isinstance(x,pd.Timestamp))]
+				dts = dts.sort_values(ignore_index=True)
+			else:
+				raise
+
+		all_years = dts.dt.year.unique().tolist()
+		
+		try:
+			# Ignore if annual datasets fail as this is indicative that the data contains bad dates
+			assert len(all_years) == 1 or table.date == year
+		except AssertionError as e:
+			# Some datasets filter by local time but return
+			# UTC time
+			# Until this is solved more elegantly, removing years between {year}-01-01 00:00:00
+			# and {year}-01-01 08:00:00
+			dts = dts[(dts < f"{year+1}-01-01 00:00:00") | (dts > f"{year+1}-01-01 08:00:00")]
+			all_years = dts.dt.year.unique().tolist()
+			if len(all_years) != 1:
+				m = (src.datasets['Year']==year) & (src.datasets['URL']==table.urls['data'])
+				assert m.sum()==1
+				# This is an annual dataset where perhaps some data is mistakenly from previous/next year
+				dts = dts[(dts < f"{year-1}-12-31 00:00:00") | (dts > f"{year-1}-12-31 23:59:59")]
+				all_years = dts.dt.year.unique().tolist()
+				assert len(all_years)==1
+		except:
+			raise(e)
+		assert year in all_years
+
+		if "month" in table.date_field.lower() or "year" in table.date_field.lower() or "yr" in table.date_field.lower() or \
+			test_utils.is_file(datasets, i):
+			# Cannot currently filter only by month/year and filtering by date for file will re-load entire dataset
+			continue
+		
+		start_date = str(year-1) + "-12-29"
+		stop_date = datetime.strftime(dts.iloc[0], "%Y-%m-%d")
+
+		try:
+			table_start = src.load(table_type, [start_date, stop_date], 
+											agency=agency, pbar=False, url=url, id=id)
+		except ValueError as e:
+			if str(e).startswith('Year range cannot contain the year corresponding to a single year dataset'):
+				start_date  = str(year) + "-01-01"
+				table_start = src.load(table_type, [start_date, stop_date], 
+											agency=agency, pbar=False, url=url, id=id)
+			else:
+				raise
+		except (OPD_DataUnavailableError, OPD_SocrataHTTPError, OPD_MinVersionError) as e:
+			continue
+		except DateFilterException as e:
+			continue
+
+		sleep(sleep_time)
+		dts_start = table_start.table[table.date_field]
+		dts_start = dts_start[dts_start.apply(lambda x: isinstance(x,pd._libs.tslibs.timestamps.Timestamp))].convert_dtypes()
+		dts_start = dts_start.sort_values(ignore_index=True, na_position="first")
+
+		# If this isn't true then the stop date is too early
+		assert dts_start.iloc[-1].year == year
+
+		# Find first value date in year
+		dts_start = dts_start[dts_start.dt.year == year]
+		try:
+			assert dts.iloc[0] == dts_start.iloc[0]
+		except AssertionError as e:
+			# This could be due to the API filtering in a different timezone than it return. Account for this by checking if first value is close to start of year
+			assert dts.iloc[0].tz_localize(None) <= datetime.strptime(f"{year}-01-01 08:00:00", "%Y-%m-%d %H:%M:%S")
+		except:
+			raise(e)
+		
+		if len(table.table) == max_count:
+			# Whole dataset was not read. Don't compare to latest data in the year
+			continue
+
+		start_date = datetime.strftime(dts.iloc[-1], "%Y-%m-%d")
+		stop_date  = str(year+1) + "-01-10"  
+
+		try:
+			table_stop = src.load(table_type, [start_date, stop_date], 
+											agency=agency, pbar=False, url=url, id=id)
+		except ValueError as e:
+			if str(e).startswith('There is more than one source matching') or \
+				str(e).startswith('Year range cannot contain the year corresponding to a single year dataset'):
+				stop_date  = str(year) + "-12-31"  
+				table_stop = src.load(table_type, [start_date, stop_date], 
+											agency=agency, pbar=False, url=url, id=id)
+			else:
+				raise
+		sleep(sleep_time)
+		dts_stop = table_stop.table[table.date_field]
+
+		dts_stop = dts_stop[dts_stop.apply(lambda x: not isinstance(x,str))]
+		try:
+			dts_stop = dts_stop.sort_values(ignore_index=True)
+		except TypeError as e:
+			dts_stop = dts_stop[dts_stop.apply(lambda x: isinstance(x,pd.Timestamp))]
+			dts_stop = dts_stop.sort_values(ignore_index=True)
+
+		# If this isn't true then the start date is too late
+		assert dts_stop.iloc[0].year == year
+
+		# Find last value date in year
+		dts_stop = dts_stop[dts_stop.dt.year == year]
+		assert dts.iloc[-1] == dts_stop.iloc[-1]
+
+	if len(caught_exceptions)==1:
+		raise caught_exceptions[0]
+	elif len(caught_exceptions)>0:
+		msg = f"{len(caught_exceptions)} URL errors encountered:\n"
+		for e in caught_exceptions:
+			msg += "\t" + e.args[0] + "\n"
+		raise OPD_MultipleErrors(msg)
+
+	for e in caught_exceptions_warn:
+		warnings.warn(str(e))
+
 
 if __name__ == "__main__":
 	from test_utils import get_datasets
@@ -492,7 +441,7 @@ if __name__ == "__main__":
 	use_changed_rows = False
 	csvfile = None
 	csvfile = os.path.join('..','opd-data', 'opd_source_table.csv')
-	start_idx = 0
+	start_idx = 463
 	skip = None
 	# skip = "Sacramento,Beloit,Rutland"
 	source = None
@@ -502,6 +451,7 @@ if __name__ == "__main__":
 
 	datasets = get_datasets(csvfile, use_changed_rows)
 
-	test_load_year(datasets, source, start_idx, skip, False, query=query) 
+	# test_load_year_annual_data(datasets, source, start_idx, skip, False, query=query) 
+	test_load_year_multiple(datasets, source, start_idx, skip, False, query=query) 
 	start_idx = 0
 	# test_source_download_not_limitable(datasets, source, start_idx, skip) 

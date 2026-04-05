@@ -14,7 +14,7 @@ import os
 import pandas as pd
 import pytest
 
-from test_utils import check_for_dataset
+from test_utils import check_for_dataset, user_request_skip
 
 sleep_time = 0.1
 log_filename = f"pytest_url_errors_{datetime.now().strftime('%Y%m%d_%H')}.txt"
@@ -51,31 +51,20 @@ def buffalo_data():
 	
 
 @pytest.mark.slow(reason="This test is slow to run and will be run last.")
-def test_get_years(datasets, source, start_idx, skip, loghtml, query={}):
+def test_get_years(datasets, source, start_idx, skip, query={}):
 	caught_exceptions = []
 	caught_exceptions_warn = []
 
 	already_ran = []
 	last_source = None
 	for i in range(len(datasets)):
-		if source != None and datasets.iloc[i]["SourceName"] != source:
+		if user_request_skip(datasets, i, skip, start_idx, source, query):
 			continue
-		if skip != None and datasets.iloc[i]["SourceName"] in skip:
-			continue
-		if i < start_idx:
-			continue
+
 		if is_filterable(datasets.iloc[i]["DataType"]) or datasets.iloc[i]["Year"] != MULTI or \
 			datasets.iloc[i]["DataType"] == DataType.EXCEL.value:  # If Excel, we can possibly check
 			srcName = datasets.iloc[i]["SourceName"]
 			state = datasets.iloc[i]["State"]
-
-			match = True
-			for k,v in query.items():
-				if datasets.iloc[i][k]!=v:
-					match = False
-					break
-			if not match:
-				continue
 
 			if (srcName, state, datasets.iloc[i]["TableType"]) in already_ran:
 				continue
@@ -136,29 +125,22 @@ def test_get_years(datasets, source, start_idx, skip, loghtml, query={}):
 			# Adding a pause here to prevent issues with requesting from site too frequently
 			sleep(0.1)
 
-	if loghtml:
-		log_errors_to_file(caught_exceptions, caught_exceptions_warn)
-	else:
-		if len(caught_exceptions)==1:
-			raise caught_exceptions[0]
-		elif len(caught_exceptions)>0:
-			msg = f"{len(caught_exceptions)} URL errors encountered:\n"
-			for e in caught_exceptions:
-				msg += "\t" + e.args[0] + "\n"
-			raise OPD_MultipleErrors(msg)
+	if len(caught_exceptions)==1:
+		raise caught_exceptions[0]
+	elif len(caught_exceptions)>0:
+		msg = f"{len(caught_exceptions)} URL errors encountered:\n"
+		for e in caught_exceptions:
+			msg += "\t" + e.args[0] + "\n"
+		raise OPD_MultipleErrors(msg)
 
-		for e in caught_exceptions_warn:
-			warnings.warn(str(e))
+	for e in caught_exceptions_warn:
+		warnings.warn(str(e))
 
 
-def test_get_agencies(datasets, source, start_idx, skip):
+def test_get_agencies(datasets, source, start_idx, skip, query={}):
 		
 	for i in range(len(datasets)):
-		if skip != None and datasets.iloc[i]["SourceName"] in skip:
-			continue
-		if i < start_idx:
-			continue
-		if source != None and datasets.iloc[i]["SourceName"] != source:
+		if user_request_skip(datasets, i, skip, start_idx, source, query):
 			continue
 
 		if is_filterable(datasets.iloc[i]["DataType"]) or datasets.iloc[i]["Agency"] != MULTI:
@@ -269,36 +251,11 @@ def is_filterable(data_type):
 def is_stanford(url):
 	return "stanford.edu" in url
 
-def log_errors_to_file(*args):
-	if not os.path.exists(log_folder):
-		os.mkdir(log_folder)
-
-	filename = os.path.join(log_folder, log_filename)
-
-	if os.path.exists(filename):
-		perm = "r+"
-	else:
-		perm = "w"
-
-	with open(filename, perm) as f:
-		for x in args:
-			for e in x:
-				new_line = ', '.join([str(x) for x in e.args])
-				skip = False
-				if perm == "r+":
-					for line in f:
-						if new_line in line or line in new_line:
-							skip = True
-							break
-
-				if not skip:
-					f.write(new_line)
-					f.write("\n")
 
 if __name__ == "__main__":
 	from test_utils import get_datasets
 	# For testing
-	# (csvfile, source, last, skip, loghtml)
+	# (csvfile, source, last, skip)
 
 	use_changed_rows = False
 

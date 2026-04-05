@@ -38,7 +38,7 @@ def test_clean_date_input_list(date):
 
 
 def test_clean_date_includes_time():
-	date = ['2023-11-01T00:00:00','2023-12-31T23:59:59']
+	date = ['2023-11-01T40:00:00','2023-12-31T23:58:59']
 	with pytest.warns(UserWarning):
 		clean_date = data_loader._clean_date_input(date)
 	

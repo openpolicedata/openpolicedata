@@ -1,5 +1,5 @@
 import pytest
-from test_utils import get_datasets, get_outage_datasets
+from test_utils import get_datasets, get_outage_datasets, get_remaining_datasets
 
 
 def pytest_addoption(parser):
@@ -17,9 +17,6 @@ def pytest_addoption(parser):
     )
     parser.addoption(
         "--skip", action="store", default=None, help="Comma-separated list of sources to skip"
-    )
-    parser.addoption(
-        "--loghtml", action="store", default=0, help="0 (default) or 1 indicating if URL warnings/errors should be logged"
     )
 
     parser.addoption("--use-changed-rows", action="store_true", help="Run tests only on changed rows")
@@ -76,11 +73,6 @@ def skip(request):
 
 
 @pytest.fixture(scope='session')
-def loghtml(request):
-    return int(request.config.option.loghtml)
-
-
-@pytest.fixture(scope='session')
 def req_csvfile(request):
     return request.config.option.csvfile
 
@@ -102,3 +94,15 @@ def outages(request):
 def datasets(request, all_datasets, use_changed_rows, outages, req_csvfile):
     ds = get_datasets(req_csvfile, use_changed_rows) if use_changed_rows else all_datasets
     return get_outage_datasets(ds) if outages else ds
+
+@pytest.fixture(scope='session')
+def is_excel(datasets):
+    return datasets['DataType']=='Excel'
+
+@pytest.fixture(scope='session')
+def is_api(datasets):
+    return datasets['DataType'].isin(["ArcGIS", 'Carto', 'CKAN', 'Opendatasoft', 'Socrata'])
+
+@pytest.fixture(scope='session')
+def remaining_datasets(datasets):
+    return get_remaining_datasets(datasets)

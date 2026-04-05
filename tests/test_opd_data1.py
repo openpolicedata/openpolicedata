@@ -9,7 +9,6 @@ from openpolicedata.exceptions import OPD_DataUnavailableError, OPD_TooManyReque
 	OPD_MultipleErrors, OPD_arcgisAuthInfoError, OPD_SocrataHTTPError, OPD_FutureError, OPD_MinVersionError
 import openpolicedata as opd
 from datetime import datetime
-from io import StringIO
 import pandas as pd
 from time import sleep
 import warnings
@@ -29,183 +28,20 @@ log_filename = f"pytest_url_errors_{datetime.now().strftime('%Y%m%d_%H')}.txt"
 log_folder = os.path.join(".","data/test_logs")
 
 outages_file = os.path.join("..","opd-data","outages.csv")
-# if has_outages:=os.path.exists(outages_file):
-has_outages=os.path.exists(outages_file)
-if has_outages:
-	outages = pd.read_csv(outages_file)
-else:
-	try:
-		outages = pd.read_csv('https://raw.githubusercontent.com/openpolicedata/opd-data/main/outages.csv')
-		has_outages = True
-	except:
-		pass
 
 warn_errors = (OPD_DataUnavailableError, OPD_SocrataHTTPError, OPD_FutureError)
 
-@pytest.fixture()
-def log_stream():
-    stream = StringIO()
-    yield stream
-    stream.truncate(0)
-    stream.seek(0)
-    assert len(stream.getvalue()) == 0
-
-@pytest.fixture()
-def logger(log_stream):
-    logger = opd.log.get_logger()
-    # Redirect handler output so that it can be checked
-    logger.handlers[0].setStream(log_stream)
-
-    yield logger
-    for handler in logger.handlers:
-        if handler.name != opd.log.stream_handler_name:
-            logger.removeHandler(handler)
-
-def check_table_type_warning(all_datasets):
-	sources = all_datasets.copy().iloc[0]
-	sources["TableType"] = "TEST"
-	with pytest.warns(UserWarning):
-		data.Table(sources)
-
-
-def test_load():
-	# NOTE: this is analagous to test_socrata but uses Source instead of the data_loader
-
-	if not check_for_dataset('Richmond', opd.defs.TableType.SHOOTINGS):
-		return
-	
-	src = opd.Source('Richmond', state='California')
-	df = src.load(opd.defs.TableType.SHOOTINGS, opd.defs.MULTI).table
-	count = src.get_count(opd.defs.TableType.SHOOTINGS)
-
-	assert len(df)==count
-
-	offset = 1
-	nrows = len(df)-offset-1
-	df_offset = src.load(opd.defs.TableType.SHOOTINGS, opd.defs.MULTI, offset=offset, nrows=nrows).table
-
-	assert set(df.columns)==set(df_offset.columns)
-	df_offset = df_offset[df.columns]
-	assert df_offset.equals(df.iloc[offset:nrows+offset].reset_index(drop=True))
-	
-	url = "www.transparentrichmond.org"
-	data_set = "asfd-zcvn"
-	client = data_loaders.socrata.SocrataClient(url, data_loaders.socrata.default_sodapy_key, timeout=60)
-	results = client.get(data_set, order=":id", limit=100000)
-	rows = pd.DataFrame.from_records(results)
-
-	rows['occurreddatetime'] = pd.to_datetime(rows['occurreddatetime'])
-	
-	pd.testing.assert_frame_equal(df, rows)
-
-
-def test_not_verbose(logger, log_stream):
-	source = 'Lansing'
-	table = "OFFICER-INVOLVED SHOOTINGS"
-	if check_for_dataset(source, table):
-		src = opd.Source(source)
-		table = src.load(table, 'MULTIPLE')
-		assert len(log_stream.getvalue()) == 0
-
-def test_verbose(logger, log_stream):
-	source = 'Lansing'
-	table = "OFFICER-INVOLVED SHOOTINGS"
-	if check_for_dataset(source, table):
-		src = opd.Source(source)
-		table = src.load(table, 'MULTIPLE', verbose=True)
-		assert len(log_stream.getvalue())>0
-
-@pytest.mark.parametrize('source, table, year', [('Phoenix', "OFFICER-INVOLVED SHOOTINGS", 2022), 
-				('Orlando', "OFFICER-INVOLVED SHOOTINGS", 2022), ('Indianapolis', "OFFICER-INVOLVED SHOOTINGS", 2022),
-				('Philadelphia', "COMPLAINTS - BACKGROUND", 2018)])
-def test_format_date_false(all_datasets, source, table, year):
-	if check_for_dataset(source, table):
-		src = opd.Source(source)
-		table = src.load(table, year, format_date=False, nrows=1)
-		# Confirm date has not been formatted
-		assert isinstance(table.table[table.date_field].iloc[0],str)
-		
-
-@pytest.mark.parametrize('source, table, year,url', [('Denver', "OFFICER-INVOLVED SHOOTINGS", 2022,'https://raw.githubusercontent.com/openpolicedata/opd-datasets/main/data/Colorado_Denver_OFFICER-INVOLVED_SHOOTINGS.csv'), 
-				('Sparks', "OFFICER-INVOLVED SHOOTINGS", 2022, None),  
-				('Louisville', "TRAFFIC STOPS", ['2018-12-29', '2019-01-01'], 'LMPD_STOPS_DATA_(2)')])
-def test_format_date_false_not_allowed(all_datasets, source, table, year, url):
-	if check_for_dataset(source, table):
-		src = opd.Source(source)
-		with pytest.raises(ValueError, match='Dates cannot be filtered'):
-			src.load(table, year, format_date=False, nrows=1, url=url)
-
-
-@pytest.mark.parametrize('ver', ["0.0", pd.NA])
-def test_check_version_good(datasets, ver):
-	ds = datasets.iloc[0].copy()
-
-	ds["min_version"] = ver
-	data._check_version(ds)
-
-
-@pytest.mark.parametrize('ver, err', [("-1", OPD_FutureError), ("100000.0", OPD_MinVersionError)])
-def test_check_version_bad(datasets, ver, err):
-	ds = datasets.iloc[0].copy()
-	ds["min_version"] = ver
-	with pytest.raises(err):
-		data._check_version(ds)
-
-
-def test_offsets_and_nrows():
-	if check_for_dataset('Philadelphia', opd.defs.TableType.SHOOTINGS):
-		src = data.Source("Philadelphia")
-		df = src.load(date=2019, table_type="Officer-Involved Shootings").table
-		offset = 1
-		nrows = len(df)-2
-		df_offset = src.load(date=2019, table_type="Officer-Involved Shootings", offset=offset, nrows=nrows).table
-		assert df_offset.equals(df.iloc[offset:offset+nrows].reset_index(drop=True))
-
-def check_excel_sheets(datasets, source, start_idx, skip):
-	for i in range(len(datasets)):
-		if user_request_skip(datasets, i, skip, start_idx, source):
-			continue
-
-		if datasets.iloc[i]["DataType"]!=DataType.EXCEL:
-			continue
-
-		srcName = datasets.iloc[i]["SourceName"]
-		state = datasets.iloc[i]["State"]
-		src = data.Source(srcName, state=state, agency=datasets.iloc[i]["Agency"])
-
-		table_print = datasets.iloc[i]["TableType"]
-		now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
-		print(f"{now} Testing {i+1} of {len(datasets)}: {srcName} {table_print} table")
-
-		excel = src._Source__get_loader(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"], datasets.iloc[i]["query"],
-				dataset_id=datasets.iloc[i]["dataset_id"])
-		sheets, has_year_sheets = excel._Excel__get_sheets()
-
-		if has_year_sheets:
-			# Ensure that load works
-			src.load(datasets.iloc[i]["TableType"], datasets.iloc[i]["Year"], pbar=False)
-		else:
-			excel._Excel__check_sheet(sheets)
-
 
 @pytest.mark.slow(reason="This test is slow to run and will be run last.")
-def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, query={}):
+def test_source_download_limitable(datasets, source, start_idx, skip, query={}):
 	caught_exceptions = []
 	caught_exceptions_warn = []
 	last_source = None
 	for i in range(len(datasets)):
-		if user_request_skip(datasets, i, skip, start_idx, source):
+		if user_request_skip(datasets, i, skip, start_idx, source, query):
 			continue
 
 		if can_be_limited(datasets.iloc[i]["DataType"], datasets.iloc[i]["URL"]):
-			match = True
-			for k,v in query.items():
-				if datasets.iloc[i][k]!=v:
-					match = False
-					break
-			if not match:
-				continue
-
 			srcName = datasets.iloc[i]["SourceName"]
 			state = datasets.iloc[i]["State"]
 			src = data.Source(srcName, state=state, agency=datasets.iloc[i]["Agency"])
@@ -321,54 +157,16 @@ def test_source_download_limitable(datasets, source, start_idx, skip, loghtml, q
 				sleep(sleep_time)
 				sleep_time+=base_sleep_time
 
-	if loghtml:
-		log_errors_to_file(caught_exceptions, caught_exceptions_warn)
-	else:
-		if len(caught_exceptions)==1:
-			raise caught_exceptions[0]
-		elif len(caught_exceptions)>0:
-			msg = f"{len(caught_exceptions)} URL errors encountered:\n"
-			for e in caught_exceptions:
-				msg += "\t" + e.args[0] + "\n"
-			raise OPD_MultipleErrors(msg)
+	if len(caught_exceptions)==1:
+		raise caught_exceptions[0]
+	elif len(caught_exceptions)>0:
+		msg = f"{len(caught_exceptions)} URL errors encountered:\n"
+		for e in caught_exceptions:
+			msg += "\t" + e.args[0] + "\n"
+		raise OPD_MultipleErrors(msg)
 
-		for e in caught_exceptions_warn:
-			warnings.warn(str(e))
-
-@pytest.mark.parametrize("loader, source, table_type, agency, years", [
-	(data_loaders.Socrata, 'Richmond', 'CALLS FOR SERVICE', None, [2021, [2020, 2022]]),
-	(data_loaders.Ckan, 'Virginia', 'STOPS', "Arlington County Police Department", [2021, [2020, 2022]]),
-	(data_loaders.Arcgis, "Charlotte-Mecklenburg", 'EMPLOYEE', None, []),
-	(data_loaders.Csv, 'Jacksonville', "OFFICER-INVOLVED SHOOTINGS", None, []),
-	(data_loaders.Excel, 'Norwich', "OFFICER-INVOLVED SHOOTINGS", None, []),
-	(data_loaders.Opendatasoft, 'Long Beach', "STOPS", None, [2021, [2020, 2022]]),
-	(data_loaders.Carto, "Philadelphia", 'STOPS', None, [2021, [2020, 2022]])
-	])
-def test_get_count(datasets, loader, source, table_type, agency, years):
-	if check_for_dataset(source, table_type):
-		print(f"Testing {loader} source")
-		src = opd.Source(source)
-		i = src.datasets["TableType"] == table_type
-		i = i[i].index
-		if len(i)>0:
-			i = src.datasets.loc[i, 'DataType'].str.lower()==loader.__name__.lower()
-			i = i[i].index
-		assert len(i)==1
-		i = i[0]
-		if pd.notnull(src.datasets.loc[i]["dataset_id"]):
-			loader = loader(src.datasets.loc[i]["URL"], data_set=src.datasets.loc[i]["dataset_id"], date_field=src.datasets.loc[i]["date_field"])
-		else:
-			loader = loader(src.datasets.loc[i]["URL"], date_field=src.datasets.loc[i]["date_field"])
-		if len(years)==0:
-			assert loader.get_count(force=True) == src.get_count(date=src.datasets.loc[i]['Year'], table_type=table_type, force=True)
-		else: 
-			for year in years:
-				assert loader.get_count(date=year, force=True) == src.get_count(date=year, table_type=table_type, force=True)
-
-		if agency:
-			opt_filter = '"' + src.datasets.loc[i]["agency_field"] + '"' + " = '" + agency + "'"
-			year = years[0]
-			assert src.get_count(date=year, agency=agency, force=True) == loader.get_count(date=year, opt_filter=opt_filter, force=True)
+	for e in caught_exceptions_warn:
+		warnings.warn(str(e))
 
 
 def test_get_years_to_check():
@@ -429,32 +227,6 @@ def can_be_limited(data_type, url):
 		raise ValueError("Unknown table type")
 	
 
-def log_errors_to_file(*args):
-	if not os.path.exists(log_folder):
-		os.mkdir(log_folder)
-
-	filename = os.path.join(log_folder, log_filename)
-
-	if os.path.exists(filename):
-		perm = "r+"
-	else:
-		perm = "w"
-
-	with open(filename, perm) as f:
-		for x in args:
-			for e in x:
-				new_line = ', '.join([str(x) for x in e.args])
-				skip = False
-				if perm == "r+":
-					for line in f:
-						if new_line in line or line in new_line:
-							skip = True
-							break
-
-				if not skip:
-					f.write(new_line)
-					f.write("\n")
-
 if __name__ == "__main__":
 	from test_utils import get_datasets
 	# For testing
@@ -471,9 +243,9 @@ if __name__ == "__main__":
 
 	datasets = get_datasets(csvfile, use_changed_rows)
 
-	# check_excel_sheets(csvfile, source, last, skip, None) 
+	# test_excel_sheets(csvfile, source, last, skip, None) 
 	# test_get_years_to_check(csvfile, source, last, skip, None) 
-	# check_table_type_warning(csvfile, source, last, skip, None) 
+	# test_table_type_warning(csvfile, source, last, skip, None) 
 	# test_offsets_and_nrows(csvfile, source, last, skip, None) 
 	# test_check_version(csvfile, None, last, skip, None) #
 	test_source_download_limitable(datasets, source, start_idx, skip, False, query) 

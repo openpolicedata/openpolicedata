@@ -12,6 +12,8 @@ import urllib
 from datetime import datetime
 from urllib.parse import urlparse
 
+from tests.test_utils import shuffle
+
 if __name__ == "__main__":
 	import sys
 	sys.path.append('../openpolicedata')
@@ -156,10 +158,7 @@ def test_agencies_not_multi(datasets):
 def test_zip(datasets):
     ds = datasets[datasets['URL'].str.endswith('zip')]
     urls = ds['URL'].unique()
-    rand_state = random.getstate()
-    random.seed(datetime.now().month*31 + datetime.now().day) # Using a seed that varies but can be guessed if there is an error
-    random.shuffle(urls)
-    random.setstate(rand_state)
+    shuffle(urls)
     hostnames = []
     urls_run = []
     for url in urls:
