@@ -640,6 +640,8 @@ def to_datetime(dates, ignore_errors=False, *args, **kwargs):
                 # Find date
                 m = re.search(r'\d+[/-]\d+[/-]\d+', dates)
                 if not m:
+                    if (m:=re.search(r'(\d{4})\sQ(\d)', dates)):
+                        return pd.Period(freq='Q', year=int(m.group(1)), quarter=int(m.group(2)))
                     raise
 
                 datestr = m.group()
