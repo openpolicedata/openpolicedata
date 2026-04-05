@@ -18,8 +18,6 @@ troubleshooting/index.md
 citations/index.md
 ```
 
-> **OPD User Survey**: We would love to hear how you are using OpenPoliceData and how we can make it better! [Please take a moment to fill out this short survey.](https://docs.google.com/forms/d/e/1FAIpQLScvhcKQwvPmUK6wV0YKQipGsTsz0uzyVdT8FQsQ5g2RBvNh0g/viewform?usp=pp_url)
-
 > Older OpenPoliceData versions (<0.6) must be upgraded. Data source table format changes that were not backward-compatible were introduced to provide access to more datasets. However, a methodology for providing older source table formats for older OPD versions was not introduced until version 0.6. Run `pip install openpolicedata --upgrade` from the command line to upgrade OPD.
 
 # OpenPoliceData
