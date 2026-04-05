@@ -1094,7 +1094,6 @@ class Source:
                 pbar: bool = False, 
                 nbatch: int = 10000, 
                 offset: int = 0,
-                sortby=None,
                 force: bool =False,
                 verbose: bool | str | int = False,
                 format_date: bool = True,
@@ -1148,7 +1147,7 @@ class Source:
         count = self.get_count(table_type, date, agency, force, verbose=verbose, url=url, id=id)
         for k in range(offset, count, nbatch):
             yield self.__load(table_type, date, agency, True, pbar, nrows=min(nbatch, count-k), offset=k, 
-                              verbose=verbose, url_contains=url, id=id, format_date=format_date, sortby=sortby)
+                              verbose=verbose, url_contains=url, id=id, format_date=format_date)
     
     
     def load(self, 
@@ -1158,7 +1157,6 @@ class Source:
             pbar: bool = True,
             nrows: int | None = None, 
             offset: int = 0,
-            sortby=None,
             verbose: bool | str | int = False,
             format_date: bool = True,
             url: str | None = None,
@@ -1205,7 +1203,7 @@ class Source:
             Table object containing the requested data
         '''
 
-        return self.__load(table_type, date, agency, True, pbar, nrows=nrows, offset=offset, sortby=sortby, 
+        return self.__load(table_type, date, agency, True, pbar, nrows=nrows, offset=offset, 
                            verbose=verbose, url_contains=url, id=id, format_date=format_date)
 
     
@@ -1360,7 +1358,7 @@ class Source:
     
 
     def __load(self, table_type, date_orig, agency, load_table, pbar=True, return_count=False, force=False, 
-               nrows=None, offset=0, sortby=None, verbose=False, url_contains=None, id=None, format_date=True):
+               nrows=None, offset=0, verbose=False, url_contains=None, id=None, format_date=True):
         
         date = data_loader._clean_date_input(date_orig)
         src = self.filter(table_type, date, url_contains, id, errors=True).iloc[0]
@@ -1415,7 +1413,7 @@ class Source:
                 if return_count:
                     return loader.get_count(date=date_filter, agency=agency, opt_filter=opt_filter, force=force)
                 else:
-                    table = loader.load(date=date_filter, agency=agency, opt_filter=opt_filter, nrows=nrows, pbar=pbar, offset=offset, sortby=sortby, 
+                    table = loader.load(date=date_filter, agency=agency, opt_filter=opt_filter, nrows=nrows, pbar=pbar, offset=offset, 
                                         format_date=format_date)
                     if format_date:
                         date_field = self.__fix_date_field(table, date_field, src.name)
