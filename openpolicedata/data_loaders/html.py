@@ -1,6 +1,6 @@
 import pandas as pd
 
-from .data_loader import Data_Loader, _filter_dataframe
+from .data_loader import Data_Loader, _filter_dataframe, _clean_date_input
 from ..datetime_parser import to_datetime
 from .. import log
 
@@ -120,6 +120,8 @@ class Html(Data_Loader):
         pandas DataFrame
             DataFrame containing table imported from the HTML table
         '''
+
+        date = _clean_date_input(date)
 
         if isinstance(nrows, float):
             nrows = int(nrows)

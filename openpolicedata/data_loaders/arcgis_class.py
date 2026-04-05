@@ -11,7 +11,7 @@ from tqdm import tqdm
 from typing import Optional
 import warnings
 
-from .data_loader import Data_Loader, str2json, _url_error_msg, get_legacy_session, _process_date, _default_limit, _use_gpd_force, _has_gpd
+from .data_loader import Data_Loader, str2json, _url_error_msg, get_legacy_session, _process_date, _default_limit, _use_gpd_force, _has_gpd, _clean_date_input, _filter_inaccurate_date_query
 from ..datetime_parser import to_datetime
 from ..exceptions import OPD_DataUnavailableError, OPD_arcgisAuthInfoError, OPD_TooManyRequestsError
 from .. import log
@@ -199,6 +199,8 @@ class Arcgis(Data_Loader):
         int
             Record count or number of rows in data request
         '''
+
+        date = _clean_date_input(date)
         
         if self._last_count is not None and self._last_count[0]==(date,where):
             logger.debug("Request matches previous count request. Returning saved count.")
@@ -208,7 +210,7 @@ class Arcgis(Data_Loader):
             where_query, record_count = self.__construct_where(date)
 
             if not self.__accurate_count:
-                raise ValueError(f"Count is not accurate for date input {self.__accurate_count}. "
+                raise ValueError(f"Count is not accurate for date input {self.date}. "
                                  "Date field contains data in text format not date format "
                                  "and the text not formatted in a way that makes getting a count "
                                  "possible without loading in the data. Either adjust the input to "
@@ -236,6 +238,12 @@ class Arcgis(Data_Loader):
 
 
     def __request(self, where=None, return_count=False, out_fields="*", out_type="json", offset=0, count=None, sp_ref=None):
+
+        try:
+            r=requests.get(self.url, params={'f':'json'})
+            orderby = [x['name'] for x in r.json()['fields'] if 'OBJECTID' in x['name']][0]
+        except:
+            orderby = None
         
         # Running with no inputs or just an out_type will return metadata only
         url = self.url + "/"
@@ -253,7 +261,7 @@ class Arcgis(Data_Loader):
                 if sp_ref!=None:
                     params["outSR"] = sp_ref
                 if self.date_field!=None:
-                    params["orderByFields"] = self.date_field
+                    params["orderByFields"] = f'{self.date_field}, {orderby}' if orderby else self.date_field
                 
             if count!=None:
                 params["resultRecordCount"] = count
@@ -443,7 +451,7 @@ class Arcgis(Data_Loader):
         where_query = ""
         zero_found = False
         if self._date_format in [0,1] or self._date_format==None:
-            start_date, stop_date = _process_date(date, force_year=is_numeric_year, is_date_string=is_date_string)
+            start_date, stop_date = _process_date(date, is_date_string=is_date_string)
 
             if date_delim=='':
                 start_date = start_date.replace('-','')
@@ -459,7 +467,7 @@ class Arcgis(Data_Loader):
                     continue
                 if k==0:
                     if is_numeric_year:
-                        where_query = f"{self.date_field} >= {start_date} AND  {self.date_field} <= {stop_date}"
+                        where_query = f"{self.date_field} >= {start_date[:4]} AND  {self.date_field} <= {stop_date[:4]}"
                     else:
                         where_query = f"{self.date_field} >= '{start_date}' AND  {self.date_field} <= '{stop_date}'"
                 elif is_numeric_year:
@@ -525,6 +533,8 @@ class Arcgis(Data_Loader):
         pandas or geopandas DataFrame
             DataFrame containing table imported from ArcGIS
         '''
+
+        date = _clean_date_input(date)
         
         where_query, record_count = self.__construct_where(date, date_range_error=False)
         
@@ -534,7 +544,11 @@ class Arcgis(Data_Loader):
             return pd.DataFrame()
 
         batch_size = self.max_record_count or _default_limit
-        nrows = nrows if nrows!=None and record_count>=nrows else record_count
+        if nrows==None or nrows > record_count or not self.__accurate_count:
+            if not self.__accurate_count:
+                nrows_after_read = nrows
+            nrows = record_count
+            
         batch_size = nrows if nrows < batch_size else batch_size
         num_batches = ceil(nrows / batch_size)
             
@@ -557,6 +571,8 @@ class Arcgis(Data_Loader):
                         raise
 
                 features.extend(data["features"])
+
+                assert not self.verify  # Adding 2/2/2026
                 if self.verify:
                     layer_query_result_old = self.__active_layer.query(where=where_query, result_offset=batch*batch_size, 
                         result_record_count=batch_size, return_all_records=False)
@@ -623,22 +639,7 @@ class Arcgis(Data_Loader):
                     df[col] = to_datetime(df[col], unit="ms", errors='coerce')
 
         if not self.__accurate_count:
-            if not format_date:
-                raise ValueError("Dates cannot be filtered if format_date is False for this dataset due to the date column not being a "+
-                                 "esriFieldTypeDate type at the Arcgis source. Note: most other Arcgis datasets will work fine if format_date is False")
-            logger.debug(f"User requested filtering by a date range but this was NOT done in the Arcgis query "+
-                         f"due to the date field not being in a date format. Converting {self.date_field} column to "
-                         f"a datetime in order to filter for requested date range {date}")
-            df[self.date_field] = to_datetime(df[self.date_field], errors='coerce')
-            date_range = [str(x) for x in date]
-            if len(date_range[0])==4:
-                date_range[0] = date_range[0]+'-01-01'
-            if len(date_range[1])==4:
-                date_range[1] = date_range[1] + "-12-31T23:59:59.999"
-            else:
-                date_range[1] = date_range[1] + "T23:59:59.999"
-
-            df = df[ (df[self.date_field] >= date_range[0]) & (df[self.date_field] <= date_range[1]) ]
+            df = _filter_inaccurate_date_query(df, self.date_field, date, format_date, 0, nrows_after_read)
 
         if len(df) > 0:
             has_point_geometry = any("geometry" in x and "x" in x["geometry"] for x in features)

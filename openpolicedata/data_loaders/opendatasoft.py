@@ -3,9 +3,8 @@ import pandas as pd
 import requests
 import urllib3
 
-from .data_loader import Data_Loader, str2json, _url_error_msg, _process_date
+from .data_loader import Data_Loader, str2json, _url_error_msg, _process_date, _clean_date_input
 from .csv_class import TqdmReader
-from ..datetime_parser import to_datetime
 from ..exceptions import OPD_DataUnavailableError
 from .. import log
 
@@ -97,6 +96,8 @@ class Opendatasoft(Data_Loader):
         int
             Record count or number of rows in data request
         '''
+
+        date = _clean_date_input(date)
 
         if self._last_count is not None and self._last_count[0]==date:
             logger.debug("Request matches previous count request. Returning saved count.")
@@ -200,7 +201,7 @@ class Opendatasoft(Data_Loader):
 
     def __construct_where(self, date=None):
         if self.date_field!=None and date!=None:
-            start_date, stop_date = _process_date(date, date_field=self.date_field)
+            start_date, stop_date = _process_date(date)
             where_query = f"{self.date_field} >= '{start_date}' AND {self.date_field} <= '{stop_date}'"
         else:
             where_query = None
@@ -235,13 +236,16 @@ class Opendatasoft(Data_Loader):
             DataFrame containing downloaded
         '''
 
+        date = _clean_date_input(date)
+
         nrows = nrows if nrows!=None else -1
 
         if sortby=="date":
             if self.date_field:
                 sortby = self.date_field
             else:
-                raise ValueError("Date sorting was requested but no date field was provided")
+                warnings.warn("Date sorting was requested but no date field was provided. Resulting data will not be sorted by date")
+                sortby = None
 
         where_query = self.__construct_where(date)
         df = self.__request(where=where_query, offset=offset, count=nrows, pbar=pbar, sortby=sortby)

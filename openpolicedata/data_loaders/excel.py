@@ -71,17 +71,16 @@ class Excel(Data_Loader):
         
         try:
             if is_zip:
-                with UrlIoContextManager(self.url) as fp:
-                    with ZipFile(fp, 'r') as z:
-                        if not file_in_zip:
-                            if len(z.namelist())>1:
-                                raise ValueError(f"More than one file found in zip file at {self.url}. One file must be specified if there is more than one file.")
-                            else:
-                                file_in_zip = z.namelist()[0]
-                        elif file_in_zip not in z.namelist():
-                            raise ValueError(f'Unable to find file {file_in_zip} in {self.url}')
+                with UrlIoContextManager(self.url) as fp, ZipFile(fp, 'r') as z:
+                    if not file_in_zip:
+                        if len(z.namelist())>1:
+                            raise ValueError(f"More than one file found in zip file at {self.url}. One file must be specified if there is more than one file.")
+                        else:
+                            file_in_zip = z.namelist()[0]
+                    elif file_in_zip not in z.namelist():
+                        raise ValueError(f'Unable to find file {file_in_zip} in {self.url}')
 
-                        self.excel_file = pd.ExcelFile(BytesIO(z.read(file_in_zip)))
+                    self.excel_file = pd.ExcelFile(BytesIO(z.read(file_in_zip)))
             else:
                 self.excel_file = pd.ExcelFile(self.url)
         except urllib.error.HTTPError as e:

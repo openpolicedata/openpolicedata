@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 from tqdm import tqdm
 
-from .data_loader import Data_Loader, str2json, _url_error_msg, _process_date, _default_limit, _use_gpd_force, _has_gpd
+from .data_loader import Data_Loader, str2json, _url_error_msg, _process_date, _default_limit, _use_gpd_force, _has_gpd, _clean_date_input
 from ..datetime_parser import to_datetime
 from ..exceptions import OPD_DataUnavailableError, OPD_TooManyRequestsError
 from .. import log
@@ -102,6 +102,8 @@ class Carto(Data_Loader):
             Record count or number of rows in data request
         '''
 
+        date = _clean_date_input(date)
+
         if self._last_count is not None and self._last_count[0]==date:
             logger.debug("Request matches previous count request. Returning saved count.")
             return self._last_count[1]
@@ -176,7 +178,7 @@ class Carto(Data_Loader):
 
     def __construct_where(self, date=None):
         if self.date_field!=None and date!=None:
-            start_date, stop_date = _process_date(date, date_field=self.date_field)
+            start_date, stop_date = _process_date(date)
             where_query = f"{self.date_field} >= '{start_date}' AND {self.date_field} <= '{stop_date}'"
         else:
             where_query = None
@@ -208,6 +210,8 @@ class Carto(Data_Loader):
         pandas or geopandas DataFrame
             DataFrame containing downloaded
         '''
+
+        date = _clean_date_input(date)
         
         if self._last_count is not None and self._last_count[0]==date:
             record_count = self._last_count[1]

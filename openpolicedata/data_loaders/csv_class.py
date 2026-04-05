@@ -250,6 +250,8 @@ class Csv(Data_Loader):
             DataFrame containing table imported from CSV
         '''
 
+        date = _clean_date_input(date)
+
         if isinstance(nrows, float):
             nrows = int(nrows)
         

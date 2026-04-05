@@ -5,7 +5,7 @@ import re
 import requests
 from tqdm import tqdm
 
-from .data_loader import Data_Loader, _url_error_msg, str2json, _process_date
+from .data_loader import Data_Loader, _url_error_msg, str2json, _process_date, _clean_date_input, _filter_inaccurate_date_query
 from ..datetime_parser import to_datetime
 from ..exceptions import OPD_DataUnavailableError, OPD_TooManyRequestsError
 from .. import log
@@ -97,15 +97,27 @@ class Ckan(Data_Loader):
             Record count or number of rows in data request
         '''
 
+        date = _clean_date_input(date)
+
         if self._last_count is not None and self._last_count[0]==date and self._last_count[1]==opt_filter:
             logger.debug("Request matches previous count request. Returning saved count.")
             return self._last_count[2]
         else:
             where = self.__construct_where(date, opt_filter)
+
+            if not self.__accurate_count:
+                raise ValueError(f"Count is not accurate for date input {self.date}. "
+                                 "Date field contains data in text format not date format "
+                                 "and the text not formatted in a way that makes getting a count "
+                                 "possible without loading in the data. Either adjust the input to "
+                                 "get_count to get a range of years instead of a range of dates or "
+                                 "load in the data for the current date range")
+
             json = self.__request(where=where, return_count=True)
             count = json['result']['records'][0]['count']
 
-        self._last_count = (date, opt_filter, count, where)
+        if self.__accurate_count:
+            self._last_count = (date, opt_filter, count, where)
 
         return count
 
@@ -181,6 +193,8 @@ class Ckan(Data_Loader):
 
 
     def __construct_where(self, date=None, opt_filter=None, filter_year=False, sample_data=None):
+        self.__accurate_count = True
+
         if self.date_field!=None and date!=None:
             datetime_format = None
             if not sample_data:
@@ -216,15 +230,16 @@ class Ckan(Data_Loader):
                             raise ValueError(f"Dates in {self.date_field} are text (not date) values and have unknown format (i.e. {dates[0]})")
 
             if filter_year:
-                start_date, stop_date = _process_date(date, date_field=self.date_field, force_year=True)
+                start_date, stop_date = _process_date(date)
+                self.__accurate_count = re.search(r'\d{4}-01-01', start_date) and re.search(r'\d{4}-12-31T23:59:59.999', stop_date)
                 where = '('
-                for y in range(int(start_date),int(stop_date)+1):
+                for y in range(int(start_date[:4]),int(stop_date[:4])+1):
                     # %25 is % wildcard symbol
                     where+='"' + self.date_field + '"' + rf" LIKE '%{y}%' OR "
                 where = where[:-4] + ')'
             else:
                 self._sort_by_date = True
-                start_date, stop_date = _process_date(date, date_field=self.date_field, datetime_format=datetime_format)
+                start_date, stop_date = _process_date(date, datetime_format=datetime_format)
                 where = f"""("{self.date_field}" >= '{start_date}' AND "{self.date_field}" <= '{stop_date}')"""
         else:
             where = None
@@ -278,6 +293,8 @@ class Ckan(Data_Loader):
             DataFrame containing downloaded
         '''
 
+        date = _clean_date_input(date)
+
         data = self.__request(count=100)
         date_cols = [x['id'] for x in data['result']["fields"] if x["type"] in ['timestamp','date']]
         
@@ -288,7 +305,8 @@ class Ckan(Data_Loader):
             where_query = self.__construct_where(date, opt_filter, sample_data=data)
             json = self.__request(where=where_query, return_count=True, out_fields=select)
             record_count = json['result']['records'][0]['count']
-            self._last_count = (date, opt_filter, record_count, where_query)
+            if self.__accurate_count:
+                self._last_count = (date, opt_filter, record_count, where_query)
 
         record_count-=offset
         if record_count<=0:
@@ -296,6 +314,11 @@ class Ckan(Data_Loader):
 
         # Default fetch limit per https://docs.ckan.org/en/2.9/maintaining/datastore.html#ckanext.datastore.logic.action.datastore_search_sql
         batch_size = 32000
+        if nrows==None or nrows > record_count or not self.__accurate_count:
+            if not self.__accurate_count:
+                nrows_after_read = nrows
+            nrows = record_count
+            
         nrows = nrows if nrows!=None and record_count>=nrows else record_count
         batch_size = nrows if nrows < batch_size else batch_size
         num_batches = ceil(nrows / batch_size)
@@ -316,7 +339,8 @@ class Ckan(Data_Loader):
             if self.date_field:
                 sortby = self.date_field
             else:
-                raise ValueError("Date sorting was requested but no date field was provided")
+                warnings.warn("Date sorting was requested but no date field was provided. Resulting data will not be sorted by date")
+                sortby = "_id"
         elif not sortby:
             # order by_id guarantees data order remains the same when paging
             sortby = "_id"
@@ -352,6 +376,9 @@ class Ckan(Data_Loader):
                 if col in df:
                     logger.debug(f"Column {col} had a data type of date. Converting values to datetime objects.")
                     df[col] = to_datetime(df[col])
+
+        if not self.__accurate_count:
+            df = _filter_inaccurate_date_query(df, self.date_field, date, format_date, 0, nrows_after_read)
 
         if len(df) > 0:
             if output_type=='set':
