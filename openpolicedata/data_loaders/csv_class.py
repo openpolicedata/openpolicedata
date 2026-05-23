@@ -300,7 +300,7 @@ class Csv(Data_Loader):
                     raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(self.url))
                 else:
                     raise e
-            except requests.exceptions.ConnectionError as e:
+            except requests.ConnectionError as e:
                 if 'Max retries exceeded' in str(e):
                     raise OPD_DataUnavailableError(*e.args, _url_error_msg.format(self.url))
                 else:

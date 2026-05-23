@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-import datetime
-from datetime import datetime
+from datetime import datetime, date
 from io import BytesIO
 import numbers
 import json
@@ -348,7 +347,7 @@ class Data_Loader(ABC):
 			check.sort(reverse=True)
 			year = check.pop(0)
 		else:
-			year = datetime.date.today().year
+			year = date.today().year
 
 		oldest_recent = 20
 		max_misses_gap = 10

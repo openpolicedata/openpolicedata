@@ -938,7 +938,7 @@ class Source:
             if use_coverage:
                 years.update(range(df["coverage_start"].year, df["coverage_end"].year+1))
                 if not use_coverage_only:
-                    if req_years!=None:
+                    if req_years is not None:
                         years_to_check = [x for x in req_years if x not in years]
                     else:
                         years_to_check = _get_years_to_check(years, cur_year, force, loader.isfile())
@@ -953,7 +953,7 @@ class Source:
         years = list(years)
         years.sort()
 
-        if req_years!=None:
+        if req_years is not None:
             years = [x for x in years if x in req_years]
 
         return years

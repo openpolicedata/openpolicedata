@@ -90,3 +90,14 @@ def test_format_date_false_not_allowed(source, table, year, url):
 		src = opd.Source(source)
 		with pytest.raises(ValueError, match='Dates cannot be filtered'):
 			src.load(table, year, format_date=False, nrows=1, url=url)
+
+def test_get_years_to_check():
+	assert data._get_years_to_check([2022, 2020], cur_year=2023, force=False, isfile=False) == [2023]
+
+@pytest.mark.parametrize('year, force, isfile', [(2020,True, False), (2022,False,True), (2023, True, True), (2023, False, False)])
+def test_get_years_to_check_empty(year, force, isfile):
+	assert data._get_years_to_check([year], cur_year=2023, force=force, isfile=isfile) == []
+
+@pytest.mark.parametrize('force, isfile', [(True, False), (True,True), (False, False)])
+def test_get_years_to_check_bool(force, isfile):
+	assert data._get_years_to_check([2020, 2021], cur_year=2023, force=force, isfile=isfile) == [2022, 2023]

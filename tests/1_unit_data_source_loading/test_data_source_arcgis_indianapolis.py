@@ -80,6 +80,6 @@ def test_load(gt, row, src, date, nrows, offset):
 
 def test_format_date_false(src):
 	if check_for_dataset(source, table):
-		table = src.load(table, year, format_date=False, nrows=1)
+		t = src.load(table, year, format_date=False, nrows=1)
 		# Confirm date has not been formatted
-		assert isinstance(table.table[table.date_field].iloc[0],str)
+		assert isinstance(t.table[t.date_field].iloc[0],str)

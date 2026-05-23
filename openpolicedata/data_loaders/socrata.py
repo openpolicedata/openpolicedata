@@ -84,6 +84,13 @@ class Socrata(Data_Loader):
 
             if data_type=='timestamp' or date_formats=={'yyyymmdd'}:
                 where = self.date_field + " between '" + start_date + "' and '" + stop_date +"'"
+            elif data_type=='numeric':
+                assert date_formats=={'YYYY'}
+                accurate = date[0].month==1 and date[0].day==1 and date[1].month==12 and date[1].day==31
+                if not accurate:
+                    raise ValueError('Only the year is provided in the date column. Unable to filter by specific dates. Please filter by full years.')
+                where = self.date_field + " between '" + start_date[:4] + "' and '" + stop_date[:4] +"'"
+                where = [data_loader.Where(where=where, accurate=accurate)]
             else:
                 start_range, full_years, stop_range = datetime_parser.split_date_range(start_date, stop_date)
                 where = self.year_where_query(full_years)
@@ -91,6 +98,8 @@ class Socrata(Data_Loader):
                     where = where+" OR " if len(where)>0 else ''
                     if any(x in ['YYYY Q'] for x in date_formats):
                         raise ValueError('Unable to filter by date. Filter by year instead. Dates for this dataset only provide the quarter an event occurred (e.g. 2025 Q1).')
+                    if any(x in ['YYYY'] for x in date_formats):
+                        raise ValueError('Unable to filter by date. Filter by year instead. Date column only provides the year.')
                     for x in date_formats:
                         if x=='yyyymmdd':
                             where+=f'({self.yyyymmdd_where_query(start_range, stop_range)}) OR '
@@ -199,7 +208,7 @@ class Socrata(Data_Loader):
         for w in where:
             try:
                 results = self.client.get(self.data_set, where=w.where, select="count(*)")
-            except (requests.HTTPError, requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError) as e:
+            except (requests.HTTPError, requests.exceptions.ReadTimeout, requests.ConnectionError) as e:
                 raise OPD_SocrataHTTPError(self.url, self.data_set, *e.args, _url_error_msg.format(self.get_api_url()))
             except Exception as e: 
                 if len(e.args)>0 and isinstance(e.args[0],str) and (e.args[0].startswith('Unknown response format: text/html') or \
@@ -511,8 +520,11 @@ class Socrata(Data_Loader):
         try:
             # Check if date is formatted as a date or is text that needs to be handled more carefully
             meta = self.client.get_metadata(self.data_set)
-        except:
+        except (requests.HTTPError, requests.ConnectionError) as e:
+            raise OPD_SocrataHTTPError(self.url, self.data_set, *e.args, _url_error_msg.format(self.get_api_url()))
+        except Exception as e:
             check_meta = False
+            raise
 
         data_formats = set()
         if check_meta:
@@ -521,6 +533,21 @@ class Socrata(Data_Loader):
                 if column[0]['dataTypeName']=='text':
                     if 'cachedContents' in column[0]:
                         data_formats = self.__get_formats_from_meta(column)
+                    else:
+                        raise ValueError(f'Unable to determine format of date column {self.date_field}')
+                elif column[0]['dataTypeName']=='number':
+                    if 'cachedContents' in column[0] and ('smallest' in column[0]['cachedContents'] or 'largest' in column[0]['cachedContents']):
+                        if 'smallest' in column[0]['cachedContents'] and isinstance(column[0]['cachedContents']['smallest'],str) and \
+                            column[0]['cachedContents']['smallest'].isdigit():
+                            data_formats.add('YYYY')
+                        if 'largest' in column[0]['cachedContents'] and isinstance(column[0]['cachedContents']['largest'],str) and \
+                            column[0]['cachedContents']['largest'].isdigit():
+                            data_formats.add('YYYY')
+                        if len(data_formats)==0:
+                            raise NotImplementedError()
+                        return 'numeric', data_formats
+                    else:
+                        raise ValueError(f'Unable to determine format of date column {self.date_field}')
                 else:  # This is a timestamp
                     return 'timestamp', None
                 
@@ -591,6 +618,8 @@ class Socrata(Data_Loader):
                         formats.add('MM/DD/YY')
                     elif re.search(r'^\d{4}\s*Q\d$', value):
                         formats.add('YYYY Q')
+                    elif re.search(r'^\d{4}$', value):
+                        formats.add('YYYY')
                     else:
                         raise NotImplementedError()
                 else:

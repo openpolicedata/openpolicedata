@@ -98,6 +98,16 @@ def test_year(datasets):
     rem = datasets["Year"][[type(x)!=int for x in datasets["Year"]]]
     assert ((rem == opd.defs.MULTI) | (rem == opd.defs.NA)).all()
 
+@pytest.mark.parametrize('col', ['coverage_start','coverage_end'])
+def test_date_type_cols(datasets, col):
+    assert pd.api.types.is_datetime64_any_dtype(datasets[col])
+
+
+def test_coverage_start_lt_end(datasets):
+    df = datasets[datasets['coverage_start'].notnull()]
+    assert (df['coverage_start'] <= df['coverage_end']).all()
+
+
 def test_single_year_coverage(datasets):
     for k in range(len(datasets)):
         if not isinstance(datasets.iloc[k]['Year'], str):

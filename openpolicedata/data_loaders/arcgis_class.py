@@ -390,11 +390,11 @@ class Arcgis(Data_Loader):
                 DateParseParams(re.compile(r"^(19|20)\d{6}\b"), ineq_comp=True),  # YYYYMMDD
                 DateParseParams(re.compile(r"^(19|20)\d{12}\b"), ineq_comp=True),  # YYYYMMDDHHMMSS
                 DateParseParams(re.compile(r"^(19|20)\d{2}-\d{2}-\d{2}(\b|T)"), ineq_comp=True, date_delim="-"),  # YYYY-MM-DDThh:mm:ss
+                DateParseParams(re.compile(r"^(19|20)\d{2}/\d{2}/\d{2}"), ineq_comp=True, date_delim="/"),  # YYYY-MM-DDThh:mm:ss
                 DateParseParams(re.compile(r"^[A-Z][a-z]+ \d{1,2}, (19|20)\d{2}\b"), "{} LIKE '[A-Z]% [0-9][0-9], {}' OR {} LIKE '[A-Z]% [0-9], {}'"),  # Month DD, YYYY
                 DateParseParams(re.compile(r"^\d{1,2}[-/]\d{1,2}[-/](19|20)\d{2}\b"), 
-                    "{} LIKE '%[0-9][0-9][/-][0-9][0-9][/-]{}%' OR {} LIKE '%[0-9][/-][0-9][0-9][/-]{}%' OR " + 
-                    "{} LIKE '%[0-9][/-][0-9][/-]{}%' OR {} LIKE '%[0-9][0-9][/-][0-9][/-]{}%'"),  # mm/dd/yyyy or mm-dd-yyyy
-                DateParseParams(re.compile(r"^\d{4}[-/]\d{1,2}$"), "{} LIKE '{}[-/][0-9][0-9]' OR {} LIKE '{}[-/][0-9]'", full_date=False),  # YYYY-MM or YYYY/M
+                    "{} LIKE '%[/-]{}%'"),  # mm/dd/yyyy or mm-dd-yyyy
+                DateParseParams(re.compile(r"^\d{4}[-/]\d{1,2}$"), "{} LIKE '{}[-/]%'", full_date=False),  # YYYY-MM or YYYY/M
                 DateParseParams(re.compile(r"^\d{4}$"), "{} = '{}'", full_date=False),  # YYYY
                 DateParseParams(re.compile(r"^\d{1,2}[-/]\d{4}$"), "{} LIKE '[0-9][0-9][-/]{}' OR {} LIKE '[0-9][-/]{}'", full_date=False),  # MM-YYYY or MM/YYYY
             ]
@@ -419,12 +419,9 @@ class Arcgis(Data_Loader):
         if self._ineq_comp:
             where_query, record_count = self._build_date_query_date_type(date, self._date_delim, is_date_string=True)
         else:
-            date = [date] if isinstance(date, numbers.Number) else date.copy()
-            for k,y in enumerate(date):
-                y = str(y) if isinstance(y, pd.Timestamp) else y
-                if isinstance(y,str) and re.search(r'^\d{4}-\d{2}-\d{2}', y):
-                    date[k] = y[:4]
-                    self.__accurate_count = False
+            # Determine whether filtering by year will produce requested result or not
+            self.__accurate_count = date[0].month == 1 and date[0].day==1 and date[1].month == 12 or date[1].day == 31
+            date = [str(x)[:4] for x in date]
                     
             if (not self._full_date or date_range_error) and any([isinstance(x,str) and len(x)!=4 for x in date]):
                 # Currently can only handle years
@@ -433,9 +430,8 @@ class Arcgis(Data_Loader):
                                 "not a date range ([2022-01-01, 2022-03-01]).")
             
             where_query = self._date_format.format(self.date_field, date[0])
-            if len(date)>1:
-                for x in range(int(date[0])+1,int(date[1])+1):
-                    where_query = f"{where_query} or " + self._date_format.format(self.date_field, x)
+            for x in range(int(date[0])+1,int(date[1])+1):
+                where_query = f"{where_query} or " + self._date_format.format(self.date_field, x)
 
             record_count = self.__request(where=where_query, return_count=True)["count"]
 
@@ -639,7 +635,10 @@ class Arcgis(Data_Loader):
                     df[col] = to_datetime(df[col], unit="ms", errors='coerce')
 
         if not self.__accurate_count:
+            df['tmp_idx'] = range(0,len(df))
             df = _filter_inaccurate_date_query(df, self.date_field, date, format_date, 0, nrows_after_read)
+            features = [x for k,x in enumerate(features) if k in df['tmp_idx']]
+            df = df.drop(columns='tmp_idx')
 
         if len(df) > 0:
             has_point_geometry = any("geometry" in x and "x" in x["geometry"] for x in features)

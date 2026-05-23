@@ -128,8 +128,18 @@ def test_load_year(gt, row, loader, date, nrows, offset):
     df = loader.load(date=date, nrows=nrows, offset=offset)
     check_result(df, gt, row)
 
-def test_load_count0(loader):
+def test_load_count0_too_big_offset(loader):
+    if not check_for_dataset(source, table):
+        return
     df = loader.load(offset=10_000_000)  # Simulate with offset that is undoubtedly larger than dataset
+    assert len(df)==0
+
+
+def test_load_count0_date_out_of_range(row, loader):
+    if not check_for_dataset(source, table):
+        return
+    date = [row['coverage_start']-pd.Timedelta(days=365*2), row['coverage_start']-pd.Timedelta(days=365)]
+    df = loader.load(date=date)  # Simulate with offset that is undoubtedly larger than dataset
     assert len(df)==0
 
 

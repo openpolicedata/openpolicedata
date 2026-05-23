@@ -5,7 +5,7 @@ from sodapy import Socrata as SocrataClient
 
 if __name__ == "__main__":
 	sys.path.append('../openpolicedata')
-from openpolicedata import data_loaders, defs, datetime_parser
+from openpolicedata import data_loaders, defs
 import pandas as pd
 
 from test_utils import check_for_dataset, check_result

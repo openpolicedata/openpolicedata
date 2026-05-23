@@ -183,7 +183,7 @@ class Opendatasoft(Data_Loader):
             try:
                 r = requests.get(url, params=params, stream=True)
                 r.raise_for_status()
-            except requests.exceptions.ConnectionError as e:
+            except requests.ConnectionError as e:
                 if len(e.args)>0 and isinstance(e.args[0], urllib3.exceptions.MaxRetryError):
                     raise OPD_DataUnavailableError(self.get_api_url(), _url_error_msg.format(self.get_api_url())) from e
                 else:

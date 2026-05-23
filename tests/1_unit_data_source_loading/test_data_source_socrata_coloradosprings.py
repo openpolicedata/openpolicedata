@@ -35,11 +35,81 @@ def gt(row):
 def src():
     return Source(source)
 
-# def get_count(self, 
-#                   verbose: bool | str | int = False,
-#                   url: str | None = None,
-#                   id: str | None = None
-#                   ) -> int:
+
+def test_get_years(gt, row, src):
+    if not check_for_dataset(source, table):
+        return
+    
+    true_years = gt[row['date_field']].dt.year.unique()
+
+    years = src.get_years(table)
+
+    assert all(true_years==years)
+
+
+def test_get_years_coverage_end_not_updated(gt, row, src):
+    if not check_for_dataset(source, table):
+        return
+    
+    true_years = gt[row['date_field']].dt.year.unique()
+
+    # Note this will fail if this dataset ever falls behind because get_years only will check
+    # future years if most recent year is within the last few years
+    idx = src.datasets[src.datasets['TableType']==table].index
+    # Simulate that coverage_end is old and more recent data available
+    src.datasets.loc[idx, 'coverage_end'] = src.datasets.loc[idx, 'coverage_end'] - pd.Timedelta(days=366)
+
+    years = src.get_years(table)
+
+    assert all(true_years==years)
+
+
+def test_get_years_use_coverage_only(gt, row, src):
+    if not check_for_dataset(source, table):
+        return
+    
+    true_years = gt[row['date_field']].dt.year.unique()
+
+    # Note this will fail if this dataset ever falls behind because get_years only will check
+    # future years if most recent year is within the last few years
+    idx = src.datasets[src.datasets['TableType']==table].index
+    # Simulate that coverage_end is old and more recent data available
+    src.datasets.loc[idx, 'coverage_end'] = src.datasets.loc[idx, 'coverage_end'] - pd.Timedelta(days=366)
+
+    years = src.get_years(table, use_coverage_only=True)
+
+    true_years = list(true_years)
+    true_years.remove(max(true_years))
+    assert true_years==years
+
+
+def test_get_years_manual(gt, row, src):
+    if not check_for_dataset(source, table):
+        return
+    
+    true_years = gt[row['date_field']].dt.year.unique()
+
+    # Note this will fail if this dataset ever falls behind because get_years only will check
+    # future years if most recent year is within the last few years
+    idx = src.datasets[src.datasets['TableType']==table].index
+    # Simulate that coverage_end is old and more recent data available
+    src.datasets.loc[idx, 'coverage_end'] = src.datasets.loc[idx, 'coverage_end'] - pd.Timedelta(days=366)
+
+    years = src.get_years(table, manual=True)
+
+    assert all(true_years==years)
+
+def test_get_years_req_years(gt, row, src):
+    if not check_for_dataset(source, table):
+        return
+    
+    true_years = gt[row['date_field']].dt.year.unique()
+
+    req_years = true_years[:2]
+    years = src.get_years(table, req_years=req_years)
+
+    assert all(req_years==years)
+
 
 def test_get_count(gt, src):
     if not check_for_dataset(source, table):
@@ -68,15 +138,6 @@ def test_load_all(gt, row, src):
     check_result(df, gt, row)
 
 
-def test_load_date_filter_zero_count(row, src):
-    if not check_for_dataset(source, table):
-        return
-    
-    date = [row['coverage_start']-pd.Timedelta(days=365*2), row['coverage_start']-pd.Timedelta(days=365)]
-    df = src.load(table, date=date).table
-    assert len(df)==0
-
-
 @pytest.mark.parametrize('date', [2025, [2024, 2025], ['2024-04-01', '2025-11-01']])
 @pytest.mark.parametrize('nrows', [None, 2])
 @pytest.mark.parametrize('offset', [0, 1])
@@ -92,3 +153,14 @@ def test_load(gt, row, src, date, nrows, offset):
     
     df = src.load(table, date=date, nrows=nrows, offset=offset).table
     check_result(df, gt, row)
+
+
+def test_load_gen(gt, row, src):
+    if check_for_dataset(source, table):
+        nbatch = 50
+        df = pd.DataFrame()
+        for t in src.load_iter(table, 'MULTIPLE', nbatch=nbatch):
+            df = pd.concat([df, t.table])
+
+        check_result(df, gt, row)
+            

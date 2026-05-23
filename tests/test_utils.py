@@ -4,6 +4,7 @@ import time
 import pandas as pd
 import os
 import re
+import shapely
 import subprocess
 import warnings
 import urllib
@@ -124,8 +125,8 @@ def shuffle(lst):
     random.setstate(rand_state)
 
 
-def check_for_dataset(source, table_type, warn=True):
-	ds = opd.datasets.query(source_name=source, table_type=table_type)
+def check_for_dataset(source, table_type, state=None, warn=True):
+	ds = opd.datasets.query(source_name=source, table_type=table_type, state=state)
 	if len(ds):
 		return True
 	elif warn:
@@ -252,12 +253,13 @@ def load_data(src, table_type, year, agency, nrows, url, id, caught_exceptions_w
 
 	return table
 
-def check_result(df, gt, row):
+def check_result(df, gt, row, convert_to_date=True):
     assert len(gt)>0, 'Ground truth is empty. Unintentionally filtered for empty table'
-    df[row['date_field']] = opd.datetime_parser.to_datetime(df[row['date_field']])
+    if convert_to_date:
+        df[row['date_field']] = opd.datetime_parser.to_datetime(df[row['date_field']])
 
-    if not isinstance(df[row['date_field']].dtype, pd.PeriodDtype):
-        df[row['date_field']] = df[row['date_field']].dt.tz_localize(None)
+        if not isinstance(df[row['date_field']].dtype, pd.PeriodDtype):
+            df[row['date_field']] = df[row['date_field']].dt.tz_localize(None)
 
     df = df.dropna(axis=1, how='all')
     gt = gt.dropna(axis=1, how='all')
@@ -267,8 +269,15 @@ def check_result(df, gt, row):
     df = df.apply(lambda x: x.apply(lambda y: str(y) if isinstance(y,dict) else y))
     gt = gt.apply(lambda x: x.apply(lambda y: str(y) if isinstance(y,dict) else y))
 
+    df = df.sort_values(by=df.columns.tolist()).reset_index(drop=True)
+    gt = gt.sort_values(by=df.columns.tolist()).reset_index(drop=True)
+
+    if 'geometry' in df:  # Force NaN points to be equal
+         df['geometry'] = df['geometry'].apply(lambda x: shapely.geometry.point.Point(-1000, -1000) if pd.notnull(x) and pd.isnull(x.x) else x)
+         gt['geometry'] = gt['geometry'].apply(lambda x: shapely.geometry.point.Point(-1000, -1000) if pd.notnull(x) and pd.isnull(x.x) else x)
+
     # Sorting is done to account for rows that are sorted by date but where rows with same date are in different order
-    pd.testing.assert_frame_equal(df.sort_values(by=df.columns.tolist()).reset_index(drop=True), gt.sort_values(by=df.columns.tolist()).reset_index(drop=True))
+    pd.testing.assert_frame_equal(df, gt)
     time.sleep(0.1) # Just so we don't cause issues at the URL
 
 def check_load_for_datasets(datasets, skip, start_idx, source, query, nrows=None, testfcn=None, datefcn=None):
@@ -361,7 +370,10 @@ def get_remaining_datasets(datasets):
         files.extend(glob.glob(os.path.join('tests', f, '**','*.py'), recursive=True))
 
     matches = []
+    exclude = ['test_socrata_general.py']
     for f in files:
+        if os.path.basename(f) in exclude:
+             continue
         with open(f, 'r') as fid:
             for line in fid:
                 m = re.search(r'^source\s*=\s*[\"\'](.+)[\'\"]', line)
