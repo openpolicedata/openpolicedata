@@ -88,7 +88,7 @@ class CombinedDataset(Data_Loader):
         '''
         return True
     
-    def load(self, nrows=None, offset=None, pbar=True, **kwargs):
+    def load(self, date=None, nrows=None, offset=None, pbar=True, **kwargs):
         """Load data for query. 
 
         **kwargs will be passed to the load function of the data_class
@@ -106,7 +106,7 @@ class CombinedDataset(Data_Loader):
                 # Tables in dfs will be merged
                 on.append(self.datasets[k][0]['on'])
 
-            dfs.append(loader.load(_first_time=first_time, **kwargs))
+            dfs.append(loader.load(date=date, _first_time=first_time, **kwargs))
             first_time = False
             if loader!=self.loaders[-1]:
                 sleep(0.5)  # Reduce likelihood of timeout due to repeated requests
