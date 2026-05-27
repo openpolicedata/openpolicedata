@@ -964,7 +964,8 @@ class Source:
                      year: str | int | None = None, 
                      partial_name: str | None = None,
                      url: str | None = None,
-                     id: str | None = None
+                     id: str | None = None,
+                     force: bool = False
                      ) -> list[str]:
         '''Get agencies available for 1 or more datasets
 
@@ -983,6 +984,10 @@ class Source:
             (Optional) If set, URL must contain this string. Can be used in combination with id when multiple datasets match a set of inputs.
         id - str | None
             (Optional) If set, dataset ID must equal this value. Can be used in combination with url when multiple datasets match a set of inputs.
+        force : bool
+            (Optional) For file-based data, an exception will be thrown unless force 
+            is true. It may be more efficient to load the data and extract the years
+            manually
 
         Returns
         -------
@@ -999,7 +1004,10 @@ class Source:
             src = src[src['dataset_id'].apply(lambda x: x==id)]
 
         if year != None:
-            src = src[src["Year"] == year]
+            m = src["Year"] == year
+            if m.sum()==0:
+                raise ValueError(f'No datasets have {year} in the Year column. Avaliable dataset years are {src["Year"].tolist()}')
+            src = src[m]
 
         if len(src) == 1:
             src = src.iloc[0]
@@ -1011,29 +1019,32 @@ class Source:
         # Otherwise return self.agency
         if src["Agency"] == defs.MULTI:
             _check_version(src)
-            year = None if year == defs.MULTI else year
             loader = self.__get_loader(src["DataType"], src["URL"], src['query'], dataset=src["dataset_id"], 
                                        date_field=src["date_field"], agency_field=src["agency_field"])
-            if src["DataType"] ==defs.DataType.CSV:
+            
+            if not force and src["DataType"] in [defs.DataType.CSV, defs.DataType.EXCEL, defs.DataType.HTML]:
+                raise ValueError(f"Extracting agencies for a {src['DataType']} file requires reading the whole file in. In most cases, "+
+                    "running load() load in the data and manually getting the agencies will be more "
+                    "efficient. If running get_agencies is still desired, set force=True")
+
+            if src['DataType'] ==defs.DataType.ArcGIS:
                 raise NotImplementedError(f"Unable to get agencies for {src['DataType']}")
-            elif src['DataType'] ==defs.DataType.ArcGIS:
-                raise NotImplementedError(f"Unable to get agencies for {src['DataType']}")
-            elif src["DataType"] in [defs.DataType.EXCEL, defs.DataType.HTML]:
-                df = loader.load(year)
+            elif src["DataType"] in [defs.DataType.EXCEL, defs.DataType.HTML, defs.DataType.CSV]:
+                df = loader.load()
                 return df[src["agency_field"]].unique().tolist()
             elif src['DataType'] ==defs.DataType.SOCRATA:
                 opt_filter = 'LOWER('+ src["agency_field"] + ") LIKE '%" + partial_name.lower() + "%'" if partial_name else None
 
                 select = "DISTINCT " + src["agency_field"]
 
-                agency_set = loader.load(year, opt_filter=opt_filter, select=select, output_type="set")
+                agency_set = loader.load(opt_filter=opt_filter, select=select, output_type="set")
                 return list(agency_set)
             elif src['DataType'] ==defs.DataType.CKAN:
                 opt_filter = 'LOWER("'+ src["agency_field"] + '")' + " LIKE '%" + partial_name.lower() + "%'" if partial_name else None
 
                 select = 'DISTINCT "' + src["agency_field"] + '"'
 
-                agency_set = loader.load(year, opt_filter=opt_filter, select=select, output_type="set")
+                agency_set = loader.load(opt_filter=opt_filter, select=select, output_type="set")
                 return list(agency_set)
             else:
                 raise ValueError(f"Unknown data type: {src['DataType']}")
