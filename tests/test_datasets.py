@@ -220,6 +220,20 @@ def test_arcgis_urls(datasets):
             assert result != None
             assert len(url) == result.span()[1]
 
+@pytest.mark.parametrize(
+    "url_fragment, data_type",
+    [
+        (".csv", opd.defs.DataType.CSV.value),
+        (".xls", opd.defs.DataType.EXCEL.value),
+        ("MapServer", opd.defs.DataType.ArcGIS.value),
+        ("FeatureServer", opd.defs.DataType.ArcGIS.value),
+    ],
+)
+def test_urls_match_data_type_for_obvious_fragments(datasets, url_fragment, data_type):
+    ds = datasets[datasets["URL"].str.contains(url_fragment, case=False, regex=False, na=False)]
+    assert len(ds) > 0
+    assert (ds["DataType"] == data_type).all()
+
 def test_source_list_by_state(datasets, use_changed_rows):
     state = "Virginia"
     df = opd.datasets.query(state=state)
