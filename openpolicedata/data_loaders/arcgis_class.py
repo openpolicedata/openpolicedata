@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 import itertools
 from math import ceil
-import numbers
 from numpy import nan
 import pandas as pd
 import re
@@ -85,7 +84,6 @@ class Arcgis(Data_Loader):
         self._date_type = None
         self._date_format = None
         self.date_field = date_field
-        self.verify = False
         self.query = str2json(query)
 
         # Table vs. Layer: https://developers.arcgis.com/rest/services-reference/enterprise/layer-feature-service-.htm
@@ -115,8 +113,6 @@ class Arcgis(Data_Loader):
         else:
             raise ValueError("Unexpected ArcGIS layer type: {}".format(meta["type"]))
 
-        self.__set_verify(_verify_arcgis)
-
 
     def isfile(self):
         '''Returns False to indicate that ArcGIS data is not file-based
@@ -126,60 +122,6 @@ class Arcgis(Data_Loader):
         False
         '''
         return False
-
-
-    def __set_verify(self, verify):
-        # Sets whether to validate OPD queries against ones using arcgis package
-        if not verify:
-            self.verify = verify
-        else:
-            # https://developers.arcgis.com/python/
-            try:
-                from arcgis.features import FeatureLayerCollection
-                self.verify =verify
-            except:
-                self.verify = False
-                return
-
-            last_slash =self.url.rindex("/")
-            layer_num = self.url[last_slash+1:]
-            base_url = self.url[:last_slash]
-            try:
-                layer_collection = FeatureLayerCollection(base_url)
-            except Exception as e:
-                if len(e.args)>0:
-                    if "Error Code: 500" in e.args[0]:
-                        raise OPD_DataUnavailableError(self.url, e.args, _url_error_msg.format(self.url))
-                    elif "A general error occurred: 'authInfo'" in e.args[0]:
-                        raise OPD_arcgisAuthInfoError(self.url, e.args, _url_error_msg.format(self.url))
-                raise e
-            except: raise
-
-            is_table = True
-            self.__active_layer = None
-            for layer in layer_collection.layers:
-                layer_url = layer.url
-                if layer_url[-1] == "/":
-                    layer_url = layer_url[:-1]
-                if layer_num == layer_url[last_slash+1:]:
-                    self.__active_layer = layer
-                    is_table = False
-                    break
-
-            if is_table != self.is_table:
-                raise ValueError("is_table is not read in properly")
-
-            if self.is_table:
-                for layer in layer_collection.tables:
-                    layer_url = layer.url
-                    if layer_url[-1] == "/":
-                        layer_url = layer_url[:-1]
-                    if layer_num == layer_url[last_slash+1:]:
-                        self.__active_layer = layer
-                        break
-
-            if self.__active_layer == None:
-                raise ValueError("Unable to find layer")
 
 
     def get_count(self, date=None, *,  where=None, **kwargs):
@@ -220,10 +162,6 @@ class Arcgis(Data_Loader):
             where_query = where
             try:
                 record_count = self.__request(where=where, return_count=True)["count"]
-                if self.verify:
-                    record_count_orig = self.__active_layer.query(where=where, return_count_only=True)
-                    if record_count_orig!=record_count:
-                        raise ValueError(f"Record count of {record_count} does not equal count from arcgis package of {record_count_orig}")
             except Exception as e:
                 if len(e.args)>0 and "Error Code: 429" in e.args[0]:
                     raise OPD_TooManyRequestsError(self.url, *e.args, _url_error_msg.format(self.url))
@@ -241,7 +179,8 @@ class Arcgis(Data_Loader):
 
         try:
             r=requests.get(self.url, params={'f':'json'})
-            orderby = [x['name'] for x in r.json()['fields'] if 'OBJECTID' in x['name']][0]
+            # TODO: This should be only done once?
+            orderby = [x['name'] for x in r.json()['fields'] if 'OBJECTID' in x['name'].upper()][0]
         except:
             orderby = None
         
@@ -330,10 +269,6 @@ class Arcgis(Data_Loader):
             where_query = '1=1' if len(where_query)==0 else where_query
             try:
                 record_count = self.__request(where=where_query, return_count=True)["count"]
-                if self.verify:
-                    record_count_orig = self.__active_layer.query(where=where_query, return_count_only=True)
-                    if record_count_orig!=record_count:
-                        raise ValueError(f"Record count of {record_count} does not equal count from arcgis package of {record_count_orig}")
             except Exception as e:
                 if len(e.args)>0 and "Error Code: 429" in e.args[0]:
                     raise OPD_TooManyRequestsError(self.url, *e.args, _url_error_msg.format(self.url))
@@ -478,11 +413,6 @@ class Arcgis(Data_Loader):
             
                 try:
                     record_count = self.__request(where=where_query, return_count=True)["count"]
-
-                    if self.verify:
-                        record_count_orig = self.__active_layer.query(where=where_query, return_count_only=True)
-                        if record_count_orig!=record_count:
-                            raise ValueError(f"Record count of {record_count} does not equal count from arcgis package of {record_count_orig}")
                     if self._date_format!=None or record_count>0:
                         self._date_format = k
                         return where_query, record_count
@@ -557,7 +487,13 @@ class Arcgis(Data_Loader):
             bs = batch_size if batch<num_batches-1 else nrows-batch*batch_size
             try:
                 try:
-                    data = self.__request(where=where_query, offset=offset+batch*batch_size, count=bs)
+                    max_tries = 1 + (batch==0 and num_batches>1)
+                    for k in range(max_tries):
+                        data = self.__request(where=where_query, offset=offset+batch*batch_size, count=bs)
+                        if len(data['features'])==batch_size:
+                            break
+                        elif k+1<max_tries:
+                            sleep(2)  # https://maps2.dcgis.dc.gov/dcgis/rest/services/FEEDS/MPD/MapServer/35 has returned 1000 before when it should return 2000
                 except:
                     if batch>0:
                         # There may have been an error due to too many requests over a short time. Wait and try again
@@ -567,44 +503,6 @@ class Arcgis(Data_Loader):
                         raise
 
                 features.extend(data["features"])
-
-                assert not self.verify  # Adding 2/2/2026
-                if self.verify:
-                    layer_query_result_old = self.__active_layer.query(where=where_query, result_offset=batch*batch_size, 
-                        result_record_count=batch_size, return_all_records=False)
-                    sdf = layer_query_result_old.sdf
-
-                    attributes = pd.DataFrame.from_records([x["attributes"] for x in data["features"]])
-                    for col in [x["name"] for x in data["fields"] if x["type"]=='esriFieldTypeDate']:
-                        attributes[col] = to_datetime(attributes[col], unit="ms")
-                    
-                    if not self.is_table:
-                        geom_old = sdf.pop("SHAPE")
-                        has_point_geometry = any("geometry" in x and "x" in x["geometry"] for x in data["features"])
-                        if not has_point_geometry and geom_old.apply(lambda x: x is not None).any():
-                            raise KeyError("Geometry not found")
-                        if _has_gpd and has_point_geometry:
-                            x = [x["geometry"]["x"] if "geometry" in x else None for x in data["features"]]
-                            y = [x["geometry"]["y"] if "geometry" in x else None for x in data["features"]]
-                            x_old = [x["x"] if x!=None else None for x in geom_old]
-                            y_old = [x["y"] if x!=None else None for x in geom_old]
-                            if x!=x_old and any([x!=None for x in x_old]):
-                                raise ValueError(f"X coordinates do not match for {self.url}")
-                            if y!=y_old and any([x!=None for x in y_old]):
-                                raise ValueError(f"Y coordinates do not match for {self.url}")
-
-                    if not sdf.columns.equals(attributes.columns):
-                        # A case was found where data from arcgis package had extra OBJECT_ID column (OBJECT_ID1 and OBJECT_ID)
-                        # These columns are not used anyway so just remove them
-                        missing_cols = [x for x in sdf.columns if x not in attributes.columns]
-                        for col in missing_cols:
-                            if col in ["OBJECTID"]:
-                                sdf.pop(col)
-                            else:
-                                raise ValueError(f"Column '{col}' exists in arcgis query but not opd query")
-
-                    if not sdf.equals(attributes):
-                        raise ValueError(f"DataFrames do not match for {self.url}")
 
                 if batch==0:
                     date_cols = [x["name"] for x in data["fields"] if x["type"]=='esriFieldTypeDate' and x['name'].lower()!='time']

@@ -910,15 +910,15 @@ class Source:
         list
             List of years available for 1 or more datasets
         '''
-        dfs = self.__find_datasets(table_type, datasets)
+        df = self.__find_datasets(table_type, datasets)
 
         cur_year = datetime.now().year
-        all_years = list(dfs["Year"])
+        all_years = list(df["Year"])
         years = {x for x in all_years if isinstance(x,numbers.Number) or x==defs.NA}
         for k in [k for k,x in enumerate(all_years) if x==defs.MULTI]:
-            df = dfs.iloc[k]
+            row = df.iloc[k]
             try:
-                _check_version(df)
+                _check_version(row)
             except (exceptions.OPD_FutureError,exceptions.OPD_MinVersionError) as e:
                 if len(years)>0:
                     # Only throw error if this is on the only dataset so far
@@ -927,26 +927,27 @@ class Source:
                     raise e
             except:
                 raise
-            url = df["URL"]
-            date_field = df["date_field"] if pd.notnull(df["date_field"]) else None
+            url = row["URL"]
+            date_field = row["date_field"] if pd.notnull(row["date_field"]) else None
             
-            use_coverage = not manual and pd.notnull(df["coverage_start"]) and pd.notnull(df["coverage_end"]) and \
-                hasattr(df["coverage_start"], 'year') and hasattr(df["coverage_end"], 'year')
-            if not use_coverage_only or not use_coverage:
-                loader = self.__get_loader(df["DataType"], url, df['query'], dataset=df["dataset_id"], date_field=date_field)
+            use_coverage = not manual and pd.notnull(row["coverage_start"]) and pd.notnull(row["coverage_end"]) and \
+                hasattr(row["coverage_start"], 'year') and hasattr(row["coverage_end"], 'year')
 
             if use_coverage:
-                years.update(range(df["coverage_start"].year, df["coverage_end"].year+1))
+                years.update(range(row["coverage_start"].year, row["coverage_end"].year+1))
                 if not use_coverage_only:
                     if req_years is not None:
                         years_to_check = [x for x in req_years if x not in years]
                     else:
-                        years_to_check = _get_years_to_check(years, cur_year, force, loader.isfile())
+                        isfile = row['DataType'] in ['CSV','Excel','HTML']
+                        years_to_check = _get_years_to_check(years, cur_year, force, isfile)
                     if len(years_to_check)>0:
                         # Check for updates
+                        loader = self.__get_loader(row["DataType"], url, row['query'], dataset=row["dataset_id"], date_field=date_field)
                         new_years = loader.get_years(force=force, check=years_to_check)
                         years.update(new_years)
             else:
+                loader = self.__get_loader(row["DataType"], url, row['query'], dataset=row["dataset_id"], date_field=date_field)
                 new_years = loader.get_years(force=force, check=req_years)
                 years.update(new_years)
             
