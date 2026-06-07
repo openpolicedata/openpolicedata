@@ -50,6 +50,7 @@ OpenPoliceData provides access to police data with 2 simple lines of code:
 [<img src="https://avatars.githubusercontent.com/u/142138112" alt="Alt Text" width="35" height="35">](https://github.com/harikrishnatp)
 [<img src="https://avatars.githubusercontent.com/u/170487658" alt="Alt Text" width="35" height="35">](https://github.com/gotog11)
 [<img src="https://avatars.githubusercontent.com/u/98405259" alt="Alt Text" width="35" height="35">](https://github.com/apancoast)
+[<img src="https://avatars.githubusercontent.com/u/19560284" alt="Alt Text" width="35" height="35">](https://github.com/skyswordw)
 
 All contributions are welcome including code enhancments, bug fixes, bug reports, documentation updates, and locating new datasets. If you're interesting in helping out, see our [Contributing Guide](https://github.com/openpolicedata/openpolicedata/blob/main/CONTRIBUTING.MD) or reach out by [email](mailto:openpolicedata@gmail.com).
 
