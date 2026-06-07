@@ -1,5 +1,6 @@
 import pandas as pd
 import pytest
+import requests
 
 if __name__ == "__main__":
 	import sys
@@ -46,7 +47,20 @@ def gt(gt_raw, row):
 def src():
     return Source(source)
 
-def test_get_count(gt, src):
+
+@pytest.fixture(scope='module')
+def gt_agencies(row):
+    if not check_for_dataset(source, table):
+        return None
+    
+    url = 'https://data.virginia.gov/api/3/action/datastore_search_sql'
+    params = {'format': 'json', 'sql': f'SELECT DISTINCT "{row["agency_field"]}" FROM "60506bbb-685f-4360-8a8c-30e137ce3615" OFFSET 0 LIMIT 10000'}
+    r = requests.get(url, params=params)
+    results = r.json()['result']['records']
+
+    return [x[row["agency_field"]] for x in results if isinstance(x,dict) and len(x)>0]
+
+def test_get_count_agency(gt, src):
     if not check_for_dataset(source, table):
         return
     
@@ -75,3 +89,26 @@ def test_load_agency_subset(gt, row, src, nrows, offset):
     
     df = src.load(table, date=date, agency=agency, nrows=nrows, offset=offset).table
     check_result(df, gt, row)
+
+
+def test_get_agencies_all(src, gt_agencies):
+    if not check_for_dataset(source, table):
+        return
+
+    agency_set = src.get_agencies(table)
+    
+    assert len(agency_set)==set(agency_set)
+    assert set(agency_set)==set(gt_agencies)
+
+def test_get_agencies_matching(src, gt_agencies):
+    if not check_for_dataset(source, table):
+        return
+
+    partial_name = 'Fairfax'
+    agency_set = src.get_agencies(table, partial_name=partial_name)
+
+    truth = [x for x in gt_agencies if partial_name in x]
+
+    assert len(agency_set)==set(agency_set)
+    assert all(partial_name.lower() in x.lower() for x in agency_set)
+    assert set(agency_set)==set(truth)

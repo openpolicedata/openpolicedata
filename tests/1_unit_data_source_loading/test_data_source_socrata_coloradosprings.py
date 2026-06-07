@@ -1,10 +1,11 @@
+import os
 import pandas as pd
 import pytest
 from sodapy import Socrata as SocrataClient
 
 if __name__ == "__main__":
-	import sys
-	sys.path.append('../openpolicedata')
+    import sys
+    sys.path.append('../openpolicedata')
 from openpolicedata import defs, data_loaders, datetime_parser, Source
 from test_utils import check_for_dataset, check_result
 
@@ -34,6 +35,13 @@ def gt(row):
 @pytest.fixture(scope='module')
 def src():
     return Source(source)
+
+@pytest.fixture(scope='module')
+def whole_table(src):
+    if not check_for_dataset(source, table):
+        return
+    
+    return src.load(table, date='MULTIPLE')
 
 
 def test_get_years(gt, row, src):
@@ -130,12 +138,11 @@ def test_get_count_year_date_filter(gt, src, row, date):
     assert count == test.sum()
 
 
-def test_load_all(gt, row, src):
+def test_load_all(gt, row, src, whole_table):
     if not check_for_dataset(source, table):
         return
     
-    df = src.load(table, date='MULTIPLE').table
-    check_result(df, gt, row)
+    check_result(whole_table.table, gt, row)
 
 
 @pytest.mark.parametrize('date', [2025, [2024, 2025], ['2024-04-01', '2025-11-01']])
@@ -163,4 +170,22 @@ def test_load_gen(gt, row, src):
             df = pd.concat([df, t.table])
 
         check_result(df, gt, row)
-            
+
+@pytest.mark.parametrize('save,fname,load',[('to_csv','get_csv_filename','load_csv'),
+                                            ('to_feather','get_feather_filename','load_feather'),
+                                            ('to_parquet','get_parquet_filename','load_parquet')])
+def test_save_load(src, whole_table, save,fname,load):
+    if check_for_dataset(source, table):
+
+        getattr(whole_table, save)()
+
+        filename = getattr(whole_table, fname)()
+        assert os.path.exists(filename)
+
+        try:
+            # Load table back in
+            getattr(src, load)(table_type=whole_table.table_type, date=whole_table.date, agency=whole_table.agency)
+        except:
+            raise
+        finally:
+            os.remove(filename)
