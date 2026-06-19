@@ -83,6 +83,7 @@ class Arcgis(Data_Loader):
 
         self._date_type = None
         self._date_format = None
+        self._year_digits = 4
         self.date_field = date_field
         self.query = str2json(query)
 
@@ -320,6 +321,7 @@ class Arcgis(Data_Loader):
                 ineq_comp: bool = False
                 date_delim: str = ""
                 full_date: bool = True
+                year_digits: int = 4
 
             matches = [
                 DateParseParams(re.compile(r"^(19|20)\d{6}\b"), ineq_comp=True),  # YYYYMMDD
@@ -329,6 +331,12 @@ class Arcgis(Data_Loader):
                 DateParseParams(re.compile(r"^[A-Z][a-z]+ \d{1,2}, (19|20)\d{2}\b"), "{} LIKE '[A-Z]% [0-9][0-9], {}' OR {} LIKE '[A-Z]% [0-9], {}'"),  # Month DD, YYYY
                 DateParseParams(re.compile(r"^\d{1,2}[-/]\d{1,2}[-/](19|20)\d{2}\b"), 
                     "{} LIKE '%[/-]{}%'"),  # mm/dd/yyyy or mm-dd-yyyy
+                DateParseParams(re.compile(r"^\d{1,2}[-/]\d{1,2}[-/]\d{2}\b"),
+                    "{} LIKE '_/_/{} %' OR {} LIKE '__/_/{} %' OR {} LIKE '_/__/{} %' OR {} LIKE '__/__/{} %' OR "
+                    "{} LIKE '_-_-{} %' OR {} LIKE '__-_-{} %' OR {} LIKE '_-__-{} %' OR {} LIKE '__-__-{} %' OR "
+                    "{} LIKE '_/_/{}' OR {} LIKE '__/_/{}' OR {} LIKE '_/__/{}' OR {} LIKE '__/__/{}' OR "
+                    "{} LIKE '_-_-{}' OR {} LIKE '__-_-{}' OR {} LIKE '_-__-{}' OR {} LIKE '__-__-{}'",
+                    year_digits=2),  # mm/dd/yy or mm-dd-yy
                 DateParseParams(re.compile(r"^\d{4}[-/]\d{1,2}$"), "{} LIKE '{}[-/]%'", full_date=False),  # YYYY-MM or YYYY/M
                 DateParseParams(re.compile(r"^\d{4}$"), "{} = '{}'", full_date=False),  # YYYY
                 DateParseParams(re.compile(r"^\d{1,2}[-/]\d{4}$"), "{} LIKE '[0-9][0-9][-/]{}' OR {} LIKE '[0-9][-/]{}'", full_date=False),  # MM-YYYY or MM/YYYY
@@ -350,6 +358,7 @@ class Arcgis(Data_Loader):
             else:
                 self._date_format = repeat_format(matches[idx].arcgis_pattern)
                 self._full_date = matches[idx].full_date
+                self._year_digits = matches[idx].year_digits
 
         if self._ineq_comp:
             where_query, record_count = self._build_date_query_date_type(date, self._date_delim, is_date_string=True)
@@ -363,10 +372,14 @@ class Arcgis(Data_Loader):
                 raise ValueError(f"Date column is a string data type at the source {self.url}. "+
                                 "Currently only able to filter for a single year (2023) or a year range ([2022,2023]) "+
                                 "not a date range ([2022-01-01, 2022-03-01]).")
+
+            def format_year(year):
+                year = str(year)
+                return year[-2:] if self._year_digits == 2 else year
             
-            where_query = self._date_format.format(self.date_field, date[0])
+            where_query = self._date_format.format(self.date_field, format_year(date[0]))
             for x in range(int(date[0])+1,int(date[1])+1):
-                where_query = f"{where_query} or " + self._date_format.format(self.date_field, x)
+                where_query = f"{where_query} or " + self._date_format.format(self.date_field, format_year(x))
 
             record_count = self.__request(where=where_query, return_count=True)["count"]
 
