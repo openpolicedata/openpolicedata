@@ -5,7 +5,7 @@ if __name__ == "__main__":
 	import sys
 	sys.path.append('../openpolicedata')
 from openpolicedata import defs, data_loaders, datetime_parser, Source
-from test_utils import check_for_dataset, check_result
+from test_utils import check_result
 
 source = 'Indianapolis'
 table = defs.TableType.SHOOTINGS
@@ -19,7 +19,7 @@ def row(datasets):
 
 
 @pytest.fixture(scope='module')
-def gt(row):
+def gt(check_for_dataset, row):
     if not check_for_dataset(source, table):
         return None
     
@@ -34,7 +34,7 @@ def src():
     return Source(source)
 
 
-def test_get_count(gt, src):
+def test_get_count(check_for_dataset, gt, src):
     if not check_for_dataset(source, table):
         return
     
@@ -42,7 +42,7 @@ def test_get_count(gt, src):
 
 
 @pytest.mark.parametrize('date', [year, [f'{year}-01-01', '2025-06-01']])
-def test_get_count_year_date_filter(gt, src, row, date):
+def test_get_count_year_date_filter(check_for_dataset, gt, src, row, date):
     if not check_for_dataset(source, table):
         return
     
@@ -53,7 +53,7 @@ def test_get_count_year_date_filter(gt, src, row, date):
     assert count == test.sum()
 
 
-def test_load_year_all(gt, row, src):
+def test_load_year_all(check_for_dataset, gt, row, src):
     if not check_for_dataset(source, table):
         return
     
@@ -64,7 +64,7 @@ def test_load_year_all(gt, row, src):
 @pytest.mark.parametrize('date', [year, [f'{year}-01-01', '2025-06-01']])
 @pytest.mark.parametrize('nrows', [None, 2])
 @pytest.mark.parametrize('offset', [0, 1])
-def test_load(gt, row, src, date, nrows, offset):
+def test_load(check_for_dataset, gt, row, src, date, nrows, offset):
     if not check_for_dataset(source, table):
         return
     
@@ -78,7 +78,7 @@ def test_load(gt, row, src, date, nrows, offset):
     check_result(df, gt, row)
 
 
-def test_format_date_false(src):
+def test_format_date_false(check_for_dataset, src):
 	if check_for_dataset(source, table):
 		t = src.load(table, year, format_date=False, nrows=1)
 		# Confirm date has not been formatted

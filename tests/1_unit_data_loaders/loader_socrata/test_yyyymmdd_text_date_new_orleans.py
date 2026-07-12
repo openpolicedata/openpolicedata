@@ -8,7 +8,7 @@ if __name__ == "__main__":
 from openpolicedata import data_loaders, defs, datetime_parser
 import pandas as pd
 
-from test_utils import check_for_dataset, check_result
+from test_utils import check_result
 
 source = 'New Orleans'
 table = defs.TableType.COMPLAINTS
@@ -21,7 +21,7 @@ def row(datasets):
 
 
 @pytest.fixture(scope='module')
-def gt(row):
+def gt(check_for_dataset, row):
     if not check_for_dataset(source, table):
         return None
     
@@ -38,13 +38,13 @@ def gt(row):
 def loader(row):
     return data_loaders.Socrata(url=row['URL'], data_set=row['dataset_id'], date_field=row['date_field'])
 
-def test_get_count_all(gt, loader):
+def test_get_count_all(check_for_dataset, gt, loader):
     if not check_for_dataset(source, table):
         return
     
     assert len(gt)==loader.get_count()
 
-def test_get_count_year(gt, row, loader):
+def test_get_count_year(check_for_dataset, gt, row, loader):
     if not check_for_dataset(source, table):
         return
     
@@ -55,7 +55,7 @@ def test_get_count_year(gt, row, loader):
     assert count==len(gt)
 
 
-def test_load_year(gt, row, loader):
+def test_load_year(check_for_dataset, gt, row, loader):
     if not check_for_dataset(source, table):
         return
     
@@ -67,7 +67,7 @@ def test_load_year(gt, row, loader):
 
 
 @pytest.mark.parametrize('date', [['2024-06-01', '2024-07-08'], ['2024-01-02', '2025-01-01'], ['2023-01-02', '2025-01-01']])
-def test_load_date_range(gt, row, loader, date):
+def test_load_date_range(check_for_dataset, gt, row, loader, date):
     if not check_for_dataset(source, table):
         return
     

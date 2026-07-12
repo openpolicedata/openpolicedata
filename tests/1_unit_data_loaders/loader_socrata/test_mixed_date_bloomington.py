@@ -8,7 +8,7 @@ if __name__ == "__main__":
 from openpolicedata import data_loaders, defs, datetime_parser
 import pandas as pd
 
-from test_utils import check_for_dataset, check_result
+from test_utils import check_result
 
 source = 'Bloomington'
 table = defs.TableType.CITATIONS
@@ -20,7 +20,7 @@ def row(datasets):
     return row.iloc[0]
 
 @pytest.fixture(scope='module')
-def gt_raw(row):
+def gt_raw(check_for_dataset, row):
     if not check_for_dataset(source, table):
         return None
     
@@ -33,7 +33,7 @@ def gt_raw(row):
 
 
 @pytest.fixture(scope='module')
-def gt(gt_raw, row):
+def gt(check_for_dataset, gt_raw, row):
     if not check_for_dataset(source, table):
         return None
     df = gt_raw.copy()
@@ -47,7 +47,7 @@ def loader(row):
     return data_loaders.Socrata(url=row['URL'], data_set=row['dataset_id'], date_field=row['date_field'])
 
 
-def test_load_year(gt, row, loader):
+def test_load_year(check_for_dataset, gt, row, loader):
     if not check_for_dataset(source, table):
         return
     
@@ -60,7 +60,7 @@ def test_load_year(gt, row, loader):
 
 
 @pytest.mark.parametrize('date', [['2017-06-01', '2017-07-08'], ['2017-01-02', '2018-01-01'], ['2017-01-02', '2019-01-01']])
-def test_load_date_range(gt, row, loader, date):
+def test_load_date_range(check_for_dataset, gt, row, loader, date):
     if not check_for_dataset(source, table):
         return
     

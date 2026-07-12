@@ -10,7 +10,7 @@ if __name__ == "__main__":
 from openpolicedata import data_loaders, defs, datetime_parser
 import pandas as pd
 
-from test_utils import check_for_dataset, check_result
+from test_utils import check_result
 
 source = 'Seattle'
 table = defs.TableType.SHOOTINGS
@@ -22,7 +22,7 @@ def row(datasets):
     return row.iloc[0]
 
 @pytest.fixture(scope='module')
-def gt_raw(row):
+def gt_raw(check_for_dataset, row):
     if not check_for_dataset(source, table):
         return None
     
@@ -35,7 +35,7 @@ def gt_raw(row):
 
 
 @pytest.fixture(scope='module')
-def gt(gt_raw, row):
+def gt(check_for_dataset, gt_raw, row):
     if not check_for_dataset(source, table):
         return None
     df = gt_raw.copy()
@@ -52,7 +52,7 @@ def test_notfile(loader):
     assert not loader.isfile()
 
 
-def test_get_count(gt, loader):
+def test_get_count(check_for_dataset, gt, loader):
     if not check_for_dataset(source, table):
         return
     
@@ -66,7 +66,7 @@ def test_mmddyyyy_test(loader):
     assert loader._Socrata__mmddyyyy_test()
 
 @pytest.mark.parametrize('year', [2022, [2022, 2023]])
-def test_get_count_year_filter(gt, loader, row, year):
+def test_get_count_year_filter(check_for_dataset, gt, loader, row, year):
     if not check_for_dataset(source, table):
         return
     
@@ -77,7 +77,7 @@ def test_get_count_year_filter(gt, loader, row, year):
     assert count == is_year.sum()
     
 
-def test_get_count_date_filter(loader):
+def test_get_count_date_filter(check_for_dataset, loader):
     if not check_for_dataset(source, table):
         return
     
@@ -89,7 +89,9 @@ def test_get_count_date_filter(loader):
 
 
 @pytest.mark.parametrize('year, opt_filter', [(1900, None), (1900,'test'), ([1900, 1901],'test')])
-def test_count_cached(loader, year, opt_filter):
+def test_count_cached(check_for_dataset, loader, year, opt_filter):
+    if not check_for_dataset(source, table):
+        return
     count = -42 # Actual query will never accidentally equal this number
     date = data_loaders.data_loader._clean_date_input(year)
     where = loader._Socrata__construct_where(date, opt_filter)
@@ -100,7 +102,9 @@ def test_count_cached(loader, year, opt_filter):
 
 
 @pytest.mark.parametrize('next_year, next_opt_filter', [(1901, None), (1900, r"date_time LIKE '%1900%'")])
-def test_count_not_cached(loader, next_year, next_opt_filter):
+def test_count_not_cached(check_for_dataset, loader, next_year, next_opt_filter):
+    if not check_for_dataset(source, table):
+        return
     count = -42 # Actual query will never accidentally equal this number
     year = 1900
     opt_filter = None
@@ -115,7 +119,7 @@ def test_count_not_cached(loader, next_year, next_opt_filter):
 @pytest.mark.parametrize('date', [None, 2025, [2024, 2025]])
 @pytest.mark.parametrize('nrows', [None, 2])
 @pytest.mark.parametrize('offset', [0, 1])
-def test_load_year(gt, row, loader, date, nrows, offset):
+def test_load_year(check_for_dataset, gt, row, loader, date, nrows, offset):
     if not check_for_dataset(source, table):
         return
     
@@ -128,14 +132,14 @@ def test_load_year(gt, row, loader, date, nrows, offset):
     df = loader.load(date=date, nrows=nrows, offset=offset)
     check_result(df, gt, row)
 
-def test_load_count0_too_big_offset(loader):
+def test_load_count0_too_big_offset(check_for_dataset, loader):
     if not check_for_dataset(source, table):
         return
     df = loader.load(offset=10_000_000)  # Simulate with offset that is undoubtedly larger than dataset
     assert len(df)==0
 
 
-def test_load_count0_date_out_of_range(row, loader):
+def test_load_count0_date_out_of_range(check_for_dataset, row, loader):
     if not check_for_dataset(source, table):
         return
     date = [row['coverage_start']-pd.Timedelta(days=365*2), row['coverage_start']-pd.Timedelta(days=365)]
@@ -146,7 +150,7 @@ def test_load_count0_date_out_of_range(row, loader):
 @pytest.mark.parametrize('date', [['2025-05-30','2025-10-30'], ['2005-03-01','2005-06-20'], ['2024-01-02','2025-10-30'], ['2023-05-30','2025-10-30']])
 @pytest.mark.parametrize('nrows', [None, 2])
 @pytest.mark.parametrize('offset', [0, 1])
-def test_load_date_inaccurate_initial_filter_include(gt, row, loader, date, nrows, offset):
+def test_load_date_inaccurate_initial_filter_include(check_for_dataset, gt, row, loader, date, nrows, offset):
     if not check_for_dataset(source, table):
         return
     
@@ -161,7 +165,7 @@ def test_load_date_inaccurate_initial_filter_include(gt, row, loader, date, nrow
     check_result(df, gt, row)
 
 
-def test_load_date_inaccurate_initial_filter_exclude(gt, row, loader):
+def test_load_date_inaccurate_initial_filter_exclude(check_for_dataset, gt, row, loader):
     if not check_for_dataset(source, table):
         return
     
@@ -190,7 +194,7 @@ def test_load_date_inaccurate_initial_filter_exclude(gt, row, loader):
     check_result(df, gt, row)
 
 
-def test_load_batch(gt, row, loader):
+def test_load_batch(check_for_dataset, gt, row, loader):
     if not check_for_dataset(source, table):
         return
     
@@ -212,7 +216,3 @@ def test_load_batch(gt, row, loader):
         data_loaders.data_loader._default_limit = orig
 
     check_result(df, gt, row)
-
-
-def test_filter_MDDYYYY_vs_MMDDYYY():
-    raise NotImplementedError()

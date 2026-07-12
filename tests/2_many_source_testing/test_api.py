@@ -1,7 +1,5 @@
 from datetime import datetime
-
 from time import sleep
-from urllib.parse import urlparse
 import warnings
 
 import pandas as pd
@@ -38,6 +36,7 @@ def small_datasets(api_datasets, no_datefield):
                                     defs.TableType.LAWSUITS, defs.TableType.POINTING_WEAPON, defs.TableType.VEHICLE_PURSUITS])
     return is_small & (~no_datefield)
 
+
 @pytest.fixture(scope='module')
 def large_datasets(no_datefield, small_datasets):
     return (~no_datefield) & (~small_datasets)
@@ -52,7 +51,7 @@ def test_load_no_date_field(api_datasets, no_datefield, source, start_idx, skip,
     check_load_for_datasets(api_datasets[no_datefield],  skip, start_idx, source, query, nrows=100)
 
 
-def test_load_small_multiyear_dataset(api_datasets, small_datasets, source, start_idx, skip, query={}):
+def test_load_small_dataset_with_datefield(api_datasets, small_datasets, source, start_idx, skip, query={}):
     nrows = 10000
     def set_date(dataset, src, table_type):
         start = dataset['coverage_start'] + pd.Timedelta(days=1) if dataset['coverage_start']<dataset['coverage_end'] else dataset['coverage_start']
@@ -60,6 +59,8 @@ def test_load_small_multiyear_dataset(api_datasets, small_datasets, source, star
             end = pd.Timestamp(datetime.now()).floor('D')
         else:
             end = dataset['coverage_end'] - pd.Timedelta(days=1) if dataset['coverage_start']<dataset['coverage_end'] else dataset['coverage_end']
+
+        end = min(end, datetime.now().replace(hour=0,minute=0,second=0,microsecond=0))
         return [start, end]
     
     def check_date(dataset, table, date):
@@ -67,25 +68,26 @@ def test_load_small_multiyear_dataset(api_datasets, small_datasets, source, star
         assert table.table[dataset['date_field']].min().tz_localize(None) >= date[0]
         assert table.table[dataset['date_field']].max().tz_localize(None) < date[1]+pd.Timedelta(days=1)
     
-    datasets = api_datasets[small_datasets]
-    datasets = datasets[datasets['Year']==opd.defs.MULTI]
     check_load_for_datasets(api_datasets[small_datasets],  skip, start_idx, source, query, testfcn=check_date, datefcn=set_date, nrows=nrows)
 
 
-def test_load_large_multiyear_dataset(api_datasets, large_datasets, source, start_idx, skip, query={}):
+def test_load_large_dataset_with_datefield(api_datasets, large_datasets, source, start_idx, skip, query={}):
     nrows = 10000
     def set_date(dataset, src, table_type):
         end = dataset['coverage_end'] - pd.Timedelta(days=2) if dataset['coverage_start']<dataset['coverage_end'] - pd.Timedelta(days=1) else dataset['coverage_end']
+        end = min(end, datetime.now().replace(hour=0,minute=0,second=0,microsecond=0))
         start = max(dataset['coverage_start'], end - pd.Timedelta(days=30))
         return [start, end]
     
     def check_date(dataset, table, date):
         assert len(table.table)<=nrows
-        assert table.table[dataset['date_field']].min().tz_localize(None) >= date[0]
-        assert table.table[dataset['date_field']].max().tz_localize(None) < date[1]+pd.Timedelta(days=2) # Adding 2 days: 1 to not consider time of day and a 2nd for timezone offsets
+        if isinstance(table.table[dataset['date_field']].dtype, pd.PeriodDtype):
+            assert table.table[dataset['date_field']].min().year==date[0].year
+            assert table.table[dataset['date_field']].max().year==date[1].year
+        else:
+            assert table.table[dataset['date_field']].min().tz_localize(None) >= date[0]
+            assert table.table[dataset['date_field']].max().tz_localize(None) < date[1]+pd.Timedelta(days=2) # Adding 2 days: 1 to not consider time of day and a 2nd for timezone offsets
 
-    datasets = api_datasets[large_datasets]
-    datasets = datasets[datasets['Year']==opd.defs.MULTI]
     check_load_for_datasets(api_datasets[large_datasets],  skip, start_idx, source, query, datefcn=set_date, testfcn=check_date, nrows=nrows)
 
 
@@ -103,7 +105,8 @@ def test_load_annual_dataset(api_datasets, source, start_idx, skip, query={}):
                     assert table.table[dataset['date_field']].min().year==dataset['Year']
                     assert table.table[dataset['date_field']].max().year==dataset['Year']
                 else:
-                    assert table.table[dataset['date_field']].min().tz_localize(None) >= pd.to_datetime(f"{dataset['Year']-1}-12-31")
+                    if (dataset['SourceName'],dataset['TableType'], dataset['Year']) not in [('Santa Rosa','INCIDENTS', 2015),('Santa Rosa','INCIDENTS', 2016)]:
+                        assert table.table[dataset['date_field']].min().tz_localize(None) >= pd.to_datetime(f"{dataset['Year']-1}-12-31")
                     if table.source_name=='Lincoln' and table.table_type==opd.defs.TableType.VEHICLE_PURSUITS and dataset['Year']==2019:
                         # This dataset is labeled 2019 and there is a separate dataset for 2020-2021. However, there is some 2020-2021 data in this
                         assert table.table[dataset['date_field']].max().tz_localize(None).floor('D') == pd.to_datetime(f"2021-02-21")

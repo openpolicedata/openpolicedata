@@ -8,7 +8,7 @@ if __name__ == "__main__":
 from openpolicedata import data_loaders, defs
 import pandas as pd
 
-from test_utils import check_for_dataset, check_result
+from test_utils import check_result
 
 source = 'Bloomington'
 table = defs.TableType.EMPLOYEE
@@ -21,7 +21,7 @@ def row(datasets):
 
 
 @pytest.fixture(scope='module')
-def gt(row):
+def gt(check_for_dataset, row):
     if not check_for_dataset(source, table):
         return None
     
@@ -39,7 +39,7 @@ def loader(row):
     return data_loaders.Socrata(url=row['URL'], data_set=row['dataset_id'], date_field=row['date_field'])
 
 
-def test_get_count(gt, row, loader):
+def test_get_count(check_for_dataset, gt, row, loader):
     if not check_for_dataset(source, table):
         return
     
@@ -50,7 +50,7 @@ def test_get_count(gt, row, loader):
     assert count==len(gt)
 
 
-def test_load_year(gt, row, loader):
+def test_load_year(check_for_dataset, gt, row, loader):
     if not check_for_dataset(source, table):
         return
     
@@ -61,7 +61,7 @@ def test_load_year(gt, row, loader):
     check_result(df, gt, row)
 
 
-def test_load_date_range(loader):
+def test_load_date_range(check_for_dataset, loader):
     if not check_for_dataset(source, table):
         return
     

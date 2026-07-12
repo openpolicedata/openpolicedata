@@ -5,7 +5,7 @@ if __name__ == "__main__":
 	import sys
 	sys.path.append('../openpolicedata')
 from openpolicedata import defs, data_loaders, datetime_parser, Source
-from test_utils import check_for_dataset, check_result
+from test_utils import check_result
 
 source = 'Jacksonville'
 table = defs.TableType.SHOOTINGS
@@ -17,7 +17,7 @@ def row(datasets):
     return row.iloc[0]
 
 @pytest.fixture(scope='module')
-def gt_raw(row):
+def gt_raw(check_for_dataset, row):
     if not check_for_dataset(source, table):
         return None
     
@@ -27,7 +27,7 @@ def gt_raw(row):
 
 
 @pytest.fixture(scope='module')
-def gt(gt_raw, row):
+def gt(check_for_dataset, gt_raw, row):
     if not check_for_dataset(source, table):
         return None
     df = gt_raw.copy()
@@ -39,21 +39,14 @@ def gt(gt_raw, row):
 def src():
     return Source(source)
 
-# def get_count(self, 
-#                   force: bool = False,
-#                   verbose: bool | str | int = False,
-#                   url: str | None = None,
-#                   id: str | None = None
-#                   ) -> int:
-
-def test_get_count(gt, src):
+def test_get_count(check_for_dataset, gt, src):
     if not check_for_dataset(source, table):
         return
     
     assert len(gt)==src.get_count(table_type=table)
 
 
-def test_get_count_year_date_filter_error(gt, src, row):
+def test_get_count_year_date_filter_error(check_for_dataset, src, row):
     if not check_for_dataset(source, table):
         return
     
@@ -62,7 +55,7 @@ def test_get_count_year_date_filter_error(gt, src, row):
         src.get_count(table, date)
 
 
-def test_get_count_year_date_filter(gt, src, row):
+def test_get_count_year_date_filter(check_for_dataset, gt, src, row):
     if not check_for_dataset(source, table):
         return
     
@@ -73,15 +66,7 @@ def test_get_count_year_date_filter(gt, src, row):
     test = (gt[row['date_field']]>=gt_date[0]) & (gt[row['date_field']]<gt_date[1]+pd.Timedelta(1, unit='D'))
     assert count == test.sum()
 
-# def load(self, 
-#             verbose: bool | str | int = False,
-#             format_date: bool = True,
-#             url: str | None = None,
-#             id: str | None = None
-#             ) -> Table:
-
-
-def test_load(gt, row, src):
+def test_load(check_for_dataset, gt, row, src):
     if not check_for_dataset(source, table):
         return
     

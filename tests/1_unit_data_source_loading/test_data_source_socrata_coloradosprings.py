@@ -7,7 +7,7 @@ if __name__ == "__main__":
     import sys
     sys.path.append('../openpolicedata')
 from openpolicedata import defs, data_loaders, datetime_parser, Source
-from test_utils import check_for_dataset, check_result
+from test_utils import check_result
 
 source = 'Colorado Springs'
 table = defs.TableType.SHOOTINGS
@@ -20,7 +20,7 @@ def row(datasets):
 
 
 @pytest.fixture(scope='module')
-def gt(row):
+def gt(check_for_dataset, row):
     if not check_for_dataset(source, table):
         return None
     
@@ -37,14 +37,14 @@ def src():
     return Source(source)
 
 @pytest.fixture(scope='module')
-def whole_table(src):
+def whole_table(check_for_dataset, src):
     if not check_for_dataset(source, table):
         return
     
     return src.load(table, date='MULTIPLE')
 
 
-def test_get_years(gt, row, src):
+def test_get_years(check_for_dataset, gt, row, src):
     if not check_for_dataset(source, table):
         return
     
@@ -55,7 +55,7 @@ def test_get_years(gt, row, src):
     assert all(true_years==years)
 
 
-def test_get_years_coverage_end_not_updated(gt, row, src):
+def test_get_years_coverage_end_not_updated(check_for_dataset, gt, row, src):
     if not check_for_dataset(source, table):
         return
     
@@ -72,7 +72,7 @@ def test_get_years_coverage_end_not_updated(gt, row, src):
     assert all(true_years==years)
 
 
-def test_get_years_use_coverage_only(gt, row, src):
+def test_get_years_use_coverage_only(check_for_dataset, gt, row, src):
     if not check_for_dataset(source, table):
         return
     
@@ -91,7 +91,7 @@ def test_get_years_use_coverage_only(gt, row, src):
     assert true_years==years
 
 
-def test_get_years_manual(gt, row, src):
+def test_get_years_manual(check_for_dataset, gt, row, src):
     if not check_for_dataset(source, table):
         return
     
@@ -107,7 +107,7 @@ def test_get_years_manual(gt, row, src):
 
     assert all(true_years==years)
 
-def test_get_years_req_years(gt, row, src):
+def test_get_years_req_years(check_for_dataset, gt, row, src):
     if not check_for_dataset(source, table):
         return
     
@@ -119,7 +119,7 @@ def test_get_years_req_years(gt, row, src):
     assert all(req_years==years)
 
 
-def test_get_count(gt, src):
+def test_get_count(check_for_dataset, gt, src):
     if not check_for_dataset(source, table):
         return
     
@@ -127,7 +127,7 @@ def test_get_count(gt, src):
 
 
 @pytest.mark.parametrize('date', [2022, [2022, 2023], ['2024-04-01', '2025-11-01']])
-def test_get_count_year_date_filter(gt, src, row, date):
+def test_get_count_year_date_filter(check_for_dataset, gt, src, row, date):
     if not check_for_dataset(source, table):
         return
     
@@ -138,7 +138,7 @@ def test_get_count_year_date_filter(gt, src, row, date):
     assert count == test.sum()
 
 
-def test_load_all(gt, row, src, whole_table):
+def test_load_all(check_for_dataset, gt, row, src, whole_table):
     if not check_for_dataset(source, table):
         return
     
@@ -148,7 +148,7 @@ def test_load_all(gt, row, src, whole_table):
 @pytest.mark.parametrize('date', [2025, [2024, 2025], ['2024-04-01', '2025-11-01']])
 @pytest.mark.parametrize('nrows', [None, 2])
 @pytest.mark.parametrize('offset', [0, 1])
-def test_load(gt, row, src, date, nrows, offset):
+def test_load(check_for_dataset, gt, row, src, date, nrows, offset):
     if not check_for_dataset(source, table):
         return
     
@@ -162,7 +162,7 @@ def test_load(gt, row, src, date, nrows, offset):
     check_result(df, gt, row)
 
 
-def test_load_gen(gt, row, src):
+def test_load_gen(check_for_dataset, gt, row, src):
     if check_for_dataset(source, table):
         nbatch = 50
         df = pd.DataFrame()
@@ -174,7 +174,7 @@ def test_load_gen(gt, row, src):
 @pytest.mark.parametrize('save,fname,load',[('to_csv','get_csv_filename','load_csv'),
                                             ('to_feather','get_feather_filename','load_feather'),
                                             ('to_parquet','get_parquet_filename','load_parquet')])
-def test_save_load(src, whole_table, save,fname,load):
+def test_save_load(check_for_dataset, src, whole_table, save,fname,load):
     if check_for_dataset(source, table):
 
         getattr(whole_table, save)()

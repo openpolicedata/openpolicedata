@@ -8,7 +8,7 @@ import openpolicedata as opd
 from openpolicedata import data_loaders, defs, datetime_parser
 import pandas as pd
 
-from test_utils import check_for_dataset, check_result
+from test_utils import check_result
 
 source = 'Connecticut'
 table = defs.TableType.TRAFFIC
@@ -23,7 +23,7 @@ def row(datasets):
 
 
 @pytest.fixture(scope='module')
-def gt(row):
+def gt(check_for_dataset, row):
     if not check_for_dataset(source, table):
         return None
     
@@ -38,7 +38,7 @@ def gt(row):
     return df
 
 @pytest.fixture(scope='module')
-def gt_agencies(row):
+def gt_agencies(check_for_dataset, row):
     if not check_for_dataset(source, table):
         return None
     
@@ -49,7 +49,7 @@ def gt_agencies(row):
     return [x['department_name'] for x in results if isinstance(x,dict) and len(x)>0]
 
 
-def test_get_count_agency(gt):
+def test_get_count_agency(check_for_dataset, gt):
     if not check_for_dataset(source, table):
         return
     
@@ -59,7 +59,7 @@ def test_get_count_agency(gt):
     assert count == len(gt)
 
 
-def test_load_agency(gt, row):
+def test_load_agency(check_for_dataset, gt, row):
     if not check_for_dataset(source, table):
         return
     
@@ -75,7 +75,7 @@ def test_load_agency(gt, row):
     assert((t.table[row['agency_field']].str.lower()==agency).all())
     check_result(t.table, gt, row)
 
-def test_get_agencies_all(gt_agencies):
+def test_get_agencies_all(check_for_dataset, gt_agencies):
     if not check_for_dataset(source, table):
         return
 
@@ -85,7 +85,7 @@ def test_get_agencies_all(gt_agencies):
     assert len(agency_set)==set(agency_set)
     assert set(agency_set)==set(gt_agencies)
 
-def test_get_agencies_matching(gt_agencies):
+def test_get_agencies_matching(check_for_dataset, gt_agencies):
     if not check_for_dataset(source, table):
         return
 
@@ -100,8 +100,8 @@ def test_get_agencies_matching(gt_agencies):
     assert set(agency_set)==set(truth)
 
 
-def test_get_agencies_error_year_input():
-    if not check_for_dataset(source, table):
+def test_get_agencies_error_year_input(check_for_dataset):
+    if not check_for_dataset(check_for_dataset, source, table):
         return
 
     src = opd.Source(source)

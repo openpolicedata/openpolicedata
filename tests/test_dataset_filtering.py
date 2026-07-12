@@ -9,10 +9,7 @@ from openpolicedata.data_loaders import data_loader
 import openpolicedata as opd
 import pandas as pd
 
-import pathlib
 import sys
-sys.path.append(pathlib.Path(__file__).parent.resolve())
-from test_utils import check_for_dataset
 
 
 @pytest.mark.parametrize('date', [None, opd.defs.MULTI, opd.defs.NA, [pd.to_datetime('2025-02-03'), pd.to_datetime('2026-03-04')]])
@@ -125,7 +122,7 @@ def test_filter_year_bad_table_type():
 												  ('Tucson', opd.defs.TableType.ARRESTS, 2017),
 												  ('Tucson', opd.defs.TableType.ARRESTS, 'MULTIPLE'),
 												  ('Gilbert', opd.defs.TableType.EMPLOYEE, 'NONE')])
-def test_filter_year_matches(loc, table_type, year):
+def test_filter_year_matches(check_for_dataset, loc, table_type, year):
 	if check_for_dataset(loc, table_type):
 		src = data.Source(loc)
 		dataset = src.filter(table_type, year, errors=True)
@@ -134,7 +131,7 @@ def test_filter_year_matches(loc, table_type, year):
 		assert dataset.iloc[0]['TableType']==table_type
 
 
-def test_filter_string_not_found():
+def test_filter_string_not_found(check_for_dataset):
 	loc = 'Phoenix'
 	table_type = opd.defs.TableType.CALLS_FOR_SERVICE
 	if check_for_dataset(loc, table_type):
@@ -143,7 +140,7 @@ def test_filter_string_not_found():
 			src.filter(table_type, opd.defs.MULTI, errors=True)
 
 
-def test_filter_string_not_found_no_error():
+def test_filter_string_not_found_no_error(check_for_dataset):
 	loc = 'Phoenix'
 	table_type = opd.defs.TableType.CALLS_FOR_SERVICE
 	if check_for_dataset(loc, table_type):
@@ -152,7 +149,7 @@ def test_filter_string_not_found_no_error():
 		assert len(ds)==0
 
 
-def test_filter_year_not_found_single_multi():
+def test_filter_year_not_found_single_multi(check_for_dataset):
 	if check_for_dataset('Norristown', opd.defs.TableType.USE_OF_FORCE):
 		src = data.Source('Norristown')
 		dataset = src.filter(opd.defs.TableType.USE_OF_FORCE, 2000, errors=True)
@@ -161,7 +158,7 @@ def test_filter_year_not_found_single_multi():
 		assert dataset.iloc[0]['TableType']==opd.defs.TableType.USE_OF_FORCE
 
 
-def test_filter_year_nan_id():
+def test_filter_year_nan_id(check_for_dataset):
 	if check_for_dataset('Norristown', opd.defs.TableType.USE_OF_FORCE):
 		year = 2019
 		src = data.Source('Norristown')
@@ -172,7 +169,7 @@ def test_filter_year_nan_id():
 
 
 @pytest.mark.parametrize('truth,year',[[0, 2018], [1,2021]])
-def test_filter_year_multi_multi(truth, year):
+def test_filter_year_multi_multi(check_for_dataset, truth, year):
 	table_type = opd.defs.TableType.USE_OF_FORCE
 	if check_for_dataset('Asheville', table_type):
 		src = data.Source('Asheville')
@@ -190,7 +187,7 @@ def test_filter_year_multi_multi(truth, year):
 	('Phoenix', opd.defs.TableType.CALLS_FOR_SERVICE, [2016, 2018]),
 	('Mesa', opd.defs.TableType.CALLS_FOR_SERVICE, opd.defs.MULTI)
 	])
-def test_filter_year_multi_multi_overlap_error(loc, table, year):
+def test_filter_year_multi_multi_overlap_error(check_for_dataset, loc, table, year):
 	if check_for_dataset(loc, table):
 		src = data.Source(loc)
 		with pytest.raises(ValueError, match="Requested dataset is ambiguous"):
@@ -198,7 +195,7 @@ def test_filter_year_multi_multi_overlap_error(loc, table, year):
 
 
 @pytest.mark.parametrize('url, truth', [('APDUseOfForce',0),('2021',1)])
-def test_filter_year_multi_multi_overlap_url_distinguish(url, truth):
+def test_filter_year_multi_multi_overlap_url_distinguish(check_for_dataset, url, truth):
 	table_type = opd.defs.TableType.USE_OF_FORCE
 	if check_for_dataset('Asheville', table_type):
 		src = data.Source('Asheville')
@@ -208,7 +205,7 @@ def test_filter_year_multi_multi_overlap_url_distinguish(url, truth):
 		pd.testing.assert_frame_equal(dataset, options.iloc[[truth]])
 
 
-def test_filter_year_bad_url():
+def test_filter_year_bad_url(check_for_dataset):
 	table_type = opd.defs.TableType.USE_OF_FORCE
 	if check_for_dataset('Asheville', table_type):
 		src = data.Source('Asheville')
@@ -216,7 +213,7 @@ def test_filter_year_bad_url():
 			src.filter(table_type, 2020, errors=True, url='FAKE')
 
 
-def test_filter_year_bad_url_no_error():
+def test_filter_year_bad_url_no_error(check_for_dataset):
 	table_type = opd.defs.TableType.USE_OF_FORCE
 	if check_for_dataset('Asheville', table_type):
 		src = data.Source('Asheville')
@@ -224,7 +221,7 @@ def test_filter_year_bad_url_no_error():
 		assert len(ds)==0
 
 
-def test_filter_year_multi_multi_update_years():
+def test_filter_year_multi_multi_update_years(check_for_dataset):
 	table_type = opd.defs.TableType.USE_OF_FORCE
 	if check_for_dataset('Asheville', table_type):
 		src = data.Source('Asheville')
@@ -239,7 +236,7 @@ def test_filter_year_multi_multi_update_years():
 		pd.testing.assert_frame_equal(dataset, src.datasets.loc[[ds.index[0]]])
 
 
-def test_filter_year_multi_multi_out_of_range_error():
+def test_filter_year_multi_multi_out_of_range_error(check_for_dataset):
 	table_type = opd.defs.TableType.USE_OF_FORCE
 	if check_for_dataset('Asheville', table_type):
 		src = data.Source('Asheville')
@@ -248,7 +245,7 @@ def test_filter_year_multi_multi_out_of_range_error():
 
 
 @pytest.mark.parametrize('year, count', [[1900, 0], [2020, 2]])
-def test_filter_year_multi_multi_out_of_range_NO_error(year, count):
+def test_filter_year_multi_multi_out_of_range_NO_error(check_for_dataset, year, count):
 	table_type = opd.defs.TableType.USE_OF_FORCE
 	if check_for_dataset('Asheville', table_type):
 		src = data.Source('Asheville')
@@ -264,7 +261,7 @@ def test_filter_multi_multi_id_distinguish(id):
 		assert id == dataset['dataset_id'].iloc[0]
 
 
-def test_filter_year_bad_id():
+def test_filter_year_bad_id(check_for_dataset):
 	table_type = opd.defs.TableType.USE_OF_FORCE
 	if check_for_dataset('Asheville', table_type):
 		src = data.Source('Asheville')
@@ -272,7 +269,7 @@ def test_filter_year_bad_id():
 			src.filter(table_type, opd.defs.MULTI, id='FAKE', errors=True)
 
 
-def test_filter_year_bad_url_no_id():
+def test_filter_year_bad_url_no_id(check_for_dataset):
 	table_type = opd.defs.TableType.CALLS_FOR_SERVICE
 	if check_for_dataset('Mesa', table_type):
 		src = data.Source('Mesa')
@@ -297,7 +294,7 @@ def test_check_whether_to_filter_by_date_FALSE(loc, table_type, year):
 
 @pytest.mark.parametrize('date', [[2016, '2016-02-15'], ['2016-02-15', 2016],
 								 ['2016-04-05', '2016-06-15'], [2016, 2016], ['2016-01-01', '2016-12-31']])
-def test_check_whether_to_filter_by_date_TRUE_annual(date):
+def test_check_whether_to_filter_by_date_TRUE_annual(check_for_dataset, date):
 	if check_for_dataset('Phoenix', opd.defs.TableType.CALLS_FOR_SERVICE):
 		src = data.Source('Phoenix')
 		dataset = src.filter(opd.defs.TableType.CALLS_FOR_SERVICE, date, errors=True)
@@ -306,7 +303,7 @@ def test_check_whether_to_filter_by_date_TRUE_annual(date):
 
 @pytest.mark.parametrize('date', [[2020, '2020-02-15'], ['2020-02-15', 2022],
 								 ['2022-04-05', '2024-06-15'], 2021, [2021, 2021], ['2023-01-01', '2023-12-31']])
-def test_check_whether_to_filter_by_date_TRUE_MULTI(date):
+def test_check_whether_to_filter_by_date_TRUE_MULTI(check_for_dataset, date):
 	if check_for_dataset('Tucson', opd.defs.TableType.ARRESTS):
 		src = data.Source('Tucson')
 		dataset = src.filter(opd.defs.TableType.ARRESTS, date, errors=True)

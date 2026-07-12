@@ -9,7 +9,7 @@ from tqdm import tqdm
 import re
 
 from .data_loader import Data_Loader, _process_date, _url_error_msg, _use_gpd_force, _has_gpd, _clean_date_input, \
-    _filter_inaccurate_date_query, _setup_records_request
+    _filter_inaccurate_date_query, _setup_records_request, _is_annual_date_query
 from . import data_loader
 from ..exceptions import OPD_SocrataHTTPError
 from .. import log, datetime_parser
@@ -86,7 +86,7 @@ class Socrata(Data_Loader):
                 where = self.date_field + " between '" + start_date + "' and '" + stop_date +"'"
             elif data_type=='numeric':
                 assert date_formats=={'YYYY'}
-                accurate = date[0].month==1 and date[0].day==1 and date[1].month==12 and date[1].day==31
+                accurate = _is_annual_date_query(date[0])
                 if not accurate:
                     raise ValueError('Only the year is provided in the date column. Unable to filter by specific dates. Please filter by full years.')
                 where = self.date_field + " between '" + start_date[:4] + "' and '" + stop_date[:4] +"'"
@@ -179,6 +179,9 @@ class Socrata(Data_Loader):
             Record count or number of rows in data request
         '''
 
+        if pd.isnull(self.date_field) and date!=None:
+            raise ValueError(f'The dataset at {self.url} has no date field and therefore, cannot be filtered by date')
+
         where = self.__get_counts(date, opt_filter, where)
         return sum(w.count for w in where)
 
@@ -262,6 +265,9 @@ class Socrata(Data_Loader):
         pandas or geopandas DataFrame
             DataFrame containing table
         '''
+
+        if pd.isnull(self.date_field) and date!=None:
+            raise ValueError(f'The dataset at {self.url} has no date field and therefore, cannot be filtered by date')
 
         date = _clean_date_input(date)
 

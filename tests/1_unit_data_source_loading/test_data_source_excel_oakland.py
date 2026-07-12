@@ -6,7 +6,7 @@ if __name__ == "__main__":
 	import sys
 	sys.path.append('../openpolicedata')
 from openpolicedata import defs, data_loaders, datetime_parser, Source
-from test_utils import check_for_dataset, check_result
+from test_utils import check_result
 
 source = 'Oakland'
 table = defs.TableType.USE_OF_FORCE
@@ -19,7 +19,7 @@ def row(datasets):
     return row.iloc[0]
 
 @pytest.fixture(scope='module')
-def gt(row):
+def gt(check_for_dataset, row):
     if not check_for_dataset(source, table):
         return None
     
@@ -32,20 +32,20 @@ def gt(row):
 def src():
     return Source(source)
 
-def test_get_count_error(src):
+def test_get_count_error(check_for_dataset, src):
     if not check_for_dataset(source, table):
         return
     
     with pytest.raises(ValueError):
         src.get_count(table_type=table, date=year)
 
-def test_get_count(gt, src):
+def test_get_count(check_for_dataset, gt, src):
     if not check_for_dataset(source, table):
         return
     
     assert len(gt)==src.get_count(table_type=table, date=year, force=True)
 
-def test_get_count_year_date_filter(gt, src, row):
+def test_get_count_year_date_filter(check_for_dataset, gt, src, row):
     if not check_for_dataset(source, table):
         return
     
@@ -57,7 +57,7 @@ def test_get_count_year_date_filter(gt, src, row):
     test = (gt[row['date_field']]>=gt_date[0]) & (gt[row['date_field']]<gt_date[1]+pd.Timedelta(1, unit='D'))
     assert count == test.sum()
 
-def test_load(gt, row, src):
+def test_load(check_for_dataset, gt, row, src):
     if not check_for_dataset(source, table):
         return
     

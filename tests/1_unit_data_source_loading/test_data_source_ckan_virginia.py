@@ -6,7 +6,7 @@ if __name__ == "__main__":
 	import sys
 	sys.path.append('../openpolicedata')
 from openpolicedata import defs, data_loaders, datetime_parser, Source
-from test_utils import check_for_dataset, check_result
+from test_utils import check_result
 
 source = 'Virginia'
 table = defs.TableType.STOPS
@@ -20,7 +20,7 @@ def row(datasets):
     return row.iloc[0]
 
 @pytest.fixture(scope='module')
-def gt_raw(row):
+def gt_raw(check_for_dataset, row):
     if not check_for_dataset(source, table):
         return None
     
@@ -35,7 +35,7 @@ def gt_raw(row):
 
 
 @pytest.fixture(scope='module')
-def gt(gt_raw, row):
+def gt(check_for_dataset, gt_raw, row):
     if not check_for_dataset(source, table):
         return None
     df = gt_raw.copy()
@@ -49,7 +49,7 @@ def src():
 
 
 @pytest.fixture(scope='module')
-def gt_agencies(row):
+def gt_agencies(check_for_dataset, row):
     if not check_for_dataset(source, table):
         return None
     
@@ -60,7 +60,7 @@ def gt_agencies(row):
 
     return [x[row["agency_field"]] for x in results if isinstance(x,dict) and len(x)>0]
 
-def test_get_count_agency(gt, src):
+def test_get_count_agency(check_for_dataset, gt, src):
     if not check_for_dataset(source, table):
         return
     
@@ -76,7 +76,7 @@ def test_load_agency(gt, row, src):
 
 @pytest.mark.parametrize('nrows', [None, 2])
 @pytest.mark.parametrize('offset', [0, 1])
-def test_load_agency_subset(gt, row, src, nrows, offset):
+def test_load_agency_subset(check_for_dataset, gt, row, src, nrows, offset):
     if not check_for_dataset(source, table):
         return
     
@@ -91,7 +91,7 @@ def test_load_agency_subset(gt, row, src, nrows, offset):
     check_result(df, gt, row)
 
 
-def test_get_agencies_all(src, gt_agencies):
+def test_get_agencies_all(check_for_dataset, src, gt_agencies):
     if not check_for_dataset(source, table):
         return
 
@@ -100,7 +100,7 @@ def test_get_agencies_all(src, gt_agencies):
     assert len(agency_set)==set(agency_set)
     assert set(agency_set)==set(gt_agencies)
 
-def test_get_agencies_matching(src, gt_agencies):
+def test_get_agencies_matching(check_for_dataset, src, gt_agencies):
     if not check_for_dataset(source, table):
         return
 

@@ -697,7 +697,7 @@ def to_datetime(dates, ignore_errors=False, *args, **kwargs):
                         return pd.to_datetime(x, *args, **kwargs)
                     
                 return dates.apply(to_datetime_local)
-            elif 'doesn\'t match format "%Y-%m-%dT%H:%M:%S.%f%z"' in str(e):
+            elif 'doesn\'t match format "%Y-%m-%dT%H:%M:%S.%f%z"' in str(e) or 'Mixed timezones detected' in str(e):
                 return pd.to_datetime(dates.apply(lambda x: x[:-1] if isinstance(x,str) and x[-1]=='Z' else x), format='mixed')
             elif ignore_errors and 'is out of range' in str(e) and is_str_number(dates):
                 if (dec:=dates.find('.'))>0 and int(dates[dec+1:])==0:

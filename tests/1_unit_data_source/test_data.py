@@ -1,15 +1,10 @@
 from io import StringIO
 import pandas as pd
-import pathlib
 import pytest
-import sys
 
 import openpolicedata as opd
 from openpolicedata import data
 from openpolicedata.exceptions import OPD_FutureError, OPD_MinVersionError
-
-sys.path.append(pathlib.Path(__file__).parent.resolve())
-from test_utils import check_for_dataset
 
 @pytest.fixture()
 def log_stream():
@@ -47,7 +42,7 @@ def test_check_version_bad(datasets, ver, err):
 
 
 
-def test_not_verbose(logger, log_stream):
+def test_not_verbose(check_for_dataset, logger, log_stream):
 	source = 'Lansing'
 	table = "OFFICER-INVOLVED SHOOTINGS"
 	if check_for_dataset(source, table):
@@ -56,7 +51,7 @@ def test_not_verbose(logger, log_stream):
 		assert len(log_stream.getvalue()) == 0
 
 
-def test_verbose(logger, log_stream):
+def test_verbose(check_for_dataset, logger, log_stream):
 	source = 'Lansing'
 	table = "OFFICER-INVOLVED SHOOTINGS"
 	if check_for_dataset(source, table):
@@ -74,7 +69,7 @@ def test_table_type_warning(all_datasets):
 @pytest.mark.parametrize('source, table, year', [('Phoenix', "OFFICER-INVOLVED SHOOTINGS", 2022), 
 				('Orlando', "OFFICER-INVOLVED SHOOTINGS", 2022), ('Indianapolis', "OFFICER-INVOLVED SHOOTINGS", 2022),
 				('Philadelphia', "COMPLAINTS - BACKGROUND", 2018)])
-def test_format_date_false(source, table, year):
+def test_format_date_false(check_for_dataset, source, table, year):
 	if check_for_dataset(source, table):
 		src = opd.Source(source)
 		table = src.load(table, year, format_date=False, nrows=1)
@@ -85,7 +80,7 @@ def test_format_date_false(source, table, year):
 @pytest.mark.parametrize('source, table, year,url', [('Denver', "OFFICER-INVOLVED SHOOTINGS", 2022,'https://raw.githubusercontent.com/openpolicedata/opd-datasets/main/data/Colorado_Denver_OFFICER-INVOLVED_SHOOTINGS.csv'), 
 				('Sparks', "OFFICER-INVOLVED SHOOTINGS", 2022, None),  
 				('Louisville', "TRAFFIC STOPS", ['2018-12-29', '2019-01-01'], 'LMPD_STOPS_DATA_(2)')])
-def test_format_date_false_not_allowed(source, table, year, url):
+def test_format_date_false_not_allowed(check_for_dataset, source, table, year, url):
 	if check_for_dataset(source, table):
 		src = opd.Source(source)
 		with pytest.raises(ValueError, match='Dates cannot be filtered'):

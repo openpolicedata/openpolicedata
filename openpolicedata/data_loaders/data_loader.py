@@ -39,9 +39,9 @@ _url_error_msg = "There is likely an issue with the website. Open the URL {} wit
 
 
 def _filter_inaccurate_date_query(df, date_field, date, format_date, offset, nrows):
-	if not format_date:
-		raise ValueError("Dates cannot be filtered if format_date is False for this dataset due to the date column not being a "+
-							"date data type at the source. Note: most other datasets will work fine if format_date is False")
+    if not format_date:
+        df_filt = df.copy()
+        
 	logger.debug(f"User requested filtering by a date range but this was NOT done in the query "+
 					f"due to the date field not being in a date format. Converting {date_field} column to "
 					f"a datetime in order to filter for requested date range {date}")
@@ -53,8 +53,10 @@ def _filter_inaccurate_date_query(df, date_field, date, format_date, offset, nro
 
 	if isinstance(df[date_field].dtype, pd.PeriodDtype):
 		raise ValueError('Periods cannot be filtered by date, only year.')  # This code should never be reached
-	else:
-		df = df[ (df[date_field] >= date[0]) & (df[date_field] < date[1]+pd.Timedelta('1D')) ]
+    
+    tf = (df[date_field] >= date[0]) & (df[date_field] < date[1]+pd.Timedelta('1D'))
+    df = df if format_date else df_filt
+    df = df[tf]
 
 	if offset!=None and offset>0:
 		df = df.iloc[offset:]
@@ -178,8 +180,7 @@ def _filter_dataframe(df, date_field=None, date_filter=None, agency_field=None, 
 					date_filter[k] = dt_new
 
 			df = df[(df[date_field] >= date_filter[0]) & (df[date_field] < date_filter[1]+pd.Timedelta('1D'))]
-		elif date_filter[0].month==1 and date_filter[0].day==1 and \
-			date_filter[1].month==12 and date_filter[1].day==31:  # Requested full years
+		elif _is_annual_date_query(date_filter):  # Requested full years
 			logger.debug(f"Column {date_field} has been identfied as a year column")
 			logger.debug(f"Keeping values of column {date_field} between {date_filter[0]} and {date_filter[1]}")
 			dates = df[date_field].apply(lambda x: int(x) if isinstance(x,str) and x.isdigit() else x)
@@ -453,4 +454,7 @@ def _update_last_count(_last_count, date, where, opt_filter=None):
 		return _last_count
 
 def _check_query_match_last(_last_count, date, where, opt_filter=None):
-	return _last_count is not None and _last_count[0]==(date, opt_filter, [w.where for w in where])
+    return _last_count is not None and _last_count[0]==(date, opt_filter, [w.where for w in where])
+
+def _is_annual_date_query(date):
+    return date[0].month == 1 and date[0].day==1 and date[1].month == 12 and date[1].day == 31

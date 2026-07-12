@@ -1,6 +1,6 @@
 import pytest
+import warnings
 from test_utils import get_datasets, get_outage_datasets, get_remaining_datasets
-
 
 def pytest_addoption(parser):
     parser.addoption(
@@ -12,6 +12,7 @@ def pytest_addoption(parser):
     parser.addoption(
         "--source", action="store", default=None, help="Only test datasets from this source"
     )
+    parser.addoption("--datatype", default=None, help="Type of data")
     parser.addoption(
         "--start", action="store", default=0, help="Start at this index when looping over datasets"
     )
@@ -78,7 +79,7 @@ def req_csvfile(request):
 
 
 @pytest.fixture(scope='session')
-def all_datasets(request, req_csvfile):
+def all_datasets(req_csvfile):
     return get_datasets(req_csvfile)
 
 
@@ -93,7 +94,9 @@ def outages(request):
 @pytest.fixture(scope='session')
 def datasets(request, all_datasets, use_changed_rows, outages, req_csvfile):
     ds = get_datasets(req_csvfile, use_changed_rows) if use_changed_rows else all_datasets
-    return get_outage_datasets(ds) if outages else ds
+    ds = get_outage_datasets(ds) if outages else ds
+    ds = ds[ds['DataType']==request.config.option.datatype] if request.config.option.datatype else ds
+    return ds
 
 @pytest.fixture(scope='session')
 def is_excel(datasets):
@@ -106,3 +109,23 @@ def is_api(datasets):
 @pytest.fixture(scope='session')
 def remaining_datasets(datasets):
     return get_remaining_datasets(datasets)
+
+@pytest.fixture(scope='session')
+def check_for_dataset(all_datasets, datasets):
+    def f(source, table_type, state=None, warn=False):
+        # Ensure that dataset exists
+        df = all_datasets[(all_datasets['SourceName']==source) & (all_datasets['TableType']==table_type)]
+        df = df[df['State']==state] if state else df
+        assert len(df)>0, 'No dataset matches request'
+
+        # Check if dataset exists in datasets to process
+        df = datasets[(datasets['SourceName']==source) & (datasets['TableType']==table_type)]
+        df = df[df['State']==state] if state else df
+        
+        if len(df):
+            return True
+        elif warn:
+            warnings.warn(f"No data found for {source} {table_type}")
+        return False
+    
+    return f

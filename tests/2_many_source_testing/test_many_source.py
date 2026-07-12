@@ -2,7 +2,6 @@ import pandas as pd
 import pytest
 
 import openpolicedata as opd
-from tests.test_utils import check_for_dataset
 
 def test_all_datasets_tested(is_excel, is_api):
     x = (is_excel+is_api)!=1
@@ -31,7 +30,7 @@ def test_get_agencies_not_multi(datasets):
         assert len(agency)==1
         assert agency[0]==datasets.iloc[i]["Agency"]
 
-def test_get_agencies_file(datasets):
+def test_get_agencies_file(check_for_dataset, datasets):
     source = 'Illinois'
     table = 'TRAFFIC STOPS'
     if not check_for_dataset(source, table):
@@ -54,7 +53,7 @@ def test_multi_agency_list(datasets):  # Ensure that multi datasets list above c
             
 
 @pytest.mark.parametrize('state,table_type,year,partial',[(x,y,z,a) for x,y,z,a in zip(multi_states, multi_tables,multi_years,multi_partial)])
-def test_get_agencies_name_match(datasets, remaining_datasets, state, table_type, year, partial):
+def test_get_agencies_name_match(check_for_dataset, datasets, remaining_datasets, state, table_type, year, partial):
     def dataset_not_found(x):
         # Return true if dataset matches any in dataframe
         return ((x['State']!=state) | (x['SourceName']!=state) | (x['TableType']!=table_type) | (x['Year']!=year)).all()

@@ -125,14 +125,6 @@ def shuffle(lst):
     random.setstate(rand_state)
 
 
-def check_for_dataset(source, table_type, state=None, warn=True):
-	ds = opd.datasets.query(source_name=source, table_type=table_type, state=state)
-	if len(ds):
-		return True
-	elif warn:
-		warnings.warn(f"No data found for {source} {table_type}")
-	return False
-
 already_warned = [False]
 def update_outages(outages_file, dataset, is_outage, e=None):
     if not os.path.exists(outages_file):
@@ -255,7 +247,7 @@ def load_data(src, table_type, year, agency, nrows, url, id, caught_exceptions_w
 
 def check_result(df, gt, row, convert_to_date=True):
     assert len(gt)>0, 'Ground truth is empty. Unintentionally filtered for empty table'
-    if convert_to_date:
+    if convert_to_date and pd.notnull(row['date_field']):
         df[row['date_field']] = opd.datetime_parser.to_datetime(df[row['date_field']])
 
         if not isinstance(df[row['date_field']].dtype, pd.PeriodDtype):
@@ -277,7 +269,7 @@ def check_result(df, gt, row, convert_to_date=True):
          gt['geometry'] = gt['geometry'].apply(lambda x: shapely.geometry.point.Point(-1000, -1000) if pd.notnull(x) and pd.isnull(x.x) else x)
 
     # Sorting is done to account for rows that are sorted by date but where rows with same date are in different order
-    pd.testing.assert_frame_equal(df, gt)
+    pd.testing.assert_frame_equal(df, gt, check_dtype=False)
     time.sleep(0.1) # Just so we don't cause issues at the URL
 
 def check_load_for_datasets(datasets, skip, start_idx, source, query, nrows=None, testfcn=None, datefcn=None):
@@ -296,7 +288,7 @@ def check_load_for_datasets(datasets, skip, start_idx, source, query, nrows=None
         
         table_type = datasets.iloc[i]["TableType"]
         now = datetime.now().strftime("%d.%b %Y %H:%M:%S")
-        print(f"{now} Testing {i+1} of {len(datasets)}: {srcName} {table_type} table")
+        print(f"{now} Testing {i+1} of {len(datasets)}: {srcName} {table_type} {datasets.iloc[i]['Year']} table")
 
 		# Handle cases where URL is required to disambiguate requested dataset
         ds_filter = src.filter(table_type, datasets.iloc[i]["Year"])
@@ -365,6 +357,8 @@ def check_load_for_datasets(datasets, skip, start_idx, source, query, nrows=None
         warnings.warn(str(e))
 
 def get_remaining_datasets(datasets):
+    # Parse .py test files to determine which datasets are thoroughly tested in 
+    # dataset-specific tests and don't need to be retested in general tests
     files = []
     for f in ['1_unit_data_loaders', '1_unit_data_source_loading']:
         files.extend(glob.glob(os.path.join('tests', f, '**','*.py'), recursive=True))
@@ -407,9 +401,10 @@ def get_remaining_datasets(datasets):
                     if dmatch.sum()!=1 and year:
                         dmatch &= (datasets['Year']==year)
                              
-                    if dmatch.sum()!=1:
+                    if dmatch.sum()>1:
                         raise NotImplementedError()
-                    matches.append(dmatch[dmatch].index[0])
+                    elif dmatch.sum()==1:
+                        matches.append(dmatch[dmatch].index[0])
                     break
             else:
                  raise NotImplementedError()

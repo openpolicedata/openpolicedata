@@ -5,7 +5,7 @@ if __name__ == "__main__":
 	import sys
 	sys.path.append('../openpolicedata')
 from openpolicedata import defs, data_loaders, datetime_parser, Source
-from test_utils import check_for_dataset, check_result
+from test_utils import check_result
 
 source = 'Long Beach'
 table = defs.TableType.STOPS
@@ -19,7 +19,7 @@ def row(datasets):
     return row.iloc[0]
 
 @pytest.fixture(scope='module')
-def gt(row):
+def gt(check_for_dataset, row):
     if not check_for_dataset(source, table):
         return None
     
@@ -36,7 +36,7 @@ def src():
     return Source(source)
 
 
-def test_get_count(gt, src):
+def test_get_count(check_for_dataset, gt, src):
     if not check_for_dataset(source, table):
         return
     
@@ -44,7 +44,7 @@ def test_get_count(gt, src):
 
 
 @pytest.mark.parametrize('date', [year, [f'{year}-04-01', f'{year}-11-01']])
-def test_get_count_year_date_filter(gt, src, row, date):
+def test_get_count_year_date_filter(check_for_dataset, gt, src, row, date):
     if not check_for_dataset(source, table):
         return
     
@@ -55,7 +55,7 @@ def test_get_count_year_date_filter(gt, src, row, date):
     assert count == test.sum()
 
 
-def test_load(row, src, gt):
+def test_load(check_for_dataset, row, src, gt):
     if not check_for_dataset(source, table):
         return
     

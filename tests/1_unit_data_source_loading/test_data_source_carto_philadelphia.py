@@ -8,7 +8,7 @@ if __name__ == "__main__":
 	import sys
 	sys.path.append('../openpolicedata')
 from openpolicedata import defs, data_loaders, datetime_parser, Source
-from test_utils import check_for_dataset, check_result
+from test_utils import check_result
 
 source = 'Philadelphia'
 table = defs.TableType.SHOOTINGS
@@ -20,7 +20,7 @@ def row(datasets):
     return row.iloc[0]
 
 @pytest.fixture(scope='module')
-def gt(row):
+def gt(check_for_dataset, row):
     if not check_for_dataset(source, table):
         return None
     
@@ -34,7 +34,7 @@ def gt(row):
 def src():
     return Source(source)
 
-def test_get_count(gt, src):
+def test_get_count(check_for_dataset, gt, src):
     if not check_for_dataset(source, table):
         return
     
@@ -42,7 +42,7 @@ def test_get_count(gt, src):
 
 
 @pytest.mark.parametrize('date', [2022, [2022, 2023], ['2023-04-01', '2024-11-01']])
-def test_get_count_year_date_filter(gt, src, row, date):
+def test_get_count_year_date_filter(check_for_dataset, gt, src, row, date):
     if not check_for_dataset(source, table):
         return
     
@@ -53,7 +53,7 @@ def test_get_count_year_date_filter(gt, src, row, date):
     assert count == test.sum()
 
 
-def test_load_year_all(gt, row, src):
+def test_load_year_all(check_for_dataset, gt, row, src):
     if not check_for_dataset(source, table):
         return
     
@@ -64,7 +64,7 @@ def test_load_year_all(gt, row, src):
 @pytest.mark.parametrize('date', [2024, [2023, 2024], ['2023-04-01', '2024-11-01']])
 @pytest.mark.parametrize('nrows', [None, 2])
 @pytest.mark.parametrize('offset', [0, 1])
-def test_load(gt, row, src, date, nrows, offset):
+def test_load(check_for_dataset, gt, row, src, date, nrows, offset):
     if not check_for_dataset(source, table):
         return
     

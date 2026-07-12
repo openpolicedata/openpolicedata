@@ -4,10 +4,10 @@ from sodapy import Socrata as SocrataClient
 
 if __name__ == "__main__":
 	sys.path.append('../openpolicedata')
-from openpolicedata import data_loaders, defs, datetime_parser
+from openpolicedata import data_loaders, defs
 import pandas as pd
 
-from test_utils import check_for_dataset, check_result
+from test_utils import check_result
 
 source = 'New York'
 table = defs.TableType.TRAFFIC_CITATIONS
@@ -21,7 +21,7 @@ def row(datasets):
     return row.iloc[0]
 
 @pytest.fixture(scope='module')
-def gt(row):
+def gt(check_for_dataset, row):
     if not check_for_dataset(source, table):
         return None
     
@@ -41,7 +41,7 @@ def loader(row):
     return data_loaders.Socrata(url=row['URL'], data_set=row['dataset_id'], date_field=row['date_field'])
 
 
-def test_get_count_agency(gt, loader, row):
+def test_get_count_agency(check_for_dataset, gt, loader, row):
     if not check_for_dataset(source, table):
         return
     
@@ -50,7 +50,7 @@ def test_get_count_agency(gt, loader, row):
 
     assert count == len(gt)
 
-def test_load_agency(gt, row, loader):
+def test_load_agency(check_for_dataset, gt, row, loader):
     if not check_for_dataset(source, table):
         return
     
@@ -63,7 +63,7 @@ def test_load_agency(gt, row, loader):
     check_result(df, gt, row, convert_to_date=False)
 
 @pytest.mark.parametrize('date',[[f'{year}-01-01', f'{year}-12-30'],[f'{year}-01-02', f'{year}-12-31']])
-def test_load_date_filter(loader, date):
+def test_load_date_filter(check_for_dataset, loader, date):
     if not check_for_dataset(source, table):
         return
     

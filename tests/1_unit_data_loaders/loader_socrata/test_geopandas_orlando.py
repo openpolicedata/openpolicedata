@@ -1,4 +1,3 @@
-from calendar import monthrange
 import warnings
 import pytest
 import sys
@@ -14,7 +13,7 @@ if __name__ == "__main__":
 from openpolicedata import data_loaders, defs, datetime_parser
 import pandas as pd
 
-from test_utils import check_for_dataset, check_result
+from test_utils import check_result
 
 source = 'Orlando'
 table = defs.TableType.SHOOTINGS
@@ -29,7 +28,7 @@ def row(datasets):
 
 
 @pytest.fixture(scope='module')
-def gt(row):
+def gt(check_for_dataset, row):
     if not check_for_dataset(source, table):
         return None
     
@@ -53,7 +52,7 @@ def to_gpd(df):
     return gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(lon, lat), crs="EPSG:4326").drop(columns='geocoded_column')
 
 
-def test_geopandas(gt, row, loader):
+def test_geopandas(check_for_dataset, gt, row, loader):
     if not check_for_dataset(source, table):
         return
     
@@ -66,7 +65,7 @@ def test_geopandas(gt, row, loader):
     assert isinstance(df, gpd.GeoDataFrame)
     check_result(df, gt, row)
 
-def test_pandas(gt, row, loader):
+def test_pandas(check_for_dataset, gt, row, loader):
     if not check_for_dataset(source, table):
         return
     if not _has_gpd:
@@ -85,7 +84,7 @@ def test_pandas(gt, row, loader):
 
 
 @pytest.mark.parametrize('date', [['2024-01-02', '2024-12-08'], ['2017-01-02', '2018-01-01'], ['2017-01-02', '2019-01-01']])
-def test_load_date_range(gt, row, loader, date):
+def test_load_date_range(check_for_dataset, gt, row, loader, date):
     if not check_for_dataset(source, table):
         return
     
