@@ -39,9 +39,9 @@ _url_error_msg = "There is likely an issue with the website. Open the URL {} wit
 
 
 def _filter_inaccurate_date_query(df, date_field, date, format_date, offset, nrows):
-    if not format_date:
-        df_filt = df.copy()
-        
+	if not format_date:
+		df_filt = df.copy()
+		
 	logger.debug(f"User requested filtering by a date range but this was NOT done in the query "+
 					f"due to the date field not being in a date format. Converting {date_field} column to "
 					f"a datetime in order to filter for requested date range {date}")
@@ -53,10 +53,10 @@ def _filter_inaccurate_date_query(df, date_field, date, format_date, offset, nro
 
 	if isinstance(df[date_field].dtype, pd.PeriodDtype):
 		raise ValueError('Periods cannot be filtered by date, only year.')  # This code should never be reached
-    
-    tf = (df[date_field] >= date[0]) & (df[date_field] < date[1]+pd.Timedelta('1D'))
-    df = df if format_date else df_filt
-    df = df[tf]
+	
+	tf = (df[date_field] >= date[0]) & (df[date_field] < date[1]+pd.Timedelta('1D'))
+	df = df if format_date else df_filt
+	df = df[tf]
 
 	if offset!=None and offset>0:
 		df = df.iloc[offset:]
@@ -454,7 +454,7 @@ def _update_last_count(_last_count, date, where, opt_filter=None):
 		return _last_count
 
 def _check_query_match_last(_last_count, date, where, opt_filter=None):
-    return _last_count is not None and _last_count[0]==(date, opt_filter, [w.where for w in where])
+	return _last_count is not None and _last_count[0]==(date, opt_filter, [w.where for w in where])
 
 def _is_annual_date_query(date):
-    return date[0].month == 1 and date[0].day==1 and date[1].month == 12 and date[1].day == 31
+	return date[0].month == 1 and date[0].day==1 and date[1].month == 12 and date[1].day == 31
