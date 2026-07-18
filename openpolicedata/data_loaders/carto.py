@@ -3,7 +3,8 @@ import pandas as pd
 import requests
 from tqdm import tqdm
 
-from .data_loader import Data_Loader, str2json, _url_error_msg, _process_date, _default_limit, _use_gpd_force, _has_gpd, _clean_date_input
+from .data_loader import Data_Loader, str2json, _url_error_msg, _process_date, _default_limit, _use_gpd_force, _has_gpd, _clean_date_input, \
+    _is_annual_date_query
 from ..datetime_parser import to_datetime
 from ..exceptions import OPD_DataUnavailableError, OPD_TooManyRequestsError
 from .. import log
@@ -103,18 +104,34 @@ class Carto(Data_Loader):
         '''
 
         date = _clean_date_input(date)
+        return self.__get_count(date, True)[0]
+    
 
+    def __get_count(self, date, throw_error):
+        if pd.isnull(self.date_field) and date!=None:
+            raise ValueError(f'The dataset at {self.url} has no date field and therefore, cannot be filtered by date')
+        
         if self._last_count is not None and self._last_count[0]==date:
             logger.debug("Request matches previous count request. Returning saved count.")
-            return self._last_count[1]
+            record_count = self._last_count[1]
+            where_query = self._last_count[2]
         else:
-            where = self.__construct_where(date)
-            json = self.__request(where=where, return_count=True)
-            count = json["rows"][0]["count"]
+            where_query = self.__construct_where(date)
 
-        self._last_count = (date, count, where)
+            if throw_error and date!=None and self.count_precision!='day'and not _is_annual_date_query(date):
+                raise ValueError(f"Count is not accurate for date input {date}. "
+                                 "Date field contains data in text format not date format "
+                                 "and the text not formatted in a way that makes getting a count "
+                                 "difficult without loading in the data. Either adjust the input to "
+                                 "get_count to get a range of years instead of a range of dates or "
+                                 "load in the data for the desired date range")
+            
+            json = self.__request(where=where_query, return_count=True)
+            record_count = json["rows"][0]["count"]
 
-        return count
+        self._last_count = (date, record_count, where_query)
+
+        return record_count, where_query
 
 
     def __request(self, where=None, return_count=False, out_fields="*", out_type="GeoJSON", offset=0, count=None):
@@ -177,9 +194,23 @@ class Carto(Data_Loader):
 
 
     def __construct_where(self, date=None):
-        if self.date_field!=None and date!=None:
+        if date!=None:
+            if self.date_field==None:
+                raise ValueError('Date filtering requested for a dataset with no recorded date field')
+            
             start_date, stop_date = _process_date(date)
-            where_query = f"{self.date_field} >= '{start_date}' AND {self.date_field} <= '{stop_date}'"
+            type_info = self.__request(count=0, out_type="JSON", out_fields=self.date_field)
+            if type_info['fields'][self.date_field]['type']=='date':
+                self.count_precision = 'day'
+                where_query = f"{self.date_field} >= '{start_date}' AND {self.date_field} <= '{stop_date}'"
+            elif type_info['fields'][self.date_field]['type']=='number' and 'year' in self.date_field.lower():
+                self.count_precision = 'year'
+                where_query = f"{self.date_field} >= {start_date[:4]} AND {self.date_field} <= {stop_date[:4]}"
+            elif type_info['fields'][self.date_field]['type']=='string':
+                raise NotImplementedError()
+            else:
+                raise NotImplementedError()
+            
         else:
             where_query = None
 
@@ -213,14 +244,7 @@ class Carto(Data_Loader):
 
         date = _clean_date_input(date)
         
-        if self._last_count is not None and self._last_count[0]==date:
-            record_count = self._last_count[1]
-            where_query = self._last_count[2]
-        else:
-            where_query = self.__construct_where(date)
-            json = self.__request(where=where_query, return_count=True)
-            record_count = json["rows"][0]["count"]
-            self._last_count = (date, record_count, where_query)
+        record_count, where_query = self.__get_count(date, False)
 
         record_count-=offset
         if record_count<=0:

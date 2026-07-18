@@ -180,6 +180,7 @@ def test_get_years(api_datasets, source, start_idx, skip, query={}):
             raise
 
         if set(years)!=years_expected:
+            t = src.load('COMPLAINTS - BACKGROUND',2026)
             if mdatasets.loc[most_recent,'Year']==opd.defs.MULTI:
                 # Check if the dataset has any data right now. Perhaps it's not available
                 count = src.get_count(table, opd.defs.MULTI, url=mdatasets.loc[most_recent,'URL'], id=mdatasets.loc[most_recent,'dataset_id'])
