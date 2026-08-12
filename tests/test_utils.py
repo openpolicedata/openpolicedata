@@ -364,11 +364,11 @@ def get_remaining_datasets(datasets):
         files.extend(glob.glob(os.path.join('tests', f, '**','*.py'), recursive=True))
 
     matches = []
-    exclude = ['test_socrata_general.py']
+    exclude = ['test_socrata_general.py', 'test_loader_arcgis.py']
     for f in files:
         if os.path.basename(f) in exclude:
              continue
-        with open(f, 'r') as fid:
+        with open(f, 'r', encoding="utf8") as fid:
             for line in fid:
                 m = re.search(r'^source\s*=\s*[\"\'](.+)[\'\"]', line)
                 if m:

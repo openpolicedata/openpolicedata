@@ -411,7 +411,7 @@ class Socrata(Data_Loader):
 
         where = ''
         for w in wherelist:
-            x = f'{w[0]} AND ({' OR '.join(w[1])})'
+            x = f'{w[0]} AND ({" OR ".join(w[1])})'
             if len(wherelist)>1:
                 x = f'({x})'
             where+=x+' OR '
