@@ -375,6 +375,7 @@ def get_remaining_datasets(datasets):
                     source = m.group(1)
                     year = None
                     url = None
+                    id = None
                     for k in range(3):
                         line = fid.readline()
                         m = re.search(r'^table\s*=\s*(.+)\s*', line)
@@ -394,12 +395,18 @@ def get_remaining_datasets(datasets):
                         if m:
                             url = m.group(1)
                             continue
+                        m = re.search(r'^id\s*=\s*[\"\'](.+)[\"\']\s*', line)
+                        if m:
+                            id = m.group(1)
+                            continue
 					
                     dmatch = (datasets['SourceName']==source) & (datasets['TableType']==table)
                     if dmatch.sum()!=1 and url:
                         dmatch &= datasets['URL'].str.contains(url)
                     if dmatch.sum()!=1 and year:
                         dmatch &= (datasets['Year']==year)
+                    if dmatch.sum()!=1 and id:
+                        dmatch &= (datasets['dataset_id']==id)
                              
                     if dmatch.sum()>1:
                         raise NotImplementedError()

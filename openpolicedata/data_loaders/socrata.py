@@ -86,7 +86,7 @@ class Socrata(Data_Loader):
                 where = self.date_field + " between '" + start_date + "' and '" + stop_date +"'"
             elif data_type=='numeric':
                 assert date_formats=={'YYYY'}
-                accurate = _is_annual_date_query(date[0])
+                accurate = _is_annual_date_query(date)
                 if not accurate:
                     raise ValueError('Only the year is provided in the date column. Unable to filter by specific dates. Please filter by full years.')
                 where = self.date_field + " between '" + start_date[:4] + "' and '" + stop_date[:4] +"'"

@@ -31,6 +31,7 @@ def gt(check_for_dataset, row):
                          order=":id")
 
     df = pd.DataFrame.from_records(results)
+    assert len(df)>0  # NOTE: There may be typo in agency name above
     df[row['date_field']] = df[row['date_field']].apply(int)
 
     return df
