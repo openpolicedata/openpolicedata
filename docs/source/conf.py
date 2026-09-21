@@ -120,6 +120,18 @@ exclude_patterns = []
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 html_theme = 'pydata_sphinx_theme'
+
+# Reclaim the primary sidebar column throughout the API reference.
+html_sidebars = {
+    'api': [],
+    'api_*': [],
+    'modules': [],
+    'openpolicedata*': [],
+    'generated/**': [],
+    'genindex': [],
+    'py-modindex': [],
+}
+
 html_static_path = ['_static']
 html_css_files = ["css/custom.css"]
 
